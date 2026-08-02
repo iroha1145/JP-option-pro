@@ -81,7 +81,9 @@ function HeatTile({
             <span className={cn('font-mono text-[15px] font-semibold leading-5 tnum', textMain)}>
               {fmtPct(primary)}
             </span>
-            <span className={cn('truncate text-micro', textSub)}>{primaryLabel}</span>
+            {/* 窄屏の 149px タイルには入らない（英語 "1d median" で確実に切れる）。
+                口径は直上の Segmented が示しているので端末幅では省く。 */}
+            <span className={cn('hidden truncate text-micro sm:inline', textSub)}>{primaryLabel}</span>
           </span>
           <span className={cn('block truncate font-mono text-micro tnum', textSub)}>
             {secondaryLabel} {fmtPct(secondary)}

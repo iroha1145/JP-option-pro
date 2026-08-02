@@ -88,7 +88,7 @@ export default function StockDetail() {
         markLines.push({
           yAxis: overlays.invalidation_price,
           lineStyle: { color: CH.down600, type: 'dotted', width: 1 },
-          label: { formatter: '失效位', position: 'insideEndBottom', color: CH.down600, fontSize: 10 },
+          label: { formatter: t('失效位'), position: 'insideEndBottom', color: CH.down600, fontSize: 10 },
         });
       }
       const markSwing = (points: { trade_date: string; price: number | null }[], isHigh: boolean) => {
@@ -193,7 +193,7 @@ export default function StockDetail() {
           <h1 className="font-display text-display-m text-ink-900">{security.name_ja ?? security.name_en ?? '—'}</h1>
           {security.active === 0 && (
             <span className="rounded-sm bg-down-50 px-1.5 py-0.5 text-micro text-down-700">
-              上場廃止 {security.delisted_date ?? ''}
+              {t('上場廃止')} {security.delisted_date ?? ''}
             </span>
           )}
           {isOwner && (
@@ -255,7 +255,7 @@ export default function StockDetail() {
             </span>
             <span className="flex items-center gap-2">
               <span className="flex items-center gap-1 text-caption text-ink-400">
-                图例
+                {t('图例')}
                 <InfoHint hint={STRUCTURE_HINTS.chart_overlays} align="end" />
               </span>
               {interval === '1d' && (
@@ -342,7 +342,7 @@ export default function StockDetail() {
 
           {/* 技术指标 */}
           <section className="card-surface rounded-lg p-3">
-            <h2 className="mb-2 text-body font-medium text-ink-900">技术指标</h2>
+            <h2 className="mb-2 text-body font-medium text-ink-900">{t('技术指标')}</h2>
             <IndicatorGrid technical={technical} />
           </section>
         </div>
@@ -357,7 +357,7 @@ export default function StockDetail() {
           </div>
         </section>
         <section className="card-surface rounded-lg p-4 xl:col-span-5">
-          <h2 className="mb-3 text-h3 text-ink-900">K线结构分析</h2>
+          <h2 className="mb-3 text-h3 text-ink-900">{t('K线结构分析')}</h2>
           <StructurePanel technical={technical} />
         </section>
       </div>
@@ -657,25 +657,25 @@ function StructurePanel({ technical }: { technical: TechnicalStructure | null })
       <div>
         <div className="mb-1 flex items-center justify-between">
           <span className="flex items-center gap-1 text-caption text-ink-500">
-            市场结构（HH/HL）
+            {t('市场结构（HH/HL）')}
             <InfoHint hint={STRUCTURE_HINTS.market_structure} />
           </span>
-          <span className="text-caption font-medium text-ink-800">{pa.structure_label}</span>
+          <span className="text-caption font-medium text-ink-800">{t(pa.structure_label)}</span>
         </div>
         <ScoreBar label="价格行为" score={pa.score} />
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {pa.pattern_labels.map((label) => (
-            <span key={label} className="rounded-pill border border-line bg-card px-2 py-0.5 text-micro text-ink-600">{label}</span>
+            <span key={label} className="rounded-pill border border-line bg-card px-2 py-0.5 text-micro text-ink-600">{t(label)}</span>
           ))}
           {pa.spring && (
             <span className="inline-flex items-center gap-1 rounded-pill bg-up-50 px-2 py-0.5 text-micro text-up-700">
-              Spring 假跌破回收
+              {t('Spring 假跌破回收')}
               <InfoHint hint={STRUCTURE_HINTS.spring} size={11} />
             </span>
           )}
           {pa.upthrust && (
             <span className="inline-flex items-center gap-1 rounded-pill bg-down-50 px-2 py-0.5 text-micro text-down-700">
-              Upthrust 假突破
+              {t('Upthrust 假突破')}
               <InfoHint hint={STRUCTURE_HINTS.upthrust} size={11} />
             </span>
           )}
@@ -690,11 +690,11 @@ function StructurePanel({ technical }: { technical: TechnicalStructure | null })
       <div className="border-t border-line pt-2.5">
         <div className="mb-1 flex items-center justify-between">
           <span className="flex items-center gap-1 text-caption text-ink-500">
-            基底检测（枢轴聚类）
+            {t('基底检测（枢轴聚类）')}
             <InfoHint hint={STRUCTURE_HINTS.base_detection} />
           </span>
           <span className="text-caption font-medium text-ink-800">
-            {base ? `${base.resistance_touches ?? '—'} 次触碰 · 质量 ${base.quality !== null ? Math.round((base.quality ?? 0) * 100) : '—'}` : '未检测到完成基底'}
+            {base ? t('{n} 次触碰 · 质量 {q}', { n: base.resistance_touches ?? '—', q: base.quality !== null ? Math.round((base.quality ?? 0) * 100) : '—' }) : t('未检测到完成基底')}
           </span>
         </div>
         {base && (
@@ -711,10 +711,10 @@ function StructurePanel({ technical }: { technical: TechnicalStructure | null })
       <div className="border-t border-line pt-2.5">
         <div className="mb-1 flex items-center justify-between">
           <span className="flex items-center gap-1 text-caption text-ink-500">
-            量价一致（努力/结果）
+            {t('量价一致（努力/结果）')}
             <InfoHint hint={STRUCTURE_HINTS.vol_price} />
           </span>
-          <span className="rounded-pill bg-ai-50 px-2 py-0.5 text-micro font-medium text-ai-600">{vpm.setup_label}</span>
+          <span className="rounded-pill bg-ai-50 px-2 py-0.5 text-micro font-medium text-ai-600">{t(vpm.setup_label)}</span>
         </div>
         <dl className="grid grid-cols-3 gap-1.5 text-caption">
           <StructFact label="努力" value={vpm.effort !== null ? `${vpm.effort.toFixed(2)}x` : '—'} />
@@ -722,7 +722,7 @@ function StructurePanel({ technical }: { technical: TechnicalStructure | null })
           <StructFact label="假突破风险" value={`${vpm.false_breakout_risk > 0 ? '+' : ''}${vpm.false_breakout_risk}`} />
         </dl>
         {vpm.tags.length > 0 && (
-          <p className="mt-1.5 text-micro text-ink-400">{vpm.tags.join(' · ')}</p>
+          <p className="mt-1.5 text-micro text-ink-400">{vpm.tags.map((tag) => t(tag)).join(' · ')}</p>
         )}
       </div>
     </div>
@@ -771,7 +771,8 @@ function IndicatorGrid({ technical }: { technical: TechnicalStructure | null }) 
 function StructFact({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md bg-paper-2 px-2 py-1">
-      <dt className="text-micro text-ink-400">{label}</dt>
+      {/* label は msgid（呼び出し側は中文原文を渡す）—— ここで必ず訳す */}
+      <dt className="text-micro text-ink-400">{t(label)}</dt>
       <dd className="font-mono text-caption tnum text-ink-800">{value}</dd>
     </div>
   );
@@ -864,7 +865,8 @@ function MiniStat({ label, value, hint }: { label: string; value: string; hint?:
     <div className="rounded-md bg-paper-2 px-1.5 py-1.5 text-center">
       <div className="truncate font-mono text-body-s tnum text-ink-900">{value}</div>
       <div className="flex items-center justify-center gap-0.5 text-micro text-ink-400">
-        <span className="truncate">{label}</span>
+        {/* label は msgid（呼び出し側は中文原文）—— ここで訳さないと三言語とも中文のまま */}
+        <span className="truncate" title={t(label)}>{t(label)}</span>
         {hint && <InfoHint hint={hint} size={11} side="bottom" />}
       </div>
     </div>

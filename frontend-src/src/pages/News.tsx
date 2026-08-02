@@ -250,7 +250,7 @@ function NewsCard({ item }: { item: NewsItem }) {
           {/* 中文影响分析（独立区域，不混入日语正文） */}
           {item.analysis_zh && (
             <div className="mt-2 rounded-md bg-ai-50 p-2.5 text-body-s text-ink-800">
-              <span className="mr-1.5 rounded-sm bg-ai-600 px-1 py-0.5 text-micro font-bold text-white">中文分析</span>
+              <span className="mr-1.5 rounded-sm bg-ai-600 px-1 py-0.5 text-micro font-bold text-white">{t('中文分析')}</span>
               {item.analysis_zh.headline && <strong className="mr-1">{item.analysis_zh.headline}</strong>}
               {item.analysis_zh.impact}
               {/* 受影响股票只列代码与理由，不显示涨跌方向（产品决定移除方向预测） */}

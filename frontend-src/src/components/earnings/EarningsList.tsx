@@ -50,8 +50,10 @@ function ForecastPairBars({
   );
 }
 
+/* 短縮形（OP / NP）を使う: 行は元々コンパクトで、隣の実績行も「营利/纯利」表記。
+   フル表記だと英語 "Operating profit" が端末幅で確実に切れる。 */
 function metricLabel(metric: string | undefined): string {
-  return metric === 'net_profit' ? t('纯利益') : t('营业利益');
+  return metric === 'net_profit' ? t('纯利') : t('营利');
 }
 
 /* ---------------- 状态芯片 ---------------- */
@@ -234,7 +236,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                             </span>
                           </span>
                           <span className="block flex items-center gap-1 truncate text-micro text-ink-400">
-                            {forecast ? metricLabel(forecast.metric) : t('营业利益')}
+                            {forecast ? metricLabel(forecast.metric) : t('营利')}
                             {forecast?.direction === 'upward' && <span className="text-up-700">{t('上方修正')}</span>}
                             {forecast?.direction === 'downward' && <span className="text-down-700">{t('下方修正')}</span>}
                           </span>
@@ -298,7 +300,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                               </span>
                             </span>
                             <span className="block truncate text-micro text-ink-400">
-                              {forecast ? metricLabel(forecast.metric) : t('营业利益')}
+                              {forecast ? metricLabel(forecast.metric) : t('营利')}
                               {forecast?.direction === 'upward' && <span className="ml-1 text-up-700">{t('上方修正')}</span>}
                               {forecast?.direction === 'downward' && <span className="ml-1 text-down-700">{t('下方修正')}</span>}
                             </span>

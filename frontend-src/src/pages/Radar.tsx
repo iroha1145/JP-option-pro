@@ -201,12 +201,12 @@ function LeadBigCard({ event }: { event: RadarEvent }) {
               {structure.structure_label && (
                 <Tag tone="brand">{structure.structure_label}</Tag>
               )}
-              {structure.setup_label && <Tag tone="ai">{structure.setup_label}</Tag>}
+              {structure.setup_label && <Tag tone="ai">{t(structure.setup_label)}</Tag>}
               {(structure.pattern_labels ?? []).map((label) => (
-                <Tag key={label} tone="neutral">{label}</Tag>
+                <Tag key={label} tone="neutral">{t(label)}</Tag>
               ))}
-              {structure.spring && <Tag tone="up">Spring 假跌破回收</Tag>}
-              {structure.upthrust && <Tag tone="down">Upthrust 假突破</Tag>}
+              {structure.spring && <Tag tone="up">{t('Spring 假跌破回收')}</Tag>}
+              {structure.upthrust && <Tag tone="down">{t('Upthrust 假突破')}</Tag>}
             </div>
           )}
         </div>
@@ -273,7 +273,7 @@ function LeadChart({ bars, event }: { bars: StockBar[]; event: RadarEvent }) {
       markLines.push({
         yAxis: base.invalidation_price,
         lineStyle: { color: CH.down600, type: 'dotted', width: 1 },
-        label: { formatter: '失效位', position: 'insideEndBottom', color: CH.down600, fontSize: 10 },
+        label: { formatter: t('失效位'), position: 'insideEndBottom', color: CH.down600, fontSize: 10 },
       });
     }
     return {
@@ -335,7 +335,7 @@ function EventCard({ event, onSelect }: { event: RadarEvent; onSelect: () => voi
       <div className="flex flex-wrap items-center gap-1.5">
         <SignalChip signal={event.signal_type} />
         <StateChip state={event.state} />
-        {structure?.setup_label && <Tag tone="ai">{structure.setup_label}</Tag>}
+        {structure?.setup_label && <Tag tone="ai">{t(structure.setup_label)}</Tag>}
       </div>
       <div className="grid grid-cols-3 gap-1 text-caption">
         <CardFact label={t('收盘')} value={fmtPrice(event.snapshot.close as number | null)} />

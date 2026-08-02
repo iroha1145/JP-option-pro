@@ -90,8 +90,10 @@ export function ScoreBar({
   const resolvedHint = hint === false ? undefined : (hint ?? radarScoreHint(label));
   return (
     <div className="flex items-center gap-2">
-      <span className="flex w-24 shrink-0 items-center gap-1 text-caption text-ink-500">
-        <span className="truncate">{t(label)}</span>
+      {/* w-24 では日本語「高値掴みリスク」(84px) も英語 "Relative strength" (98px) も
+          切れる。三言語の最長 98px + InfoHint 分を見て w-32。 */}
+      <span className="flex w-32 shrink-0 items-center gap-1 text-caption text-ink-500">
+        <span className="truncate" title={t(label)}>{t(label)}</span>
         {resolvedHint && <InfoHint hint={resolvedHint} size={12} />}
       </span>
       <div className="track relative h-1.5 flex-1 overflow-hidden rounded-pill bg-line">
@@ -119,9 +121,12 @@ export function CodeCell({
   nameJa?: string | null;
   to?: string;
 }) {
+  /* flex-1 が無いと、弾性のある行（首页の一覧など）で親の余白を取りに行かず
+     コード章だけの幅に潰れ、会社名が幅 0 になって完全に消える（端末幅で実測）。
+     コード章は shrink-0 で守る。 */
   const body = (
-    <span className="flex min-w-0 items-center gap-2">
-      <span className="rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-body-s font-semibold text-brand-700">
+    <span className="flex min-w-0 flex-1 items-center gap-2">
+      <span className="shrink-0 rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-body-s font-semibold text-brand-700">
         {displayCode}
       </span>
       <span className="min-w-0 truncate text-body-s text-ink-800">{nameJa ?? '—'}</span>
@@ -129,7 +134,7 @@ export function CodeCell({
   );
   if (!to) return body;
   return (
-    <Link to={to} className="group flex min-w-0 items-center gap-2 hover:underline">
+    <Link to={to} className="group flex min-w-0 flex-1 items-center gap-2 hover:underline">
       {body}
     </Link>
   );

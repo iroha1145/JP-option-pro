@@ -7,15 +7,17 @@ import type { SearchResult } from '@/api/types';
 import { useAccess } from '@/hooks/useAccess';
 import { cn } from '@/lib/utils';
 
+/* 导航用短标签，不用页面全称：全称的日文译文（ブレイクアウトレーダー 等）
+   在 8 项并排时必然折行（用户实拍）。页面标题仍用全称。 */
 export const NAV_ITEMS: { path: string; label: string; index: string }[] = [
   { path: '/', label: '首页', index: '01' },
-  { path: '/market', label: '日本市场', index: '02' },
-  { path: '/radar', label: '突破雷达', index: '03' },
-  { path: '/screener', label: '筛选器', index: '04' },
-  { path: '/watchlist', label: '自选股', index: '05' },
-  { path: '/earnings', label: '决算日历', index: '06' },
+  { path: '/market', label: '市场', index: '02' },
+  { path: '/radar', label: '雷达', index: '03' },
+  { path: '/screener', label: '筛选', index: '04' },
+  { path: '/watchlist', label: '自选', index: '05' },
+  { path: '/earnings', label: '决算', index: '06' },
   { path: '/news', label: '新闻', index: '07' },
-  { path: '/data-status', label: '数据状态', index: '08' },
+  { path: '/data-status', label: '数据', index: '08' },
 ];
 
 export default function Navbar() {
@@ -38,7 +40,7 @@ export default function Navbar() {
               end={item.path === '/'}
               className={({ isActive }) =>
                 cn(
-                  'rounded-md px-2.5 py-1.5 text-body-s text-ink-600 transition-colors hover:bg-brand-50 hover:text-ink-900',
+                  'whitespace-nowrap rounded-md px-2.5 py-1.5 text-body-s text-ink-600 transition-colors hover:bg-brand-50 hover:text-ink-900',
                   isActive && 'bg-brand-50 font-medium text-brand-700',
                 )
               }

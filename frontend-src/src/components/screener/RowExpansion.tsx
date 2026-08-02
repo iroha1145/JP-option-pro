@@ -79,7 +79,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist }: RowEx
             {row.warnings.map((warning, index) => (
               <li key={index} className="flex items-start gap-1.5 text-micro leading-[16px] text-warn-600">
                 <span className="mt-px shrink-0" aria-hidden="true">⚠</span>
-                {warning}
+                {t(warning)}
               </li>
             ))}
           </ul>
@@ -100,7 +100,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist }: RowEx
               value={[priceAction.spring ? 'Spring' : null, priceAction.upthrust ? 'Upthrust' : null].filter(Boolean).join(' · ')}
             />
           )}
-          <StructLine label={t('量价关系')} value={volPrice.setup_label ?? '—'} />
+          <StructLine label={t('量价关系')} value={volPrice.setup_label ? t(volPrice.setup_label) : '—'} />
           <StructLine
             label="RSI14"
             value={technicals.rsi14 !== null && technicals.rsi14 !== undefined ? technicals.rsi14.toFixed(1) : '—'}

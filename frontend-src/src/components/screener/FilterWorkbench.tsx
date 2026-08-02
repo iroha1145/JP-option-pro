@@ -324,7 +324,7 @@ export default function FilterWorkbench({
                     onClick={() => applyPreset(preset.id)}
                     animate={{ scale: active ? 1.04 : 1 }}
                     transition={SPRING_POP}
-                    title={preset.description}
+                    title={preset.description ? t(preset.description) : undefined}
                     aria-pressed={active}
                     className={cn(
                       'flex h-8 items-center gap-1.5 rounded-pill border px-3 text-caption transition-colors duration-fast',

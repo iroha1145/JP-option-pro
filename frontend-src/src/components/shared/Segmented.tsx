@@ -25,7 +25,14 @@ export default function Segmented<T extends string>({ options, value, onChange, 
     <div
       ref={wrapRef}
       role="tablist"
-      className={cn('relative inline-flex items-center gap-0.5 rounded-md border border-line bg-card-warm p-0.5', className)}
+      /* max-w-full + 横スクロール: 英語ラベルは中文の 2〜3 倍幅になり
+         （"Triggered/Confirmed/Watching/Failed/All" で 385px）、375px の
+         端末では素の inline-flex が文書ごと横に溢れる。滑り子は
+         offsetLeft 基準なのでスクロールしても追従する。 */
+      className={cn(
+        'no-scrollbar relative inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-md border border-line bg-card-warm p-0.5',
+        className,
+      )}
     >
       <span
         aria-hidden="true"

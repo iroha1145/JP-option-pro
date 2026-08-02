@@ -173,11 +173,18 @@ export default function WeekScrubber({
                   </div>
 
                   <span className="mt-1 truncate whitespace-nowrap font-mono text-[10px] leading-4 text-ink-300 tnum">
-                    {dayItems.length > 0
-                      ? confirmedCount > 0 && confirmedCount < dayItems.length
-                        ? t('{n} 件 · 確定{c}', { n: dayItems.length, c: confirmedCount })
-                        : t('{n} 件', { n: dayItems.length })
-                      : ''}
+                    {/* 7 日グリッドの 1 セルは端末幅で ~48px。確定内訳は sm 以上でのみ出す
+                        （英語 "101 · 76 confirmed" は必ず切れる。状態は上のチップが示す） */}
+                    {dayItems.length > 0 ? (
+                      <>
+                        <span className="sm:hidden">{t('{n} 件', { n: dayItems.length })}</span>
+                        <span className="hidden sm:inline">
+                          {confirmedCount > 0 && confirmedCount < dayItems.length
+                            ? t('{n} 件 · 確定{c}', { n: dayItems.length, c: confirmedCount })
+                            : t('{n} 件', { n: dayItems.length })}
+                        </span>
+                      </>
+                    ) : ''}
                   </span>
                 </motion.div>
               );

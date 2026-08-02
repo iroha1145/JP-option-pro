@@ -94,7 +94,7 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
           {regime.warnings.map((warning, index) => (
             <li key={index} className="flex items-start gap-1.5 text-micro leading-[16px] text-warn-600">
               <span className="mt-px shrink-0" aria-hidden="true">⚠</span>
-              {warning}
+              {t(warning)}
             </li>
           ))}
         </ul>
@@ -276,7 +276,7 @@ export function MethodCard({
                 </div>
                 <p className="mt-3 text-caption leading-[18px] text-ink-500">
                   {profile?.description
-                    ? profile.description
+                    ? t(profile.description)
                     : t('内在强度为六族加权合成（0–100，缺失重新配权）。')}
                 </p>
                 <p className="mt-1.5 text-micro leading-[16px] text-ink-400">

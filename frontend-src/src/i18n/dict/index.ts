@@ -95,7 +95,7 @@ export const DICT: Record<string, [string, string]> = {
   共: ['Total', '全'],
   条: ['items', '件'],
   第: ['Page', 'ページ'],
-  页: ['', ''],
+  页: ['', ''],  // 未使用（'第 N 页' 用の接尾辞）
   上一页: ['Prev', '前へ'],
   下一页: ['Next', '次へ'],
   加入自选: ['Add to watchlist', 'ウォッチリストに追加'],
@@ -586,4 +586,316 @@ export const DICT: Record<string, [string, string]> = {
   当日中位: ['1d median', '当日中央値'],
   '近20日中位': ['20d median', '20日中央値'],
   '上涨占比 {pct}': ['{pct} advancing', '値上がり比率 {pct}'],
+
+  /* ---- i18n 全体監査: 未収録だった UI 文言 ---- */
+  决算: ['Earnings', '決算'],
+  数据: ['Data', 'データ'],
+  '请求超时，请重试': ['Request timed out — please retry', 'リクエストがタイムアウトしました。再試行してください'],
+  请求失败: ['Request failed', 'リクエストに失敗しました'],
+  未知错误: ['Unknown error', '不明なエラー'],
+  只: ['names', '銘柄'],
+  '{n} 只': ['{n}', '{n} 銘柄'],
+  分: ['pt', '点'],
+  涨跌数据缺失: ['Change data unavailable', '騰落データなし'],
+  '持平 0 {suffix}': ['Flat 0 {suffix}', '変わらず 0 {suffix}'],
+  '持平 0.00%': ['Flat 0.00%', '変わらず 0.00%'],
+  上升: ['up', '上昇'],
+  下降: ['down', '下落'],
+  涨: ['up', '高'],
+  跌: ['down', '安'],
+  '行情为延迟数据 · 仅供研究参考': [
+    'Delayed quotes · for research only',
+    '相場は遅延データ · リサーチ目的のみ',
+  ],
+  分项强度: ['Factor scores', '要素別スコア'],
+  观察: ['Watch', '監視'],
+  趋势: ['Trend', 'トレンド'],
+  突破质量: ['Breakout quality', 'ブレイク品質'],
+  价格行为: ['Price action', 'プライスアクション'],
+  'TOPIX 相对 25/75/200 日均线的位置与斜率。': [
+    'TOPIX position and slope relative to its 25/75/200-day moving averages.',
+    'TOPIX の 25/75/200 日移動平均に対する位置と傾き。',
+  ],
+  'TOPIX 近 20 日收益的强弱。': [
+    'Strength of TOPIX returns over the last 20 days.',
+    'TOPIX の直近 20 日リターンの強弱。',
+  ],
+  '全市场收于 200 日线上方的个股占比。': [
+    'Share of all listed names closing above their 200-day moving average.',
+    '全市場で 200 日線を上回って引けた銘柄の割合。',
+  ],
+  '成交额高于自身 20 日均额的个股占比。': [
+    'Share of names whose turnover exceeds their own 20-day average.',
+    '売買代金が自身の 20 日平均を上回る銘柄の割合。',
+  ],
+  '全市场 20 日收益中位数的强弱。': [
+    'Strength of the market-wide median 20-day return.',
+    '全市場の 20 日リターン中央値の強弱。',
+  ],
+  'グロース与プライム市场 20 日收益中位数之差。': [
+    'Spread between the Growth and Prime market median 20-day returns.',
+    'グロースとプライムの 20 日リターン中央値の差。',
+  ],
+  'MA50 斜率': ['MA50 slope', 'MA50 の傾き'],
+  区间位置: ['Range position', 'レンジ内位置'],
+  波动稳定: ['Volatility stability', 'ボラティリティ安定度'],
+  '市场结构（HH/HL）': ['Market structure (HH/HL)', '相場構造（HH/HL）'],
+  '基底检测（枢轴聚类）': ['Base detection (pivot clustering)', 'ベース検出（ピボットクラスタリング）'],
+  '量价一致（努力/结果）': ['Effort vs result (volume/price)', '出来高と値動きの一致（努力/結果）'],
+  'Spring 假跌破回收': ['Spring (failed breakdown reclaimed)', 'スプリング（ダマシ下抜けの回復）'],
+  'Upthrust 假突破': ['Upthrust (failed breakout)', 'アップスラスト（ダマシ上抜け）'],
+  图上标记说明: ['Chart annotations', 'チャート上の記号の説明'],
+
+  /* ---- i18n 全体監査: 指標説明（InfoHint 本文）---- */
+  '14日 Wilder RSI，衡量近期涨跌动能的相对强弱（0-100）。': [
+    '14-day Wilder RSI, measuring the relative strength of recent up/down momentum (0-100).',
+    '14 日 Wilder RSI。直近の値動きモメンタムの相対的な強弱を 0-100 で表します。',
+  ],
+  '入评分时按折线映射：RSI≈68 得分最高（88 分），30 以下与 80 以上都会降分——动能强但未极端才加分。': [
+    'Mapped into the score by a piecewise curve: RSI≈68 scores highest (88); below 30 and above 80 both lose points — strong but not extreme momentum is what earns credit.',
+    'スコア化は折れ線マッピング: RSI≈68 が最高（88 点）で、30 以下・80 以上はいずれも減点されます。モメンタムが強く、かつ極端でない状態だけが加点対象です。',
+  ],
+  'MACD(12/26/9) 柱状图最近 3 根的变化量，按收盘价折算成百分比。正值表示多头动能在增强，负值表示衰减。': [
+    'Change in the MACD(12/26/9) histogram over the last 3 bars, expressed as a percentage of the close. Positive means bullish momentum is building; negative means it is fading.',
+    'MACD(12/26/9) ヒストグラムの直近 3 本の変化量を終値に対する％で表したもの。プラスは買い方モメンタムの増勢、マイナスは減衰を示します。',
+  ],
+  'Kaufman 效率比：63 日净涨跌幅除以逐日波动路径总长。越接近 1 越接近单边直线行情，接近 0 则为来回震荡。': [
+    'Kaufman efficiency ratio: the 63-day net move divided by the total length of the daily path. Closer to 1 means a straight one-way trend; closer to 0 means choppy back-and-forth.',
+    'Kaufman 効率比: 63 日の正味変動幅を日々の値動きの総経路長で割った値。1 に近いほど一方向の直線的な相場、0 に近いほど往来の激しいもみ合いです。',
+  ],
+  '50 日均线在最近 21 个交易日的变化率，衡量中期趋势的方向与坡度。': [
+    'Rate of change of the 50-day moving average over the last 21 trading days — the direction and gradient of the medium-term trend.',
+    '50 日移動平均の直近 21 営業日における変化率。中期トレンドの方向と傾きを表します。',
+  ],
+  '收盘价在最近 60 日高低区间内的位置：0% 贴着区间底，100% 贴着区间顶。': [
+    'Where the close sits inside the last 60 days\' high-low range: 0% is the bottom of the range, 100% the top.',
+    '終値が直近 60 日の高値・安値レンジ内のどこにあるか。0% がレンジ下限、100% がレンジ上限です。',
+  ],
+  '显示值经 5 日 EMA 平滑，避免单日毛刺。': [
+    'The displayed value is smoothed with a 5-day EMA to avoid single-day spikes.',
+    '表示値は 5 日 EMA で平滑化しており、単日のノイズを抑えています。',
+  ],
+  '最近 20 日日收益率的标准差。数值越小，趋势运行越平稳；放大往往伴随行情性质切换。': [
+    'Standard deviation of daily returns over the last 20 days. Smaller means a steadier trend; an expansion often accompanies a change in market character.',
+    '直近 20 日の日次リターンの標準偏差。小さいほどトレンドは安定して推移し、拡大は相場の性格転換を伴うことが多いです。',
+  ],
+  '以结构状态定基准分（上升结构 82 / 区间震荡 50 / 下降结构 24），再叠加K线形态修正（吞没・锤子・射击之星各 ±6，合计上限 ±10）与陷阱修正（Spring +8 / Upthrust −8）。': [
+    'The structural state sets the base score (uptrend 82 / range 50 / downtrend 24), then candlestick adjustments (engulfing, hammer, shooting star: ±6 each, ±10 combined cap) and trap adjustments (Spring +8 / Upthrust −8) are applied.',
+    '構造の状態で基準点を決め（上昇構造 82 / レンジ 50 / 下降構造 24）、そこにローソク足形状の補正（包み足・ハンマー・流れ星 各 ±6、合計上限 ±10）とダマシ補正（スプリング +8 / アップスラスト −8）を加算します。',
+  ],
+  '用分形摆动点判断结构：比较最近两个摆动高点与两个摆动低点的抬升/压低组合，得到 HH+HL 上升、LH+LL 下降等六种状态。': [
+    'Structure is read from fractal swing points: comparing whether the last two swing highs and two swing lows are rising or falling yields six states such as HH+HL (uptrend) and LH+LL (downtrend).',
+    'フラクタルのスイングポイントで構造を判定します。直近 2 つのスイング高値と 2 つのスイング安値が切り上がっているか切り下がっているかの組み合わせから、HH+HL の上昇、LH+LL の下降など 6 状態を導きます。',
+  ],
+  '摆动点只取「已确认」的分形（右侧还需再走 3 根K线），因此不存在未来函数；最新 3 根K线不会产生新摆动点。': [
+    'Only confirmed fractals count as swing points (three more bars must print to the right), so there is no look-ahead; the latest three bars never create a new swing point.',
+    'スイングポイントは「確定済み」のフラクタルのみを採用します（右側にさらに 3 本必要）。したがって未来関数はなく、直近 3 本から新しいスイングポイントは生まれません。',
+  ],
+  '在 10~80 日的七档窗口上寻找分形枢轴高点，按 max(1%×价格, 0.5×ATR) 的容差聚成阻力带，至少 2 次触碰才算有效基底；多窗口择优保留质量最高的一个。': [
+    'Fractal pivot highs are searched across seven windows from 10 to 80 days and clustered into a resistance band with a tolerance of max(1% × price, 0.5 × ATR); at least two touches are required for a valid base, and the highest-quality window is kept.',
+    '10〜80 日の 7 段階のウィンドウでフラクタルのピボット高値を探し、max(1%×価格, 0.5×ATR) の許容幅でレジスタンス帯にクラスタリングします。有効なベースと認めるには最低 2 回のタッチが必要で、複数ウィンドウのうち品質が最も高いものを採用します。',
+  ],
+  '质量为七维加权：紧致度 25% / 持续时间 15% / 触碰次数 15% / 成交额收缩 15% / ATR收缩 10% / 支撑完整性 10% / 低点抬升 10%。检测只用突破日之前的K线。': [
+    'Quality is a seven-factor weighting: tightness 25% / duration 15% / touch count 15% / turnover contraction 15% / ATR contraction 10% / support integrity 10% / rising lows 10%. Detection uses only bars before the breakout day.',
+    '品質は 7 要素の加重です: タイトさ 25% / 期間 15% / タッチ回数 15% / 売買代金の収縮 15% / ATR の収縮 10% / サポートの健全性 10% / 安値切り上げ 10%。検出にはブレイク日より前のローソク足のみを使用します。',
+  ],
+  'Wyckoff 式检验：努力 = 近10日成交额中位数 ÷ 60日基准；结果 = 同期涨跌幅 ÷ 波动基准。区间收缩时，量维持而价稳含上行偏向为「多头吸收」（突破质量 +12），量价同枯为「真空收缩」（−10、假突破风险 +12）。': [
+    'A Wyckoff-style test: effort = median turnover of the last 10 days ÷ the 60-day baseline; result = the move over the same period ÷ the volatility baseline. While the range contracts, volume holding up with prices steady-to-firm reads as bullish absorption (breakout quality +12), while both volume and price drying up reads as a vacuum contraction (−10, false-breakout risk +12).',
+    'Wyckoff 流の検証です。努力＝直近 10 日の売買代金中央値 ÷ 60 日基準、結果＝同期間の騰落率 ÷ ボラティリティ基準。レンジ収縮の局面で、出来高が維持され値位置が底堅い場合は「買い方の吸収」（ブレイク品質 +12）、出来高も値動きも枯れる場合は「真空収縮」（−10、ダマシリスク +12）と判定します。',
+  ],
+  '判定辅以 CLV（收盘在日内区间的位置）、涨跌日成交额比与 OBV 斜率；成交额缺失的交易日整行剔除，不当零处理。': [
+    'The call is supported by CLV (where the close sits in the day\'s range), the up-day/down-day turnover ratio and the OBV slope. Trading days with missing turnover are dropped entirely rather than treated as zero.',
+    '判定には CLV（終値の日中レンジ内の位置）、上昇日と下落日の売買代金比、OBV の傾きを併用します。売買代金が欠損している営業日は行ごと除外し、ゼロとして扱いません。',
+  ],
+  '近 8 根K线中，盘中跌破前一个已确认摆动低点但收盘收回其上——空头陷阱，偏多信号（价格行为 +8）。': [
+    'Within the last 8 bars, price broke below the previous confirmed swing low intraday but closed back above it — a bear trap and a bullish signal (price action +8).',
+    '直近 8 本のうち、ザラ場で直前の確定スイング安値を下抜けたものの終値でその上に戻した状態。売り方のダマシであり強気シグナルです（プライスアクション +8）。',
+  ],
+  '近 8 根K线中，盘中突破前一个已确认摆动高点但收盘跌回其下——多头陷阱，偏空信号（价格行为 −8，并计入追高风险）。': [
+    'Within the last 8 bars, price broke above the previous confirmed swing high intraday but closed back below it — a bull trap and a bearish signal (price action −8, and it counts toward chase risk).',
+    '直近 8 本のうち、ザラ場で直前の確定スイング高値を上抜けたものの終値でその下に押し戻された状態。買い方のダマシであり弱気シグナルです（プライスアクション −8、高値掴みリスクにも加算）。',
+  ],
+  '浅蓝色横带 = 检出基底的阻力带；绿色点线 = 失效位（基底支撑下沿再减 0.1×ATR）；▼ = 已确认摆动高点，▲ = 已确认摆动低点。': [
+    'Pale blue band = the detected base\'s resistance zone; green dotted line = the invalidation level (the base\'s lower support minus a further 0.1 × ATR); ▼ = confirmed swing high, ▲ = confirmed swing low.',
+    '薄い青の帯＝検出したベースのレジスタンス帯、緑の点線＝失効ライン（ベースのサポート下限からさらに 0.1×ATR 下）、▼＝確定スイング高値、▲＝確定スイング安値。',
+  ],
+  '仅复权视图绘制这些标记；未检出基底时只画摆动点。': [
+    'These annotations are drawn on the adjusted-price view only; when no base is detected, only the swing points are shown.',
+    'これらの記号は調整後価格の表示でのみ描画されます。ベースが検出されない場合はスイングポイントのみを表示します。',
+  ],
+  '基底质量 40% + 突破确认 45% + 流动性 15% 的加权，再叠加量价一致给出的 ±12 上限调整（调整量单独列示，可审计）。': [
+    'A weighting of base quality 40% + breakout confirmation 45% + liquidity 15%, plus an adjustment of up to ±12 from the effort-vs-result test (the adjustment is listed separately so it can be audited).',
+    'ベース品質 40% ＋ ブレイク確認 45% ＋ 流動性 15% の加重に、出来高と値動きの一致判定による上限 ±12 の調整を加えます（調整量は監査できるよう別掲します）。',
+  ],
+  '均线多头排列 22% + 站上75日线 12% + 63日涨幅映射 22% + 趋势持续度 14% + 价格结构 20% + RSI 映射 10%。': [
+    'MA bullish alignment 22% + above the 75-day line 12% + 63-day return mapping 22% + trend persistence 14% + price structure 20% + RSI mapping 10%.',
+    '移動平均の上昇整列 22% ＋ 75 日線上 12% ＋ 63 日騰落率マッピング 22% ＋ トレンド継続度 14% ＋ 価格構造 20% ＋ RSI マッピング 10%。',
+  ],
+  '全站规则：缺失的分量连同权重一起剔除并重新归一，绝不用 50 分冒充中性；置信度=剩余权重占比。': [
+    'A site-wide rule: a missing component is removed together with its weight and the rest are renormalised — a neutral 50 is never substituted. Confidence is the share of weight that remained.',
+    '全站共通のルール: 欠損した要素はその重みごと除外して再正規化し、中立の 50 点で代用することは決してありません。信頼度は残った重みの割合です。',
+  ],
+  '检出完成基底时使用枢轴聚类的实测七维（紧致度/持续/触碰/量缩/ATR收缩/支撑/低点抬升）；未检出时退回代理指标（波动收缩、20日区间等），并压低置信度。': [
+    'When a completed base is detected, the seven measured factors from pivot clustering are used (tightness / duration / touches / turnover contraction / ATR contraction / support / rising lows); otherwise the score falls back to proxies (volatility contraction, the 20-day range, etc.) and confidence is lowered.',
+    '完成したベースを検出できた場合はピボットクラスタリングによる実測 7 要素（タイトさ/期間/タッチ/出来高収縮/ATR 収縮/サポート/安値切り上げ）を使用します。検出できない場合は代理指標（ボラティリティ収縮、20 日レンジなど）に退避し、信頼度を下げます。',
+  ],
+  '收盘在日内区间的位置 25% + 成交额放大倍数（对20日中位数）30% + 突破幅度（按ATR折算）25% + 站稳天数 20%。': [
+    'Close position within the day\'s range 25% + turnover expansion vs the 20-day median 30% + breakout extent in ATR terms 25% + days held above the level 20%.',
+    '終値の日中レンジ内位置 25% ＋ 売買代金の増加倍率（20 日中央値比）30% ＋ ブレイク幅（ATR 換算）25% ＋ 定着日数 20%。',
+  ],
+  '对 TOPIX 的 63 日超额收益 60% + 对所属东证33业种中位数的超额 40%，各自映射 −5%~+25% 区间。': [
+    '63-day excess return versus TOPIX 60% + excess versus the median of its TSE 33-sector group 40%, each mapped over a −5% to +25% range.',
+    'TOPIX に対する 63 日超過リターン 60% ＋ 所属する東証 33 業種の中央値に対する超過 40%。いずれも −5%〜+25% の範囲でマッピングします。',
+  ],
+  '当日成交额 ÷ 前20日中位数（映射 1~5 倍）60% + 近5日均额 ÷ 20日均额（映射 0.8~2.0）40%。用成交额而非成交量——不同价位的股票原始成交量不可比。': [
+    'Today\'s turnover ÷ the prior 20-day median (mapped 1× to 5×) 60% + the 5-day average ÷ the 20-day average (mapped 0.8 to 2.0) 40%. Turnover is used rather than share volume — raw volumes are not comparable across different price levels.',
+    '当日の売買代金 ÷ 直前 20 日の中央値（1〜5 倍でマッピング）60% ＋ 直近 5 日平均 ÷ 20 日平均（0.8〜2.0 でマッピング）40%。出来高ではなく売買代金を用います —— 株価水準の異なる銘柄では出来高そのものを比較できないためです。',
+  ],
+  '20 日平均成交额按对数刻度映射：约 5000 万円→0 分，100 億円→满分。': [
+    'The 20-day average turnover is mapped on a logarithmic scale: roughly ¥50M scores 0 and ¥10B scores full marks.',
+    '20 日平均売買代金を対数スケールでマッピングします。およそ 5,000 万円で 0 点、100 億円で満点です。',
+  ],
+  'TOPIX 相对 50 日线（±20 分）与 200 日线（±15 分）的位置，加上 20 日动量（±15 分封顶），基准 50 分。': [
+    'TOPIX position relative to its 50-day line (±20 points) and 200-day line (±15 points), plus 20-day momentum (capped at ±15 points), around a baseline of 50.',
+    'TOPIX の 50 日線に対する位置（±20 点）と 200 日線に対する位置（±15 点）に、20 日モメンタム（上限 ±15 点）を加算します。基準は 50 点です。',
+  ],
+  '所属业种的 20 日中位涨幅在全部东证33业种中的中位秩分位（0-100）。': [
+    'The percentile rank (0-100) of the sector\'s 20-day median return among all 33 TSE sectors.',
+    '所属業種の 20 日中央騰落率が、東証 33 業種全体の中でどの順位パーセンタイル（0-100）にあるか。',
+  ],
+  '取「距25日线的ATR倍数（1~4倍映射）」与「5日涨幅（5%~25%映射）」的较大者，再加量价一致的假突破风险与 Upthrust（+8）。': [
+    'The larger of the ATR-multiple distance from the 25-day line (mapped 1× to 4×) and the 5-day gain (mapped 5% to 25%), plus false-breakout risk from the effort-vs-result test and Upthrust (+8).',
+    '「25 日線からの乖離の ATR 倍数（1〜4 倍でマッピング）」と「5 日騰落率（5%〜25% でマッピング）」の大きい方を採り、そこに出来高と値動きの一致判定によるダマシリスクとアップスラスト（+8）を加算します。',
+  ],
+  '作为惩罚项：超过 50 的部分 ×0.25 从优先级中扣除。': [
+    'Applied as a penalty: the amount above 50 is multiplied by 0.25 and subtracted from the priority score.',
+    'ペナルティ項として、50 を超えた分に ×0.25 を掛けて優先度から差し引きます。',
+  ],
+  '信用倍率（信用买残 ÷ 卖残，周次数据）映射 2x~15x；倍率越高多头越拥挤。': [
+    'The margin ratio (margin longs ÷ shorts, weekly data) mapped over 2× to 15×; the higher the ratio, the more crowded the long side.',
+    '信用倍率（信用買い残 ÷ 売り残、週次データ）を 2 倍〜15 倍でマッピングします。倍率が高いほど買い方が混雑しています。',
+  ],
+  '作为惩罚项：超过 50 的部分 ×0.15 从优先级中扣除。': [
+    'Applied as a penalty: the amount above 50 is multiplied by 0.15 and subtracted from the priority score.',
+    'ペナルティ項として、50 を超えた分に ×0.15 を掛けて優先度から差し引きます。',
+  ],
+  '有效K线样本天数按 30→250 天线性映射；上市不久或长期停牌的标的得分低。': [
+    'The number of usable bars is mapped linearly from 30 to 250 days; recently listed names and long-suspended issues score low.',
+    '有効なローソク足のサンプル日数を 30〜250 日で線形マッピングします。上場間もない銘柄や長期売買停止の銘柄は低スコアになります。',
+  ],
+  '综合质量 34% + 相对强度 22% + 市场契合 12% + 量能 12% + 行业契合 10% + 数据置信度 10%，再减去追高与拥挤度的惩罚。': [
+    'Overall quality 34% + relative strength 22% + market fit 12% + participation 12% + sector fit 10% + data confidence 10%, less the chase-risk and crowding penalties.',
+    '総合質 34% ＋ 相対強度 22% ＋ 地合い適合 12% ＋ 出来高参加 12% ＋ 業種適合 10% ＋ データ信頼度 10%。ここから高値掴みと混雑度のペナルティを差し引きます。',
+  ],
+  '最终排序分 = 内在强度 78% + 市场形态 8% + 偏好适配 14%（各层按置信度加权）。内在强度由短期/中期/长期/趋势/突破质量/价格行为六族合成，权重 16/24/14/16/15/15。': [
+    'Final ranking score = intrinsic strength 78% + market regime 8% + profile fit 14% (each layer weighted by its confidence). Intrinsic strength combines six families — short-term / medium-term / long-term / trend / breakout quality / price action — weighted 16/24/14/16/15/15.',
+    '最終ランキングスコア＝内在強度 78% ＋ 市場フェーズ 8% ＋ プロファイル適合 14%（各層は信頼度で加重）。内在強度は短期/中期/長期/トレンド/ブレイク品質/プライスアクションの 6 系統を 16/24/14/16/15/15 の重みで合成します。',
+  ],
+  '缺失维度按剩余权重重新归一，绝不填中性 50 分；置信度 = 实际可用权重占比。': [
+    'Missing dimensions are renormalised across the remaining weights — a neutral 50 is never filled in. Confidence is the share of weight actually available.',
+    '欠損した次元は残りの重みで再正規化し、中立の 50 点を埋めることはありません。信頼度は実際に利用できた重みの割合です。',
+  ],
+  '短期(5/20日收益·量比·MA25距离·RSI)、中期(63日收益·TOPIX相对·均线排列·MACD·MA75距离)、长期(126/252日收益·MA200距离·52周高位)、趋势(动量·效率比·MA50斜率·稳定度)、突破质量(52周高位·20日收益·价格行为±量价修正)、价格行为(HH/HL结构评分)。': [
+    'Short-term (5/20-day returns · volume ratio · distance from MA25 · RSI); medium-term (63-day return · vs TOPIX · MA alignment · MACD · distance from MA75); long-term (126/252-day returns · distance from MA200 · 52-week high position); trend (momentum · efficiency ratio · MA50 slope · stability); breakout quality (52-week high position · 20-day return · price action ± effort-vs-result adjustment); price action (HH/HL structure score).',
+    '短期(5/20 日リターン・出来高倍率・MA25 乖離・RSI)、中期(63 日リターン・TOPIX 相対・移動平均整列・MACD・MA75 乖離)、長期(126/252 日リターン・MA200 乖離・52 週高値圏)、トレンド(モメンタム・効率比・MA50 の傾き・安定度)、ブレイク品質(52 週高値圏・20 日リターン・プライスアクション±出来高補正)、プライスアクション(HH/HL 構造スコア)。',
+  ],
+  '内在强度在全部已评分股票中的中位序百分位（100 = 最强）。同业种分位按 33 业种分组计算。': [
+    'The percentile rank of intrinsic strength among all scored stocks (100 = strongest). The sector percentile is computed within each of the 33 sector groups.',
+    '内在強度が、スコア付けされた全銘柄の中で何パーセンタイルに位置するか（100 ＝ 最強）。同業種パーセンタイルは 33 業種ごとにグループ分けして算出します。',
+  ],
+  '六维：TOPIX 趋势（对 25/75/200 日线的位置与斜率）、动量（TOPIX 20日收益）、广度（200日线上方个股占比）、量能（成交额高于自身20日均额的个股占比）、风险偏好（全市场20日收益中位数）、强弱价差（グロース−プライム 20日中位收益差）。': [
+    'Six dimensions: TOPIX trend (position and slope versus the 25/75/200-day lines), momentum (TOPIX 20-day return), breadth (share of names above their 200-day line), participation (share of names whose turnover exceeds their own 20-day average), risk appetite (market-wide median 20-day return) and the strength spread (Growth minus Prime median 20-day return).',
+    '6 次元: TOPIX トレンド（25/75/200 日線に対する位置と傾き）、モメンタム（TOPIX の 20 日リターン）、広がり（200 日線を上回る銘柄の割合）、出来高参加（売買代金が自身の 20 日平均を上回る銘柄の割合）、リスク選好（全市場の 20 日リターン中央値）、強弱スプレッド（グロース−プライムの 20 日リターン中央値差）。',
+  ],
+  '综合分权重 24/18/22/12/12/12；缺失维度重新配权。市场层只占最终排序分 8%。': [
+    'The composite weights are 24/18/22/12/12/12; missing dimensions are reweighted. The market layer accounts for only 8% of the final ranking score.',
+    '総合スコアの重みは 24/18/22/12/12/12 で、欠損した次元は重みを配分し直します。市場層が最終ランキングスコアに占める割合は 8% にすぎません。',
+  ],
+
+  /* ---- i18n 監査 2: t() を通っていなかった文言 + 後端が返す構造/形状ラベル ---- */
+  技术指标: ['Technical indicators', 'テクニカル指標'],
+  K线结构分析: ['Chart structure analysis', 'チャート構造分析'],
+  图例: ['Legend', '凡例'],
+  失效位: ['Invalidation', '失効ライン'],
+  上場廃止: ['Delisted', '上場廃止'],
+  中文分析: ['Chinese analysis', '中国語分析'],
+  摆动阻力: ['Swing resistance', 'スイング上値抵抗'],
+  摆动支撑: ['Swing support', 'スイング下値支持'],
+  阻力带: ['Resistance band', 'レジスタンス帯'],
+  基底区间: ['Base period', 'ベース期間'],
+  支撑下沿: ['Support floor', 'サポート下限'],
+  努力: ['Effort', '努力（出来高）'],
+  结果: ['Result', '結果（値動き）'],
+  假突破风险: ['False-breakout risk', 'ダマシリスク'],
+  未检测到完成基底: ['No completed base detected', '完成したベースは未検出'],
+  '{n} 次触碰 · 质量 {q}': ['{n} touches · quality {q}', 'タッチ {n} 回 · 品質 {q}'],
+  /* 後端 _STRUCTURE_LABELS */
+  'HH+HL 上升结构': ['HH+HL uptrend', 'HH+HL の上昇構造'],
+  高点抬升待确认: ['Higher highs, unconfirmed', '高値切り上げ（未確認）'],
+  低点抬升筑底: ['Higher lows, basing', '安値切り上げ（底固め）'],
+  区间震荡: ['Range-bound', 'レンジ推移'],
+  高点压低: ['Lower highs', '高値切り下げ'],
+  'LH+LL 下降结构': ['LH+LL downtrend', 'LH+LL の下降構造'],
+  /* 後端 _PATTERN_LABELS */
+  看涨吞没: ['Bullish engulfing', '陽の包み足'],
+  看跌吞没: ['Bearish engulfing', '陰の包み足'],
+  锤子线: ['Hammer', 'ハンマー'],
+  射击之星: ['Shooting star', '流れ星'],
+  内包线: ['Inside bar', 'はらみ足'],
+
+  /* ---- i18n 監査 3: 後端が返す量価/分類/警告ラベル ---- */
+  未收缩: ['No contraction', '収縮なし'],
+  未明显收缩: ['No clear contraction', '明確な収縮なし'],
+  真空上涨: ['Vacuum advance', '真空の上昇'],
+  吸收型收缩: ['Absorption contraction', '吸収型の収縮'],
+  多头吸收: ['Bullish absorption', '買い方の吸収'],
+  空头吸收: ['Bearish absorption', '売り方の吸収'],
+  吸收未确认: ['Absorption unconfirmed', '吸収は未確認'],
+  方向未确认: ['Direction unconfirmed', '方向は未確認'],
+  真空型收缩: ['Vacuum contraction', '真空型の収縮'],
+  真空型: ['Vacuum', '真空型'],
+  平衡收缩: ['Balanced contraction', '均衡した収縮'],
+  高努力高结果: ['High effort, high result', '高努力・高結果'],
+  高换手吸收: ['High-turnover absorption', '高回転の吸収'],
+  低量真空移动: ['Low-volume vacuum move', '薄商いの真空的な動き'],
+  质量趋势: ['Quality trend', '良質なトレンド'],
+  相对强势: ['Relative strength', '相対的に強い'],
+  回暖候选: ['Recovery candidate', '持ち直し候補'],
+  高风险题材: ['High-risk theme', '高リスクのテーマ株'],
+  数据不足: ['Insufficient data', 'データ不足'],
+  低于200日线: ['Below the 200-day line', '200日線を下回る'],
+  回撤较深: ['Deep drawdown', '下落幅が大きい'],
+  波动偏高: ['Elevated volatility', 'ボラティリティ高め'],
+  高波动: ['High volatility', '高ボラティリティ'],
+  流动性边缘: ['Marginal liquidity', '流動性が限界的'],
+  长期趋势仍未修复: ['Long-term trend not yet repaired', '長期トレンドは未回復'],
+  'LH/LL 下降结构未破坏': ['LH/LL downtrend still intact', 'LH/LL の下降構造は崩れていない'],
+  '真空型收缩，假突破风险偏高': [
+    'Vacuum contraction — elevated false-breakout risk',
+    '真空型の収縮。ダマシのリスクが高めです',
+  ],
+  '空头吸收结构，向上突破需要更强确认': [
+    'Bearish absorption — an upside break needs stronger confirmation',
+    '売り方の吸収構造。上抜けにはより強い確認が必要です',
+  ],
+  '前高假突破（Upthrust），追高需谨慎': [
+    'Upthrust at the prior high — be cautious chasing',
+    '直近高値でのアップスラスト（ダマシ）。高値追いは慎重に',
+  ],
+  '市场行情不足，市场维度暂不计入评分': [
+    'Insufficient market data — the market dimension is excluded from scoring',
+    '市場データが不足しているため、市場次元はスコアに算入していません',
+  ],
+
+  /* ---- i18n 監査 4: 後端のプロファイル説明文 ---- */
+  '波动惩罚更重、流动性权重更高': [
+    'Heavier volatility penalty, higher liquidity weight',
+    'ボラティリティのペナルティを重く、流動性の比重を高く',
+  ],
+  '接受更高波动、突破权重更高': [
+    'Accepts higher volatility, heavier breakout weight',
+    '高めのボラティリティを許容し、ブレイクの比重を高く',
+  ],
+  '进取评分 + 强度分 ≥70': ['Aggressive scoring + strength ≥70', '進取スコア ＋ 強度スコア 70 以上'],
+  '稳健评分（波动惩罚加重）': ['Conservative scoring (heavier volatility penalty)', '稳健スコア（ボラティリティのペナルティを加重）'],
 };

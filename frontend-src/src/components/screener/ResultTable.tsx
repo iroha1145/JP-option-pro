@@ -112,7 +112,7 @@ export default function ResultTable({
                   </td>
                   <td className="px-3 py-2">
                     {row.classification ? (
-                      <span className="whitespace-nowrap rounded-xs bg-paper-2 px-1.5 py-0.5 text-micro text-ink-600">{row.classification}</span>
+                      <span className="whitespace-nowrap rounded-xs bg-paper-2 px-1.5 py-0.5 text-micro text-ink-600">{t(row.classification)}</span>
                     ) : (
                       <span className="text-ink-300">—</span>
                     )}

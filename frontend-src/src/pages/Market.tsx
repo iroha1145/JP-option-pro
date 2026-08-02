@@ -127,7 +127,6 @@ export default function Market() {
               <header className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="text-h3 text-ink-900">{t('指数')}</h2>
                 <Segmented
-                  className="max-w-full overflow-x-auto"
                   options={(market.data?.indices ?? []).slice(0, 4).map((index) => ({
                     value: index.index_code,
                     label: index.name.replace('東証', '').replace('市場指数', ''),
