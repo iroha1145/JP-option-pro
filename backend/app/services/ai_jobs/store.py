@@ -211,6 +211,22 @@ class AIJobStore(SQLiteRepository):
                 ),
             )
 
+    def jobs_for_news(self, news_ids: list[str]) -> dict[str, dict[str, str]]:
+        """news_id → {job_type: status}（フィードの分析状態表示用）。"""
+
+        if not news_ids:
+            return {}
+        placeholders = ", ".join("?" for _ in news_ids)
+        with self.read() as connection:
+            rows = connection.execute(
+                f"SELECT news_id, job_type, status FROM ai_jobs WHERE news_id IN ({placeholders})",
+                news_ids,
+            ).fetchall()
+        result: dict[str, dict[str, str]] = {}
+        for row in rows:
+            result.setdefault(row[0], {})[row[1]] = row[2]
+        return result
+
     def status_counts(self) -> dict[str, int]:
         with self.read() as connection:
             rows = connection.execute(

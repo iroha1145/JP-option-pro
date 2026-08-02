@@ -7,8 +7,13 @@ import type {
   DataStatusResponse,
   EarningsCalendarItem,
   EarningsRecentItem,
+  EconCalendarResponse,
   IntradayChart,
   MarketOverview,
+  NewsFeedResponse,
+  NewsHotspotGroup,
+  NewsSecurityRow,
+  NewsStatus,
   RadarCurrent,
   RadarEvent,
   ScreenerResponse,
@@ -160,7 +165,23 @@ export const workerApi = {
 };
 
 export const newsApi = {
-  feed(hours = 72) {
-    return get<{ mode: string; items: unknown[]; note_ja?: string }>(`/news/feed?${toQuery({ hours })}`);
+  feed(params: { hours?: number; category?: string; only_securities?: boolean; min_importance?: number } = {}) {
+    return get<NewsFeedResponse>(`/news/feed?${toQuery({ ...params })}`);
+  },
+  hotspots(hours = 72) {
+    return get<{ window_hours?: number; groups: NewsHotspotGroup[]; note_ja?: string }>(
+      `/news/hotspots?${toQuery({ hours })}`,
+    );
+  },
+  securities(hours = 72) {
+    return get<{ window_hours?: number; rows: NewsSecurityRow[]; note_ja?: string }>(
+      `/news/securities?${toQuery({ hours })}`,
+    );
+  },
+  status() {
+    return get<NewsStatus>('/news/status');
+  },
+  econCalendar(start?: string, end?: string) {
+    return get<EconCalendarResponse>(`/news/econ-calendar?${toQuery({ start, end })}`);
   },
 };

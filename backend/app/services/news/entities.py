@@ -23,6 +23,47 @@ _LEGAL_SUFFIXES = (
 # 「（7203）」「(7203)」「＜7203＞」「<285A>」だけをコード文脈として認める。
 _CODE_CONTEXT = re.compile(r"[（(＜<]\s*([0-9][0-9A-Z]{3})\s*[)）＞>]")
 
+_KATAKANA = re.compile(r"[ァ-ヶーｦ-ﾟ]")
+_KANJI = re.compile(r"[一-鿿々]")
+
+
+def _is_katakana(char: str) -> bool:
+    return bool(char) and bool(_KATAKANA.fullmatch(char))
+
+
+def _is_kanji(char: str) -> bool:
+    return bool(char) and bool(_KANJI.fullmatch(char))
+
+
+def _boundary_ok(text: str, start: int, end: int, alias: str) -> bool:
+    """短い日本語別名の境界検査。
+
+    実害事例: 「ステーキング」の中の「キング」(8118)、「鈴木潤一」(人名) の
+    中の「鈴木」(6785)。純カタカナ別名はカタカナ境界を、3文字以下の別名は
+    漢字/カタカナ境界を許さない。長い別名（トヨタ自動車 等）は誤爆余地が
+    小さいので従来通り部分一致。"""
+
+    before = text[start - 1] if start > 0 else ""
+    after = text[end] if end < len(text) else ""
+    all_katakana = all(_is_katakana(char) for char in alias)
+    if all_katakana:
+        return not _is_katakana(before) and not _is_katakana(after)
+    if len(alias) <= 3:
+        blocked = (_is_kanji(before) or _is_katakana(before)) or (
+            _is_kanji(after) or _is_katakana(after)
+        )
+        return not blocked
+    return True
+
+
+def _find_with_boundary(text: str, alias: str) -> bool:
+    index = text.find(alias)
+    while index != -1:
+        if _boundary_ok(text, index, index + len(alias), alias):
+            return True
+        index = text.find(alias, index + 1)
+    return False
+
 
 def _strip_suffixes(name: str) -> str:
     text = name.strip()
@@ -101,17 +142,18 @@ class EntityMatcher:
         for alias, code, alias_type in self._aliases:
             if code in found:
                 continue
-            needle = alias.lower() if alias.isascii() else alias
-            haystack = lowered if alias.isascii() else text
-            if needle and needle in haystack:
+            if alias.isascii():
                 # ASCII 別名は単語境界を要求（"Sony" が "Sonya" に当たらない）
-                if alias.isascii():
-                    pattern = re.compile(rf"(?<![A-Za-z0-9]){re.escape(needle)}(?![A-Za-z0-9])")
-                    if not pattern.search(lowered):
-                        continue
-                found[code] = EntityMatch(code, alias, alias_type)
-                if len(found) >= limit:
-                    break
+                pattern = re.compile(rf"(?<![A-Za-z0-9]){re.escape(alias.lower())}(?![A-Za-z0-9])")
+                if not pattern.search(lowered):
+                    continue
+            else:
+                # 日本語別名: 短い別名はカタカナ/漢字境界を検査（キング/鈴木問題）
+                if not _find_with_boundary(text, alias):
+                    continue
+            found[code] = EntityMatch(code, alias, alias_type)
+            if len(found) >= limit:
+                break
         for match_obj in _CODE_CONTEXT.finditer(text):
             display = match_obj.group(1)
             code = self._display_to_code.get(display)

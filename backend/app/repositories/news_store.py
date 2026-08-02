@@ -87,6 +87,17 @@ class NewsStore(SQLiteRepository):
             ).fetchone()
         return dict(row) if row else None
 
+    def feed_states(self) -> list[dict[str, Any]]:
+        with self.read() as connection:
+            rows = connection.execute(
+                "SELECT * FROM news_feed_state ORDER BY feed_url"
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def alias_count(self) -> int:
+        with self.read() as connection:
+            return int(connection.execute("SELECT COUNT(*) FROM entity_aliases").fetchone()[0])
+
     def record_feed_fetch(
         self, feed_url: str, *, etag: str | None, last_modified: str | None,
         items_seen: int, error_code: str | None = None,

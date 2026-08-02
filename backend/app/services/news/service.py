@@ -9,7 +9,7 @@ from app.data_paths import get_data_paths
 from app.personal_config import get_personal_config
 from app.repositories.core import CoreRepository
 from app.repositories.news_store import NewsStore
-from app.services.ai_jobs.store import AIJobStore, request_hash
+from app.services.ai_jobs.store import AIJobStore, request_hash  # noqa: F401 — request_hash は enqueue 用
 from app.services.ai_jobs import runtime as ai
 from app.services.news import classify
 from app.services.news.entities import EntityMatcher, build_alias_rows
@@ -309,27 +309,268 @@ def _apply_result(store: NewsStore, job: dict[str, Any], result: dict[str, Any])
 
 
 # ---------------------------------------------------------------------------
-# API ビュー
+# API ビュー（米国版カタリストデスクの情報設計に対応）
 # ---------------------------------------------------------------------------
 
 
-def news_feed_view(*, hours: int = 72) -> dict[str, Any]:
+def _security_names(codes: set[str]) -> dict[str, str | None]:
+    if not codes:
+        return {}
+    core = CoreRepository(get_data_paths().core_db, read_only=True)
+    if not core.exists():
+        return {}
+    names: dict[str, str | None] = {}
+    for code in codes:
+        security = core.get_security(code)
+        names[code] = security.get("name_ja") if security else None
+    return names
+
+
+def _analysis_states(items: list[dict[str, Any]]) -> dict[str, str]:
+    """news_id → none|pending|completed|failed（AI ジョブ表と結果から判定）。"""
+
+    config = get_personal_config()
+    paths = get_data_paths()
+    states: dict[str, str] = {}
+    jobs_map: dict[str, dict[str, str]] = {}
+    store = AIJobStore(paths.ai_jobs_db, read_only=True)
+    if store.exists():
+        try:
+            jobs_map = store.jobs_for_news([item["news_id"] for item in items])
+        except Exception:  # noqa: BLE001 — 状態表示は本文配信を壊さない
+            jobs_map = {}
+    ai_enabled = config.features.news_mode == "scheduled"
+    for item in items:
+        if item.get("analysis_zh"):
+            states[item["news_id"]] = "completed"
+            continue
+        job_status = (jobs_map.get(item["news_id"]) or {}).get("news_analysis_zh")
+        if job_status in ("queued", "submitted", "unknown"):
+            states[item["news_id"]] = "pending"
+        elif job_status == "failed":
+            states[item["news_id"]] = "failed"
+        else:
+            states[item["news_id"]] = "disabled" if not ai_enabled else "none"
+    return states
+
+
+def _window_items(store: NewsStore, hours: int, *, limit: int = 300) -> list[dict[str, Any]]:
+    since = _iso(datetime.now(timezone.utc) - timedelta(hours=max(6, min(24 * 14, hours))))
+    return store.recent_items(since_iso=since, limit=limit)
+
+
+def news_feed_view(
+    *,
+    hours: int = 72,
+    category: str | None = None,
+    only_securities: bool = False,
+    min_importance: float | None = None,
+) -> dict[str, Any]:
     config = get_personal_config()
     paths = get_data_paths()
     store = NewsStore(paths.news_db, read_only=True)
     if not store.exists():
         return {"mode": config.features.news_mode, "items": [], "note_ja": "ニュースデータベースは未作成です。"}
-    since = _iso(datetime.now(timezone.utc) - timedelta(hours=max(6, min(24 * 14, hours))))
-    items = store.recent_items(since_iso=since, limit=200)
+    items = _window_items(store, hours)
+    if category:
+        items = [item for item in items if category in (item.get("categories") or [])]
+    if only_securities:
+        items = [item for item in items if item.get("securities")]
+    if min_importance is not None:
+        items = [
+            item for item in items
+            if item.get("importance") is not None and item["importance"] >= min_importance
+        ]
+    codes = {
+        str(entry.get("canonical_code"))
+        for item in items
+        for entry in (item.get("securities") or [])
+    }
+    names = _security_names(codes)
+    states = _analysis_states(items)
     return {
         "mode": config.features.news_mode,
         "window_hours": hours,
-        "items": [_item_view(item) for item in items],
+        "items": [
+            {**_item_view(item, names), "analysis_state": states.get(item["news_id"], "none")}
+            for item in items
+        ],
     }
 
 
-def _item_view(item: dict[str, Any]) -> dict[str, Any]:
+def news_hotspots_view(*, hours: int = 72, limit: int = 8) -> dict[str, Any]:
+    """銘柄別ホットスポット: 実体つきニュースを主銘柄でグルーピングし、
+    (最大重要度, 件数) でランク付け。米国版 HotspotsStrip の簡易版。"""
+
+    paths = get_data_paths()
+    store = NewsStore(paths.news_db, read_only=True)
+    if not store.exists():
+        return {"groups": []}
+    items = _window_items(store, hours)
+    groups: dict[str, dict[str, Any]] = {}
+    for item in items:
+        securities = item.get("securities") or []
+        if not securities:
+            continue
+        primary = str(securities[0].get("canonical_code"))
+        group = groups.setdefault(
+            primary,
+            {"canonical_code": primary, "item_count": 0, "max_importance": None,
+             "categories": [], "latest": None},
+        )
+        group["item_count"] += 1
+        importance = item.get("importance")
+        if importance is not None and (group["max_importance"] is None or importance > group["max_importance"]):
+            group["max_importance"] = importance
+        for cat in item.get("categories") or []:
+            if cat not in group["categories"]:
+                group["categories"].append(cat)
+        if group["latest"] is None:
+            group["latest"] = {
+                "news_id": item["news_id"],
+                "title": item.get("translated_title_ja") or item.get("original_title"),
+                "published_at": item.get("published_at"),
+            }
+    ranked = sorted(
+        groups.values(),
+        key=lambda g: (-(g["max_importance"] or 0.0), -g["item_count"], g["canonical_code"]),
+    )[: max(1, int(limit))]
+    names = _security_names({g["canonical_code"] for g in ranked})
+    for group in ranked:
+        code = group["canonical_code"]
+        group["display_code"] = _display(code)
+        group["name_ja"] = names.get(code)
+        group["categories"] = group["categories"][:3]
+    return {"window_hours": hours, "groups": ranked}
+
+
+def news_securities_view(*, hours: int = 72, limit: int = 50) -> dict[str, Any]:
+    """銘柄別インパクト集計（米国版 StocksPanel 対応）。
+
+    決定論部分（件数・重要度・分類）は常に出る。AI 方向サマリは
+    分析済みアイテムがある銘柄のみ（無ければ null — 0 で偽装しない）。"""
+
+    paths = get_data_paths()
+    store = NewsStore(paths.news_db, read_only=True)
+    if not store.exists():
+        return {"rows": []}
+    items = _window_items(store, hours)
+    per_code: dict[str, dict[str, Any]] = {}
+    for item in items:
+        for entry in item.get("securities") or []:
+            code = str(entry.get("canonical_code"))
+            row = per_code.setdefault(
+                code,
+                {"canonical_code": code, "news_count": 0, "max_importance": None,
+                 "categories": [], "latest": None,
+                 "analyzed_count": 0, "positive": 0, "negative": 0,
+                 "confidence_sum": 0.0},
+            )
+            row["news_count"] += 1
+            importance = item.get("importance")
+            if importance is not None and (row["max_importance"] is None or importance > row["max_importance"]):
+                row["max_importance"] = importance
+            for cat in item.get("categories") or []:
+                if cat not in row["categories"]:
+                    row["categories"].append(cat)
+            if row["latest"] is None:
+                row["latest"] = {
+                    "title": item.get("translated_title_ja") or item.get("original_title"),
+                    "published_at": item.get("published_at"),
+                }
+            analysis = item.get("analysis_zh") or {}
+            for affected in analysis.get("affected") or []:
+                if str(affected.get("code")) != code:
+                    continue
+                row["analyzed_count"] += 1
+                direction = affected.get("direction")
+                if direction == "positive":
+                    row["positive"] += 1
+                elif direction == "negative":
+                    row["negative"] += 1
+                row["confidence_sum"] += float(affected.get("confidence") or 0)
+    rows = sorted(
+        per_code.values(),
+        key=lambda r: (-(r["max_importance"] or 0.0), -r["news_count"], r["canonical_code"]),
+    )[: max(1, int(limit))]
+    names = _security_names({row["canonical_code"] for row in rows})
+    for row in rows:
+        code = row["canonical_code"]
+        row["display_code"] = _display(code)
+        row["name_ja"] = names.get(code)
+        row["categories"] = row["categories"][:3]
+        analyzed = row.pop("analyzed_count")
+        confidence_sum = row.pop("confidence_sum")
+        row["ai"] = (
+            {
+                "analyzed": analyzed,
+                "positive": row.pop("positive"),
+                "negative": row.pop("negative"),
+                "avg_confidence": round(confidence_sum / analyzed, 1),
+            }
+            if analyzed
+            else None
+        )
+        row.pop("positive", None)
+        row.pop("negative", None)
+    return {"window_hours": hours, "rows": rows}
+
+
+def news_pipeline_status_view() -> dict[str, Any]:
+    """データ源健全性 + AI パイプライン状態（米国版 SourcesPanel/StatusHero 対応）。"""
+
+    from app.config import get_settings
+
+    config = get_personal_config()
+    settings = get_settings()
+    paths = get_data_paths()
+    store = NewsStore(paths.news_db, read_only=True)
+    feeds: list[dict[str, Any]] = []
+    alias_count = 0
+    if store.exists():
+        feeds = store.feed_states()
+        alias_count = store.alias_count()
+    configured = list(config.news.feed_urls)
+    known = {feed["feed_url"] for feed in feeds}
+    for url in configured:
+        if url not in known:
+            feeds.append({"feed_url": url, "last_fetched_at": None, "last_error_code": None, "items_seen": 0})
+    ai_queue: dict[str, int] = {}
+    jobs = AIJobStore(paths.ai_jobs_db, read_only=True)
+    if jobs.exists():
+        try:
+            ai_queue = jobs.status_counts()
+        except Exception:  # noqa: BLE001
+            ai_queue = {}
+    ai_ready = config.features.news_mode == "scheduled" and settings.openai_configured()
+    return {
+        "mode": config.features.news_mode,
+        "sync_seconds": config.news.sync_seconds,
+        "window_hours": config.news.window_hours,
+        "entity_aliases": alias_count,
+        "feeds": feeds,
+        "ai": {
+            "enabled": ai_ready,
+            "openai_configured": settings.openai_configured(),
+            "translation_target": "ja-JP",
+            "analysis_language": "zh-CN",
+            "queue": ai_queue,
+            "note_ja": (
+                None
+                if ai_ready
+                else "AI 翻訳・影響分析は OPENAI_API_KEY を設定し news_mode を scheduled にすると有効になります。"
+            ),
+        },
+    }
+
+
+def _display(code: str) -> str:
+    return code[:4] if len(code) == 5 and code.endswith("0") else code
+
+
+def _item_view(item: dict[str, Any], names: dict[str, str | None] | None = None) -> dict[str, Any]:
     analysis = item.get("analysis_zh")
+    components = item.get("importance_components") or {}
     return {
         "news_id": item["news_id"],
         "source": item.get("source"),
@@ -355,17 +596,14 @@ def _item_view(item: dict[str, Any]) -> dict[str, Any]:
         "securities": [
             {
                 "canonical_code": entry.get("canonical_code"),
-                "display_code": (
-                    entry.get("canonical_code", "")[:4]
-                    if str(entry.get("canonical_code", "")).endswith("0")
-                    and len(str(entry.get("canonical_code", ""))) == 5
-                    else entry.get("canonical_code")
-                ),
-                "name_ja": None,
+                "display_code": _display(str(entry.get("canonical_code", ""))),
+                "name_ja": (names or {}).get(str(entry.get("canonical_code"))),
             }
             for entry in (item.get("securities") or [])
         ],
         "importance": item.get("importance"),
+        "importance_reasons": (components.get("reasons") or [])[:4],
+        "market_relevance": item.get("market_relevance"),
     }
 
 

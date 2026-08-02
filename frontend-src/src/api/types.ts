@@ -428,6 +428,109 @@ export interface IntradayChart {
   bars: IntradayBar[];
 }
 
+export interface NewsAffected {
+  code: string;
+  direction: 'positive' | 'negative' | 'mixed' | 'unclear';
+  confidence: number | null;
+  reason_zh: string | null;
+}
+
+export interface NewsItem {
+  news_id: string;
+  source: string | null;
+  source_url: string | null;
+  published_at: string | null;
+  source_language: string | null;
+  original_title: string | null;
+  original_summary: string | null;
+  translated_title_ja: string | null;
+  summary_ja: string | null;
+  analysis_zh: {
+    headline: string | null;
+    impact: string | null;
+    affected: NewsAffected[] | null;
+    insufficient_context: boolean | null;
+  } | null;
+  analysis_state?: 'completed' | 'pending' | 'failed' | 'disabled' | 'none';
+  categories: string[];
+  securities: { canonical_code: string; display_code: string; name_ja: string | null }[];
+  importance: number | null;
+  importance_reasons?: string[];
+  market_relevance?: string | null;
+}
+
+export interface NewsFeedResponse {
+  mode: string;
+  window_hours?: number;
+  items: NewsItem[];
+  note_ja?: string;
+}
+
+export interface NewsHotspotGroup {
+  canonical_code: string;
+  display_code: string;
+  name_ja: string | null;
+  item_count: number;
+  max_importance: number | null;
+  categories: string[];
+  latest: { news_id: string; title: string | null; published_at: string | null } | null;
+}
+
+export interface NewsSecurityRow {
+  canonical_code: string;
+  display_code: string;
+  name_ja: string | null;
+  news_count: number;
+  max_importance: number | null;
+  categories: string[];
+  latest: { title: string | null; published_at: string | null } | null;
+  ai: { analyzed: number; positive: number; negative: number; avg_confidence: number } | null;
+}
+
+export interface NewsFeedState {
+  feed_url: string;
+  etag?: string | null;
+  last_modified?: string | null;
+  last_fetched_at: string | null;
+  last_error_code: string | null;
+  items_seen: number;
+}
+
+export interface NewsStatus {
+  mode: string;
+  sync_seconds: number;
+  window_hours: number;
+  entity_aliases: number;
+  feeds: NewsFeedState[];
+  ai: {
+    enabled: boolean;
+    openai_configured: boolean;
+    translation_target: string;
+    analysis_language: string;
+    queue: Record<string, number>;
+    note_ja: string | null;
+  };
+}
+
+export interface EconEvent {
+  date: string;
+  time_jst: string;
+  name_ja: string;
+  category: string;
+  importance: 'high' | 'medium' | 'low';
+  organizer: string;
+  confirmed: boolean;
+  source_url?: string;
+  note?: string;
+}
+
+export interface EconCalendarResponse {
+  coverage_note_ja: string;
+  start_date: string;
+  end_date: string;
+  events: EconEvent[];
+}
+
 export interface AccessStatus {
   mode: 'private_network' | 'password';
   is_owner: boolean;
