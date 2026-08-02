@@ -10,6 +10,11 @@ from typing import Any
 
 from app.domain.symbols import display_code, normalize_input_code
 from app.repositories.core import CoreRepository
+from app.services.radar.base_detector import detect_base
+from app.services.radar.features import clean_series, series_excluding_last
+from app.services.radar.price_action import compute_price_action
+from app.services.radar.technicals import compute_technicals
+from app.services.radar.vol_price_match import compute_vol_price_match
 
 STOCK_RESEARCH_VERSION = "jp-stock-v1"
 
@@ -122,6 +127,37 @@ def derive_quarter_values(summaries: list[dict[str, Any]]) -> list[dict[str, Any
     return results
 
 
+def technical_structure(bars: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """K線構造分析（米国版アルゴリズム移植: ベース/価格行動/量価/指標）。"""
+
+    series = clean_series(bars)
+    if series is None:
+        return None
+    prior = series_excluding_last(series)
+    base = detect_base(prior) if prior else None
+    price_action = compute_price_action(series)
+    vol_price = compute_vol_price_match(series)
+    technicals = compute_technicals(series)
+    overlays: dict[str, Any] = {
+        "swing_highs": price_action.get("swing_highs") or [],
+        "swing_lows": price_action.get("swing_lows") or [],
+    }
+    if base:
+        overlays["resistance_high"] = base.get("resistance_high")
+        overlays["resistance_low"] = base.get("resistance_low")
+        overlays["support_low"] = base.get("support_low")
+        overlays["invalidation_price"] = base.get("invalidation_price")
+        overlays["base_start"] = base.get("base_start")
+        overlays["base_end"] = base.get("base_end")
+    return {
+        "base": base,
+        "price_action": price_action,
+        "vol_price": vol_price,
+        "technicals": technicals,
+        "chart_overlays": overlays,
+    }
+
+
 def stock_overview(repository: CoreRepository, canonical_code: str) -> dict[str, Any] | None:
     security = repository.get_security(canonical_code)
     if security is None:
@@ -170,6 +206,7 @@ def stock_overview(repository: CoreRepository, canonical_code: str) -> dict[str,
         "margin_alerts": repository.margin_alerts_for_code(canonical_code, limit=20),
         "short_positions": repository.short_positions_for_code(canonical_code, limit=30),
         "radar_events": repository.radar_events_for_code(canonical_code, limit=20),
+        "technical": technical_structure(bars),
     }
 
 

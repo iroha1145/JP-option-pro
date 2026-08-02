@@ -97,6 +97,7 @@ def _event_view(repository, event: dict, *, include_transitions: bool = False) -
         "alert_priority": event.get("alert_priority"),
         "scores": event.get("scores") or {},
         "snapshot": (event.get("features") or {}).get("snapshot") or {},
+        "structure": (event.get("features") or {}).get("structure") or None,
     }
     if include_transitions:
         view["transitions"] = event.get("transitions") or []

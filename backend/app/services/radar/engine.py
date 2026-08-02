@@ -17,9 +17,19 @@ from app.personal_config import RadarConfig
 from app.repositories.core import CoreRepository
 
 from . import lifecycle as lc
-from .features import compute_security_features, index_return
+from .base_detector import detect_base
+from .features import (
+    clean_series,
+    compute_features_from_series,
+    index_return,
+    series_excluding_last,
+)
+from .price_action import compute_price_action
+from .technicals import compute_technicals
+from .vol_price_match import compute_vol_price_match
 from .scoring import (
     BASE_WEIGHTS,
+    BASE_WEIGHTS_DETECTED,
     CONFIRMATION_WEIGHTS,
     LIQUIDITY_WEIGHTS,
     PARTICIPATION_WEIGHTS,
@@ -33,10 +43,11 @@ from .scoring import (
     weighted_score,
 )
 
-ENGINE_VERSION = "jp-radar-engine-v1"
+ENGINE_VERSION = "jp-radar-engine-v2"
 
 SIGNAL_HIGH_252 = "high_break_252"
 SIGNAL_HIGH_120 = "high_break_120"
+SIGNAL_BASE_BREAK = "base_breakout"
 SIGNAL_HIGH_60 = "high_break_60"
 SIGNAL_VOLUME_BREAK = "volume_surge_break"
 SIGNAL_HIGH_20 = "high_break_20"
@@ -45,6 +56,7 @@ SIGNAL_HIGH_20 = "high_break_20"
 SIGNAL_PRIORITY = (
     SIGNAL_HIGH_252,
     SIGNAL_HIGH_120,
+    SIGNAL_BASE_BREAK,
     SIGNAL_HIGH_60,
     SIGNAL_VOLUME_BREAK,
     SIGNAL_HIGH_20,
@@ -75,17 +87,30 @@ def _signal_pivot(features: Mapping[str, Any], signal_type: str) -> float | None
     return features.get("prior_high_20")
 
 
-def detect_new_signal(features: Mapping[str, Any]) -> tuple[str, float] | None:
-    """Strongest breakout signal on the target day, if any."""
+def detect_new_signal(
+    features: Mapping[str, Any], *, base: Mapping[str, Any] | None = None
+) -> tuple[str, float] | None:
+    """Strongest breakout signal on the target day, if any.
+
+    優先順: 52週 > 120日 > 完成ベース上抜け > 60日 > 出来高急増 > 20日。
+    """
 
     close = features.get("close")
     if close is None:
         return None
     ratio = features.get("turnover_ratio")
-    for signal_type in (SIGNAL_HIGH_252, SIGNAL_HIGH_120, SIGNAL_HIGH_60):
+    for signal_type in (SIGNAL_HIGH_252, SIGNAL_HIGH_120):
         pivot = _signal_pivot(features, signal_type)
         if pivot is not None and close > pivot:
             return signal_type, float(pivot)
+    if base is not None:
+        resistance = base.get("resistance_high")
+        buffer = base.get("break_buffer") or 0.0
+        if resistance is not None and close > float(resistance) + float(buffer):
+            return SIGNAL_BASE_BREAK, float(resistance)
+    pivot60 = features.get("prior_high_60")
+    if pivot60 is not None and close > pivot60:
+        return SIGNAL_HIGH_60, float(pivot60)
     pivot20 = features.get("prior_high_20")
     if pivot20 is not None and close > pivot20:
         if ratio is not None and ratio >= _VOLUME_BREAK_RATIO:
@@ -139,9 +164,15 @@ def compute_scores(
     sector_fit: float | None,
     market_fit: float | None,
     crowding_risk: float | None,
+    base_structure: Mapping[str, Any] | None = None,
+    price_action: Mapping[str, Any] | None = None,
+    vol_price: Mapping[str, Any] | None = None,
+    technicals: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     close = features.get("close")
     atr = features.get("atr14")
+    pa_score = (price_action or {}).get("score")
+    rsi_component = (technicals or {}).get("rsi_score")
 
     trend = weighted_score(
         {
@@ -149,25 +180,43 @@ def compute_scores(
             "above_ma75": None if features.get("ma75_gap_pct") is None else (100.0 if features["ma75_gap_pct"] > 0 else 20.0),
             "return_63d_score": linear_score(features.get("return_63d"), -0.10, 0.40),
             "trend_persistence": None if features.get("trend_persistence") is None else clamp_score(features["trend_persistence"] * 100.0),
+            "price_structure": clamp_score(pa_score) if pa_score is not None else None,
+            "rsi": clamp_score(rsi_component) if rsi_component is not None else None,
         },
         TREND_WEIGHTS,
     )
 
-    # ベースのタイトさ: 直近ピボットと MA25 の距離を終値比で測る。
-    range_pct = None
-    if features.get("prior_high_20") and close:
-        low_proxy = features.get("ma25")
-        if low_proxy:
-            range_pct = abs(features["prior_high_20"] - low_proxy) / close
-    base = weighted_score(
-        {
-            "tightness": linear_score(-(range_pct or 0.0), -0.30, -0.06) if range_pct is not None else None,
-            "duration": None,  # v1 では基底継続日数を未計測（重みは再正規化される）
-            "contraction": linear_score(features.get("volatility_contraction"), 0.0, 0.5),
-            "position_in_base": None if features.get("close_location") is None else clamp_score(features["close_location"] * 100.0),
-        },
-        BASE_WEIGHTS,
-    )
+    base_metrics = (base_structure or {}).get("metrics") or {}
+    if base_metrics:
+        # 実測ベース品質（枢軸クラスタ検出に成功した場合、米国版と同じ次元）
+        base = weighted_score(
+            {
+                "tightness": base_metrics.get("tightness_quality"),
+                "duration": base_metrics.get("duration_quality"),
+                "resistance_touches": base_metrics.get("resistance_touch_quality"),
+                "turnover_contraction": base_metrics.get("turnover_contraction_quality"),
+                "atr_contraction": base_metrics.get("atr_contraction_quality"),
+                "support_integrity": base_metrics.get("support_integrity"),
+                "higher_low": base_metrics.get("higher_low_quality"),
+            },
+            BASE_WEIGHTS_DETECTED,
+        )
+    else:
+        # 代理指標（ベース未検出）: 直近ピボットと MA25 の距離を終値比で測る。
+        range_pct = None
+        if features.get("prior_high_20") and close:
+            low_proxy = features.get("ma25")
+            if low_proxy:
+                range_pct = abs(features["prior_high_20"] - low_proxy) / close
+        base = weighted_score(
+            {
+                "tightness": linear_score(-(range_pct or 0.0), -0.30, -0.06) if range_pct is not None else None,
+                "duration": None,
+                "contraction": linear_score(features.get("volatility_contraction"), 0.0, 0.5),
+                "position_in_base": None if features.get("close_location") is None else clamp_score(features["close_location"] * 100.0),
+            },
+            BASE_WEIGHTS,
+        )
 
     breakout_margin = None
     if close and pivot_price and atr and atr > 0:
@@ -218,6 +267,12 @@ def compute_scores(
     r5 = features.get("return_5d")
     if r5 is not None:
         chase = max(chase, (linear_score(r5, 0.05, 0.25) or 0.0))
+    # 量価一致の假突破リスク + Upthrust は追高リスク側に積む。
+    vpm_risk = float((vol_price or {}).get("false_breakout_risk") or 0.0)
+    if vpm_risk > 0:
+        chase += vpm_risk
+    if (price_action or {}).get("upthrust"):
+        chase += 8.0
     chase_risk = clamp_score(chase)
 
     quality_components = {
@@ -226,9 +281,14 @@ def compute_scores(
         "liquidity": liquidity.score,
     }
     quality = weighted_score(quality_components, {"base": 0.40, "confirmation": 0.45, "liquidity": 0.15})
+    # Wyckoff 努力対結果による突破品質の調整（±12 に制限、監査可能に別掲）。
+    vpm_adjustment = float((vol_price or {}).get("breakout_quality_adjustment") or 0.0)
+    quality_score = quality.score
+    if quality_score is not None and vpm_adjustment:
+        quality_score = clamp_score(quality_score + max(-12.0, min(12.0, vpm_adjustment)))
 
     priority = alert_priority(
-        breakout_quality=quality.score,
+        breakout_quality=quality_score,
         relative_strength=relative.score,
         market_fit=market_fit,
         sector_fit=sector_fit,
@@ -238,15 +298,20 @@ def compute_scores(
         crowding_risk=crowding_risk,
     )
 
+    quality_pack = _score_pack(quality)
+    quality_pack["score"] = quality_score
+    quality_pack["vol_price_adjustment"] = vpm_adjustment
+
     return {
         "score_version": SCORE_VERSION,
         "trend_quality": _score_pack(trend),
         "base_quality": _score_pack(base),
+        "base_detected": bool(base_metrics),
         "breakout_confirmation": _score_pack(confirmation),
         "relative_strength": _score_pack(relative),
         "participation": _score_pack(participation),
         "liquidity": _score_pack(liquidity),
-        "breakout_quality": _score_pack(quality),
+        "breakout_quality": quality_pack,
         "sector_fit": sector_fit,
         "market_fit": market_fit,
         "data_confidence": data_confidence,
@@ -342,12 +407,16 @@ class RadarEngine:
         margin_map = self._repository.latest_margin_map()
 
         features_by_code: dict[str, dict[str, Any]] = {}
+        structure_by_code: dict[str, dict[str, Any]] = {}
         sector_returns: dict[str, list[float]] = {}
         for code, security in equities.items():
             bars = bars_by_code.get(code)
             if not bars or bars[-1].get("trade_date") != target_date:
                 continue  # 当日データの無い銘柄はスキャン対象外
-            features = compute_security_features(bars)
+            series = clean_series(bars)
+            if series is None:
+                continue
+            features = compute_features_from_series(series)
             if features is None:
                 continue
             if features.get("data_days", 0) < self._config.min_listed_days:
@@ -356,6 +425,14 @@ class RadarEngine:
             if avg_turnover is not None and avg_turnover < self._config.min_avg_turnover_jpy:
                 continue
             features_by_code[code] = features
+            # 構造分析: ベースは「当日を除いた」列で検出（先読み禁止）。
+            prior_series = series_excluding_last(series)
+            structure_by_code[code] = {
+                "base": detect_base(prior_series) if prior_series else None,
+                "price_action": compute_price_action(series),
+                "vol_price": compute_vol_price_match(series),
+                "technicals": compute_technicals(series),
+            }
             sector = security.get("sector33_code")
             if sector and features.get("return_20d") is not None:
                 sector_returns.setdefault(sector, []).append(features["return_20d"])
@@ -392,6 +469,18 @@ class RadarEngine:
             regulated = False
             margin_row = margin_map.get(code)
             crowding = crowding_score(margin_row, regulated=regulated)
+            structure = structure_by_code.get(code) or {}
+            score_kwargs = {
+                "rs_topix_63d": rs_topix,
+                "rs_sector_63d": rs_sector,
+                "sector_fit": sector_fit.get(sector),
+                "market_fit": market_fit,
+                "crowding_risk": crowding,
+                "base_structure": structure.get("base"),
+                "price_action": structure.get("price_action"),
+                "vol_price": structure.get("vol_price"),
+                "technicals": structure.get("technicals"),
+            }
 
             existing = events_by_code.get(code, [])
             handled_signals: set[str] = set()
@@ -406,19 +495,18 @@ class RadarEngine:
                     features,
                     pivot_price=event.get("pivot_price"),
                     hold_days=int(event["features"].get("hold_days") or 0),
-                    rs_topix_63d=rs_topix,
-                    rs_sector_63d=rs_sector,
-                    sector_fit=sector_fit.get(sector),
-                    market_fit=market_fit,
-                    crowding_risk=crowding,
+                    **score_kwargs,
                 )
                 event["scores"] = scores
                 event["alert_priority"] = (scores.get("alert_priority") or {}).get("score")
+                event_features = dict(event.get("features") or {})
+                event_features["structure"] = _structure_snapshot(structure)
+                event["features"] = event_features
                 updated.append(event)
                 if changed:
                     transitions += 1
 
-            detection = detect_new_signal(features)
+            detection = detect_new_signal(features, base=structure.get("base"))
             watch = None if detection else detect_watch_candidate(features)
             chosen = detection or watch
             if chosen is None:
@@ -455,11 +543,7 @@ class RadarEngine:
                 features,
                 pivot_price=pivot,
                 hold_days=hold_days,
-                rs_topix_63d=rs_topix,
-                rs_sector_63d=rs_sector,
-                sector_fit=sector_fit.get(sector),
-                market_fit=market_fit,
-                crowding_risk=crowding,
+                **score_kwargs,
             )
             updated.append(
                 {
@@ -479,6 +563,7 @@ class RadarEngine:
                         "hold_days": hold_days,
                         "event_high": features.get("close"),
                         "snapshot": _feature_snapshot(features),
+                        "structure": _structure_snapshot(structure),
                     },
                     "transitions": transitions_log,
                 }
@@ -561,6 +646,44 @@ class RadarEngine:
             )
             event["transitions"] = log[-40:]
         return event, result.changed
+
+
+def _structure_snapshot(structure: Mapping[str, Any]) -> dict[str, Any]:
+    """イベント行に保存する構造分析の要約（フルの swing 配列等は間引く）。"""
+
+    base = structure.get("base") or None
+    price_action = structure.get("price_action") or {}
+    vol_price = structure.get("vol_price") or {}
+    technicals = structure.get("technicals") or {}
+    return {
+        "base": (
+            {
+                "pivot_id": base.get("pivot_id"),
+                "pivot_price": base.get("pivot_price"),
+                "resistance_low": base.get("resistance_low"),
+                "resistance_high": base.get("resistance_high"),
+                "support_low": base.get("support_low"),
+                "invalidation_price": base.get("invalidation_price"),
+                "base_start": base.get("base_start"),
+                "base_end": base.get("base_end"),
+                "resistance_touches": base.get("resistance_touches"),
+                "quality": base.get("quality"),
+            }
+            if base
+            else None
+        ),
+        "structure": price_action.get("structure"),
+        "structure_label": price_action.get("structure_label"),
+        "price_action_score": price_action.get("score"),
+        "pattern_labels": price_action.get("pattern_labels") or [],
+        "spring": bool(price_action.get("spring")),
+        "upthrust": bool(price_action.get("upthrust")),
+        "setup_type": vol_price.get("setup_type"),
+        "setup_label": vol_price.get("setup_label"),
+        "vpm_tags": vol_price.get("tags") or [],
+        "rsi14": technicals.get("rsi14"),
+        "trend_efficiency_63d": technicals.get("trend_efficiency_63d"),
+    }
 
 
 def _feature_snapshot(features: Mapping[str, Any]) -> dict[str, Any]:

@@ -120,6 +120,69 @@ export interface StockOverview {
   margin_alerts: Record<string, unknown>[];
   short_positions: ShortPositionRow[];
   radar_events: RadarEvent[];
+  technical: TechnicalStructure | null;
+}
+
+export interface SwingPoint {
+  trade_date: string;
+  price: number | null;
+}
+
+export interface TechnicalStructure {
+  base: BaseStructure | null;
+  price_action: {
+    status: string;
+    score: number | null;
+    structure: string;
+    structure_label: string;
+    swing_highs: SwingPoint[];
+    swing_lows: SwingPoint[];
+    resistance: number | null;
+    support: number | null;
+    resistance_dist_pct: number | null;
+    support_dist_pct: number | null;
+    patterns: string[];
+    pattern_labels: string[];
+    spring: boolean;
+    upthrust: boolean;
+    tags: string[];
+  };
+  vol_price: {
+    status: string;
+    setup_type: string;
+    setup_label: string;
+    range_compression: number | null;
+    turnover_range_ratio: number | null;
+    clv_mean: number | null;
+    up_down_turnover_ratio: number | null;
+    obv_slope: number | null;
+    effort: number | null;
+    result: number | null;
+    breakout_quality_adjustment: number;
+    false_breakout_risk: number;
+    tags: string[];
+  };
+  technicals: {
+    rsi14: number | null;
+    rsi_score: number | null;
+    macd: { histogram: number | null; direction_pct: number | null };
+    trend_efficiency_63d: number | null;
+    ma50_slope_pct_21d: number | null;
+    return_stability_20d: number | null;
+    range_position_60d: number | null;
+    range_persistence_fast: number | null;
+    range_persistence_slow: number | null;
+  };
+  chart_overlays: {
+    swing_highs: SwingPoint[];
+    swing_lows: SwingPoint[];
+    resistance_high?: number | null;
+    resistance_low?: number | null;
+    support_low?: number | null;
+    invalidation_price?: number | null;
+    base_start?: string | null;
+    base_end?: string | null;
+  };
 }
 
 export interface MarginInterestRow {
@@ -163,6 +226,37 @@ export interface RadarScores {
   alert_priority?: ScorePack;
 }
 
+export interface BaseStructure {
+  pivot_id?: string | null;
+  pivot_price: number | null;
+  resistance_low: number | null;
+  resistance_high: number | null;
+  support_low: number | null;
+  support_high?: number | null;
+  invalidation_price: number | null;
+  base_start: string | null;
+  base_end: string | null;
+  resistance_touches: number | null;
+  quality: number | null;
+  base_duration_days?: number | null;
+  metrics?: Record<string, number | null>;
+}
+
+export interface EventStructure {
+  base: BaseStructure | null;
+  structure: string | null;
+  structure_label: string | null;
+  price_action_score: number | null;
+  pattern_labels: string[];
+  spring: boolean;
+  upthrust: boolean;
+  setup_type: string | null;
+  setup_label: string | null;
+  vpm_tags: string[];
+  rsi14: number | null;
+  trend_efficiency_63d: number | null;
+}
+
 export interface RadarEvent {
   event_id: string;
   canonical_code: string;
@@ -180,6 +274,7 @@ export interface RadarEvent {
   alert_priority: number | null;
   scores: RadarScores;
   snapshot: Record<string, number | string | boolean | null>;
+  structure?: EventStructure | null;
   transitions?: { date: string; from: string | null; to: string; reason: string }[];
 }
 

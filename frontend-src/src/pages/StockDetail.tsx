@@ -1,4 +1,8 @@
-/** 个股研究页：K线（复权/不复权）+ 财务 + 信用/空卖 + 雷达 + 决算。 */
+/** 个股研究页 v2 — 卡片重排：
+ *  行1: K线(8列, 高度固定) + 右侧紧凑栏(4列: 雷达/信用/技术指标)
+ *  行2: 决算时间线(7列, 限高滚动) + 技术结构面板(5列)
+ *  行3: 空卖报告 + 发表预定 (两列)
+ *  K线叠加: 基底阻力带 markArea + 枢轴/失效位 markLine + 摆动点。 */
 
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router';
@@ -12,18 +16,23 @@ import DataTable, { type Column } from '@/components/shared/DataTable';
 import { SkeletonCard } from '@/components/shared/Skeleton';
 import ReactECharts from '@/components/charts/ReactECharts';
 import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart';
-import { DataThrough, SignalChip, StateChip } from '@/components/domain';
+import { DataThrough, ScoreBar, SignalChip, StateChip } from '@/components/domain';
 import { useAccess } from '@/hooks/useAccess';
 import { t } from '@/i18n/core';
 import { fmtDate, fmtPct, fmtPrice, fmtYenCompact } from '@/lib/format';
-import type { FinancialSummaryView, MarginInterestRow, ShortPositionRow } from '@/api/types';
+import type {
+  FinancialSummaryView,
+  MarginInterestRow,
+  ShortPositionRow,
+  TechnicalStructure,
+} from '@/api/types';
 
 type Range = '3m' | '6m' | '1y' | '3y' | '10y';
 type PriceMode = 'adjusted' | 'raw';
 
 export default function StockDetail() {
   const { code = '' } = useParams();
-  const [range, setRange] = useState<Range>('1y');
+  const [range, setRange] = useState<Range>('6m');
   const [priceMode, setPriceMode] = useState<PriceMode>('adjusted');
   const overview = usePolling(() => stocksApi.overview(code), null, [code]);
   const chart = usePolling(() => stocksApi.chart(code, range), null, [code, range]);
@@ -31,13 +40,18 @@ export default function StockDetail() {
   const [watchNote, setWatchNote] = useState<string | null>(null);
 
   const state = remoteState(overview);
+  const technical = overview.data?.technical ?? null;
 
   const chartOption = useMemo(() => {
     const bars = chart.data?.bars ?? [];
     if (bars.length === 0) return null;
-    const pick = (bar: (typeof bars)[number], adj: 'adj_open' | 'adj_high' | 'adj_low' | 'adj_close', raw: 'open' | 'high' | 'low' | 'close') =>
-      priceMode === 'adjusted' ? (bar[adj] ?? bar[raw]) : bar[raw];
-    const dates = bars.map((bar) => bar.trade_date.slice(2));
+    const pick = (
+      bar: (typeof bars)[number],
+      adj: 'adj_open' | 'adj_high' | 'adj_low' | 'adj_close',
+      raw: 'open' | 'high' | 'low' | 'close',
+    ) => (priceMode === 'adjusted' ? (bar[adj] ?? bar[raw]) : bar[raw]);
+    const dates = bars.map((bar) => bar.trade_date);
+    const shortDates = dates.map((date) => date.slice(2));
     const candles = bars.map((bar) => [
       pick(bar, 'adj_open', 'open'),
       pick(bar, 'adj_close', 'close'),
@@ -45,15 +59,50 @@ export default function StockDetail() {
       pick(bar, 'adj_high', 'high'),
     ]);
     const turnover = bars.map((bar) => bar.turnover_value);
+
+    const overlays = technical?.chart_overlays;
+    const markLines: Record<string, unknown>[] = [];
+    const markPoints: ({ name: string } & Record<string, unknown>)[] = [];
+    if (priceMode === 'adjusted' && overlays) {
+      if (overlays.invalidation_price != null) {
+        markLines.push({
+          yAxis: overlays.invalidation_price,
+          lineStyle: { color: CH.down600, type: 'dotted', width: 1 },
+          label: { formatter: '失效位', position: 'insideEndBottom', color: CH.down600, fontSize: 10 },
+        });
+      }
+      const markSwing = (points: { trade_date: string; price: number | null }[], isHigh: boolean) => {
+        for (const point of points.slice(-3)) {
+          const index = dates.indexOf(point.trade_date);
+          if (index >= 0 && point.price != null) {
+            markPoints.push({
+              name: isHigh ? 'swing-high' : 'swing-low',
+              coord: [index, point.price],
+              symbol: 'triangle',
+              symbolRotate: isHigh ? 180 : 0,
+              symbolSize: 8,
+              itemStyle: { color: isHigh ? CH.warn600 : CH.ai600 },
+              label: { show: false },
+            });
+          }
+        }
+      };
+      markSwing(overlays.swing_highs ?? [], true);
+      markSwing(overlays.swing_lows ?? [], false);
+    }
+
     return {
-      grid: [baseGrid({ top: 12, bottom: '26%' }), baseGrid({ top: '78%', bottom: 4 })],
+      grid: [
+        baseGrid({ top: 8, bottom: '24%', left: 4, right: 48 }),
+        baseGrid({ top: '80%', bottom: 2, left: 4, right: 48 }),
+      ],
       tooltip: glassTooltip({ trigger: 'axis' }),
       xAxis: [
-        { ...categoryAxis(dates), gridIndex: 0 },
-        { ...categoryAxis(dates), gridIndex: 1, axisLabel: { show: false } },
+        { ...categoryAxis(shortDates), gridIndex: 0 },
+        { ...categoryAxis(shortDates), gridIndex: 1, axisLabel: { show: false } },
       ],
       yAxis: [
-        { ...valueAxis({ scale: true }), gridIndex: 0 },
+        { ...valueAxis({ scale: true, position: 'right' }), gridIndex: 0 },
         { ...valueAxis(), gridIndex: 1, axisLabel: { show: false }, splitLine: { show: false } },
       ],
       series: [
@@ -63,11 +112,27 @@ export default function StockDetail() {
           xAxisIndex: 0,
           yAxisIndex: 0,
           itemStyle: {
-            color: CH.up600,
-            color0: CH.down600,
-            borderColor: CH.up600,
-            borderColor0: CH.down600,
+            color: CH.up600, color0: CH.down600,
+            borderColor: CH.up600, borderColor0: CH.down600,
           },
+          markLine: { symbol: 'none', animation: false, data: markLines },
+          markPoint: { animation: false, data: markPoints },
+          ...(priceMode === 'adjusted'
+          && overlays?.resistance_high != null
+          && overlays?.resistance_low != null
+            ? {
+                markArea: {
+                  silent: true,
+                  itemStyle: { color: CH.brand400, opacity: 0.08 },
+                  data: [
+                    [{ yAxis: overlays.resistance_low }, { yAxis: overlays.resistance_high }] as [
+                      { yAxis: number },
+                      { yAxis: number },
+                    ],
+                  ],
+                },
+              }
+            : {}),
         },
         {
           type: 'bar' as const,
@@ -78,7 +143,7 @@ export default function StockDetail() {
         },
       ],
     };
-  }, [chart.data, priceMode]);
+  }, [chart.data, priceMode, technical]);
 
   if (state === 'loading') {
     return <SkeletonCard className="mt-6 h-96" />;
@@ -98,16 +163,18 @@ export default function StockDetail() {
   const security = data.security;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* ヘッダー */}
-      <header className="border-b border-line pb-4">
+      <header className="border-b border-line pb-3">
         <div className="flex flex-wrap items-center gap-3">
           <span className="rounded-md bg-brand-50 px-2 py-1 font-mono text-h3 font-bold text-brand-700">
             {security.display_code}
           </span>
           <h1 className="font-display text-display-m text-ink-900">{security.name_ja ?? security.name_en ?? '—'}</h1>
           {security.active === 0 && (
-            <span className="rounded-sm bg-down-50 px-1.5 py-0.5 text-micro text-down-700">上場廃止 {security.delisted_date ?? ''}</span>
+            <span className="rounded-sm bg-down-50 px-1.5 py-0.5 text-micro text-down-700">
+              上場廃止 {security.delisted_date ?? ''}
+            </span>
           )}
           {isOwner && (
             <button
@@ -126,14 +193,13 @@ export default function StockDetail() {
             </button>
           )}
         </div>
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-ink-500">
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-ink-500">
           <span>{security.market_name ?? '—'}</span>
           <span>{security.sector33_name ?? '—'}</span>
           {security.scale_category && <span>{security.scale_category}</span>}
           {security.margin_name && <span>{security.margin_name}</span>}
-          <span>{security.name_en ?? ''}</span>
         </div>
-        <div className="mt-3 flex flex-wrap items-end gap-4">
+        <div className="mt-2 flex flex-wrap items-end gap-4">
           <span className="font-mono text-display-l tnum text-ink-900">{fmtPrice(data.quote.close)}</span>
           <ChangeBadge value={data.quote.change_pct} />
           <span className="text-body-s text-ink-500">
@@ -143,53 +209,47 @@ export default function StockDetail() {
         </div>
       </header>
 
-      {/* チャート */}
-      <section className="card-surface rounded-lg p-4">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <Segmented<Range>
-            options={(['3m', '6m', '1y', '3y', '10y'] as Range[]).map((value) => ({ value, label: value.toUpperCase() }))}
-            value={range}
-            onChange={setRange}
-          />
-          <Segmented<PriceMode>
-            options={[
-              { value: 'adjusted', label: t('复权') },
-              { value: 'raw', label: t('不复权') },
-            ]}
-            value={priceMode}
-            onChange={setPriceMode}
-          />
-        </div>
-        {chartOption ? (
-          <ReactECharts className="h-80 w-full" option={chartOption} ariaLabel={`${security.display_code} chart`} />
-        ) : chart.loading ? (
-          <SkeletonCard className="h-80" />
-        ) : (
-          <EmptyState title={t('暂无数据')} />
-        )}
-      </section>
-
-      <div className="grid gap-6 xl:grid-cols-2">
-        {/* 財務 */}
-        <section className="card-surface rounded-lg p-4">
-          <h2 className="mb-3 text-h3 text-ink-900">{t('决算时间线')}</h2>
-          <FinancialTable summaries={data.financials.summaries} />
+      {/* 行1: K線 + 右侧紧凑栏 */}
+      <div className="grid gap-4 xl:grid-cols-12">
+        <section className="card-surface rounded-lg p-3 xl:col-span-8">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <Segmented<Range>
+              options={(['3m', '6m', '1y', '3y', '10y'] as Range[]).map((value) => ({ value, label: value.toUpperCase() }))}
+              value={range}
+              onChange={setRange}
+            />
+            <Segmented<PriceMode>
+              options={[
+                { value: 'adjusted', label: t('复权') },
+                { value: 'raw', label: t('不复权') },
+              ]}
+              value={priceMode}
+              onChange={setPriceMode}
+            />
+          </div>
+          {chartOption ? (
+            <ReactECharts className="h-72 w-full" option={chartOption} ariaLabel={`${security.display_code} chart`} />
+          ) : chart.loading ? (
+            <SkeletonCard className="h-72" />
+          ) : (
+            <EmptyState title={t('暂无数据')} />
+          )}
         </section>
 
-        {/* レーダー + 信用 + 空売り */}
-        <div className="space-y-6">
-          <section className="card-surface rounded-lg p-4">
-            <h2 className="mb-3 text-h3 text-ink-900">{t('突破雷达')}</h2>
+        <div className="grid content-start gap-4 xl:col-span-4">
+          {/* 雷达 */}
+          <section className="card-surface rounded-lg p-3">
+            <h2 className="mb-2 text-body font-medium text-ink-900">{t('突破雷达')}</h2>
             {data.radar_events.length === 0 ? (
-              <p className="text-body-s text-ink-400">{t('暂无相关雷达事件')}</p>
+              <p className="text-caption text-ink-400">{t('暂无相关雷达事件')}</p>
             ) : (
-              <ul className="divide-y divide-line">
-                {data.radar_events.slice(0, 5).map((event) => (
-                  <li key={event.event_id} className="flex items-center gap-2 py-2">
+              <ul className="space-y-1.5">
+                {data.radar_events.slice(0, 3).map((event) => (
+                  <li key={event.event_id} className="flex flex-wrap items-center gap-1.5 text-caption">
                     <SignalChip signal={event.signal_type} />
                     <StateChip state={event.state} />
-                    <span className="ml-auto text-caption text-ink-500">
-                      {fmtDate(event.discovered_date)} · {t('枢轴价')} {fmtPrice(event.pivot_price)}
+                    <span className="ml-auto text-ink-500">
+                      {fmtDate(event.discovered_date)} · {fmtPrice(event.pivot_price)}
                     </span>
                   </li>
                 ))}
@@ -197,32 +257,165 @@ export default function StockDetail() {
             )}
           </section>
 
-          <section className="card-surface rounded-lg p-4">
-            <h2 className="mb-3 text-h3 text-ink-900">{t('信用交易')}</h2>
+          {/* 信用交易 */}
+          <section className="card-surface rounded-lg p-3">
+            <h2 className="mb-2 text-body font-medium text-ink-900">{t('信用交易')}</h2>
             <MarginPanel rows={data.margin_interest} />
           </section>
 
-          <section className="card-surface rounded-lg p-4">
-            <h2 className="mb-3 text-h3 text-ink-900">{t('空卖残高报告')}</h2>
-            <ShortPositionsPanel rows={data.short_positions} />
+          {/* 技术指标 */}
+          <section className="card-surface rounded-lg p-3">
+            <h2 className="mb-2 text-body font-medium text-ink-900">技术指标</h2>
+            <IndicatorGrid technical={technical} />
           </section>
         </div>
+      </div>
+
+      {/* 行2: 决算时间线 + 技术结构 */}
+      <div className="grid gap-4 xl:grid-cols-12">
+        <section className="card-surface rounded-lg p-4 xl:col-span-7">
+          <h2 className="mb-3 text-h3 text-ink-900">{t('决算时间线')}</h2>
+          <div className="max-h-[360px] overflow-y-auto">
+            <FinancialTable summaries={data.financials.summaries} />
+          </div>
+        </section>
+        <section className="card-surface rounded-lg p-4 xl:col-span-5">
+          <h2 className="mb-3 text-h3 text-ink-900">K线结构分析</h2>
+          <StructurePanel technical={technical} />
+        </section>
+      </div>
+
+      {/* 行3: 空卖 + 发表预定 */}
+      <div className="grid gap-4 xl:grid-cols-2">
+        <section className="card-surface rounded-lg p-4">
+          <h2 className="mb-3 text-h3 text-ink-900">{t('空卖残高报告')}</h2>
+          <ShortPositionsPanel rows={data.short_positions} />
+        </section>
+        <section className="card-surface rounded-lg p-4">
+          <h2 className="mb-3 text-h3 text-ink-900">{t('发表预定')}</h2>
+          {data.earnings.length === 0 ? (
+            <p className="text-body-s text-ink-400">{t('暂无数据')}</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {data.earnings.slice(0, 4).map((item, index) => (
+                <li key={index} className="flex items-center justify-between py-1.5 text-body-s">
+                  <span className="text-ink-700">{String(item.fiscal_quarter ?? '—')}</span>
+                  <span className="font-mono tnum text-ink-900">
+                    {item.announcement_date ? fmtDate(String(item.announcement_date)) : t('未定')}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
     </div>
   );
 }
 
+/* ---------------- 技术结构面板（美版算法输出） ---------------- */
+
+function StructurePanel({ technical }: { technical: TechnicalStructure | null }) {
+  if (!technical) return <p className="text-body-s text-ink-400">{t('暂无数据')}</p>;
+  const pa = technical.price_action;
+  const vpm = technical.vol_price;
+  const base = technical.base;
+  return (
+    <div className="space-y-3">
+      {/* 市场结构 */}
+      <div>
+        <div className="mb-1 flex items-center justify-between">
+          <span className="text-caption text-ink-500">市场结构（HH/HL）</span>
+          <span className="text-caption font-medium text-ink-800">{pa.structure_label}</span>
+        </div>
+        <ScoreBar label="价格行为" score={pa.score} />
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {pa.pattern_labels.map((label) => (
+            <span key={label} className="rounded-pill border border-line bg-card px-2 py-0.5 text-micro text-ink-600">{label}</span>
+          ))}
+          {pa.spring && <span className="rounded-pill bg-up-50 px-2 py-0.5 text-micro text-up-700">Spring 假跌破回收</span>}
+          {pa.upthrust && <span className="rounded-pill bg-down-50 px-2 py-0.5 text-micro text-down-700">Upthrust 假突破</span>}
+        </div>
+        <dl className="mt-2 grid grid-cols-2 gap-1.5 text-caption">
+          <StructFact label="摆动阻力" value={`${fmtPrice(pa.resistance)}（${pa.resistance_dist_pct !== null ? `${pa.resistance_dist_pct > 0 ? '+' : ''}${pa.resistance_dist_pct}%` : '—'}）`} />
+          <StructFact label="摆动支撑" value={`${fmtPrice(pa.support)}（${pa.support_dist_pct !== null ? `${pa.support_dist_pct > 0 ? '+' : ''}${pa.support_dist_pct}%` : '—'}）`} />
+        </dl>
+      </div>
+
+      {/* 基底 */}
+      <div className="border-t border-line pt-2.5">
+        <div className="mb-1 flex items-center justify-between">
+          <span className="text-caption text-ink-500">基底检测（枢轴聚类）</span>
+          <span className="text-caption font-medium text-ink-800">
+            {base ? `${base.resistance_touches ?? '—'} 次触碰 · 质量 ${base.quality !== null ? Math.round((base.quality ?? 0) * 100) : '—'}` : '未检测到完成基底'}
+          </span>
+        </div>
+        {base && (
+          <dl className="grid grid-cols-2 gap-1.5 text-caption">
+            <StructFact label="阻力带" value={`${fmtPrice(base.resistance_low)} – ${fmtPrice(base.resistance_high)}`} />
+            <StructFact label="失效位" value={fmtPrice(base.invalidation_price)} />
+            <StructFact label="基底区间" value={`${fmtDate(base.base_start)} → ${fmtDate(base.base_end)}`} />
+            <StructFact label="支撑下沿" value={fmtPrice(base.support_low)} />
+          </dl>
+        )}
+      </div>
+
+      {/* 量价一致 */}
+      <div className="border-t border-line pt-2.5">
+        <div className="mb-1 flex items-center justify-between">
+          <span className="text-caption text-ink-500">量价一致（努力/结果）</span>
+          <span className="rounded-pill bg-ai-50 px-2 py-0.5 text-micro font-medium text-ai-600">{vpm.setup_label}</span>
+        </div>
+        <dl className="grid grid-cols-3 gap-1.5 text-caption">
+          <StructFact label="努力" value={vpm.effort !== null ? `${vpm.effort.toFixed(2)}x` : '—'} />
+          <StructFact label="结果" value={vpm.result !== null ? `${vpm.result.toFixed(2)}x` : '—'} />
+          <StructFact label="假突破风险" value={`${vpm.false_breakout_risk > 0 ? '+' : ''}${vpm.false_breakout_risk}`} />
+        </dl>
+        {vpm.tags.length > 0 && (
+          <p className="mt-1.5 text-micro text-ink-400">{vpm.tags.join(' · ')}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function IndicatorGrid({ technical }: { technical: TechnicalStructure | null }) {
+  if (!technical) return <p className="text-caption text-ink-400">{t('暂无数据')}</p>;
+  const tech = technical.technicals;
+  return (
+    <dl className="grid grid-cols-3 gap-1.5">
+      <MiniStat label="RSI 14" value={tech.rsi14 !== null ? tech.rsi14.toFixed(1) : '—'} />
+      <MiniStat
+        label="MACD 动向"
+        value={tech.macd.direction_pct !== null ? `${tech.macd.direction_pct > 0 ? '+' : ''}${tech.macd.direction_pct.toFixed(2)}%` : '—'}
+      />
+      <MiniStat label="趋势效率" value={tech.trend_efficiency_63d !== null ? tech.trend_efficiency_63d.toFixed(2) : '—'} />
+      <MiniStat label="MA50 斜率" value={tech.ma50_slope_pct_21d !== null ? `${tech.ma50_slope_pct_21d > 0 ? '+' : ''}${tech.ma50_slope_pct_21d.toFixed(1)}%` : '—'} />
+      <MiniStat label="区间位置" value={tech.range_position_60d !== null ? fmtPct(tech.range_position_60d, 0) : '—'} />
+      <MiniStat label="波动稳定" value={tech.return_stability_20d !== null ? fmtPct(tech.return_stability_20d, 1) : '—'} />
+    </dl>
+  );
+}
+
+function StructFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md bg-paper-2 px-2 py-1">
+      <dt className="text-micro text-ink-400">{label}</dt>
+      <dd className="font-mono text-caption tnum text-ink-800">{value}</dd>
+    </div>
+  );
+}
+
+/* ---------------- 既存パネル（コンパクト化） ---------------- */
+
 function FinancialTable({ summaries }: { summaries: FinancialSummaryView[] }) {
   const columns: Column<FinancialSummaryView>[] = [
     {
-      key: 'date',
-      title: t('发表预定'),
-      width: '104px',
+      key: 'date', title: t('发表预定'), width: '96px',
       render: (row) => <span className="font-mono text-caption tnum text-ink-700">{fmtDate(row.disclosed_date)}</span>,
     },
     {
-      key: 'period',
-      title: t('决算种别'),
+      key: 'period', title: t('决算种别'),
       render: (row) => (
         <span className="flex items-center gap-1">
           <span className="rounded-sm bg-paper-2 px-1.5 py-0.5 text-micro text-ink-600">
@@ -233,35 +426,21 @@ function FinancialTable({ summaries }: { summaries: FinancialSummaryView[] }) {
       ),
     },
     {
-      key: 'sales',
-      title: t('销售额'),
-      align: 'right',
+      key: 'sales', title: t('销售额'), align: 'right',
       render: (row) => <span className="font-mono text-caption tnum">{fmtYenCompact(row.sales ?? row.nc_sales)}</span>,
     },
     {
-      key: 'op',
-      title: t('营业利益'),
-      align: 'right',
+      key: 'op', title: t('营业利益'), align: 'right',
       render: (row) => (
         <span className="font-mono text-caption tnum">{fmtYenCompact(row.operating_profit ?? row.nc_operating_profit)}</span>
       ),
     },
     {
-      key: 'np',
-      title: t('纯利益'),
-      align: 'right',
+      key: 'np', title: t('纯利益'), align: 'right',
       render: (row) => <span className="font-mono text-caption tnum">{fmtYenCompact(row.net_profit)}</span>,
     },
     {
-      key: 'eps',
-      title: 'EPS',
-      align: 'right',
-      render: (row) => <span className="font-mono text-caption tnum">{row.eps !== null ? row.eps.toFixed(1) : '—'}</span>,
-    },
-    {
-      key: 'forecast',
-      title: `${t('会社预想')}·OP`,
-      align: 'right',
+      key: 'forecast', title: `${t('会社预想')}·OP`, align: 'right',
       render: (row) => (
         <span className="font-mono text-caption tnum text-ink-500">{fmtYenCompact(row.forecast_operating_profit)}</span>
       ),
@@ -274,19 +453,19 @@ function FinancialTable({ summaries }: { summaries: FinancialSummaryView[] }) {
 }
 
 function MarginPanel({ rows }: { rows: MarginInterestRow[] }) {
-  if (rows.length === 0) return <p className="text-body-s text-ink-400">{t('暂无数据')}</p>;
+  if (rows.length === 0) return <p className="text-caption text-ink-400">{t('暂无数据')}</p>;
   const latest = rows[rows.length - 1];
   const ratio =
     latest.long_total !== null && latest.short_total !== null && latest.short_total > 0
       ? latest.long_total / latest.short_total
       : null;
   return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-3 gap-2 text-center">
-        <MiniStat label={t('信用买残')} value={fmtYenCompact(latest.long_total)} />
-        <MiniStat label={t('信用卖残')} value={fmtYenCompact(latest.short_total)} />
+    <div className="space-y-1.5">
+      <dl className="grid grid-cols-3 gap-1.5">
+        <MiniStat label={t('信用买残')} value={fmtYenCompact(latest.long_total, 0)} />
+        <MiniStat label={t('信用卖残')} value={fmtYenCompact(latest.short_total, 0)} />
         <MiniStat label={t('信用倍率')} value={ratio !== null ? `${ratio.toFixed(2)}x` : '—'} />
-      </div>
+      </dl>
       <p className="text-right text-micro text-ink-400">
         {t('数据截至')} {fmtDate(latest.application_date)}（週次）
       </p>
@@ -311,9 +490,9 @@ function ShortPositionsPanel({ rows }: { rows: ShortPositionRow[] }) {
 
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md bg-paper-2 py-2">
-      <div className="font-mono text-data-m tnum text-ink-900">{value}</div>
-      <div className="text-micro text-ink-400">{label}</div>
+    <div className="rounded-md bg-paper-2 px-1.5 py-1.5 text-center">
+      <div className="truncate font-mono text-body-s tnum text-ink-900">{value}</div>
+      <div className="truncate text-micro text-ink-400">{label}</div>
     </div>
   );
 }

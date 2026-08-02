@@ -22,6 +22,7 @@ export const RADAR_STATE_LABELS: Record<string, string> = {
 export const SIGNAL_LABELS: Record<string, string> = {
   high_break_252: '52周高点突破',
   high_break_120: '120日高点突破',
+  base_breakout: '基底突破',
   high_break_60: '60日高点突破',
   high_break_20: '20日高点突破',
   volume_surge_break: '放量突破',

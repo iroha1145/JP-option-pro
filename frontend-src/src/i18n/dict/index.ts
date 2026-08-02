@@ -180,4 +180,7 @@ export const DICT: Record<string, [string, string]> = {
   在筛选器中添加: ['Add from the screener', 'スクリーナーから追加'],
   确认: ['Confirm', '確認'],
   取消: ['Cancel', 'キャンセル'],
+  卡片: ['Cards', 'カード'],
+  列表: ['List', 'リスト'],
+  基底突破: ['Base breakout', 'ベースブレイク'],
 };

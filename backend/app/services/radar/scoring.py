@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Mapping
 
-SCORE_VERSION = "jp-radar-score-v1"
+SCORE_VERSION = "jp-radar-score-v2"
 MIN_ACTIVE_WEIGHT = 0.25
 
 
@@ -77,12 +77,26 @@ def linear_score(value: float | None, low: float, high: float) -> float | None:
 # ---------------------------------------------------------------------------
 
 TREND_WEIGHTS = {
-    "ma_alignment": 0.30,
-    "above_ma75": 0.20,
-    "return_63d_score": 0.30,
-    "trend_persistence": 0.20,
+    "ma_alignment": 0.22,
+    "above_ma75": 0.12,
+    "return_63d_score": 0.22,
+    "trend_persistence": 0.14,
+    "price_structure": 0.20,  # HH/HL 構造 + パターン + トラップ（price_action）
+    "rsi": 0.10,
 }
 
+# 完成ベースが検出できた場合（base_detector の実測値、米国版と同重み）
+BASE_WEIGHTS_DETECTED = {
+    "tightness": 0.25,
+    "duration": 0.15,
+    "resistance_touches": 0.15,
+    "turnover_contraction": 0.15,
+    "atr_contraction": 0.10,
+    "support_integrity": 0.10,
+    "higher_low": 0.10,
+}
+
+# ベース未検出時の代理指標（v1 と同じ）
 BASE_WEIGHTS = {
     "tightness": 0.35,
     "duration": 0.20,

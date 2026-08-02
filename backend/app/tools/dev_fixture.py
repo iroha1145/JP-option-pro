@@ -121,6 +121,56 @@ def build_fixture(data_dir: str | None = None, *, days: int = 320, end_date: dat
     rng = random.Random(20260731)
     breakout_codes = {"70130", "58030", "285A0"}
     bar_rows = []
+
+    # 6146: 教科書的な「レンジベース → 当日ブレイク」形態（ベース検出のデモ用）。
+    base_code = "61460"
+    master_rows.append(
+        {
+            "canonical_code": base_code,
+            "name_ja": "ディスコ", "name_en": "DISCO CORPORATION",
+            "sector17_code": "9", "sector17_name": "電機・精密",
+            "sector33_code": "3650", "sector33_name": "電気機器",
+            "scale_category": "TOPIX Mid400", "market_code": "0111", "market_name": "プライム",
+            "margin_code": "1", "margin_name": "信用", "product_category": "1",
+            "as_of_date": target,
+        }
+    )
+    repository.replace_security_master(master_rows, as_of_date=target)
+    support_level, resistance_level = 41000.0, 45000.0
+    for index, day in enumerate(days_list):
+        remaining = len(days_list) - index
+        if remaining == 1:
+            close = resistance_level * 1.035  # 当日: 抵抗帯を明確に上抜け
+            high, low = close * 1.008, resistance_level * 0.998
+            open_ = resistance_level * 1.002
+            volume = 3_600_000.0
+        elif remaining <= 61:
+            phase = ((61 - remaining) % 10) / 10
+            mid = support_level + (resistance_level - support_level) * (0.2 + 0.6 * abs(0.5 - phase) * 2)
+            close = mid + rng.uniform(-300, 300)
+            high = min(resistance_level * 1.002, close + rng.uniform(300, 900))
+            low = max(support_level * 0.998, close - rng.uniform(300, 900))
+            open_ = close + rng.uniform(-250, 250)
+            volume = rng.uniform(0.9, 1.4) * 1_200_000 * (0.75 if remaining <= 30 else 1.0)
+        else:
+            drift_close = 30000.0 * (1.0 + 0.0012) ** index
+            close = min(drift_close, support_level * 1.02)
+            high, low = close * 1.012, close * 0.988
+            open_ = close * (1.0 + rng.uniform(-0.006, 0.006))
+            volume = rng.uniform(0.9, 1.5) * 1_400_000
+        bar_rows.append(
+            {
+                "canonical_code": base_code, "trade_date": day,
+                "open": round(open_, 1), "high": round(high, 1),
+                "low": round(low, 1), "close": round(close, 1),
+                "upper_limit": 0, "lower_limit": 0,
+                "volume": round(volume), "turnover_value": round(volume * close),
+                "adjustment_factor": 1.0,
+                "adj_open": round(open_, 1), "adj_high": round(high, 1),
+                "adj_low": round(low, 1), "adj_close": round(close, 1),
+                "adj_volume": round(volume),
+            }
+        )
     for display, _name, _s33, _s33n, _mkt, base, drift in FIXTURE_SECURITIES:
         code = _canonical(display)
         price = base
@@ -181,8 +231,9 @@ def build_fixture(data_dir: str | None = None, *, days: int = 320, end_date: dat
     )
 
     # 財務サマリー: 四半期累計 + 会社予想（上方修正を1社に演出）
+    fins_universe = FIXTURE_SECURITIES + (("6146", "ディスコ", "3650", "電気機器", "0111", 43000.0, 0.35),)
     fin_rows = []
-    for display, _name, _s33, _s33n, _mkt, base, drift in FIXTURE_SECURITIES:
+    for display, _name, _s33, _s33n, _mkt, base, drift in fins_universe:
         code = _canonical(display)
         annual_sales = base * 2_000_000
         for quarter_index, (period, disc_offset) in enumerate(
@@ -240,7 +291,7 @@ def build_fixture(data_dir: str | None = None, *, days: int = 320, end_date: dat
 
     # 信用残（週次・直近8週）
     margin_rows = []
-    for display, _name, _s33, _s33n, _mkt, base, _drift in FIXTURE_SECURITIES:
+    for display, _name, _s33, _s33n, _mkt, base, _drift in fins_universe:
         code = _canonical(display)
         for week in range(8):
             app_date = (date.fromisoformat(target) - timedelta(days=7 * week + 3)).isoformat()

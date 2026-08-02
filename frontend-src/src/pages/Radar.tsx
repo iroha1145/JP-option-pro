@@ -1,21 +1,26 @@
-/** 突破雷达：收盘后全市场扫描结果 + 生命周期过滤 + 事件评分详情。 */
+/** 突破雷达 — 美版布局移植：Lead 大卡（K线+枢轴带）→ 信号卡片流 → 生命周期。
+ *  数据仍为收盘后日线扫描，Lead 卡的 K 线按需拉取单只标的。 */
 
-import { useMemo, useState } from 'react';
-import { radarApi, workerApi } from '@/api/modules';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router';
+import { radarApi, stocksApi, workerApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { remoteState } from '@/hooks/remoteState';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import Segmented from '@/components/shared/Segmented';
-import { SkeletonRows } from '@/components/shared/Skeleton';
+import { SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
+import ReactECharts from '@/components/charts/ReactECharts';
+import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart';
 import { CodeCell, DataThrough, RADAR_STATE_LABELS, ScoreBar, SignalChip, StateChip } from '@/components/domain';
 import { useAccess } from '@/hooks/useAccess';
 import { t } from '@/i18n/core';
 import { fmtDate, fmtPct, fmtPrice, fmtYenCompact } from '@/lib/format';
-import type { RadarEvent } from '@/api/types';
+import type { RadarEvent, StockBar } from '@/api/types';
 
 type StateGroup = 'active' | 'confirmed' | 'watching' | 'closed' | 'all';
+type ViewMode = 'cards' | 'table';
 
 const GROUP_STATES: Record<StateGroup, string | undefined> = {
   all: undefined,
@@ -28,82 +33,30 @@ const GROUP_STATES: Record<StateGroup, string | undefined> = {
 export default function Radar() {
   const { isOwner } = useAccess();
   const [group, setGroup] = useState<StateGroup>('active');
-  const [selected, setSelected] = useState<RadarEvent | null>(null);
+  const [view, setView] = useState<ViewMode>('cards');
+  const [leadId, setLeadId] = useState<string | null>(null);
+  const [refreshNote, setRefreshNote] = useState<string | null>(null);
+
   const query = usePolling(
     () => radarApi.current(GROUP_STATES[group] ? { states: GROUP_STATES[group], limit: 200 } : { limit: 200 }),
     120_000,
     [group],
   );
   const state = remoteState(query, (d) => d.events.length === 0);
-  const [refreshNote, setRefreshNote] = useState<string | null>(null);
+  const events = query.data?.events ?? [];
 
-  const columns = useMemo<Column<RadarEvent>[]>(
-    () => [
-      {
-        key: 'code',
-        title: t('代码'),
-        width: '30%',
-        render: (row) => <CodeCell displayCode={row.display_code} nameJa={row.name_ja} to={`/stock/${row.display_code}`} />,
-      },
-      {
-        key: 'signal',
-        title: t('信号'),
-        render: (row) => <SignalChip signal={row.signal_type} />,
-      },
-      {
-        key: 'state',
-        title: t('状态'),
-        render: (row) => <StateChip state={row.state} />,
-      },
-      {
-        key: 'pivot',
-        title: t('枢轴价'),
-        align: 'right',
-        render: (row) => <span className="font-mono text-body-s tnum">{fmtPrice(row.pivot_price)}</span>,
-      },
-      {
-        key: 'close',
-        title: t('收盘'),
-        align: 'right',
-        render: (row) => (
-          <span className="font-mono text-body-s tnum">{fmtPrice(row.snapshot.close as number | null)}</span>
-        ),
-      },
-      {
-        key: 'turnover',
-        title: t('成交额'),
-        align: 'right',
-        sortable: true,
-        sortValue: (row) => (row.snapshot.turnover_today as number | null) ?? -1,
-        render: (row) => (
-          <span className="font-mono text-body-s tnum text-ink-600">
-            {fmtYenCompact(row.snapshot.turnover_today as number | null)}
-          </span>
-        ),
-      },
-      {
-        key: 'discovered',
-        title: t('发现日'),
-        align: 'right',
-        sortable: true,
-        sortValue: (row) => row.discovered_date,
-        render: (row) => <span className="text-caption text-ink-500">{fmtDate(row.discovered_date)}</span>,
-      },
-      {
-        key: 'priority',
-        title: t('优先级'),
-        align: 'right',
-        sortable: true,
-        sortValue: (row) => row.alert_priority ?? -1,
-        render: (row) => (
-          <span className="font-mono text-data-m tnum text-ink-900">
-            {row.alert_priority !== null ? Math.round(row.alert_priority) : '—'}
-          </span>
-        ),
-      },
-    ],
-    [],
-  );
+  // Lead = 明示選択 or 優先度トップ。フィルタ変更で選択が消えたら先頭へ戻す。
+  const lead = useMemo(() => {
+    if (leadId) {
+      const picked = events.find((event) => event.event_id === leadId);
+      if (picked) return picked;
+    }
+    return events[0] ?? null;
+  }, [events, leadId]);
+
+  useEffect(() => {
+    setLeadId(null);
+  }, [group]);
 
   return (
     <div className="space-y-6">
@@ -136,104 +89,344 @@ export default function Radar() {
         }
       />
 
-      <Segmented<StateGroup>
-        options={[
-          { value: 'active', label: t('已触发') },
-          { value: 'confirmed', label: t('已确认') },
-          { value: 'watching', label: t('观察中') },
-          { value: 'closed', label: t('已失效') },
-          { value: 'all', label: t('全部') },
-        ]}
-        value={group}
-        onChange={setGroup}
-      />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Segmented<StateGroup>
+          options={[
+            { value: 'active', label: t('已触发') },
+            { value: 'confirmed', label: t('已确认') },
+            { value: 'watching', label: t('观察中') },
+            { value: 'closed', label: t('已失效') },
+            { value: 'all', label: t('全部') },
+          ]}
+          value={group}
+          onChange={setGroup}
+        />
+        <Segmented<ViewMode>
+          options={[
+            { value: 'cards', label: t('卡片') },
+            { value: 'table', label: t('列表') },
+          ]}
+          value={view}
+          onChange={setView}
+        />
+      </div>
 
       {state === 'loading' ? (
-        <SkeletonRows rows={10} />
+        <>
+          <SkeletonCard className="h-80" />
+          <SkeletonRows rows={6} />
+        </>
       ) : state === 'error' ? (
         <EmptyState variant="error" title={t('加载失败')} description={String(query.error?.message ?? '')} />
       ) : state === 'empty' ? (
         <EmptyState title={t('暂无数据')} description={query.data?.note ?? ''} />
       ) : (
-        <div className="grid gap-4 xl:grid-cols-3">
-          <div className="xl:col-span-2">
-            <DataTable
-              columns={columns}
-              rows={query.data?.events ?? []}
-              rowKey={(row) => row.event_id}
-              rowHeight={44}
-              defaultSort={{ key: 'priority', desc: true }}
-              onRowClick={(row) => setSelected(row)}
-            />
-          </div>
-          <aside className="card-surface h-fit rounded-lg p-4 xl:sticky xl:top-20">
-            {selected ? (
-              <EventDetail event={selected} />
-            ) : (
-              <p className="py-8 text-center text-body-s text-ink-400">{t('详情')} — {t('打开')}</p>
-            )}
-          </aside>
-        </div>
+        <>
+          {lead && <LeadBigCard event={lead} />}
+          {view === 'cards' ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {events
+                .filter((event) => event.event_id !== lead?.event_id)
+                .map((event) => (
+                  <EventCard
+                    key={event.event_id}
+                    event={event}
+                    onSelect={() => {
+                      setLeadId(event.event_id);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                  />
+                ))}
+            </div>
+          ) : (
+            <RadarTable events={events} onSelect={(event) => {
+              setLeadId(event.event_id);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }} />
+          )}
+        </>
       )}
     </div>
   );
 }
 
-function EventDetail({ event }: { event: RadarEvent }) {
+/* ---------------- Lead 大卡（美版 LeadBigCard 対応） ---------------- */
+
+function LeadBigCard({ event }: { event: RadarEvent }) {
+  const chart = usePolling(
+    () => stocksApi.chart(event.canonical_code, '6m'),
+    null,
+    [event.canonical_code],
+  );
   const scores = event.scores ?? {};
+  const structure = event.structure ?? null;
+
   return (
-    <div className="space-y-4">
-      <header className="flex items-start justify-between gap-2">
-        <CodeCell displayCode={event.display_code} nameJa={event.name_ja} to={`/stock/${event.display_code}`} />
-        <StateChip state={event.state} />
-      </header>
-      <dl className="grid grid-cols-2 gap-2 text-body-s">
-        <Fact label={t('信号')} value={<SignalChip signal={event.signal_type} />} />
-        <Fact label={t('枢轴价')} value={fmtPrice(event.pivot_price)} mono />
-        <Fact label={t('发现日')} value={fmtDate(event.discovered_date)} />
-        <Fact
-          label={t('距52周高点')}
-          value={fmtPct(event.snapshot.pct_from_high_252 as number | null)}
-          mono
-        />
-      </dl>
-      <div className="space-y-1.5 border-t border-line pt-3">
-        <ScoreBar label="综合质量" score={scores.breakout_quality?.score ?? null} />
-        <ScoreBar label="趋势质量" score={scores.trend_quality?.score ?? null} />
-        <ScoreBar label="基底质量" score={scores.base_quality?.score ?? null} />
-        <ScoreBar label="突破确认" score={scores.breakout_confirmation?.score ?? null} />
-        <ScoreBar label="相对强度" score={scores.relative_strength?.score ?? null} />
-        <ScoreBar label="量能" score={scores.participation?.score ?? null} />
-        <ScoreBar label="流动性" score={scores.liquidity?.score ?? null} />
-        <ScoreBar label="市场契合" score={scores.market_fit ?? null} />
-        <ScoreBar label="行业契合" score={scores.sector_fit ?? null} />
-        <ScoreBar label="追高风险" score={scores.chase_risk ?? null} />
-        <ScoreBar label="拥挤度" score={scores.crowding_risk ?? null} />
-        <ScoreBar label="数据置信度" score={scores.data_confidence ?? null} />
-      </div>
-      {event.transitions && event.transitions.length > 0 && (
-        <div className="border-t border-line pt-3">
-          <h3 className="mb-1.5 text-caption font-medium text-ink-500">{t('生命周期')}</h3>
-          <ol className="space-y-1 text-caption text-ink-600">
-            {event.transitions.slice(-6).map((transition, index) => (
-              <li key={index} className="flex items-center gap-2">
-                <span className="font-mono tnum text-ink-400">{fmtDate(transition.date)}</span>
-                <span>{t(RADAR_STATE_LABELS[transition.to] ?? transition.to)}</span>
-                <span className="truncate text-ink-300">{transition.reason}</span>
-              </li>
-            ))}
-          </ol>
+    <section className="card-surface overflow-hidden rounded-xl">
+      <div className="grid gap-0 lg:grid-cols-3">
+        {/* 左 2/3: ヘッダー + K線 */}
+        <div className="border-line p-4 lg:col-span-2 lg:border-r">
+          <header className="mb-2 flex flex-wrap items-center gap-2">
+            <CodeCell displayCode={event.display_code} nameJa={event.name_ja} to={`/stock/${event.display_code}`} />
+            <SignalChip signal={event.signal_type} />
+            <StateChip state={event.state} />
+            <span className="ml-auto flex items-baseline gap-1.5">
+              <span className="text-micro text-ink-400">{t('优先级')}</span>
+              <span className="font-mono text-display-m tnum text-ink-900">
+                {event.alert_priority !== null ? Math.round(event.alert_priority) : '—'}
+              </span>
+            </span>
+          </header>
+          <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-caption text-ink-500">
+            <span>{event.sector33_name ?? '—'} · {event.market_name ?? '—'}</span>
+            <span>{t('发现日')} {fmtDate(event.discovered_date)}</span>
+            <span>
+              {t('枢轴价')} <span className="font-mono tnum text-ink-800">{fmtPrice(event.pivot_price)}</span>
+            </span>
+            <span>
+              {t('收盘')} <span className="font-mono tnum text-ink-800">{fmtPrice(event.snapshot.close as number | null)}</span>
+            </span>
+            <span>
+              {t('成交额')} <span className="font-mono tnum text-ink-800">{fmtYenCompact(event.snapshot.turnover_today as number | null)}</span>
+            </span>
+          </div>
+          {chart.data && chart.data.bars.length > 0 ? (
+            <LeadChart bars={chart.data.bars} event={event} />
+          ) : (
+            <SkeletonCard className="h-64" />
+          )}
+          {/* 構造タグ行（価格行動 + 量価一致） */}
+          {structure && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {structure.structure_label && (
+                <Tag tone="brand">{structure.structure_label}</Tag>
+              )}
+              {structure.setup_label && <Tag tone="ai">{structure.setup_label}</Tag>}
+              {(structure.pattern_labels ?? []).map((label) => (
+                <Tag key={label} tone="neutral">{label}</Tag>
+              ))}
+              {structure.spring && <Tag tone="up">Spring 假跌破回收</Tag>}
+              {structure.upthrust && <Tag tone="down">Upthrust 假突破</Tag>}
+            </div>
+          )}
         </div>
-      )}
-    </div>
+
+        {/* 右 1/3: スコア + ライフサイクル */}
+        <div className="flex flex-col gap-3 p-4">
+          <div className="space-y-1.5">
+            <ScoreBar label="综合质量" score={scores.breakout_quality?.score ?? null} />
+            <ScoreBar label="趋势质量" score={scores.trend_quality?.score ?? null} />
+            <ScoreBar label="基底质量" score={scores.base_quality?.score ?? null} />
+            <ScoreBar label="突破确认" score={scores.breakout_confirmation?.score ?? null} />
+            <ScoreBar label="相对强度" score={scores.relative_strength?.score ?? null} />
+            <ScoreBar label="量能" score={scores.participation?.score ?? null} />
+            <ScoreBar label="流动性" score={scores.liquidity?.score ?? null} />
+            <ScoreBar label="市场契合" score={scores.market_fit ?? null} />
+            <ScoreBar label="行业契合" score={scores.sector_fit ?? null} />
+            <ScoreBar label="追高风险" score={scores.chase_risk ?? null} />
+            <ScoreBar label="拥挤度" score={scores.crowding_risk ?? null} />
+          </div>
+          {event.transitions && event.transitions.length > 0 && (
+            <div className="border-t border-line pt-2.5">
+              <h3 className="mb-1.5 text-caption font-medium text-ink-500">{t('生命周期')}</h3>
+              <ol className="space-y-1 text-caption text-ink-600">
+                {event.transitions.slice(-5).map((transition, index) => (
+                  <li key={index} className="flex items-center gap-2">
+                    <span className="font-mono tnum text-ink-400">{fmtDate(transition.date)}</span>
+                    <span>{t(RADAR_STATE_LABELS[transition.to] ?? transition.to)}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+          <Link
+            to={`/stock/${event.display_code}`}
+            className="mt-auto rounded-md border border-line py-1.5 text-center text-body-s text-brand-700 hover:bg-brand-50"
+          >
+            {t('个股研究')} →
+          </Link>
+        </div>
+      </div>
+    </section>
   );
 }
 
-function Fact({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+function LeadChart({ bars, event }: { bars: StockBar[]; event: RadarEvent }) {
+  const option = useMemo(() => {
+    const dates = bars.map((bar) => bar.trade_date.slice(5));
+    const candles = bars.map((bar) => [
+      bar.adj_open ?? bar.open,
+      bar.adj_close ?? bar.close,
+      bar.adj_low ?? bar.low,
+      bar.adj_high ?? bar.high,
+    ]);
+    const markLines: Record<string, unknown>[] = [];
+    if (event.pivot_price !== null) {
+      markLines.push({
+        yAxis: event.pivot_price,
+        lineStyle: { color: CH.brand600, type: 'dashed', width: 1.2 },
+        label: { formatter: `${t('枢轴价')} ${fmtPrice(event.pivot_price)}`, position: 'insideEndTop', color: CH.brand600, fontSize: 10 },
+      });
+    }
+    const base = event.structure?.base;
+    if (base?.invalidation_price != null) {
+      markLines.push({
+        yAxis: base.invalidation_price,
+        lineStyle: { color: CH.down600, type: 'dotted', width: 1 },
+        label: { formatter: '失效位', position: 'insideEndBottom', color: CH.down600, fontSize: 10 },
+      });
+    }
+    return {
+      grid: baseGrid({ top: 10, bottom: 4, left: 4, right: 44 }),
+      tooltip: glassTooltip({ trigger: 'axis' }),
+      xAxis: categoryAxis(dates),
+      yAxis: valueAxis({ scale: true, position: 'right' }),
+      series: [
+        {
+          type: 'candlestick' as const,
+          data: candles,
+          itemStyle: {
+            color: CH.up600, color0: CH.down600,
+            borderColor: CH.up600, borderColor0: CH.down600,
+          },
+          markLine: {
+            symbol: 'none',
+            data: markLines,
+            animation: false,
+          },
+          ...(base?.resistance_high != null && base?.resistance_low != null
+            ? {
+                markArea: {
+                  silent: true,
+                  itemStyle: { color: CH.brand400, opacity: 0.08 },
+                  data: [
+                    [{ yAxis: base.resistance_low }, { yAxis: base.resistance_high }] as [
+                      { yAxis: number },
+                      { yAxis: number },
+                    ],
+                  ],
+                },
+              }
+            : {}),
+        },
+      ],
+    };
+  }, [bars, event]);
+  return <ReactECharts className="h-64 w-full" option={option} ariaLabel={`${event.display_code} lead chart`} />;
+}
+
+/* ---------------- イベントカード ---------------- */
+
+function EventCard({ event, onSelect }: { event: RadarEvent; onSelect: () => void }) {
+  const quality = event.scores?.breakout_quality?.score ?? null;
+  const structure = event.structure ?? null;
   return (
-    <div className="rounded-md bg-paper-2 px-2 py-1.5">
-      <dt className="text-micro text-ink-400">{label}</dt>
-      <dd className={mono ? 'font-mono tnum text-ink-900' : 'text-ink-900'}>{value}</dd>
-    </div>
+    <button
+      type="button"
+      onClick={onSelect}
+      className="card-surface card-hover flex flex-col gap-2 rounded-lg p-3 text-left"
+    >
+      <div className="flex items-center gap-2">
+        <CodeCell displayCode={event.display_code} nameJa={event.name_ja} />
+        <span className="ml-auto font-mono text-data-l tnum text-ink-900">
+          {event.alert_priority !== null ? Math.round(event.alert_priority) : '—'}
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <SignalChip signal={event.signal_type} />
+        <StateChip state={event.state} />
+        {structure?.setup_label && <Tag tone="ai">{structure.setup_label}</Tag>}
+      </div>
+      <div className="grid grid-cols-3 gap-1 text-caption">
+        <CardFact label={t('收盘')} value={fmtPrice(event.snapshot.close as number | null)} />
+        <CardFact label={t('枢轴价')} value={fmtPrice(event.pivot_price)} />
+        <CardFact label={t('成交额')} value={fmtYenCompact(event.snapshot.turnover_today as number | null)} />
+      </div>
+      <div className="flex items-center gap-2 text-micro text-ink-400">
+        <span>{t('综合质量')} {quality !== null ? Math.round(quality) : '—'}</span>
+        <span>·</span>
+        <span>{t('距52周高点')} {fmtPct(event.snapshot.pct_from_high_252 as number | null)}</span>
+        <span className="ml-auto">{fmtDate(event.discovered_date)}</span>
+      </div>
+    </button>
+  );
+}
+
+function CardFact({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="rounded-md bg-paper-2 px-1.5 py-1">
+      <span className="block text-micro text-ink-400">{label}</span>
+      <span className="font-mono text-body-s tnum text-ink-800">{value}</span>
+    </span>
+  );
+}
+
+function Tag({ children, tone }: { children: React.ReactNode; tone: 'brand' | 'ai' | 'up' | 'down' | 'neutral' }) {
+  const tones = {
+    brand: 'bg-brand-50 text-brand-700',
+    ai: 'bg-ai-50 text-ai-600',
+    up: 'bg-up-50 text-up-700',
+    down: 'bg-down-50 text-down-700',
+    neutral: 'border border-line bg-card text-ink-600',
+  };
+  return (
+    <span className={`inline-flex items-center rounded-pill px-2 py-0.5 text-micro ${tones[tone]}`}>{children}</span>
+  );
+}
+
+/* ---------------- 列表視圖 ---------------- */
+
+function RadarTable({ events, onSelect }: { events: RadarEvent[]; onSelect: (event: RadarEvent) => void }) {
+  const columns = useMemo<Column<RadarEvent>[]>(
+    () => [
+      {
+        key: 'code', title: t('代码'), width: '28%',
+        render: (row) => <CodeCell displayCode={row.display_code} nameJa={row.name_ja} to={`/stock/${row.display_code}`} />,
+      },
+      { key: 'signal', title: t('信号'), render: (row) => <SignalChip signal={row.signal_type} /> },
+      { key: 'state', title: t('状态'), render: (row) => <StateChip state={row.state} /> },
+      {
+        key: 'pivot', title: t('枢轴价'), align: 'right',
+        render: (row) => <span className="font-mono text-body-s tnum">{fmtPrice(row.pivot_price)}</span>,
+      },
+      {
+        key: 'close', title: t('收盘'), align: 'right',
+        render: (row) => <span className="font-mono text-body-s tnum">{fmtPrice(row.snapshot.close as number | null)}</span>,
+      },
+      {
+        key: 'turnover', title: t('成交额'), align: 'right', sortable: true,
+        sortValue: (row) => (row.snapshot.turnover_today as number | null) ?? -1,
+        render: (row) => (
+          <span className="font-mono text-body-s tnum text-ink-600">
+            {fmtYenCompact(row.snapshot.turnover_today as number | null)}
+          </span>
+        ),
+      },
+      {
+        key: 'discovered', title: t('发现日'), align: 'right', sortable: true,
+        sortValue: (row) => row.discovered_date,
+        render: (row) => <span className="text-caption text-ink-500">{fmtDate(row.discovered_date)}</span>,
+      },
+      {
+        key: 'priority', title: t('优先级'), align: 'right', sortable: true,
+        sortValue: (row) => row.alert_priority ?? -1,
+        render: (row) => (
+          <span className="font-mono text-data-m tnum text-ink-900">
+            {row.alert_priority !== null ? Math.round(row.alert_priority) : '—'}
+          </span>
+        ),
+      },
+    ],
+    [],
+  );
+  return (
+    <DataTable
+      columns={columns}
+      rows={events}
+      rowKey={(row) => row.event_id}
+      rowHeight={44}
+      defaultSort={{ key: 'priority', desc: true }}
+      onRowClick={onSelect}
+    />
   );
 }

@@ -126,6 +126,10 @@ def compute_security_features(bars: Sequence[Mapping[str, Any]]) -> dict[str, An
     series = clean_series(bars)
     if series is None:
         return None
+    return compute_features_from_series(series)
+
+
+def compute_features_from_series(series: dict[str, list]) -> dict[str, Any] | None:
     closes = series["closes"]
     highs = series["highs"]
     lows = series["lows"]
@@ -257,10 +261,20 @@ def index_return(series: Sequence[Mapping[str, Any]], days: int) -> float | None
     return closes[-1] / closes[-1 - days] - 1.0
 
 
+def series_excluding_last(series: dict[str, list]) -> dict[str, list] | None:
+    """評価対象日を除いた列（ベース検出用 — 当日は自分の抵抗帯に不参加）。"""
+
+    if len(series.get("closes") or []) < 2:
+        return None
+    return {key: list(values[:-1]) for key, values in series.items()}
+
+
 __all__ = [
     "FEATURE_VERSION",
     "MIN_BARS_FOR_FEATURES",
     "clean_series",
+    "compute_features_from_series",
     "compute_security_features",
     "index_return",
+    "series_excluding_last",
 ]
