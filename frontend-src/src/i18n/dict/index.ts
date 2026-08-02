@@ -183,4 +183,5 @@ export const DICT: Record<string, [string, string]> = {
   卡片: ['Cards', 'カード'],
   列表: ['List', 'リスト'],
   基底突破: ['Base breakout', 'ベースブレイク'],
+  '{title}：查看指标说明': ['{title}: indicator explanation', '{title}：指標の説明を見る'],
 };

@@ -15,9 +15,11 @@ import Segmented from '@/components/shared/Segmented';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import { SkeletonCard } from '@/components/shared/Skeleton';
 import ReactECharts from '@/components/charts/ReactECharts';
+import InfoHint from '@/components/shared/InfoHint';
 import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart';
 import { DataThrough, ScoreBar, SignalChip, StateChip } from '@/components/domain';
 import { useAccess } from '@/hooks/useAccess';
+import { STRUCTURE_HINTS, TECHNICAL_HINTS, type ScoreHint } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { fmtDate, fmtPct, fmtPrice, fmtYenCompact } from '@/lib/format';
 import type {
@@ -218,14 +220,20 @@ export default function StockDetail() {
               value={range}
               onChange={setRange}
             />
-            <Segmented<PriceMode>
-              options={[
-                { value: 'adjusted', label: t('复权') },
-                { value: 'raw', label: t('不复权') },
-              ]}
-              value={priceMode}
-              onChange={setPriceMode}
-            />
+            <span className="flex items-center gap-2">
+              <span className="flex items-center gap-1 text-caption text-ink-400">
+                图例
+                <InfoHint hint={STRUCTURE_HINTS.chart_overlays} align="end" />
+              </span>
+              <Segmented<PriceMode>
+                options={[
+                  { value: 'adjusted', label: t('复权') },
+                  { value: 'raw', label: t('不复权') },
+                ]}
+                value={priceMode}
+                onChange={setPriceMode}
+              />
+            </span>
           </div>
           {chartOption ? (
             <ReactECharts className="h-72 w-full" option={chartOption} ariaLabel={`${security.display_code} chart`} />
@@ -325,7 +333,10 @@ function StructurePanel({ technical }: { technical: TechnicalStructure | null })
       {/* 市场结构 */}
       <div>
         <div className="mb-1 flex items-center justify-between">
-          <span className="text-caption text-ink-500">市场结构（HH/HL）</span>
+          <span className="flex items-center gap-1 text-caption text-ink-500">
+            市场结构（HH/HL）
+            <InfoHint hint={STRUCTURE_HINTS.market_structure} />
+          </span>
           <span className="text-caption font-medium text-ink-800">{pa.structure_label}</span>
         </div>
         <ScoreBar label="价格行为" score={pa.score} />
@@ -333,8 +344,18 @@ function StructurePanel({ technical }: { technical: TechnicalStructure | null })
           {pa.pattern_labels.map((label) => (
             <span key={label} className="rounded-pill border border-line bg-card px-2 py-0.5 text-micro text-ink-600">{label}</span>
           ))}
-          {pa.spring && <span className="rounded-pill bg-up-50 px-2 py-0.5 text-micro text-up-700">Spring 假跌破回收</span>}
-          {pa.upthrust && <span className="rounded-pill bg-down-50 px-2 py-0.5 text-micro text-down-700">Upthrust 假突破</span>}
+          {pa.spring && (
+            <span className="inline-flex items-center gap-1 rounded-pill bg-up-50 px-2 py-0.5 text-micro text-up-700">
+              Spring 假跌破回收
+              <InfoHint hint={STRUCTURE_HINTS.spring} size={11} />
+            </span>
+          )}
+          {pa.upthrust && (
+            <span className="inline-flex items-center gap-1 rounded-pill bg-down-50 px-2 py-0.5 text-micro text-down-700">
+              Upthrust 假突破
+              <InfoHint hint={STRUCTURE_HINTS.upthrust} size={11} />
+            </span>
+          )}
         </div>
         <dl className="mt-2 grid grid-cols-2 gap-1.5 text-caption">
           <StructFact label="摆动阻力" value={`${fmtPrice(pa.resistance)}（${pa.resistance_dist_pct !== null ? `${pa.resistance_dist_pct > 0 ? '+' : ''}${pa.resistance_dist_pct}%` : '—'}）`} />
@@ -345,7 +366,10 @@ function StructurePanel({ technical }: { technical: TechnicalStructure | null })
       {/* 基底 */}
       <div className="border-t border-line pt-2.5">
         <div className="mb-1 flex items-center justify-between">
-          <span className="text-caption text-ink-500">基底检测（枢轴聚类）</span>
+          <span className="flex items-center gap-1 text-caption text-ink-500">
+            基底检测（枢轴聚类）
+            <InfoHint hint={STRUCTURE_HINTS.base_detection} />
+          </span>
           <span className="text-caption font-medium text-ink-800">
             {base ? `${base.resistance_touches ?? '—'} 次触碰 · 质量 ${base.quality !== null ? Math.round((base.quality ?? 0) * 100) : '—'}` : '未检测到完成基底'}
           </span>
@@ -363,7 +387,10 @@ function StructurePanel({ technical }: { technical: TechnicalStructure | null })
       {/* 量价一致 */}
       <div className="border-t border-line pt-2.5">
         <div className="mb-1 flex items-center justify-between">
-          <span className="text-caption text-ink-500">量价一致（努力/结果）</span>
+          <span className="flex items-center gap-1 text-caption text-ink-500">
+            量价一致（努力/结果）
+            <InfoHint hint={STRUCTURE_HINTS.vol_price} />
+          </span>
           <span className="rounded-pill bg-ai-50 px-2 py-0.5 text-micro font-medium text-ai-600">{vpm.setup_label}</span>
         </div>
         <dl className="grid grid-cols-3 gap-1.5 text-caption">
@@ -384,15 +411,36 @@ function IndicatorGrid({ technical }: { technical: TechnicalStructure | null }) 
   const tech = technical.technicals;
   return (
     <dl className="grid grid-cols-3 gap-1.5">
-      <MiniStat label="RSI 14" value={tech.rsi14 !== null ? tech.rsi14.toFixed(1) : '—'} />
+      <MiniStat
+        label="RSI 14"
+        value={tech.rsi14 !== null ? tech.rsi14.toFixed(1) : '—'}
+        hint={TECHNICAL_HINTS.rsi14}
+      />
       <MiniStat
         label="MACD 动向"
         value={tech.macd.direction_pct !== null ? `${tech.macd.direction_pct > 0 ? '+' : ''}${tech.macd.direction_pct.toFixed(2)}%` : '—'}
+        hint={TECHNICAL_HINTS.macd}
       />
-      <MiniStat label="趋势效率" value={tech.trend_efficiency_63d !== null ? tech.trend_efficiency_63d.toFixed(2) : '—'} />
-      <MiniStat label="MA50 斜率" value={tech.ma50_slope_pct_21d !== null ? `${tech.ma50_slope_pct_21d > 0 ? '+' : ''}${tech.ma50_slope_pct_21d.toFixed(1)}%` : '—'} />
-      <MiniStat label="区间位置" value={tech.range_position_60d !== null ? fmtPct(tech.range_position_60d, 0) : '—'} />
-      <MiniStat label="波动稳定" value={tech.return_stability_20d !== null ? fmtPct(tech.return_stability_20d, 1) : '—'} />
+      <MiniStat
+        label="趋势效率"
+        value={tech.trend_efficiency_63d !== null ? tech.trend_efficiency_63d.toFixed(2) : '—'}
+        hint={TECHNICAL_HINTS.trend_efficiency}
+      />
+      <MiniStat
+        label="MA50 斜率"
+        value={tech.ma50_slope_pct_21d !== null ? `${tech.ma50_slope_pct_21d > 0 ? '+' : ''}${tech.ma50_slope_pct_21d.toFixed(1)}%` : '—'}
+        hint={TECHNICAL_HINTS.ma50_slope}
+      />
+      <MiniStat
+        label="区间位置"
+        value={tech.range_position_60d !== null ? fmtPct(tech.range_position_60d, 0) : '—'}
+        hint={TECHNICAL_HINTS.range_position}
+      />
+      <MiniStat
+        label="波动稳定"
+        value={tech.return_stability_20d !== null ? fmtPct(tech.return_stability_20d, 1) : '—'}
+        hint={TECHNICAL_HINTS.return_stability}
+      />
     </dl>
   );
 }
@@ -488,11 +536,14 @@ function ShortPositionsPanel({ rows }: { rows: ShortPositionRow[] }) {
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: string }) {
+function MiniStat({ label, value, hint }: { label: string; value: string; hint?: ScoreHint }) {
   return (
     <div className="rounded-md bg-paper-2 px-1.5 py-1.5 text-center">
       <div className="truncate font-mono text-body-s tnum text-ink-900">{value}</div>
-      <div className="truncate text-micro text-ink-400">{label}</div>
+      <div className="flex items-center justify-center gap-0.5 text-micro text-ink-400">
+        <span className="truncate">{label}</span>
+        {hint && <InfoHint hint={hint} size={11} side="bottom" />}
+      </div>
     </div>
   );
 }

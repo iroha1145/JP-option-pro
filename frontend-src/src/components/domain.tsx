@@ -1,8 +1,10 @@
 /** 日股领域小组件：状态徽章、数据截至徽章、评分条、代码徽标。 */
 
 import { Link } from 'react-router';
+import InfoHint from '@/components/shared/InfoHint';
 import { t } from '@/i18n/core';
 import { fmtDate, fmtScore } from '@/lib/format';
+import { radarScoreHint, type ScoreHint } from '@/lib/indicatorHints';
 import { cn } from '@/lib/utils';
 
 export const RADAR_STATE_LABELS: Record<string, string> = {
@@ -74,11 +76,24 @@ export function DataThrough({ date, className }: { date: string | null | undefin
   );
 }
 
-export function ScoreBar({ label, score }: { label: string; score: number | null | undefined }) {
+export function ScoreBar({
+  label,
+  score,
+  hint,
+}: {
+  label: string;
+  score: number | null | undefined;
+  /** 省略时按 label 自动查 RADAR_SCORE_HINTS；传 false 明确关闭。 */
+  hint?: ScoreHint | false;
+}) {
   const value = score ?? null;
+  const resolvedHint = hint === false ? undefined : (hint ?? radarScoreHint(label));
   return (
     <div className="flex items-center gap-2">
-      <span className="w-20 shrink-0 text-caption text-ink-500">{t(label)}</span>
+      <span className="flex w-24 shrink-0 items-center gap-1 text-caption text-ink-500">
+        <span className="truncate">{t(label)}</span>
+        {resolvedHint && <InfoHint hint={resolvedHint} size={12} />}
+      </span>
       <div className="track relative h-1.5 flex-1 overflow-hidden rounded-pill bg-line">
         {value !== null && (
           <div
