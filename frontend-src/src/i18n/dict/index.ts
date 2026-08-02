@@ -583,4 +583,7 @@ export const DICT: Record<string, [string, string]> = {
   ],
   成交额份额: ['Turnover share', '売買代金シェア'],
   '量比=当日成交额/20日均额': ['Vol ratio = today turnover / 20d average', '出来高倍率=当日売買代金/20日平均'],
+  当日中位: ['1d median', '当日中央値'],
+  '近20日中位': ['20d median', '20日中央値'],
+  '上涨占比 {pct}': ['{pct} advancing', '値上がり比率 {pct}'],
 };

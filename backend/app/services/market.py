@@ -105,6 +105,13 @@ def market_overview(repository: CoreRepository) -> dict[str, Any]:
                 key=lambda row: row["return_1d"],
                 reverse=True,
             )[:3]
+            # 業種内の値上がり銘柄比率: 中央値だけでは「全面高」と「数銘柄が
+            # 牽引しただけ」が同じ顔になる。ヒートタイル下端の細バーに使う。
+            advancers_share = (
+                sum(1 for value in r1_values if value > 0.0005) / len(r1_values)
+                if r1_values
+                else None
+            )
             sectors.append(
                 {
                     "sector33_code": sector_code,
@@ -112,6 +119,7 @@ def market_overview(repository: CoreRepository) -> dict[str, Any]:
                     "member_count": len(members),
                     "median_return_1d": r1_values[len(r1_values) // 2] if r1_values else None,
                     "median_return_20d": r20_values[len(r20_values) // 2] if r20_values else None,
+                    "advancers_share": advancers_share,
                     "leaders": [
                         {
                             "canonical_code": row["canonical_code"],

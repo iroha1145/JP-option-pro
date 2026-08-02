@@ -17,6 +17,8 @@ export interface SectorStrength {
   member_count: number;
   median_return_1d: number | null;
   median_return_20d: number | null;
+  /** 业种内上涨股占比（0..1）：热力砖底端细条 */
+  advancers_share: number | null;
   leaders: { canonical_code: string; name_ja: string | null; return_1d: number | null }[];
 }
 

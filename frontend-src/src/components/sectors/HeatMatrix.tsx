@@ -42,11 +42,13 @@ function HeatTile({
   const primary = metricValue(sector, metric);
   const secondary = metric === 'r1' ? sector.median_return_20d : sector.median_return_1d;
   const secondaryLabel = metric === 'r1' ? t('近20日') : t('当日');
+  const primaryLabel = metric === 'r1' ? t('当日中位') : t('近20日中位');
   const { bg, dark } = tone(primary);
-  const leader = sector.leaders[0] ?? null;
   const textMain = dark ? 'text-white' : 'text-ink-800';
   const textSub = dark ? 'text-white/75' : 'text-ink-500';
-  const chipClass = dark ? 'bg-white/20 text-white' : 'bg-ink-900/[0.06] text-ink-600';
+  const barTrack = dark ? 'bg-white/15' : 'bg-ink-900/[0.07]';
+  const barFill = dark ? 'bg-white/45' : 'bg-ink-900/25';
+  const share = sector.advancers_share;
 
   return (
     <button
@@ -59,38 +61,44 @@ function HeatTile({
         r20: fmtPct(sector.median_return_20d),
       })}
       className={cn(
-        'group relative overflow-hidden rounded-md p-3 text-left shadow-sh-1 transition-[box-shadow,transform] duration-fast hover:-translate-y-0.5 hover:shadow-sh-2',
+        'group relative h-[92px] overflow-hidden rounded-md text-left shadow-sh-1 transition-[box-shadow,transform] duration-fast hover:-translate-y-0.5 hover:shadow-sh-2 md:h-[108px]',
         primary === null && 'border border-dashed border-line-strong',
         selected && 'ring-2 ring-brand-600 ring-offset-1',
       )}
       style={{ backgroundColor: bg }}
     >
-      <span className="flex items-start justify-between gap-1.5">
-        <span className={cn('min-w-0 truncate text-[13px] font-semibold leading-[18px]', textMain)}>
-          {sector.sector33_name}
+      <span className="flex h-full flex-col justify-between p-3">
+        <span className="flex min-w-0 items-start justify-between gap-1.5">
+          <span className={cn('min-w-0 truncate text-[13px] font-semibold leading-[18px]', textMain)}>
+            {sector.sector33_name}
+          </span>
+          <span className={cn('shrink-0 font-mono text-micro tnum', textSub)}>
+            {t('{n} 只', { n: sector.member_count })}
+          </span>
         </span>
-        <span className={cn('shrink-0 font-mono text-micro tnum', textSub)}>{sector.member_count}</span>
+        <span>
+          <span className="flex items-baseline gap-1.5">
+            <span className={cn('font-mono text-[15px] font-semibold leading-5 tnum', textMain)}>
+              {fmtPct(primary)}
+            </span>
+            <span className={cn('truncate text-micro', textSub)}>{primaryLabel}</span>
+          </span>
+          <span className={cn('block truncate font-mono text-micro tnum', textSub)}>
+            {secondaryLabel} {fmtPct(secondary)}
+          </span>
+        </span>
       </span>
 
-      <span className={cn('mt-1.5 block font-mono text-[15px] font-semibold leading-5 tnum', textMain)}>
-        {fmtPct(primary)}
-      </span>
-      <span className={cn('block font-mono text-micro tnum', textSub)}>
-        {secondaryLabel} {fmtPct(secondary)}
-      </span>
-
-      {/* 美版此处是 IV —— 日股无期权，改为今日领涨 */}
-      <span className={cn('mt-1.5 flex items-center gap-1 rounded-sm px-1 py-0.5 text-micro', chipClass)}>
-        {leader ? (
-          <>
-            <span className="font-mono font-semibold">{leader.canonical_code.replace(/0$/, '')}</span>
-            <span className="min-w-0 flex-1 truncate">{leader.name_ja ?? ''}</span>
-            <span className="font-mono tnum">{fmtPct(leader.return_1d)}</span>
-          </>
-        ) : (
-          <span className="truncate">{t('无领涨数据')}</span>
-        )}
-      </span>
+      {/* 底端细条＝业种内上涨股占比（中位数看不出「普涨」还是「被少数拉起」） */}
+      {share !== null && (
+        <span
+          className={cn('absolute inset-x-0 bottom-0 h-[3px] overflow-hidden', barTrack)}
+          aria-hidden="true"
+          title={t('上涨占比 {pct}', { pct: `${Math.round(share * 100)}%` })}
+        >
+          <span className={cn('block h-full', barFill)} style={{ width: `${Math.max(2, share * 100)}%` }} />
+        </span>
+      )}
     </button>
   );
 }
