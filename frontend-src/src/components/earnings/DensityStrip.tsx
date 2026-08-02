@@ -49,8 +49,18 @@ export default function DensityStrip({ items, onJumpDay }: DensityStripProps) {
                 type="button"
                 onClick={() => onJumpDay(day.date)}
                 aria-label={t('{date} {weekday}，{n} 件决算，跳转', { date: fmtMDCN(day.date), weekday: weekdayCN(day.date), n })}
-                className="group relative flex h-full min-w-0 flex-1 items-end focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400/60"
+                className={cn(
+                  'group relative flex h-full min-w-0 flex-1 items-end focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400/60',
+                  /* 今天 = 整列淡底 + 列顶圆点（环套在数像素高的柱段上会成一个怪方块） */
+                  isToday && 'rounded-[3px] bg-brand-50',
+                )}
               >
+                {isToday && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -top-1 left-1/2 size-1 -translate-x-1/2 rounded-full bg-brand-600"
+                  />
+                )}
                 <span
                   className={cn(
                     'glass pointer-events-none absolute -top-2 z-20 hidden w-max max-w-[190px] -translate-y-full rounded-md border border-line px-2.5 py-1.5 text-left shadow-sh-2 group-hover:block group-focus-visible:block',
@@ -91,7 +101,6 @@ export default function DensityStrip({ items, onJumpDay }: DensityStripProps) {
                       'w-full transition-colors duration-fast',
                       solid > 0 ? 'bg-brand-500 group-hover:bg-brand-600' : n === 0 ? 'bg-line' : 'bg-transparent',
                       n - solid <= 0 && 'rounded-t-[2px]',
-                      isToday && 'ring-1 ring-brand-600 ring-offset-1',
                     )}
                     style={{ height: solid > 0 ? `${Math.max(8, (solid / max) * 100)}%` : n === 0 ? '2px' : '0px' }}
                   />

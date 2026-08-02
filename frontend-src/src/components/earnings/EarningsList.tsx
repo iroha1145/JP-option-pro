@@ -26,29 +26,24 @@ function ForecastPairBars({
 }) {
   const max = Math.max(Math.abs(prior ?? 0), Math.abs(forecast ?? 0), 1);
   const height = (value: number | null) => (value == null ? 0 : Math.max(6, (Math.abs(value) / max) * 26));
+  void index;
   return (
-    <span className="flex h-7 w-11 items-end justify-center gap-1" aria-hidden="true">
+    /* 不做 scaleY 入场动画：whileInView 在数像素高的元素上会停在 scaleY(0)
+       （决算密度条同病，实机复现）——柱子按最终高度静态渲染。 */
+    <span className="flex h-7 w-11 shrink-0 items-end justify-center gap-1" aria-hidden="true">
       {prior != null && (
-        <motion.span
+        <span
           className={cn('w-2.5 rounded-t-[2px] border border-ink-300/70', prior < 0 && 'opacity-50')}
           style={{
             height: height(prior),
             backgroundImage: 'repeating-linear-gradient(45deg, rgba(138,148,176,.55) 0 1.2px, transparent 1.2px 4px)',
           }}
-          initial={{ scaleY: 0 }}
-          whileInView={{ scaleY: 1 }}
-          viewport={{ once: true, amount: 0.5 }}
-          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: Math.min(index * 0.04, 0.5) }}
         />
       )}
       {forecast != null && (
-        <motion.span
-          className={cn('w-2.5 origin-bottom rounded-t-[2px] bg-brand-600', forecast < 0 && 'opacity-50')}
+        <span
+          className={cn('w-2.5 rounded-t-[2px] bg-brand-600', forecast < 0 && 'opacity-50')}
           style={{ height: height(forecast) }}
-          initial={{ scaleY: 0 }}
-          whileInView={{ scaleY: 1 }}
-          viewport={{ once: true, amount: 0.5 }}
-          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: Math.min(index * 0.04, 0.5) + 0.08 }}
         />
       )}
     </span>
@@ -257,7 +252,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                     </span>
                   </motion.div>
 
-                  {/* 移动卡片 */}
+                  {/* 移动卡片 — 信息位与桌面行对齐：收盘/涨跌 · 双柱(前期実績vs会社予想) · 20日均额 · ★/雷达 */}
                   <motion.button
                     type="button"
                     initial={{ opacity: 0, y: 10 }}
@@ -267,23 +262,59 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                     className="block w-full border-b border-line px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-paper-2 md:hidden"
                   >
                     <span className="flex items-center gap-2">
-                      <span className="rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-body-s font-semibold text-brand-700">
+                      <span className="shrink-0 rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-body-s font-semibold text-brand-700">
                         {row.display_code}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-body-s text-ink-800">{row.name_ja ?? '—'}</span>
                         <span className="block truncate text-micro text-ink-400">{row.sector33_name ?? '—'}</span>
                       </span>
-                      <ChangeBadge value={row.change_pct !== null ? row.change_pct / 100 : null} size="sm" />
+                      <span className="shrink-0 text-right">
+                        <span className="block font-mono text-body-s text-ink-900 tnum">{fmtPrice(row.close)}</span>
+                        <ChangeBadge value={row.change_pct !== null ? row.change_pct / 100 : null} size="sm" />
+                      </span>
                     </span>
-                    <span className="mt-2 flex items-center justify-between gap-2">
+                    <span className="mt-2 flex items-end justify-between gap-2">
                       <StatusChip item={row} />
-                      <span className="font-mono text-micro text-ink-500 tnum">
-                        {released
-                          ? `${t('营利')} ${fmtYenCompact(released.operating_profit)}`
-                          : forecastValue != null
-                            ? `${metricLabel(forecast?.metric)} ${fmtYenCompact(forecastValue)}`
-                            : '—'}
+                      {released ? (
+                        <span className="min-w-0 text-right font-mono text-caption tnum">
+                          <span className="block truncate">
+                            <span className="text-ink-400">{t('营利')}</span>{' '}
+                            <span className="font-semibold text-ink-900">{fmtYenCompact(released.operating_profit)}</span>
+                          </span>
+                          <span className="block truncate text-micro text-ink-500">
+                            {t('销售')} {fmtYenCompact(released.sales)} · {t('纯利')} {fmtYenCompact(released.net_profit)}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="flex min-w-0 items-center justify-end gap-2">
+                          <ForecastPairBars prior={priorValue} forecast={forecastValue} index={index} />
+                          <span className="min-w-0 text-right font-mono text-caption tnum">
+                            <span className="block truncate">
+                              <span className="text-ink-500">{priorValue != null ? fmtYenCompact(priorValue) : '—'}</span>
+                              <span className="mx-1 text-ink-300">→</span>
+                              <span className={forecastValue != null ? 'font-semibold text-ink-900' : 'text-ink-300'}>
+                                {forecastValue != null ? fmtYenCompact(forecastValue) : '—'}
+                              </span>
+                            </span>
+                            <span className="block truncate text-micro text-ink-400">
+                              {forecast ? metricLabel(forecast.metric) : t('营业利益')}
+                              {forecast?.direction === 'upward' && <span className="ml-1 text-up-700">{t('上方修正')}</span>}
+                              {forecast?.direction === 'downward' && <span className="ml-1 text-down-700">{t('下方修正')}</span>}
+                            </span>
+                          </span>
+                        </span>
+                      )}
+                    </span>
+                    <span className="mt-1.5 flex items-center justify-between text-micro text-ink-400">
+                      <span className="font-mono tnum">
+                        {t('20日均额')} {fmtYenCompact(row.avg_turnover_20d)}
+                      </span>
+                      <span>
+                        {row.in_watchlist && <span className="text-warn-600">★</span>}
+                        {row.radar_state && (
+                          <span className="ml-1 inline-block size-1.5 rounded-full bg-brand-600 align-middle" title={t('雷达信号')} />
+                        )}
                       </span>
                     </span>
                   </motion.button>
