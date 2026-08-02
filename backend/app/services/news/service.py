@@ -447,8 +447,8 @@ def news_hotspots_view(*, hours: int = 72, limit: int = 8) -> dict[str, Any]:
 def news_securities_view(*, hours: int = 72, limit: int = 50) -> dict[str, Any]:
     """銘柄別インパクト集計（米国版 StocksPanel 対応）。
 
-    決定論部分（件数・重要度・分類）は常に出る。AI 方向サマリは
-    分析済みアイテムがある銘柄のみ（無ければ null — 0 で偽装しない）。"""
+    決定論部分（件数・重要度・分類）は常に出る。AI サマリは分析済み件数のみ
+    （方向予測は v2 で製品から削除）。分析ゼロ件は null — 0 で偽装しない。"""
 
     paths = get_data_paths()
     store = NewsStore(paths.news_db, read_only=True)
@@ -462,9 +462,7 @@ def news_securities_view(*, hours: int = 72, limit: int = 50) -> dict[str, Any]:
             row = per_code.setdefault(
                 code,
                 {"canonical_code": code, "news_count": 0, "max_importance": None,
-                 "categories": [], "latest": None,
-                 "analyzed_count": 0, "positive": 0, "negative": 0,
-                 "confidence_sum": 0.0},
+                 "categories": [], "latest": None, "analyzed_count": 0},
             )
             row["news_count"] += 1
             importance = item.get("importance")
@@ -483,12 +481,6 @@ def news_securities_view(*, hours: int = 72, limit: int = 50) -> dict[str, Any]:
                 if str(affected.get("code")) != code:
                     continue
                 row["analyzed_count"] += 1
-                direction = affected.get("direction")
-                if direction == "positive":
-                    row["positive"] += 1
-                elif direction == "negative":
-                    row["negative"] += 1
-                row["confidence_sum"] += float(affected.get("confidence") or 0)
     rows = sorted(
         per_code.values(),
         key=lambda r: (-(r["max_importance"] or 0.0), -r["news_count"], r["canonical_code"]),
@@ -500,19 +492,7 @@ def news_securities_view(*, hours: int = 72, limit: int = 50) -> dict[str, Any]:
         row["name_ja"] = names.get(code)
         row["categories"] = row["categories"][:3]
         analyzed = row.pop("analyzed_count")
-        confidence_sum = row.pop("confidence_sum")
-        row["ai"] = (
-            {
-                "analyzed": analyzed,
-                "positive": row.pop("positive"),
-                "negative": row.pop("negative"),
-                "avg_confidence": round(confidence_sum / analyzed, 1),
-            }
-            if analyzed
-            else None
-        )
-        row.pop("positive", None)
-        row.pop("negative", None)
+        row["ai"] = {"analyzed": analyzed} if analyzed else None
     return {"window_hours": hours, "rows": rows}
 
 

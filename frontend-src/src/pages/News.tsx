@@ -253,23 +253,18 @@ function NewsCard({ item }: { item: NewsItem }) {
               <span className="mr-1.5 rounded-sm bg-ai-600 px-1 py-0.5 text-micro font-bold text-white">中文分析</span>
               {item.analysis_zh.headline && <strong className="mr-1">{item.analysis_zh.headline}</strong>}
               {item.analysis_zh.impact}
+              {/* 受影响股票只列代码与理由，不显示涨跌方向（产品决定移除方向预测） */}
               {(item.analysis_zh.affected?.length ?? 0) > 0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {item.analysis_zh.affected!.map((affected) => (
-                    <span
+                    <Link
                       key={affected.code}
-                      className={cn(
-                        'rounded-pill px-2 py-0.5 font-mono text-micro',
-                        affected.direction === 'positive' && 'bg-up-50 text-up-700',
-                        affected.direction === 'negative' && 'bg-down-50 text-down-700',
-                        affected.direction !== 'positive' && affected.direction !== 'negative' && 'bg-paper-2 text-ink-500',
-                      )}
+                      to={`/stock/${affected.code.endsWith('0') && affected.code.length === 5 ? affected.code.slice(0, 4) : affected.code}`}
+                      title={affected.reason_zh ?? undefined}
+                      className="rounded-pill bg-paper-2 px-2 py-0.5 font-mono text-micro text-ink-600 hover:bg-brand-50 hover:text-brand-700"
                     >
                       {affected.code.endsWith('0') && affected.code.length === 5 ? affected.code.slice(0, 4) : affected.code}
-                      {' '}
-                      {affected.direction === 'positive' ? '↑' : affected.direction === 'negative' ? '↓' : '·'}
-                      {affected.confidence != null ? ` ${affected.confidence}` : ''}
-                    </span>
+                    </Link>
                   ))}
                 </div>
               )}
@@ -369,14 +364,12 @@ function StocksImpactPanel({ rows, loading }: { rows: NewsSecurityRow[]; loading
       },
       {
         key: 'ai',
-        title: t('AI 方向'),
+        title: t('AI 分析'),
         align: 'right',
         render: (row) =>
           row.ai ? (
-            <span className="font-mono text-caption tnum">
-              <span className="text-up-700">{row.ai.positive}↑</span>{' '}
-              <span className="text-down-700">{row.ai.negative}↓</span>{' '}
-              <span className="text-ink-400">({row.ai.avg_confidence})</span>
+            <span className="font-mono text-caption text-ink-600 tnum">
+              {t('已分析')} {row.ai.analyzed}
             </span>
           ) : (
             <span className="text-micro text-ink-300">{t('未分析')}</span>

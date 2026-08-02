@@ -583,6 +583,7 @@ class RadarEngine:
             "market_fit": market_fit,
             "sector_fit": sector_fit,
             "features_by_code": features_by_code,
+            "structure_by_code": structure_by_code,
             "sector_median_returns": sector_median_returns,
             "rs_context": {"topix_return_63d": topix_r63},
         }

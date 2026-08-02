@@ -124,3 +124,98 @@ def test_earnings_calendar_declares_coverage_note(client):
     assert "3月期・9月期" in body["coverage_note"]
     assert body["items"], "フィクスチャの発表予定"
     assert any(item["announcement_date"] is None for item in body["items"])  # 未定は null で返す
+
+
+def test_strength_scan_endpoints(client):
+    profiles = client.get("/api/strength/profiles").json()
+    assert [p["id"] for p in profiles["profiles"]] == ["conservative", "balanced", "aggressive"]
+    assert len(profiles["sectors"]) == 33
+    assert abs(sum(profiles["family_weights"].values()) - 1.0) < 1e-9
+
+    market = client.get("/api/strength/market")
+    assert market.status_code == 200
+    regime = market.json()["market_regime"]
+    assert set(regime["dims"]) == {
+        "index_trend", "momentum", "breadth", "volume", "risk_appetite", "risk_on_spread",
+    }
+
+    scan = client.get("/api/strength/scan?timeframe=all&profile=balanced&top=10")
+    assert scan.status_code == 200
+    body = scan.json()
+    assert body["trade_date"] == "2026-07-31"
+    assert body["universe_count"] >= body["screened_count"] >= len(body["rows"]) > 0
+    assert body["tier_distribution"]["total"] == body["screened_count"]
+    top_row = body["rows"][0]
+    assert top_row["selected_view_rank"] == 1
+    assert top_row["ranking_score"] is not None
+    assert set(top_row["families"]) == {"short", "mid", "long", "trend", "breakout", "price_action"}
+    # profile を変えると ranking が変わり得るが intrinsic は不変。
+    aggressive = client.get("/api/strength/scan?profile=aggressive&top=10").json()
+    by_code = {row["canonical_code"]: row for row in aggressive["rows"]}
+    if top_row["canonical_code"] in by_code:
+        assert by_code[top_row["canonical_code"]]["intrinsic_score"] == top_row["intrinsic_score"]
+    # 不正パラメータは 422。
+    assert client.get("/api/strength/scan?timeframe=weekly").status_code == 422
+    assert client.get("/api/strength/scan?sector_id=9999x").status_code == 422
+
+
+def test_account_register_and_personal_watchlist(client, monkeypatch):
+    import app.api.access as access_api
+    import app.api.account as account_api
+    from app.services.accounts import AccountStore, set_account_store
+
+    # ループバック HTTP なので HTTPS 判定だけテスト内で満たす。
+    monkeypatch.setattr(account_api, "request_uses_https", lambda _request: True)
+    monkeypatch.setattr(access_api, "request_uses_https", lambda _request: True)
+    account_api.reset_rate_limits()
+    import tempfile
+    from pathlib import Path
+
+    tmp = tempfile.mkdtemp(prefix="jp-accounts-")
+    set_account_store(AccountStore(Path(tmp) / "accounts.db"))
+    try:
+        write_headers = {
+            "X-Optix-Action": "1",
+            "Origin": "http://testserver",
+            "Content-Type": "application/json",
+        }
+        created = client.post(
+            "/api/account/register",
+            json={"username": "taro", "password": "pw-1234"},
+            headers=write_headers,
+        )
+        assert created.status_code == 201
+        assert created.json()["username"] == "taro"
+        # Secure 属性付き cookie は http のテスト jar に載らないため手で拾う。
+        set_cookie = created.headers.get("set-cookie", "")
+        token = set_cookie.split("optix_user_session=", 1)[1].split(";", 1)[0]
+        client.cookies.set("optix_user_session", token)
+        me = client.get("/api/account/me").json()
+        assert me["logged_in"] is True and me["username"] == "taro"
+        status_body = client.get("/api/access/status").json()
+        assert status_body["account"]["username"] == "taro"
+
+        # アカウント主体の自選はオーナーの自選と別空間（private_network では
+        # ループバックがオーナーだが、account cookie が優先される）。
+        added = client.post("/api/watchlist/6758", headers=write_headers)
+        assert added.status_code == 201
+        listing = client.get("/api/watchlist").json()
+        assert listing["principal"] == "account"
+        assert [item["canonical_code"] for item in listing["items"]] == ["67580"]
+
+        # 予約名 admin では登録できない。
+        reserved = client.post(
+            "/api/account/register",
+            json={"username": "admin", "password": "pw"},
+            headers=write_headers,
+        )
+        assert reserved.status_code == 400
+        assert reserved.json()["detail"]["code"] == "username_reserved"
+
+        # ログアウトで account セッションも失効。
+        out = client.post("/api/access/logout", headers=write_headers)
+        assert out.status_code == 200
+        assert client.get("/api/account/me").json()["logged_in"] is False
+    finally:
+        set_account_store(None)
+        account_api.reset_rate_limits()

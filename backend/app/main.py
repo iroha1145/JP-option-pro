@@ -33,6 +33,7 @@ from app.access import (  # noqa: E402
 )
 from app.api import (  # noqa: E402
     access as access_api,
+    account as account_api,
     data_status as data_status_api,
     earnings as earnings_api,
     market as market_api,
@@ -41,6 +42,7 @@ from app.api import (  # noqa: E402
     screener as screener_api,
     settings as settings_api,
     stocks as stocks_api,
+    strength as strength_api,
     watchlist as watchlist_api,
     worker_actions as worker_api,
 )
@@ -202,14 +204,18 @@ _OWNER_ACTION = [Depends(require_public_read_or_owner_access), Depends(require_s
 app.include_router(market_api.router, dependencies=_PUBLIC_READ)
 app.include_router(stocks_api.router, dependencies=_PUBLIC_READ)
 app.include_router(screener_api.router, dependencies=_PUBLIC_READ)
+app.include_router(strength_api.router, dependencies=_PUBLIC_READ)
 app.include_router(earnings_api.router, dependencies=_PUBLIC_READ)
 app.include_router(radar_api.router, dependencies=_PUBLIC_READ)
 app.include_router(news_api.router, dependencies=_PUBLIC_READ)
 app.include_router(data_status_api.router, dependencies=_PUBLIC_READ)
 app.include_router(settings_api.router, dependencies=_PUBLIC_READ)
-app.include_router(watchlist_api.router, dependencies=_OWNER_ACTION)
+# 自選はルート内で主体（オーナー / 訪客アカウント）を解決し、書き込みは
+# 同一オリジンガードを各ルートで掛ける — ルータ級のオーナー強制を外す。
+app.include_router(watchlist_api.router)
 app.include_router(worker_api.router, dependencies=_OWNER_ACTION)
 app.include_router(access_api.router)
+app.include_router(account_api.router)
 
 # ---------------------------------------------------------------------------
 # health / readiness

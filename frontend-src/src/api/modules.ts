@@ -10,6 +10,7 @@ import type {
   EconCalendarResponse,
   IntradayChart,
   MarketOverview,
+  MarketRegime,
   NewsFeedResponse,
   NewsHotspotGroup,
   NewsSecurityRow,
@@ -21,6 +22,8 @@ import type {
   SettingsView,
   StockBar,
   StockOverview,
+  StrengthProfilesMeta,
+  StrengthScanResponse,
   WatchlistItem,
 } from './types.ts';
 
@@ -86,7 +89,7 @@ export const screenerApi = {
 };
 
 export const watchlistApi = {
-  list(): Promise<{ items: WatchlistItem[] }> {
+  list(): Promise<{ items: WatchlistItem[]; principal?: 'owner' | 'account'; max_items?: number | null }> {
     return get('/watchlist');
   },
   add(code: string) {
@@ -144,11 +147,24 @@ export const accessApi = {
   status(): Promise<AccessStatus> {
     return get('/access/status');
   },
-  login(password: string) {
-    return post<{ logged_in: boolean }>('/access/login', { password });
+  /** username 省略 = owner（admin）；其余用户名走访客账号（与美股版共库）。 */
+  login(password: string, username = 'admin') {
+    return post<{ logged_in: boolean; account?: { logged_in: boolean; username: string } }>(
+      '/access/login',
+      { username, password },
+    );
   },
   logout() {
     return post<{ logged_in: boolean }>('/access/logout');
+  },
+};
+
+export const accountApi = {
+  register(username: string, password: string) {
+    return post<{ logged_in: boolean; username: string }>('/account/register', { username, password });
+  },
+  me() {
+    return get<{ logged_in: boolean; username: string | null }>('/account/me');
   },
 };
 
@@ -161,6 +177,30 @@ export const workerApi = {
       `/worker/actions/${encodeURIComponent(actionType)}`,
       body,
     );
+  },
+};
+
+export interface StrengthScanParams {
+  timeframe?: string;
+  profile?: string;
+  top?: number;
+  sector_id?: string;
+  min_price?: number;
+  max_price?: number;
+  min_avg_turnover?: number;
+  tier?: string;
+  min_score?: number;
+}
+
+export const strengthApi = {
+  scan(params: StrengthScanParams = {}): Promise<StrengthScanResponse> {
+    return get(`/strength/scan?${toQuery({ ...params })}`);
+  },
+  market(): Promise<{ trade_date: string; built_at: string; market_regime: MarketRegime; universe_count: number }> {
+    return get('/strength/market');
+  },
+  profiles(): Promise<StrengthProfilesMeta> {
+    return registryGet('/strength/profiles');
   },
 };
 

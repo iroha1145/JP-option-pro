@@ -16,7 +16,7 @@ from __future__ import annotations
 import math
 from typing import Any, Mapping, Sequence
 
-FEATURE_VERSION = "jp-features-v1"
+FEATURE_VERSION = "jp-features-v2"  # v2: +return_126d/+return_252d（強度スキャン長期族）
 
 MIN_BARS_FOR_FEATURES = 30
 
@@ -179,6 +179,8 @@ def compute_features_from_series(series: dict[str, list]) -> dict[str, Any] | No
     return_5d = _pct_return(closes, 5)
     return_20d = _pct_return(closes, 20)
     return_63d = _pct_return(closes, 63)
+    return_126d = _pct_return(closes, 126)
+    return_252d = _pct_return(closes, 252)
 
     # Volatility contraction: recent 10-bar ATR vs the 30→10 bar window.
     atr_recent = _atr(highs[-11:], lows[-11:], closes[-11:], 10) if len(closes) >= 12 else None
@@ -247,6 +249,8 @@ def compute_features_from_series(series: dict[str, list]) -> dict[str, Any] | No
         "return_5d": return_5d,
         "return_20d": return_20d,
         "return_63d": return_63d,
+        "return_126d": return_126d,
+        "return_252d": return_252d,
         "volatility_contraction": volatility_contraction,
         "drawdown_63d": drawdown_63d,
         "overheat_atr_multiple": overheat_atr_multiple,

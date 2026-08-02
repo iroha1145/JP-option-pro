@@ -15,7 +15,7 @@ from app.domain.constants import EQUITY_TRADING_DIVISIONS
 from app.domain.symbols import display_code
 
 from .base import SQLiteRepository, utc_now_iso
-from .core_schema import CORE_DDL, CORE_SCHEMA_VERSION
+from .core_schema import CORE_DDL, CORE_MIGRATIONS, CORE_SCHEMA_VERSION
 
 
 def _upsert_sql(table: str, columns: Sequence[str], conflict: Sequence[str]) -> str:
@@ -32,6 +32,7 @@ class CoreRepository(SQLiteRepository):
     SCHEMA_NAME = "jp_core"
     SCHEMA_VERSION = CORE_SCHEMA_VERSION
     DDL = CORE_DDL
+    MIGRATIONS = CORE_MIGRATIONS
 
     def __init__(self, db_path: Path, *, read_only: bool = False) -> None:
         super().__init__(db_path, read_only=read_only)
@@ -836,6 +837,93 @@ class CoreRepository(SQLiteRepository):
         with self.read() as connection:
             row = connection.execute("SELECT MAX(trade_date) FROM screener_rows").fetchone()
         return row[0] if row and row[0] else None
+
+    # ------------------------------------------------------------------
+    # strength scan (nightly intrinsic cross-section)
+    # ------------------------------------------------------------------
+
+    _STRENGTH_COLUMNS = (
+        "canonical_code", "trade_date", "intrinsic_score", "confidence",
+        "score_short", "score_mid", "score_long", "trend_score",
+        "breakout_quality_score", "price_action_score",
+        "global_rank_percentile", "sector_rank_percentile",
+        "close", "change_pct", "atr_pct", "avg_turnover_20d",
+        "turnover_ratio", "ath_proximity", "drawdown_63d_pct",
+        "ma_alignment_pct", "rs_topix_63d", "market_code", "sector33_code",
+        "details_json", "built_at",
+    )
+
+    def replace_strength_rows(
+        self,
+        rows: Iterable[Mapping[str, Any]],
+        *,
+        trade_date: str,
+        regime: Mapping[str, Any],
+    ) -> int:
+        now = utc_now_iso()
+        prepared = []
+        for row in rows:
+            if not row.get("canonical_code"):
+                continue
+            values = {column: row.get(column) for column in self._STRENGTH_COLUMNS}
+            values["details_json"] = json.dumps(
+                row.get("details") or {}, ensure_ascii=False, sort_keys=True
+            )
+            values["built_at"] = now
+            prepared.append(tuple(values[column] for column in self._STRENGTH_COLUMNS))
+        with self.write() as connection:
+            connection.execute("DELETE FROM strength_rows")
+            if prepared:
+                connection.executemany(
+                    f"INSERT INTO strength_rows ({', '.join(self._STRENGTH_COLUMNS)}) "
+                    f"VALUES ({', '.join('?' for _ in self._STRENGTH_COLUMNS)})",
+                    prepared,
+                )
+            connection.execute(
+                "INSERT INTO strength_meta (id, trade_date, regime_json, universe_count, built_at) "
+                "VALUES (1, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET trade_date=excluded.trade_date, "
+                "regime_json=excluded.regime_json, universe_count=excluded.universe_count, "
+                "built_at=excluded.built_at",
+                (
+                    trade_date,
+                    json.dumps(dict(regime), ensure_ascii=False, sort_keys=True),
+                    len(prepared),
+                    now,
+                ),
+            )
+        return len(prepared)
+
+    def strength_rows_all(self) -> list[dict[str, Any]]:
+        with self.read() as connection:
+            rows = connection.execute("SELECT * FROM strength_rows").fetchall()
+        results = []
+        for row in rows:
+            item = dict(row)
+            raw = item.pop("details_json", None)
+            try:
+                item["details"] = json.loads(raw) if raw else {}
+            except ValueError:
+                item["details"] = {}
+            results.append(item)
+        return results
+
+    def strength_meta(self) -> dict[str, Any] | None:
+        with self.read() as connection:
+            row = connection.execute(
+                "SELECT trade_date, regime_json, universe_count, built_at FROM strength_meta WHERE id=1"
+            ).fetchone()
+        if row is None:
+            return None
+        try:
+            regime = json.loads(row["regime_json"]) if row["regime_json"] else {}
+        except ValueError:
+            regime = {}
+        return {
+            "trade_date": row["trade_date"],
+            "regime": regime,
+            "universe_count": int(row["universe_count"] or 0),
+            "built_at": row["built_at"],
+        }
 
     # ------------------------------------------------------------------
     # sync state

@@ -38,6 +38,11 @@ class SQLiteRepository:
     SCHEMA_NAME = "base"
     SCHEMA_VERSION = "v0"
     DDL: tuple[str, ...] = ()
+    #: 明示的な前方マイグレーション: {旧version: (追加DDL群, 新version)}。
+    #: 追加DDL適用後のスキーマは新規作成と同一でなければならない（検証は
+    #: バージョン文字列と新チェックサムの保存で行う）。チェーンに無い旧版は
+    #: 従来通り SchemaVersionError で拒否する。
+    MIGRATIONS: dict[str, tuple[tuple[str, ...], str]] = {}
 
     def __init__(self, db_path: Path, *, read_only: bool = False) -> None:
         self._db_path = Path(db_path)
@@ -83,11 +88,36 @@ class SQLiteRepository:
                         " VALUES (1, ?, ?, ?)",
                         (self.SCHEMA_VERSION, self._checksum, utc_now_iso()),
                     )
-                elif row[0] != self.SCHEMA_VERSION or row[1] != self._checksum:
-                    raise SchemaVersionError(
-                        f"{self._db_path.name}: stored schema {row[0]}/{row[1][:12]} does not match"
-                        f" code {self.SCHEMA_VERSION}/{self._checksum[:12]}"
-                    )
+                else:
+                    version = str(row[0])
+                    # 前方マイグレーション: 既知の旧版なら追加DDLを適用して
+                    # バージョンを進める。1 トランザクション内なので途中失敗は
+                    # 丸ごとロールバックされる。
+                    migrated = False
+                    while version != self.SCHEMA_VERSION and version in self.MIGRATIONS:
+                        statements, next_version = self.MIGRATIONS[version]
+                        for statement in statements:
+                            connection.execute(statement)
+                        version = next_version
+                        migrated = True
+                    if version != self.SCHEMA_VERSION:
+                        raise SchemaVersionError(
+                            f"{self._db_path.name}: stored schema {row[0]}/{row[1][:12]} does not match"
+                            f" code {self.SCHEMA_VERSION}/{self._checksum[:12]} and no migration path exists"
+                        )
+                    if migrated:
+                        connection.execute(
+                            f"UPDATE {self.SCHEMA_NAME}_schema SET version=?, checksum=?, applied_at=?"
+                            " WHERE id=1",
+                            (self.SCHEMA_VERSION, self._checksum, utc_now_iso()),
+                        )
+                    elif row[1] != self._checksum:
+                        # 同一バージョンでチェックサム不一致 = スキーマ漂流。
+                        # マイグレーションを経ない書き換えは従来通り拒否する。
+                        raise SchemaVersionError(
+                            f"{self._db_path.name}: stored schema {row[0]}/{row[1][:12]} does not match"
+                            f" code {self.SCHEMA_VERSION}/{self._checksum[:12]}"
+                        )
                 connection.execute("COMMIT")
             except BaseException:
                 connection.execute("ROLLBACK")

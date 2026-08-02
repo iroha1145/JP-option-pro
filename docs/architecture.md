@@ -15,14 +15,16 @@
 
 | ファイル | ライタ | 内容 |
 |---|---|---|
-| jp-core.db | worker | 銘柄マスタ・取引カレンダー・日足・指数・財務・決算予定・信用・空売り・レーダー・スクリーナー断面・同期チェックポイント |
+| jp-core.db | worker | 銘柄マスタ・取引カレンダー・日足・指数・財務・決算予定・信用・空売り・レーダー・スクリーナー断面・強度スキャン断面（strength_rows / strength_meta, v2）・同期チェックポイント |
 | jp-news.db | worker | ニュース原文・日本語訳・中文分析・実体別名・フィード状態 |
 | jp-ai-jobs.db | worker + API | モデルジョブキュー（UNIQUE(request_hash) 去重・トークン予算） |
 | jp-worker.db | worker + API | タスク状態・リース・手動アクションキュー |
-| jp-app.db | API | ウォッチリスト |
+| jp-app.db | API | オーナーのウォッチリスト + 訪客アカウント別ウォッチリスト（v2） |
+| accounts.db | API（共有可） | 訪客アカウント・セッション。**米国版と同一スキーマ**：`ACCOUNTS_DB_PATH` で米国版デプロイの実ファイルを指せば同一アカウントが両サイトで通用する |
 
 スキーマは DDL の SHA-256 をバージョン表に保存し、開くたびに照合する
-（ドリフトは起動失敗として顕在化）。
+（ドリフトは起動失敗として顕在化）。既知の旧版には MIGRATIONS の
+前方移行チェーン（jp-core-v1→v2 / jp-app-v1→v2）だけを許し、それ以外は拒否。
 
 ## 同期レーン
 
@@ -63,6 +65,17 @@ AI は言語理解だけを担当:
 - `news_analysis_zh`: 簡体中文の影響分析（allowed_codes 束縛・insufficient_context 正直）
 決定論で出来ること（分類・指紋・コード対応・時刻）はモデルに渡さない。
 
+## 強度スキャン（米国版 Strength Radar 移植）
+
+- 夜間 post_close がレーダーと同じ features / 構造分析から銘柄内在評価を
+  6 因子ファミリ（短期16/中期24/長期14/趨勢16/突破15/価格行為15）で合成し
+  strength_rows に全量保存。市場レジーム（TOPIX + ブレッドス 6 次元）も同時確定。
+- API `/api/strength/scan` は保存済み断面に profile_fit / market_fit / ranking
+  （内在78% + 市場8% + 選好14%、信頼度加重）とリスク減点・分類を重ねるだけ。
+  フィルタは**全評価済み母集団**にサーバ側で適用（米国版の「上位N名内だけの
+  絞り込み」問題は存在しない）。
+- 欠損は常に重み再配分 + confidence 低下。中立 50 での偽装はどの層にも無い。
+
 ## アクセス制御
 
 - `private_network`: 承認済み CIDR のみ。Cookie なし。
@@ -70,3 +83,7 @@ AI は言語理解だけを担当:
   GET/HEAD は訪問者にも公開、書込は owner + 同源証明
   （Origin=Host・Sec-Fetch-Site・X-Optix-Action の四重チェック）。
 - 起動時に配備境界を fail-closed 検証（プロキシ設定と CIDR の整合など）。
+- 訪客アカウント（米国版互換）: `/api/access/login` はユーザー名で分岐
+  （`admin`=オーナー、他は accounts.db の PBKDF2-240k アカウント）。訪客
+  セッションはオーナー権限を一切持たず、自選（jp-app.db の per-account 表）
+  だけが書ける。登録は `/api/account/register`（レート制限付き）。

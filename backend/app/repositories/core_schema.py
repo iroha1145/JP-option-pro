@@ -7,7 +7,54 @@ upserts that keep ``ingested_at`` as the revision stamp.
 
 from __future__ import annotations
 
-CORE_SCHEMA_VERSION = "jp-core-v1"
+CORE_SCHEMA_VERSION = "jp-core-v2"
+
+# -- 強度スキャン断面（v2 追加）。米国版 Strength Radar の日本株移植:
+#    夜間バッチが銘柄内在評価（intrinsic）を全量計算して保存し、API は
+#    profile/market の重ね掛けだけを要求時に行う。details_json には
+#    因子ファミリ内訳・欠損監査・構造タグの素材を丸ごと保存する。
+_STRENGTH_DDL: tuple[str, ...] = (
+    """
+    CREATE TABLE IF NOT EXISTS strength_rows (
+        canonical_code TEXT PRIMARY KEY,
+        trade_date TEXT NOT NULL,
+        intrinsic_score REAL,
+        confidence REAL,
+        score_short REAL,
+        score_mid REAL,
+        score_long REAL,
+        trend_score REAL,
+        breakout_quality_score REAL,
+        price_action_score REAL,
+        global_rank_percentile REAL,
+        sector_rank_percentile REAL,
+        close REAL,
+        change_pct REAL,
+        atr_pct REAL,
+        avg_turnover_20d REAL,
+        turnover_ratio REAL,
+        ath_proximity REAL,
+        drawdown_63d_pct REAL,
+        ma_alignment_pct REAL,
+        rs_topix_63d REAL,
+        market_code TEXT,
+        sector33_code TEXT,
+        details_json TEXT NOT NULL DEFAULT '{}',
+        built_at TEXT NOT NULL
+    ) WITHOUT ROWID
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_strength_score ON strength_rows(intrinsic_score)",
+    "CREATE INDEX IF NOT EXISTS idx_strength_sector ON strength_rows(sector33_code)",
+    """
+    CREATE TABLE IF NOT EXISTS strength_meta (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        trade_date TEXT NOT NULL,
+        regime_json TEXT NOT NULL DEFAULT '{}',
+        universe_count INTEGER NOT NULL DEFAULT 0,
+        built_at TEXT NOT NULL
+    )
+    """,
+)
 
 CORE_DDL: tuple[str, ...] = (
     # -- 上場銘柄マスタ（現在ビュー） ---------------------------------------
@@ -257,6 +304,12 @@ CORE_DDL: tuple[str, ...] = (
         data_through TEXT
     ) WITHOUT ROWID
     """,
+    *_STRENGTH_DDL,
 )
 
-__all__ = ["CORE_DDL", "CORE_SCHEMA_VERSION"]
+#: v1 → v2: 強度スキャン断面の追加のみ（既存テーブルは無変更）。
+CORE_MIGRATIONS: dict[str, tuple[tuple[str, ...], str]] = {
+    "jp-core-v1": (_STRENGTH_DDL, CORE_SCHEMA_VERSION),
+}
+
+__all__ = ["CORE_DDL", "CORE_MIGRATIONS", "CORE_SCHEMA_VERSION"]

@@ -37,6 +37,9 @@
 ## シークレット
 
 - `secrets.env`（chmod 600）: JQUANTS_API_KEY / OPENAI_API_KEY / APP_PASSWORD_HASH。
+- `ACCOUNTS_DB_PATH`（任意）: 訪客アカウント DB の場所。米国版デプロイの
+  accounts.db を指せば「数据共通」——同一ユーザー名・パスワードが両サイトで
+  通用する。未設定時は DATA_DIR/accounts.db。
   machine.env に書いても**無視される**（キー所属ルール）。
 - パスワードハッシュ生成:
   `python -c "from app.access import hash_owner_password; print(hash_owner_password('12文字以上'))"`

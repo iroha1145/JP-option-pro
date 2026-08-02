@@ -428,10 +428,119 @@ export interface IntradayChart {
   bars: IntradayBar[];
 }
 
+/* ---------------- 强度扫描（美版 Strength Radar 的日股移植） ---------------- */
+
+export interface StrengthStructure {
+  price_action: {
+    structure?: string | null;
+    structure_label?: string | null;
+    pattern_labels?: string[];
+    spring?: boolean;
+    upthrust?: boolean;
+  };
+  vol_price: {
+    setup_type?: string | null;
+    setup_label?: string | null;
+    breakout_quality_adjustment?: number | null;
+    false_breakout_risk?: number | null;
+    tags?: string[];
+  };
+  technicals: {
+    rsi14?: number | null;
+    macd_direction_pct?: number | null;
+    trend_efficiency_63d?: number | null;
+    ma50_slope_pct_21d?: number | null;
+  };
+}
+
+export interface StrengthRow {
+  canonical_code: string;
+  display_code: string;
+  name_ja: string | null;
+  sector33_code: string | null;
+  sector33_name: string | null;
+  market_name: string | null;
+  close: number | null;
+  change_pct: number | null;
+  intrinsic_score: number | null;
+  ranking_score: number | null;
+  market_fit_score: number | null;
+  profile_fit_score: number | null;
+  confidence: number | null;
+  ranking_confidence: number | null;
+  score_short: number | null;
+  score_mid: number | null;
+  score_long: number | null;
+  trend_score: number | null;
+  breakout_quality_score: number | null;
+  price_action_score: number | null;
+  global_rank_percentile: number | null;
+  sector_rank_percentile: number | null;
+  avg_turnover_20d: number | null;
+  turnover_ratio: number | null;
+  atr_pct: number | null;
+  ath_proximity: number | null;
+  rs_topix_63d: number | null;
+  ma_alignment_pct: number | null;
+  risk_penalty: number | null;
+  classification: string | null;
+  tags: string[];
+  reasons: string[];
+  warnings: string[];
+  selected_view_rank: number | null;
+  families: Record<string, number | null>;
+  effective_weights: Record<string, number>;
+  missing_families: string[];
+  structure: StrengthStructure;
+}
+
+export interface MarketRegime {
+  score: number | null;
+  label: string | null;
+  confidence: number | null;
+  status: string;
+  dims: {
+    index_trend: number | null;
+    momentum: number | null;
+    breadth: number | null;
+    volume: number | null;
+    risk_appetite: number | null;
+    risk_on_spread: number | null;
+  };
+  spread_label: string | null;
+  warnings: string[];
+  universe_size?: number;
+}
+
+export interface TierDistribution {
+  S: number; A: number; B: number; C: number; D: number;
+  unscored: number; scored: number; total: number;
+}
+
+export interface StrengthScanResponse {
+  trade_date: string;
+  built_at: string;
+  score_version: string;
+  params: Record<string, unknown>;
+  market_regime: MarketRegime;
+  universe_count: number;
+  screened_count: number;
+  matched_count: number;
+  tier_distribution: TierDistribution;
+  rows: StrengthRow[];
+}
+
+export interface StrengthProfilesMeta {
+  timeframes: string[];
+  profiles: { id: string; name: string; description: string }[];
+  presets: { id: string; name: string; profile: string; min_score: number | null; description: string }[];
+  sectors: { id: string; name: string }[];
+  family_weights: Record<string, number>;
+}
+
+/** AI 分析的受影响股票：只有代码与理由，不含方向预测（v2 起产品移除）。 */
 export interface NewsAffected {
   code: string;
-  direction: 'positive' | 'negative' | 'mixed' | 'unclear';
-  confidence: number | null;
   reason_zh: string | null;
 }
 
@@ -484,7 +593,7 @@ export interface NewsSecurityRow {
   max_importance: number | null;
   categories: string[];
   latest: { title: string | null; published_at: string | null } | null;
-  ai: { analyzed: number; positive: number; negative: number; avg_confidence: number } | null;
+  ai: { analyzed: number } | null;
 }
 
 export interface NewsFeedState {
@@ -535,6 +644,8 @@ export interface AccessStatus {
   mode: 'private_network' | 'password';
   is_owner: boolean;
   password_configured: boolean;
+  /** 访客账号会话（与美股版共库的账号体系；不授予任何 owner 权限）。 */
+  account?: { logged_in: boolean; username: string | null };
 }
 
 export interface SettingsView {

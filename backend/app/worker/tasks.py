@@ -17,6 +17,7 @@ from typing import Any
 
 from app.config import get_settings
 from app.data_paths import get_data_paths
+from app.domain.constants import TOPIX_INDEX_CODE
 from app.domain.timeutil import add_days, iso_date, now_jst, seconds_until_next_jst_time, today_jst
 from app.personal_config import get_personal_config
 from app.providers.jquants.client import JQuantsClient
@@ -25,6 +26,7 @@ from app.services import jquants_sync as sync
 from app.services.radar.engine import RadarEngine
 from app.services.radar.lifecycle import TERMINAL_STATES
 from app.services.screener import build_screener_rows
+from app.services.strength_scan import build_strength_rows, compute_market_regime_jp
 from app.worker.runtime import TaskResult, TaskSpec
 
 TASK_CALENDAR_MASTER = "calendar_master_sync"
@@ -420,6 +422,7 @@ def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str,
     engine = RadarEngine(context.repository, context.config.radar)
     summary = engine.scan(target_date, lookback_start=lookback_start)
     features_by_code = summary.pop("features_by_code")
+    structure_by_code = summary.pop("structure_by_code")
     sector_median_returns = summary.pop("sector_median_returns")
     rs_context = summary.pop("rs_context")
 
@@ -448,6 +451,30 @@ def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str,
         "screener_snapshot", rows_total=written, data_through=target_date
     )
     summary["screener_rows"] = written
+
+    # 強度スキャン断面: 同じ features / 構造分析から intrinsic を全量確定。
+    topix_series = context.repository.index_series(
+        TOPIX_INDEX_CODE, start_date=lookback_start
+    )
+    market_codes = {
+        code: (securities.get(code) or {}).get("market_code") or ""
+        for code in features_by_code
+    }
+    regime = compute_market_regime_jp(topix_series, features_by_code, market_codes)
+    strength_rows = build_strength_rows(
+        trade_date=target_date,
+        features_by_code=features_by_code,
+        structure_by_code=structure_by_code,
+        securities=securities,
+        topix_return_63d=rs_context.get("topix_return_63d"),
+    )
+    strength_written = context.repository.replace_strength_rows(
+        strength_rows, trade_date=target_date, regime=regime
+    )
+    context.repository.record_sync_success(
+        "strength_snapshot", rows_total=strength_written, data_through=target_date
+    )
+    summary["strength_rows"] = strength_written
     summary["status"] = "ok"
     return summary
 

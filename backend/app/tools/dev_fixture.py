@@ -363,6 +363,7 @@ def build_fixture(data_dir: str | None = None, *, days: int = 320, end_date: dat
     lookback_start = days_list[0]
     summary = engine.scan(target, lookback_start=lookback_start)
     features_by_code = summary.pop("features_by_code")
+    structure_by_code = summary.pop("structure_by_code")
     sector_median_returns = summary.pop("sector_median_returns")
     rs_context = summary.pop("rs_context")
     securities = {row["canonical_code"]: row for row in repository.list_securities(active_only=True)}
@@ -380,6 +381,27 @@ def build_fixture(data_dir: str | None = None, *, days: int = 320, end_date: dat
     repository.record_sync_success("radar_scan", rows_total=summary.get("events_written"), data_through=target)
     repository.record_sync_success("screener_snapshot", rows_total=len(screener_rows), data_through=target)
 
+    # 強度スキャン断面（本番の post_close と同じ流れ）
+    from app.domain.constants import TOPIX_INDEX_CODE
+    from app.services.strength_scan import build_strength_rows, compute_market_regime_jp
+
+    topix_series = repository.index_series(TOPIX_INDEX_CODE, start_date=lookback_start)
+    regime = compute_market_regime_jp(
+        topix_series, features_by_code,
+        {code: (securities.get(code) or {}).get("market_code") or "" for code in features_by_code},
+    )
+    strength_rows = build_strength_rows(
+        trade_date=target,
+        features_by_code=features_by_code,
+        structure_by_code=structure_by_code,
+        securities=securities,
+        topix_return_63d=rs_context.get("topix_return_63d"),
+    )
+    repository.replace_strength_rows(strength_rows, trade_date=target, regime=regime)
+    repository.record_sync_success(
+        "strength_snapshot", rows_total=len(strength_rows), data_through=target
+    )
+
     return {
         "data_dir": str(paths.root),
         "target_date": target,
@@ -387,6 +409,7 @@ def build_fixture(data_dir: str | None = None, *, days: int = 320, end_date: dat
         "bars": len(bar_rows),
         "radar": {k: v for k, v in summary.items() if k != "sector_fit"},
         "screener_rows": len(screener_rows),
+        "strength_rows": len(strength_rows),
     }
 
 

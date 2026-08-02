@@ -19,7 +19,7 @@ export const NAV_ITEMS: { path: string; label: string; index: string }[] = [
 ];
 
 export default function Navbar() {
-  const { isOwner, mode, logout } = useAccess();
+  const { isOwner, mode, logout, accountUsername } = useAccess();
   const navigate = useNavigate();
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-overlay backdrop-blur-md">
@@ -51,8 +51,17 @@ export default function Navbar() {
         <div className="ml-auto flex items-center gap-2">
           <SearchBox onPick={(code) => navigate(`/stock/${code}`)} />
           <LanguageSwitcher />
+          {accountUsername && (
+            <span
+              className="hidden items-center gap-1.5 rounded-pill border border-line bg-card px-2.5 py-1 text-caption text-ink-600 sm:inline-flex"
+              title={t('账号与美股版通用 · admin 为所有者')}
+            >
+              <Icon name="command" size={12} className="text-brand-600" />
+              {accountUsername}
+            </span>
+          )}
           {mode === 'password' &&
-            (isOwner ? (
+            (isOwner || accountUsername ? (
               <button
                 type="button"
                 onClick={() => void logout()}

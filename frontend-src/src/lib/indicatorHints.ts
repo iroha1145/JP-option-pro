@@ -149,3 +149,26 @@ export const RADAR_SCORE_HINTS: Record<string, ScoreHint> = {
 export function radarScoreHint(label: string): ScoreHint | undefined {
   return RADAR_SCORE_HINTS[label];
 }
+
+/* ---------------- 选股扫描（强度）页 ---------------- */
+
+export const STRENGTH_HINTS: Record<string, ScoreHint> = {
+  composite: {
+    title: t('强度分'),
+    body: t('最终排序分 = 内在强度 78% + 市场形态 8% + 偏好适配 14%（各层按置信度加权）。内在强度由短期/中期/长期/趋势/突破质量/价格行为六族合成，权重 16/24/14/16/15/15。'),
+    note: t('缺失维度按剩余权重重新归一，绝不填中性 50 分；置信度 = 实际可用权重占比。'),
+  },
+  families: {
+    title: t('六族分项'),
+    body: t('短期(5/20日收益·量比·MA25距离·RSI)、中期(63日收益·TOPIX相对·均线排列·MACD·MA75距离)、长期(126/252日收益·MA200距离·52周高位)、趋势(动量·效率比·MA50斜率·稳定度)、突破质量(52周高位·20日收益·价格行为±量价修正)、价格行为(HH/HL结构评分)。'),
+  },
+  percentile: {
+    title: t('横截面分位'),
+    body: t('内在强度在全部已评分股票中的中位序百分位（100 = 最强）。同业种分位按 33 业种分组计算。'),
+  },
+  marketRegime: {
+    title: t('市场形态'),
+    body: t('六维：TOPIX 趋势（对 25/75/200 日线的位置与斜率）、动量（TOPIX 20日收益）、广度（200日线上方个股占比）、量能（成交额高于自身20日均额的个股占比）、风险偏好（全市场20日收益中位数）、强弱价差（グロース−プライム 20日中位收益差）。'),
+    note: t('综合分权重 24/18/22/12/12/12；缺失维度重新配权。市场层只占最终排序分 8%。'),
+  },
+};

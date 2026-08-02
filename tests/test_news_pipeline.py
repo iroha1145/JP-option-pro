@@ -107,7 +107,7 @@ def test_analysis_contract_binds_codes_and_language():
     with pytest.raises(ai.ResultValidationError):
         ai.validate_analysis_result(
             {"news_id": "n1", "headline_zh": "利好丰田", "impact_zh": "对营业利润有正面影响，幅度取决于汇率走势与产量。",
-             "affected": [{"code": "99840", "direction": "positive", "confidence": 60, "reason_zh": "x"}],
+             "affected": [{"code": "99840", "reason_zh": "x"}],
              "insufficient_context": False},
             news_id="n1", allowed_codes=allowed,
         )
@@ -120,11 +120,14 @@ def test_analysis_contract_binds_codes_and_language():
     valid = ai.validate_analysis_result(
         {"news_id": "n1", "headline_zh": "业绩上修利好丰田股价",
          "impact_zh": "公司上调全年营业利润预期，反映汇率与销量改善，对利润与现金流构成正面影响。",
-         "affected": [{"code": "72030", "direction": "positive", "confidence": 72, "reason_zh": "业绩指引上调"}],
+         "affected": [{"code": "72030", "reason_zh": "业绩指引上调"}],
          "insufficient_context": False},
         news_id="n1", allowed_codes=allowed,
     )
     assert valid["affected"][0]["code"] == "72030"
+    # v2: 方向・置信度は契約から削除済み — 出力に混ざっても保存されない。
+    assert "direction" not in valid["affected"][0]
+    assert "confidence" not in valid["affected"][0]
 
 
 def test_ai_job_dedup_and_budget(tmp_path):

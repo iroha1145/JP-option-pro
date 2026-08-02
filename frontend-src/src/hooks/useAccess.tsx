@@ -22,9 +22,13 @@ interface AccessContextValue {
   status: AccessStatus | null;
   isOwner: boolean;
   mode: 'private_network' | 'password' | null;
+  /** 访客账号（与美股版共库；不含任何 owner 权限）。 */
+  accountUsername: string | null;
+  /** 自选可写主体：owner 或已登录的访客账号。 */
+  canManageWatchlist: boolean;
   identityUnavailable: boolean;
   refresh: () => Promise<void>;
-  login: (password: string) => Promise<void>;
+  login: (password: string, username?: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -38,7 +42,11 @@ export function AccessProvider({ children }: { children: ReactNode }) {
 
   const applyStatus = useCallback((next: AccessStatus | null) => {
     if (next) {
-      const principal = next.is_owner ? 'owner' : 'visitor';
+      const principal = next.is_owner
+        ? 'owner'
+        : next.account?.logged_in
+          ? `account:${next.account.username ?? ''}`
+          : 'visitor';
       if (lastPrincipalRef.current !== principal) {
         lastPrincipalRef.current = principal;
         setQueryPrincipal(principal);
@@ -78,8 +86,8 @@ export function AccessProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const login = useCallback(
-    async (password: string) => {
-      await accessApi.login(password);
+    async (password: string, username = 'admin') => {
+      await accessApi.login(password, username);
       await refresh();
     },
     [refresh],
@@ -95,6 +103,8 @@ export function AccessProvider({ children }: { children: ReactNode }) {
       status,
       isOwner: Boolean(status?.is_owner),
       mode: status?.mode ?? null,
+      accountUsername: status?.account?.logged_in ? (status.account.username ?? null) : null,
+      canManageWatchlist: Boolean(status?.is_owner || status?.account?.logged_in),
       identityUnavailable,
       refresh,
       login,
