@@ -163,7 +163,7 @@ function LeadBigCard({ event }: { event: RadarEvent }) {
 
   return (
     <section className="card-surface overflow-hidden rounded-xl">
-      <div className="grid gap-0 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-0 lg:grid-cols-3">
         {/* 左 2/3: ヘッダー + K線 */}
         <div className="border-line p-4 lg:col-span-2 lg:border-r">
           <header className="mb-2 flex flex-wrap items-center gap-2">

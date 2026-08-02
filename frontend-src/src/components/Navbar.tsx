@@ -23,14 +23,14 @@ export default function Navbar() {
   const navigate = useNavigate();
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-overlay backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-shell items-center gap-4 px-4 md:px-8">
-        <NavLink to="/" className="flex items-baseline gap-2">
+      <div className="mx-auto flex h-12 max-w-shell items-center gap-3 px-4 md:h-14 md:gap-4 md:px-8">
+        <NavLink to="/" className="flex shrink-0 items-baseline gap-2">
           <span className="font-display text-h3 font-semibold text-ink-900">Optix</span>
           <span className="rounded-sm bg-brand-600 px-1.5 py-0.5 text-micro font-bold uppercase tracking-wider text-white">
             Japan
           </span>
         </NavLink>
-        <nav aria-label={t('主导航')} className="hidden flex-1 items-center gap-1 lg:flex">
+        <nav aria-label={t('主导航')} className="hidden flex-1 items-center gap-1 xl:flex">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.path}
@@ -48,9 +48,12 @@ export default function Navbar() {
             </NavLink>
           ))}
         </nav>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex min-w-0 items-center gap-2">
           <SearchBox onPick={(code) => navigate(`/stock/${code}`)} />
-          <LanguageSwitcher />
+          {/* 手机上语言切换收进 Dock 的「更多」sheet，顶栏只留搜索与登录 */}
+          <span className="hidden sm:block">
+            <LanguageSwitcher />
+          </span>
           {accountUsername && (
             <span
               className="hidden items-center gap-1.5 rounded-pill border border-line bg-card px-2.5 py-1 text-caption text-ink-600 sm:inline-flex"
@@ -135,7 +138,7 @@ function SearchBox({ onPick }: { onPick: (code: string) => void }) {
   }, []);
 
   return (
-    <div ref={boxRef} className="relative hidden sm:block">
+    <div ref={boxRef} className="relative min-w-0">
       <div className="flex items-center gap-1.5 rounded-md border border-line bg-card px-2 py-1.5">
         <Icon name="search" size={14} className="text-ink-400" />
         <input
@@ -143,7 +146,7 @@ function SearchBox({ onPick }: { onPick: (code: string) => void }) {
           onChange={(event) => setQuery(event.target.value)}
           onFocus={() => results.length > 0 && setOpen(true)}
           placeholder={t('搜索代码或公司名')}
-          className="w-40 bg-transparent text-body-s text-ink-900 outline-none placeholder:text-ink-300"
+          className="w-28 bg-transparent text-body-s text-ink-900 outline-none placeholder:text-ink-300 sm:w-40"
         />
       </div>
       {open && results.length > 0 && (

@@ -59,7 +59,7 @@ export default function Home() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* 市场广度 + 行业 */}
         <section className="card-surface rounded-lg p-4 lg:col-span-1">
           <header className="mb-3 flex items-center justify-between">
@@ -144,7 +144,7 @@ export default function Home() {
         </section>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* 最近决算 */}
         <section className="card-surface rounded-lg p-4">
           <header className="mb-3 flex items-center justify-between">

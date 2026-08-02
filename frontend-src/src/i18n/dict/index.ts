@@ -524,4 +524,23 @@ export const DICT: Record<string, [string, string]> = {
     'Amounts are operating profit · arrows show forecast revisions',
     '金額は営業利益 · 矢印は会社予想の修正方向',
   ],
+
+  /* ---- 第七轮：移动端 Dock ---- */
+  自选: ['Watchlist', 'ウォッチ'],
+  雷达: ['Radar', 'レーダー'],
+  筛选: ['Screener', 'スクリーナー'],
+  市场: ['Market', '市場'],
+  更多: ['More', 'その他'],
+  更多功能: ['More features', 'その他の機能'],
+  移动端导航: ['Mobile navigation', 'モバイルナビゲーション'],
+  界面语言: ['Language', '表示言語'],
+  '总览 · 今日市场焦点': ['Overview · today’s focus', '総覧 · 本日の市場フォーカス'],
+  '確定 · 目安三态日历': ['Confirmed · estimated calendar', '確定 · 目安の三態カレンダー'],
+  '催化剂 · 三源新闻流': ['Catalysts · news feed', 'カタリスト · ニュースフィード'],
+  '同步进度 · 数据覆盖': ['Sync status · data coverage', '同期状況 · データカバレッジ'],
+  'Owner 已登录': ['Owner signed in', 'Owner ログイン中'],
+  '已登录 {name}': ['Signed in as {name}', '{name} でログイン中'],
+  可执行写操作: ['Write actions enabled', '書き込み操作が可能'],
+  自选保存在账号里: ['Watchlist saved to account', 'ウォッチリストはアカウントに保存'],
+  登录后可保存自选: ['Sign in to save watchlist', 'ログインでウォッチリストを保存'],
 };

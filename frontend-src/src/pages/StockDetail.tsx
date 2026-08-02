@@ -224,7 +224,7 @@ export default function StockDetail() {
       </header>
 
       {/* 行1: K線 + 右侧紧凑栏 */}
-      <div className="grid gap-4 xl:grid-cols-12">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
         <section className="card-surface rounded-lg p-3 xl:col-span-8">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <span className="flex flex-wrap items-center gap-2">
@@ -326,7 +326,7 @@ export default function StockDetail() {
       </div>
 
       {/* 行2: 决算时间线 + 技术结构 */}
-      <div className="grid gap-4 xl:grid-cols-12">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
         <section className="card-surface rounded-lg p-4 xl:col-span-7">
           <h2 className="mb-3 text-h3 text-ink-900">{t('决算时间线')}</h2>
           <div className="max-h-[360px] overflow-y-auto">
@@ -340,7 +340,7 @@ export default function StockDetail() {
       </div>
 
       {/* 行3: 空卖 + 发表预定 */}
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <section className="card-surface rounded-lg p-4">
           <h2 className="mb-3 text-h3 text-ink-900">{t('空卖残高报告')}</h2>
           <ShortPositionsPanel rows={data.short_positions} />

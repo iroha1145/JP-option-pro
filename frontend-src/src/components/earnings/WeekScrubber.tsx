@@ -172,7 +172,7 @@ export default function WeekScrubber({
                     )}
                   </div>
 
-                  <span className="mt-1 font-mono text-[10px] leading-4 text-ink-300 tnum">
+                  <span className="mt-1 truncate whitespace-nowrap font-mono text-[10px] leading-4 text-ink-300 tnum">
                     {dayItems.length > 0
                       ? confirmedCount > 0 && confirmedCount < dayItems.length
                         ? t('{n} 件 · 確定{c}', { n: dayItems.length, c: confirmedCount })

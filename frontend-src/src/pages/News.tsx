@@ -463,7 +463,7 @@ function SourcesPanel({ status, loading }: { status: NewsStatus | null; loading:
   if (loading && !status) return <SkeletonRows rows={5} />;
   if (!status) return <EmptyState title={t('暂无数据')} />;
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <section className="card-surface rounded-lg p-4">
         <h3 className="mb-2 text-h3 text-ink-900">RSS {t('数据源')}</h3>
         <ul className="divide-y divide-line">

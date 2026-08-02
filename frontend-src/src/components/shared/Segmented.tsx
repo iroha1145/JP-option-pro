@@ -63,7 +63,7 @@ export default function Segmented<T extends string>({ options, value, onChange, 
             if (next instanceof HTMLElement) next.focus();
           }}
           className={cn(
-            'relative z-10 rounded-[4px] px-3 py-1 text-caption font-medium transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30',
+            'relative z-10 whitespace-nowrap rounded-[4px] px-3 py-1 text-caption font-medium transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30',
             value === o.value ? 'text-ink-800' : 'text-ink-400 hover:text-ink-600',
           )}
         >

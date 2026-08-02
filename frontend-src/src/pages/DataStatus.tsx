@@ -155,7 +155,7 @@ export default function DataStatus() {
                   {query.data.worker.healthy ? 'healthy' : 'degraded'}
                 </span>
               </h2>
-              <ul className="grid gap-1.5 text-body-s md:grid-cols-2">
+              <ul className="grid grid-cols-1 gap-1.5 text-body-s md:grid-cols-2">
                 {Object.entries(query.data.worker.tasks ?? {}).map(([name, task]) => (
                   <li key={name} className="flex items-center justify-between rounded-md bg-paper-2 px-2.5 py-1.5">
                     <span className="font-mono text-caption text-ink-700">{name}</span>

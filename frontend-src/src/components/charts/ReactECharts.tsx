@@ -43,10 +43,12 @@ export default function ReactECharts({ option, className, style, onClick, onInit
   }, [option, onClick]);
 
   return (
+    /* 尺寸只认 className（内联 height:100% 会压过 h-*，而父级是 auto 高时
+       100% 退化为内容高——canvas 与容器互喂、图表塌成 ~130px）。 */
     <div
       ref={ref}
-      className={className}
-      style={{ width: '100%', height: '100%', ...style }}
+      className={className ?? 'h-full w-full'}
+      style={style}
       role="img"
       aria-label={ariaLabel}
     />

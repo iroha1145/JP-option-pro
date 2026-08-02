@@ -8,9 +8,10 @@ export default function Layout() {
   return (
     <div className="flex min-h-screen flex-col bg-paper">
       <Navbar />
+      {/* pb 要一直留到 xl：悬浮 Dock 在 <xl 全程可见（高 64 + 离屏 12 + 呼吸空间） */}
       <main
         key={location.pathname}
-        className="page-enter mx-auto w-full max-w-shell flex-1 px-4 pb-24 pt-6 md:px-8 md:pb-12"
+        className="page-enter mx-auto w-full max-w-shell flex-1 px-4 pb-32 pt-5 md:px-8 md:pt-6 xl:pb-12"
       >
         <Outlet />
       </main>

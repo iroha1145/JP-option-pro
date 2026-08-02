@@ -86,11 +86,13 @@ export default function Market() {
         <EmptyState variant="error" title={t('加载失败')} description={String(market.error?.message ?? '')} />
       ) : (
         <>
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <section className="card-surface rounded-lg p-4 lg:col-span-2">
-              <header className="mb-2 flex items-center justify-between">
+              {/* 窄屏竖排：并排会把「指数」压成竖字、把 Segmented 压到换行 */}
+              <header className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="text-h3 text-ink-900">{t('指数')}</h2>
                 <Segmented
+                  className="max-w-full overflow-x-auto"
                   options={(market.data?.indices ?? []).slice(0, 4).map((index) => ({
                     value: index.index_code,
                     label: index.name.replace('東証', '').replace('市場指数', ''),
