@@ -7,6 +7,7 @@ dedup or the deployment boundary are pinned with ``Literal``.
 
 from __future__ import annotations
 
+import os
 import tomllib
 from functools import lru_cache
 from pathlib import Path
@@ -17,6 +18,16 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.runtime_environment import REPOSITORY_ROOT
 
 PERSONAL_CONFIG_PATH = REPOSITORY_ROOT / "config" / "personal.toml"
+
+
+def resolved_personal_config_path() -> Path:
+    """本番はイメージ内の既定 toml を差し替えず、環境変数で別ファイルを指す。
+
+    ``PERSONAL_CONFIG_PATH``（例: /data/personal.toml）が設定されていれば
+    それを使う。読み込みは従来通り fail-closed（未知キーで起動失敗）。"""
+
+    raw = os.environ.get("PERSONAL_CONFIG_PATH", "").strip()
+    return Path(raw) if raw else PERSONAL_CONFIG_PATH
 
 
 class StrictConfigModel(BaseModel):
@@ -101,7 +112,7 @@ class PersonalConfig(StrictConfigModel):
 
 
 def load_personal_config(path: Path | None = None) -> PersonalConfig:
-    config_path = path or PERSONAL_CONFIG_PATH
+    config_path = path or resolved_personal_config_path()
     if not config_path.is_file():
         return PersonalConfig()
     with config_path.open("rb") as handle:

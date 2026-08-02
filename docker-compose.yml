@@ -33,8 +33,17 @@ x-service-base: &service-base
   pids_limit: 512
   init: true
   restart: unless-stopped
+  # 共有アカウント（数据共通）: 既定はローカル名前付きボリューム（単独運用）。
+  # 米国版と同居する本番では machine.env で
+  #   SHARED_ACCOUNTS_DIR=<米国版データ実体のホストパス>
+  #   ACCOUNTS_DB_PATH=/shared-accounts/accounts.db
+  #   OPTIXJP_SHARED_GROUP=<米国版データの gid（例 101）>
+  # を指定する。既定の group_add "app" はイメージ内の自グループで無害。
+  group_add:
+    - "${OPTIXJP_SHARED_GROUP:-app}"
   volumes:
     - optixjp-data:/data
+    - ${SHARED_ACCOUNTS_DIR:-optixjp-shared-accounts}:/shared-accounts
   logging:
     driver: local
     options:
@@ -61,3 +70,4 @@ services:
 
 volumes:
   optixjp-data:
+  optixjp-shared-accounts:

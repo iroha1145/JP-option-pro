@@ -29,6 +29,9 @@ MACHINE_ENV_KEYS = frozenset(
         "TRUST_PROXY_HEADERS",
         "TRUSTED_PROXY_CIDRS",
         "DATA_DIR",
+        # ホスト固有パス（共有アカウント DB / 本番 personal.toml の差し替え先）
+        "ACCOUNTS_DB_PATH",
+        "PERSONAL_CONFIG_PATH",
     }
 )
 SECRET_ENV_KEYS = frozenset(
