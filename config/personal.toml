@@ -14,8 +14,9 @@ allowed_private_cidrs = [
 
 [features]
 radar_enabled = true
-# off | read | scheduled — ニュース同期と AI ジョブ（フェーズ5）
-news_mode = "off"
+# off | read | scheduled — ニュース同期と AI ジョブ
+# read: RSS取込+実体照合+分類+去重（AI 翻訳/分析は scheduled + OPENAI_API_KEY で有効化）
+news_mode = "read"
 
 [ai]
 daily_token_limit = 8000000
@@ -41,7 +42,12 @@ max_events_per_scan = 400
 sync_seconds = 900
 window_hours = 72
 max_ai_items_per_run = 12
-feed_urls = []
+# 日本株関連の HTTPS RSS/Atom。実体照合で日本株と接点の無い記事は自動的に落ちる。
+feed_urls = [
+  "https://www.nhk.or.jp/rss/news/cat5.xml",
+  "https://toyokeizai.net/list/feed/rss",
+  "https://prtimes.jp/index.rdf",
+]
 
 [storage]
 backup_keep = 7

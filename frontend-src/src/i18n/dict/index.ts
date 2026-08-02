@@ -184,4 +184,28 @@ export const DICT: Record<string, [string, string]> = {
   列表: ['List', 'リスト'],
   基底突破: ['Base breakout', 'ベースブレイク'],
   '{title}：查看指标说明': ['{title}: indicator explanation', '{title}：指標の説明を見る'],
+  日K: ['1D', '日足'],
+  '60分': ['60m', '60分'],
+  '5分': ['5m', '5分'],
+  '1分': ['1m', '1分'],
+  分钟数据为未复权原始价: ['Minute bars are unadjusted raw prices', '分足は無調整の生値'],
+  个交易日: ['trading days', '営業日分'],
+  刷新: ['Refresh', '更新'],
+  '分钟线需要 J-Quants 分足加购（当前订阅未包含）': [
+    'Minute bars require the J-Quants minute-data add-on (not in current plan)',
+    '分足は J-Quants のオプション契約が必要です（現在のプランには含まれていません）',
+  ],
+  该股票的分钟数据尚未取得: [
+    'Minute data for this stock has not been fetched yet',
+    'この銘柄の分足はまだ取得されていません',
+  ],
+  取得最近5个交易日的分钟数据: [
+    'Fetch last 5 trading days of minute data',
+    '直近5営業日の分足を取得',
+  ],
+  重新检测订阅状态: ['Re-check subscription', '契約状態を再確認'],
+  '已提交，数据到达后刷新本页': [
+    'Submitted — refresh once data arrives',
+    '送信しました。データ到着後に更新してください',
+  ],
 };

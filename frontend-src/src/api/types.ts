@@ -404,6 +404,30 @@ export interface DataStatusResponse {
   } | null;
 }
 
+export interface IntradayBar {
+  trade_date: string;
+  bar_time: string;
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  close: number | null;
+  volume: number | null;
+  turnover_value: number | null;
+}
+
+export interface IntradayChart {
+  canonical_code: string;
+  display_code: string;
+  interval: '1m' | '5m' | '60m';
+  available: boolean;
+  availability?: string;
+  reason?: 'plan_not_included' | 'not_fetched';
+  note_ja?: string;
+  days?: string[];
+  data_through: string | null;
+  bars: IntradayBar[];
+}
+
 export interface AccessStatus {
   mode: 'private_network' | 'password';
   is_owner: boolean;

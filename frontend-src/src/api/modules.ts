@@ -7,6 +7,7 @@ import type {
   DataStatusResponse,
   EarningsCalendarItem,
   EarningsRecentItem,
+  IntradayChart,
   MarketOverview,
   RadarCurrent,
   RadarEvent,
@@ -38,6 +39,9 @@ export const stocksApi = {
   },
   chart(code: string, range: string): Promise<{ canonical_code: string; display_code: string; range: string; data_through: string | null; bars: StockBar[] }> {
     return get(`/stocks/${encodeURIComponent(code)}/chart?${toQuery({ range })}`);
+  },
+  intradayChart(code: string, interval: '1m' | '5m' | '60m'): Promise<IntradayChart> {
+    return get(`/stocks/${encodeURIComponent(code)}/chart?${toQuery({ interval })}`);
   },
 };
 
@@ -147,9 +151,10 @@ export const workerApi = {
   status() {
     return registryGet<Record<string, unknown>>('/worker/status');
   },
-  trigger(actionType: string) {
+  trigger(actionType: string, body?: { code?: string }) {
     return post<{ action_type: string; action_id: number | null; status: string; duplicate: boolean }>(
       `/worker/actions/${encodeURIComponent(actionType)}`,
+      body,
     );
   },
 };

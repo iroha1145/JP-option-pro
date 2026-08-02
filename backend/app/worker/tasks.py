@@ -35,6 +35,7 @@ TASK_BACKFILL = "history_backfill"
 TASK_MAINTENANCE = "maintenance"
 TASK_NEWS_SYNC = "news_sync"
 TASK_AI_JOBS = "ai_jobs"
+TASK_INTRADAY = "intraday_fetch"
 
 DEFAULT_TASK_NAMES: tuple[str, ...] = (
     TASK_CALENDAR_MASTER,
@@ -45,6 +46,7 @@ DEFAULT_TASK_NAMES: tuple[str, ...] = (
     TASK_MAINTENANCE,
     TASK_NEWS_SYNC,
     TASK_AI_JOBS,
+    TASK_INTRADAY,
 )
 
 MANUAL_ACTION_TYPES: tuple[str, ...] = (
@@ -54,6 +56,7 @@ MANUAL_ACTION_TYPES: tuple[str, ...] = (
     "backfill_step",
     "radar_refresh",
     "news_sync",
+    "intraday_fetch",
 )
 
 _BACKFILL_DATASET_ORDER = (
@@ -309,6 +312,38 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             status="completed", next_delay_seconds=float(config.news.sync_seconds), details=summary
         )
 
+    def intraday_fetch_task(payload: dict[str, Any] | None) -> TaskResult:
+        """手動専用: 指定銘柄の直近分足をキャッシュ（アドオン未契約は正直に記録）。"""
+
+        from app.repositories.intraday_store import IntradayStore
+        from app.services.intraday import (
+            FETCH_TRADING_DAYS,
+            RETENTION_TRADING_DAYS,
+            fetch_recent_minutes,
+        )
+        from app.domain.timeutil import add_days, iso_date, today_jst
+
+        idle = TaskResult(status="completed", next_delay_seconds=6 * 3600.0, details={"reason": "manual_only"})
+        code = (payload or {}).get("code")
+        if not code:
+            return idle
+        if not context.jquants_ready():
+            return _not_configured()
+        store = IntradayStore(context.paths.intraday_db)
+        store.initialize()
+        result = fetch_recent_minutes(
+            client=context.client, store=store, core=context.repository,
+            canonical_code=str(code), days=FETCH_TRADING_DAYS,
+        )
+        store.prune_older_than(add_days(iso_date(today_jst()), -RETENTION_TRADING_DAYS * 2))
+        status = "completed" if result.get("status") in ("ok", "plan_not_included") else "failed"
+        return TaskResult(
+            status=status,
+            error_code=result.get("error_code"),
+            next_delay_seconds=6 * 3600.0,
+            details={"code": code, **result},
+        )
+
     def ai_jobs_task(_payload: dict[str, Any] | None) -> TaskResult:
         from app.repositories.news_store import NewsStore
         from app.services.ai_jobs.runtime import OpenAIRuntime
@@ -367,6 +402,12 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             action_types=("news_sync",),
         ),
         TaskSpec(name=TASK_AI_JOBS, run=ai_jobs_task, initial_delay_seconds=60.0),
+        TaskSpec(
+            name=TASK_INTRADAY,
+            run=intraday_fetch_task,
+            initial_delay_seconds=120.0,
+            action_types=("intraday_fetch",),
+        ),
     ]
 
 

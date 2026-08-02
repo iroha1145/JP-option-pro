@@ -56,6 +56,7 @@ class DataPaths:
     ai_jobs_db: Path
     worker_db: Path
     app_db: Path
+    intraday_db: Path
     worker_lock: Path
     snapshots_dir: Path
     market_snapshot: Path
@@ -76,6 +77,7 @@ def get_data_paths(value: str | Path | None = None) -> DataPaths:
         ai_jobs_db=root / "jp-ai-jobs.db",
         worker_db=root / "jp-worker.db",
         app_db=root / "jp-app.db",
+        intraday_db=root / "jp-intraday.db",
         worker_lock=root / "jp-worker.lock",
         snapshots_dir=snapshots,
         market_snapshot=snapshots / "market-snapshot-v1.json",

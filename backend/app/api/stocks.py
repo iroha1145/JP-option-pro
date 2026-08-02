@@ -53,9 +53,29 @@ def get_stock(code: str) -> dict:
 
 
 @router.get("/{code}/chart")
-def get_chart(code: str, range: str = Query(default="1y", pattern="^(3m|6m|1y|3y|5y|10y)$")) -> dict:
+def get_chart(
+    code: str,
+    range: str = Query(default="1y", pattern="^(3m|6m|1y|3y|5y|10y)$"),
+    interval: str = Query(default="1d", pattern="^(1d|60m|5m|1m)$"),
+) -> dict:
     canonical = _resolve_or_404(code)
-    return stock_chart(core_repository(), canonical, range_key=range)
+    if interval == "1d":
+        return stock_chart(core_repository(), canonical, range_key=range)
+    from app.data_paths import get_data_paths
+    from app.domain.symbols import display_code as to_display
+    from app.repositories.intraday_store import IntradayStore
+    from app.services.intraday import intraday_chart
+
+    store = IntradayStore(get_data_paths().intraday_db, read_only=True)
+    view = intraday_chart(store, canonical, interval=interval)
+    return {
+        "canonical_code": canonical,
+        "display_code": to_display(canonical),
+        "range": "5d",
+        "interval": interval,
+        "data_through": view["bars"][-1]["trade_date"] if view.get("bars") else None,
+        **view,
+    }
 
 
 @router.get("/{code}/resolve")

@@ -6,7 +6,7 @@
 
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router';
-import { stocksApi, watchlistApi } from '@/api/modules';
+import { stocksApi, watchlistApi, workerApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { remoteState } from '@/hooks/remoteState';
 import EmptyState from '@/components/shared/EmptyState';
@@ -24,6 +24,7 @@ import { t } from '@/i18n/core';
 import { fmtDate, fmtPct, fmtPrice, fmtYenCompact } from '@/lib/format';
 import type {
   FinancialSummaryView,
+  IntradayChart,
   MarginInterestRow,
   ShortPositionRow,
   TechnicalStructure,
@@ -31,15 +32,26 @@ import type {
 
 type Range = '3m' | '6m' | '1y' | '3y' | '10y';
 type PriceMode = 'adjusted' | 'raw';
+type Interval = '1d' | '60m' | '5m' | '1m';
 
 export default function StockDetail() {
   const { code = '' } = useParams();
   const [range, setRange] = useState<Range>('6m');
+  const [interval, setInterval] = useState<Interval>('1d');
   const [priceMode, setPriceMode] = useState<PriceMode>('adjusted');
   const overview = usePolling(() => stocksApi.overview(code), null, [code]);
   const chart = usePolling(() => stocksApi.chart(code, range), null, [code, range]);
+  const intraday = usePolling(
+    () =>
+      interval === '1d'
+        ? Promise.resolve(null)
+        : stocksApi.intradayChart(code, interval),
+    null,
+    [code, interval],
+  );
   const { isOwner } = useAccess();
   const [watchNote, setWatchNote] = useState<string | null>(null);
+  const [fetchNote, setFetchNote] = useState<string | null>(null);
 
   const state = remoteState(overview);
   const technical = overview.data?.technical ?? null;
@@ -215,32 +227,66 @@ export default function StockDetail() {
       <div className="grid gap-4 xl:grid-cols-12">
         <section className="card-surface rounded-lg p-3 xl:col-span-8">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <Segmented<Range>
-              options={(['3m', '6m', '1y', '3y', '10y'] as Range[]).map((value) => ({ value, label: value.toUpperCase() }))}
-              value={range}
-              onChange={setRange}
-            />
+            <span className="flex flex-wrap items-center gap-2">
+              <Segmented<Interval>
+                options={[
+                  { value: '1d', label: t('日K') },
+                  { value: '60m', label: t('60分') },
+                  { value: '5m', label: t('5分') },
+                  { value: '1m', label: t('1分') },
+                ]}
+                value={interval}
+                onChange={setInterval}
+              />
+              {interval === '1d' && (
+                <Segmented<Range>
+                  options={(['3m', '6m', '1y', '3y', '10y'] as Range[]).map((value) => ({ value, label: value.toUpperCase() }))}
+                  value={range}
+                  onChange={setRange}
+                />
+              )}
+            </span>
             <span className="flex items-center gap-2">
               <span className="flex items-center gap-1 text-caption text-ink-400">
                 图例
                 <InfoHint hint={STRUCTURE_HINTS.chart_overlays} align="end" />
               </span>
-              <Segmented<PriceMode>
-                options={[
-                  { value: 'adjusted', label: t('复权') },
-                  { value: 'raw', label: t('不复权') },
-                ]}
-                value={priceMode}
-                onChange={setPriceMode}
-              />
+              {interval === '1d' && (
+                <Segmented<PriceMode>
+                  options={[
+                    { value: 'adjusted', label: t('复权') },
+                    { value: 'raw', label: t('不复权') },
+                  ]}
+                  value={priceMode}
+                  onChange={setPriceMode}
+                />
+              )}
             </span>
           </div>
-          {chartOption ? (
-            <ReactECharts className="h-72 w-full" option={chartOption} ariaLabel={`${security.display_code} chart`} />
-          ) : chart.loading ? (
-            <SkeletonCard className="h-72" />
+          {interval === '1d' ? (
+            chartOption ? (
+              <ReactECharts className="h-72 w-full" option={chartOption} ariaLabel={`${security.display_code} chart`} />
+            ) : chart.loading ? (
+              <SkeletonCard className="h-72" />
+            ) : (
+              <EmptyState title={t('暂无数据')} />
+            )
           ) : (
-            <EmptyState title={t('暂无数据')} />
+            <IntradayPane
+              data={intraday.data ?? null}
+              loading={intraday.loading}
+              isOwner={isOwner}
+              fetchNote={fetchNote}
+              onFetch={async () => {
+                try {
+                  await workerApi.trigger('intraday_fetch', { code: security.canonical_code });
+                  setFetchNote(t('已提交，数据到达后刷新本页'));
+                } catch (error) {
+                  setFetchNote(String((error as Error).message ?? error));
+                }
+              }}
+              onRefresh={() => intraday.refresh({ force: true })}
+            />
           )}
         </section>
 
@@ -317,6 +363,113 @@ export default function StockDetail() {
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+/* ---------------- 盘中K线（1分/5分/60分） ---------------- */
+
+function IntradayPane({
+  data,
+  loading,
+  isOwner,
+  fetchNote,
+  onFetch,
+  onRefresh,
+}: {
+  data: IntradayChart | null;
+  loading: boolean;
+  isOwner: boolean;
+  fetchNote: string | null;
+  onFetch: () => void;
+  onRefresh: () => void;
+}) {
+  const option = useMemo(() => {
+    const bars = data?.bars ?? [];
+    if (bars.length === 0) return null;
+    const labels = bars.map((bar) => `${bar.trade_date.slice(5)} ${bar.bar_time}`);
+    const candles = bars.map((bar) => [bar.open, bar.close, bar.low, bar.high]);
+    const turnover = bars.map((bar) => bar.turnover_value);
+    return {
+      grid: [
+        baseGrid({ top: 8, bottom: '24%', left: 4, right: 48 }),
+        baseGrid({ top: '80%', bottom: 2, left: 4, right: 48 }),
+      ],
+      tooltip: glassTooltip({ trigger: 'axis' }),
+      xAxis: [
+        { ...categoryAxis(labels), gridIndex: 0 },
+        { ...categoryAxis(labels), gridIndex: 1, axisLabel: { show: false } },
+      ],
+      yAxis: [
+        { ...valueAxis({ scale: true, position: 'right' }), gridIndex: 0 },
+        { ...valueAxis(), gridIndex: 1, axisLabel: { show: false }, splitLine: { show: false } },
+      ],
+      series: [
+        {
+          type: 'candlestick' as const,
+          data: candles,
+          xAxisIndex: 0,
+          yAxisIndex: 0,
+          itemStyle: {
+            color: CH.up600, color0: CH.down600,
+            borderColor: CH.up600, borderColor0: CH.down600,
+          },
+        },
+        {
+          type: 'bar' as const,
+          data: turnover,
+          xAxisIndex: 1,
+          yAxisIndex: 1,
+          itemStyle: { color: CH.brand400, opacity: 0.4 },
+        },
+      ],
+    };
+  }, [data]);
+
+  if (loading && !data) return <SkeletonCard className="h-72" />;
+  if (data && data.available && option) {
+    return (
+      <div>
+        <ReactECharts className="h-72 w-full" option={option} ariaLabel="intraday chart" />
+        <p className="mt-1 text-right text-micro text-ink-400">
+          {t('分钟数据为未复权原始价')} · {(data.days ?? []).length} {t('个交易日')} ·{' '}
+          {t('数据截至')} {data.data_through ?? '—'}
+        </p>
+      </div>
+    );
+  }
+  const planBlocked = data?.reason === 'plan_not_included';
+  return (
+    <div className="flex h-72 flex-col items-center justify-center gap-3 rounded-md bg-paper-2">
+      <p className="max-w-md px-6 text-center text-body-s text-ink-600">
+        {planBlocked ? t('分钟线需要 J-Quants 分足加购（当前订阅未包含）') : t('该股票的分钟数据尚未取得')}
+      </p>
+      {data?.note_ja && <p className="max-w-md px-6 text-center text-caption text-ink-400">{data.note_ja}</p>}
+      {isOwner && !planBlocked && (
+        <button
+          type="button"
+          onClick={onFetch}
+          className="rounded-md bg-brand-600 px-3 py-1.5 text-body-s font-medium text-white"
+        >
+          {t('取得最近5个交易日的分钟数据')}
+        </button>
+      )}
+      {isOwner && planBlocked && (
+        <button
+          type="button"
+          onClick={onFetch}
+          className="rounded-md border border-line px-3 py-1.5 text-caption text-ink-500 hover:bg-brand-50"
+          title={t('重新检测订阅状态')}
+        >
+          {t('重新检测订阅状态')}
+        </button>
+      )}
+      <span className="flex items-center gap-2">
+        {fetchNote && <span className="text-caption text-ink-400">{fetchNote}</span>}
+        <button type="button" onClick={onRefresh} className="text-caption text-brand-700 hover:underline">
+          {t('刷新')}
+        </button>
+      </span>
     </div>
   );
 }

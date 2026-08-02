@@ -135,6 +135,27 @@ def map_topix_bar(row: Mapping[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def map_minute_bar(row: Mapping[str, Any]) -> dict[str, Any] | None:
+    """分足: Date + Time(HH:mm) + O/H/L/C/Vo/Va。取引の無い分は届かない。"""
+
+    code = _code(row)
+    trade_date = _text(row, "Date")
+    bar_time = _text(row, "Time")
+    if not code or not trade_date or not bar_time:
+        return None
+    return {
+        "canonical_code": code,
+        "trade_date": trade_date,
+        "bar_time": bar_time[:5],
+        "open": _num(row, "O"),
+        "high": _num(row, "H"),
+        "low": _num(row, "L"),
+        "close": _num(row, "C"),
+        "volume": _num(row, "Vo"),
+        "turnover_value": _num(row, "Va"),
+    }
+
+
 def map_trading_day(row: Mapping[str, Any]) -> dict[str, Any] | None:
     date = _text(row, "Date")
     division = _text(row, "HolDiv")
@@ -154,7 +175,8 @@ def map_financial_summary(row: Mapping[str, Any]) -> dict[str, Any] | None:
         "disclosed_date": disclosed_date,
         "disclosed_time": _text(row, "DiscTime"),
         "disclosure_number": disclosure_number,
-        "type_of_document": _text(row, "TypeOfDocument"),
+        # 実レスポンスは DocType（TypeOfDocument はドキュメント旧表記）
+        "type_of_document": _text(row, "DocType") or _text(row, "TypeOfDocument"),
         "period_type": _text(row, "CurPerType"),
         "period_start": _text(row, "CurPerSt"),
         "period_end": _text(row, "CurPerEn"),
@@ -187,7 +209,8 @@ def map_financial_summary(row: Mapping[str, Any]) -> dict[str, Any] | None:
         "next_forecast_sales": _num(row, "NxFSales"),
         "next_forecast_operating_profit": _num(row, "NxFOP"),
         "next_forecast_ordinary_profit": _num(row, "NxFOdP"),
-        "next_forecast_net_profit": _num(row, "NxFNP"),
+        # 実レスポンスのフィールド名は NxFNp（p が小文字）
+        "next_forecast_net_profit": _num(row, "NxFNp") if row.get("NxFNp") is not None else _num(row, "NxFNP"),
         "next_forecast_eps": _num(row, "NxFEPS"),
         # Dividends.
         "dividend_annual": _num(row, "DivAnn"),
