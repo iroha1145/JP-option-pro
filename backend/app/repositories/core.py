@@ -305,6 +305,38 @@ class CoreRepository(SQLiteRepository):
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def latest_quote_map(self) -> dict[str, dict[str, Any]]:
+        """最新営業日の終値・前日比（全市場、2クエリ・3列のみ）。"""
+
+        with self.read() as connection:
+            latest = connection.execute("SELECT MAX(trade_date) FROM daily_bars").fetchone()[0]
+            if not latest:
+                return {}
+            prior = connection.execute(
+                "SELECT MAX(trade_date) FROM daily_bars WHERE trade_date < ?", (latest,)
+            ).fetchone()[0]
+            rows = connection.execute(
+                "SELECT canonical_code, trade_date, close, adj_close FROM daily_bars "
+                "WHERE trade_date IN (?, ?)",
+                (latest, prior or latest),
+            ).fetchall()
+        prior_adj: dict[str, float] = {}
+        result: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            if row["trade_date"] == latest:
+                result[row["canonical_code"]] = {
+                    "close": row["close"], "adj_close": row["adj_close"], "change_pct": None,
+                }
+            else:
+                if row["adj_close"] is not None:
+                    prior_adj[row["canonical_code"]] = row["adj_close"]
+        for code, quote in result.items():
+            adj = quote.pop("adj_close", None)
+            prev = prior_adj.get(code)
+            if adj and prev:
+                quote["change_pct"] = round((adj / prev - 1.0) * 100.0, 2)
+        return result
+
     def latest_bar_date(self) -> str | None:
         with self.read() as connection:
             row = connection.execute("SELECT MAX(trade_date) FROM daily_bars").fetchone()

@@ -7,6 +7,7 @@ import type {
   DataStatusResponse,
   EarningsCalendarItem,
   EarningsRecentItem,
+  EarningsUpcomingResponse,
   EconCalendarResponse,
   IntradayChart,
   MarketOverview,
@@ -112,6 +113,9 @@ export const earningsApi = {
     return query
       ? get(`/earnings/calendar?${query}`)
       : registryGet('/earnings/calendar');
+  },
+  upcoming(): Promise<EarningsUpcomingResponse> {
+    return get('/earnings/upcoming');
   },
   recent(days = 7): Promise<{ items: EarningsRecentItem[] }> {
     return days === 7 ? registryGet('/earnings/recent') : get(`/earnings/recent?${toQuery({ days })}`);

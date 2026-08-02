@@ -171,13 +171,17 @@ def test_core_v1_database_migrates_forward(tmp_path):
         )
         connection.commit()
     migrated = CoreRepository(db_path)
-    migrated.initialize()  # v1 → v2 前方移行
+    migrated.initialize()  # v1 → v2 → v3 の連鎖前方移行
     assert migrated.strength_meta() is None  # 表はあるが断面は未生成
     with sqlite3.connect(db_path) as connection:
         row = connection.execute(
             "SELECT version FROM jp_core_schema WHERE id=1"
         ).fetchone()
-    assert row[0] == "jp-core-v2"
+        indexes = {r[0] for r in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='daily_bars'"
+        )}
+    assert row[0] == "jp-core-v3"
+    assert "idx_daily_bars_date_quote" in indexes
     # 未知の版数は従来通り拒否。
     with sqlite3.connect(db_path) as connection:
         connection.execute(

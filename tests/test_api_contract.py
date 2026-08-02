@@ -219,3 +219,24 @@ def test_account_register_and_personal_watchlist(client, monkeypatch):
     finally:
         set_account_store(None)
         account_api.reset_rate_limits()
+
+
+def test_earnings_upcoming_view_contract(client):
+    body = client.get("/api/earnings/upcoming").json()
+    assert set(body["counts"]) == {"released", "confirmed", "estimated", "tbd"}
+    assert "前年同期" in body["coverage_note"]
+    statuses = {item["status"] for item in body["items"]}
+    assert statuses <= {"released", "confirmed", "estimated"}
+    for item in body["items"]:
+        assert item["date"] is not None
+        assert item["display_code"]
+        if item["status"] == "released":
+            assert "actual" in item  # 実績は released 行にだけ載る
+        else:
+            assert "actual" not in item
+        if item["status"] == "estimated":
+            assert item["confirmed"] is False
+            assert item["estimate_basis"]
+    # 未定は本流から隔離される
+    for item in body["tbd_items"]:
+        assert item["date"] is None

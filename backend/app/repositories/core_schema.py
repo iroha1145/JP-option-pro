@@ -7,7 +7,14 @@ upserts that keep ``ingested_at`` as the revision stamp.
 
 from __future__ import annotations
 
-CORE_SCHEMA_VERSION = "jp-core-v2"
+CORE_SCHEMA_VERSION = "jp-core-v3"
+
+# v3: 全市場スナップショット照会（決算カレンダーの終値/前日比マップ等）を
+# カバリングインデックスで賄う。272MB の WITHOUT ROWID 主表への 4千回の
+# ランダム回表はコールドキャッシュで ~2 秒かかる — 索引だけで完結させる。
+_QUOTE_INDEX_DDL: tuple[str, ...] = (
+    "CREATE INDEX IF NOT EXISTS idx_daily_bars_date_quote ON daily_bars(trade_date, canonical_code, close, adj_close)",
+)
 
 # -- 強度スキャン断面（v2 追加）。米国版 Strength Radar の日本株移植:
 #    夜間バッチが銘柄内在評価（intrinsic）を全量計算して保存し、API は
@@ -305,11 +312,13 @@ CORE_DDL: tuple[str, ...] = (
     ) WITHOUT ROWID
     """,
     *_STRENGTH_DDL,
+    *_QUOTE_INDEX_DDL,
 )
 
-#: v1 → v2: 強度スキャン断面の追加のみ（既存テーブルは無変更）。
+#: 前方マイグレーション連鎖: v1 → v2（強度断面）→ v3（クオート索引）。
 CORE_MIGRATIONS: dict[str, tuple[tuple[str, ...], str]] = {
-    "jp-core-v1": (_STRENGTH_DDL, CORE_SCHEMA_VERSION),
+    "jp-core-v1": (_STRENGTH_DDL, "jp-core-v2"),
+    "jp-core-v2": (_QUOTE_INDEX_DDL, CORE_SCHEMA_VERSION),
 }
 
 __all__ = ["CORE_DDL", "CORE_MIGRATIONS", "CORE_SCHEMA_VERSION"]

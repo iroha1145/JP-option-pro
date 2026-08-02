@@ -6,7 +6,8 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.api.deps import app_store, core_repository
 from app.domain.timeutil import add_days, iso_date, today_jst
-from app.services.earnings_service import recent_disclosures, upcoming_calendar
+from app.services.earnings_service import recent_disclosures, upcoming_calendar, upcoming_view
+from app.services.radar.lifecycle import TERMINAL_STATES
 
 router = APIRouter(prefix="/api/earnings", tags=["earnings"])
 
@@ -29,6 +30,31 @@ def earnings_calendar(
     watchlist = set(app_store().watchlist_codes())
     return upcoming_calendar(
         repository, start_date=start_date, end_date=end_date, watchlist_codes=watchlist
+    )
+
+
+@router.get("/upcoming")
+def earnings_upcoming(
+    days_back: int = Query(default=3, ge=0, le=14),
+    days_ahead: int = Query(default=35, ge=7, le=60),
+) -> dict:
+    """高密度カレンダービュー: released / confirmed / estimated / tbd の四態。"""
+
+    repository = core_repository()
+    if not repository.exists():
+        raise HTTPException(status_code=503, detail={"code": "data_not_initialized"})
+    today = iso_date(today_jst())
+    radar_states = {
+        event["canonical_code"]: event["state"]
+        for event in repository.open_radar_events(terminal_states=sorted(TERMINAL_STATES))
+    }
+    return upcoming_view(
+        repository,
+        today=today,
+        days_back=days_back,
+        days_ahead=days_ahead,
+        watchlist_codes=set(app_store().watchlist_codes()),
+        radar_state_by_code=radar_states,
     )
 
 

@@ -428,6 +428,53 @@ export interface IntradayChart {
   bars: IntradayBar[];
 }
 
+/* ---------------- 决算日历（高密度视图） ---------------- */
+
+/** released=已公布（带实绩）/ confirmed=官方確定（仅次一交易日）/ estimated=目安（前年同期推导）/ tbd=未定 */
+export interface EarningsUpcomingItem {
+  canonical_code: string;
+  display_code: string;
+  name_ja: string | null;
+  sector33_name: string | null;
+  date: string | null;
+  status: 'released' | 'confirmed' | 'estimated' | 'tbd';
+  confirmed: boolean;
+  estimate_basis?: string;
+  period_type: string | null;
+  quarter_label: string | null;
+  fiscal_year_end: string | null;
+  close: number | null;
+  change_pct: number | null;
+  avg_turnover_20d: number | null;
+  in_watchlist: boolean;
+  radar_state: string | null;
+  featured: boolean;
+  forecast: {
+    metric: 'operating_profit' | 'net_profit';
+    forecast_value: number | null;
+    prior_fy_value: number | null;
+    direction: 'upward' | 'downward' | 'unchanged' | null;
+    as_of: string | null;
+  } | null;
+  actual?: {
+    sales: number | null;
+    operating_profit: number | null;
+    net_profit: number | null;
+    disclosed_time: string | null;
+    is_revision: boolean;
+  };
+}
+
+export interface EarningsUpcomingResponse {
+  coverage_note: string;
+  today: string;
+  window_start: string;
+  window_end: string;
+  counts: { released: number; confirmed: number; estimated: number; tbd: number };
+  items: EarningsUpcomingItem[];
+  tbd_items: EarningsUpcomingItem[];
+}
+
 /* ---------------- 强度扫描（美版 Strength Radar 的日股移植） ---------------- */
 
 export interface StrengthStructure {
