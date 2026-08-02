@@ -37,8 +37,11 @@ x-service-base: &service-base
   # 米国版と同居する本番では machine.env で
   #   SHARED_ACCOUNTS_DIR=<米国版データ実体のホストパス>
   #   ACCOUNTS_DB_PATH=/shared-accounts/accounts.db
-  #   OPTIXJP_SHARED_GROUP=<米国版データの gid（例 101）>
-  # を指定する。既定の group_add "app" はイメージ内の自グループで無害。
+  #   OPTIXJP_RUN_AS=<米国版コンテナと同じ uid:gid（例 100:101）>
+  # を指定する。SQLite の WAL/журнал 副産物を双方向に書けるのは同一 uid だけ
+  # （ACL 無しの最小権限で成立する共有）。既定 "app" はイメージ内ユーザー。
+  # OPTIXJP_RUN_AS を変えたら JP データボリュームの所有者も同じ uid に合わせる。
+  user: "${OPTIXJP_RUN_AS:-app}"
   group_add:
     - "${OPTIXJP_SHARED_GROUP:-app}"
   volumes:
