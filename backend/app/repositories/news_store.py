@@ -134,6 +134,17 @@ class NewsStore(SQLiteRepository):
             ).fetchall()
         return {row[0] for row in rows}
 
+    def recent_titles_since(self, since_iso: str) -> list[tuple[str, str, str]]:
+        """近接重複判定用: (news_id, original_title, securities_json)。"""
+
+        with self.read() as connection:
+            rows = connection.execute(
+                "SELECT news_id, original_title, securities_json FROM news_items "
+                "WHERE fetched_at >= ? AND duplicate_of IS NULL",
+                (since_iso,),
+            ).fetchall()
+        return [(row[0], row[1], row[2] or "[]") for row in rows]
+
     def fingerprint_exists_since(self, fingerprint: str, *, since_iso: str) -> str | None:
         with self.read() as connection:
             row = connection.execute(

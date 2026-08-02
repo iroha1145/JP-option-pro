@@ -474,11 +474,14 @@ class CoreRepository(SQLiteRepository):
         return len(prepared)
 
     def earnings_between(self, start_date: str, end_date: str) -> list[dict[str, Any]]:
+        # 未定（announcement_date=''）は日付レンジに関係なく常に返す —
+        # 「予定があるが日付未定」を範囲フィルタで黙って消さない。
         with self.read() as connection:
             rows = connection.execute(
                 "SELECT * FROM earnings_announcements "
-                "WHERE announcement_date >= ? AND announcement_date <= ? "
-                "ORDER BY announcement_date, canonical_code",
+                "WHERE (announcement_date >= ? AND announcement_date <= ?) "
+                "   OR announcement_date = '' "
+                "ORDER BY announcement_date = '', announcement_date, canonical_code",
                 (start_date, end_date),
             ).fetchall()
         return [dict(row) for row in rows]

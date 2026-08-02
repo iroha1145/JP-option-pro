@@ -1,10 +1,9 @@
 """Daily-bar breakout lifecycle for the Japan radar.
 
-Adapted from the proven US-project state machine, with the premarket/gap
-branches removed: this radar observes completed JST sessions only, so every
-transition is driven by daily closes. Transitions not present in the
-adjacency table are refused (never raised) — repeated scans are replayable
-and idempotent.
+参照プロジェクトの状態機械を移植し、米国市場特有のセッション分岐
+（場前ギャップ系）を取り除いた版。完了した JST セッションだけを観測する
+ため、全遷移は日足終値で駆動される。隣接表に無い遷移は拒否（例外は投げ
+ない）——再スキャンはリプレイ可能かつ冪等。
 """
 
 from __future__ import annotations

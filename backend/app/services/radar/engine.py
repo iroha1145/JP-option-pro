@@ -95,11 +95,17 @@ def detect_new_signal(features: Mapping[str, Any]) -> tuple[str, float] | None:
 
 
 def detect_watch_candidate(features: Mapping[str, Any]) -> tuple[str, float] | None:
-    """Close just below the 60-day pivot → tomorrow's candidate pool."""
+    """Close just below the 60-day pivot → tomorrow's candidate pool.
+
+    Requires actual upward momentum — a dead-flat range whose daily highs sit
+    1% above every close is not "approaching" anything."""
 
     close = features.get("close")
     pivot = features.get("prior_high_60")
     if close is None or pivot is None or pivot <= 0.0:
+        return None
+    momentum = features.get("return_20d")
+    if momentum is None or momentum < 0.03:
         return None
     gap = pivot / close - 1.0
     if 0.0 < gap <= _WATCH_PROXIMITY:

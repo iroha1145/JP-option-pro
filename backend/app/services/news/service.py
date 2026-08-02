@@ -47,6 +47,21 @@ def sync_feeds_once(
     dropped_irrelevant = 0
     feed_errors: dict[str, str] = {}
 
+    # 近接重複: 48h 以内の既存タイトル + 今回バッチ内タイトルと Jaccard 比較。
+    import json as _json
+
+    dedup_window_start = _iso(now - timedelta(hours=48))
+    seen_titles: list[tuple[str, frozenset[str], set[str]]] = []
+    for known_id, known_title, securities_json in store.recent_titles_since(dedup_window_start):
+        try:
+            known_codes = {
+                str(entry.get("canonical_code"))
+                for entry in _json.loads(securities_json)
+            }
+        except ValueError:
+            known_codes = set()
+        seen_titles.append((known_id, classify.title_bigrams(known_title), known_codes))
+
     for feed_url in config.feed_urls:
         state = store.feed_state(feed_url) or {}
         result = fetch_feed(
@@ -82,11 +97,22 @@ def sync_feeds_once(
                 continue  # 日本株と接点のない記事はフィードに入れない
             codes = sorted({m.canonical_code for m in matches})
             fingerprint = classify.content_fingerprint(item.title, item.published_at, codes)
-            duplicate_of = store.fingerprint_exists_since(
-                fingerprint, since_iso=_iso(now - timedelta(hours=48))
-            )
+            duplicate_of = store.fingerprint_exists_since(fingerprint, since_iso=dedup_window_start)
             if duplicate_of == news_id:
                 duplicate_of = None
+            bigrams = classify.title_bigrams(item.title)
+            if duplicate_of is None:
+                code_set = set(codes)
+                for known_id, known_bigrams, known_codes in seen_titles:
+                    if known_id == news_id:
+                        continue
+                    shared_entity = bool(code_set & known_codes) or (not code_set and not known_codes)
+                    threshold = 0.5 if shared_entity else 0.72
+                    if classify.titles_similar(bigrams, known_bigrams, threshold=threshold):
+                        duplicate_of = known_id
+                        break
+            if duplicate_of is None:
+                seen_titles.append((news_id, bigrams, set(codes)))
             in_watchlist = any(code in watchlist_codes for code in codes)
             has_radar = any(code in radar_codes for code in codes)
             importance, components, reasons = classify.importance_score(

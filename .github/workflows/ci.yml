@@ -1,0 +1,68 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt pytest
+
+      - name: Compile backend
+        run: python -m compileall -q backend/app
+
+      # CI は実 J-Quants・実 OpenAI に接続しない（テストは全て MockTransport/フィクスチャ）
+      - name: Backend tests
+        run: python -m pytest tests/ -q
+
+      - name: Fixture pipeline smoke (radar + screener build)
+        run: |
+          DATA_DIR=/tmp/jp-ci-fixture python -m app.tools.dev_fixture --days 140 > /tmp/fixture.json
+          python - <<'EOF'
+          import json
+          result = json.load(open('/tmp/fixture.json'))
+          assert result['radar']['events_written'] >= 1, result
+          assert result['screener_rows'] >= 10, result
+          print('fixture ok:', result['target_date'])
+          EOF
+        working-directory: backend
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Frontend install & build
+        run: |
+          npm ci --prefix frontend-src --ignore-scripts --no-audit --no-fund
+          npm run build --prefix frontend-src
+
+      # コミット済み frontend/ はビルド成果物と完全一致していること（バイトゲート）
+      - name: Frontend artifact byte gate
+        run: diff -r frontend-src/dist frontend
+
+      - name: US-market residue gate
+        run: |
+          ! grep -rniE "America/New_York|premarket|postmarket|implied.?volatilit|option.?chain|\bSPY\b|\bQQQ\b" \
+            --include="*.py" --include="*.ts" --include="*.tsx" \
+            backend/app/services backend/app/api backend/app/repositories backend/app/providers \
+            frontend-src/src/pages frontend-src/src/components frontend-src/src/api \
+            || (echo "US-market residue found" && exit 1)

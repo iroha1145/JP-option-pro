@@ -75,6 +75,25 @@ def detect_language(title: str, summary: str | None) -> str:
 _WORD_RE = re.compile(r"[a-z0-9]+")
 
 
+def title_bigrams(title: str) -> frozenset[str]:
+    normalized = normalize_text(title).lower()
+    ascii_tokens = set(_WORD_RE.findall(normalized))
+    cjk_chars = [ch for ch in normalized if not ch.isascii() and not ch.isspace()]
+    bigrams = {a + b for a, b in zip(cjk_chars, cjk_chars[1:])} if len(cjk_chars) >= 2 else set(cjk_chars)
+    return frozenset(ascii_tokens | bigrams)
+
+
+def titles_similar(a: frozenset[str], b: frozenset[str], *, threshold: float = 0.5) -> bool:
+    """同一イベントの別ソース報道判定（Jaccard）。"""
+
+    if not a or not b:
+        return False
+    union = len(a | b)
+    if union == 0:
+        return False
+    return len(a & b) / union >= threshold
+
+
 def content_fingerprint(title: str, published_at: str | None, securities: Sequence[str]) -> str:
     """近接重複の指紋: 正規化タイトルの文字 2-gram + 日付バケット + 実体。"""
 
