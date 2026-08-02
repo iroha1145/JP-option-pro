@@ -3,7 +3,6 @@
  * 每日件数迷你柱（確定+已公布=brand，含目安=淡色叠加）；hover 显当日代码；点击跳该日。
  */
 import { useMemo } from 'react';
-import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import SourceNote from '@/components/shared/SourceNote';
 import type { EarningsUpcomingItem } from '@/api/types';
@@ -77,19 +76,17 @@ export default function DensityStrip({ items, onJumpDay }: DensityStripProps) {
                     </span>
                   )}
                 </span>
-                {/* 双段柱：下段=確定/已公布（实色），上段=目安（淡色） */}
+                {/* 双段柱：下段=確定/已公布（实色），上段=目安（淡色）。
+                    不做 scaleY 入场动画：whileInView 在数像素高的元素上会停在
+                    scaleY(0)（实机复现），柱子直接按最终高度静态渲染。 */}
                 <span className="flex w-full flex-col justify-end" style={{ height: '100%' }} aria-hidden="true">
                   {n - solid > 0 && (
-                    <motion.span
-                      className="w-full rounded-t-[2px] bg-brand-300/50 group-hover:bg-brand-400/60"
+                    <span
+                      className="w-full rounded-t-[2px] bg-brand-300/60 group-hover:bg-brand-400/70"
                       style={{ height: `${Math.max(4, ((n - solid) / max) * 100)}%` }}
-                      initial={{ scaleY: 0, transformOrigin: 'bottom' }}
-                      whileInView={{ scaleY: 1 }}
-                      viewport={{ once: true, amount: 0.4 }}
-                      transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: index * 0.015 }}
                     />
                   )}
-                  <motion.span
+                  <span
                     className={cn(
                       'w-full transition-colors duration-fast',
                       solid > 0 ? 'bg-brand-500 group-hover:bg-brand-600' : n === 0 ? 'bg-line' : 'bg-transparent',
@@ -97,10 +94,6 @@ export default function DensityStrip({ items, onJumpDay }: DensityStripProps) {
                       isToday && 'ring-1 ring-brand-600 ring-offset-1',
                     )}
                     style={{ height: solid > 0 ? `${Math.max(8, (solid / max) * 100)}%` : n === 0 ? '2px' : '0px' }}
-                    initial={{ scaleY: 0, transformOrigin: 'bottom' }}
-                    whileInView={{ scaleY: 1 }}
-                    viewport={{ once: true, amount: 0.4 }}
-                    transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: index * 0.015 }}
                   />
                 </span>
               </button>

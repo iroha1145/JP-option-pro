@@ -199,6 +199,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                     transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: Math.min(index * 0.035, 0.5) }}
                     className={cn(
                       'hidden cursor-pointer items-center border-b border-line px-4 py-2.5 transition-colors duration-fast last:border-b-0 md:grid md:gap-3',
+                      GRID,
                       'hover:bg-paper-2',
                       row.status === 'estimated' && 'opacity-[0.92]',
                     )}
