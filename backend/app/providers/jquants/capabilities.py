@@ -52,7 +52,9 @@ CAPABILITIES: tuple[DataCapability, ...] = (
     DataCapability("dividend_details", "/fins/dividend", "unavailable", "irregular", None, "Premium 限定"),
     DataCapability("trading_breakdown", "/markets/breakdown", "unavailable", "daily", None, "Premium 限定"),
     DataCapability("morning_session_prices", "/equities/bars/daily/am", "unavailable", "daily", None, "Premium 限定"),
-    DataCapability("intraday_prices", "/equities/bars/minute", "unavailable", "intraday", None, "分足オプション未契約"),
+    # アドオン契約済み（2026-08: OHLC-Min + Tick 加購）。銘柄別オンデマンド取得。
+    DataCapability("intraday_prices", "/equities/bars/minute", "enabled", "intraday", None, "分足アドオン契約済み・銘柄別オンデマンド"),
+    DataCapability("tick_trades", "/equities/trades", "enabled", "intraday", None, "Tick アドオン契約済み・API 側有効化状況は addon_state を参照"),
 )
 
 

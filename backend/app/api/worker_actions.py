@@ -32,11 +32,14 @@ def request_action(
     if action_type not in MANUAL_ACTION_TYPES:
         raise HTTPException(status_code=404, detail={"code": "unknown_action"})
     payload: dict = {}
-    if action_type == "intraday_fetch":
+    if action_type in ("intraday_fetch", "tick_fetch"):
         canonical = normalize_input_code(code or "")
         if canonical is None:
             raise HTTPException(status_code=422, detail={"code": "invalid_code_format"})
         payload["code"] = canonical
+        if action_type == "tick_fetch":
+            # ランタイムは action_type を payload から剥がすため、dataset は自前で運ぶ
+            payload["dataset"] = "tick"
     repository = worker_state_write()
     if not repository.exists():
         repository.initialize()

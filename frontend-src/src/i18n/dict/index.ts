@@ -543,4 +543,24 @@ export const DICT: Record<string, [string, string]> = {
   可执行写操作: ['Write actions enabled', '書き込み操作が可能'],
   自选保存在账号里: ['Watchlist saved to account', 'ウォッチリストはアカウントに保存'],
   登录后可保存自选: ['Sign in to save watchlist', 'ログインでウォッチリストを保存'],
+
+  /* ---- 第八轮：分足・ティック加购 ---- */
+  逐笔: ['Tick', 'ティック'],
+  笔: ['ticks', '件'],
+  '约 {n} 秒/点': ['~{n}s per point', '約{n}秒/点'],
+  '已达单日行数上限，尾部截断': ['Row cap reached; tail truncated', '当日上限に達し末尾を切り詰め'],
+  逐笔为未复权原始价: ['Ticks are raw unadjusted prices', 'ティックは未調整の生値'],
+  '歩み值 · 最近 {n} 笔': ['Time & sales · last {n}', '歩み値 · 直近 {n} 件'],
+  '逐笔需要 J-Quants Tick 加购（刚购买时，API 侧生效可能有延迟）': [
+    'Ticks require the J-Quants Tick add-on (activation may lag right after purchase)',
+    'ティックは J-Quants の Tick アドオンが必要です（契約直後は有効化に時間がかかることがあります）',
+  ],
+  该股票的逐笔数据尚未取得: [
+    'Ticks for this stock have not been fetched yet',
+    'この銘柄のティックはまだ取得されていません',
+  ],
+  取得最近交易日的逐笔数据: [
+    'Fetch ticks for the latest trading day',
+    '直近取引日のティックを取得',
+  ],
 };

@@ -10,6 +10,7 @@ import type {
   EarningsUpcomingResponse,
   EconCalendarResponse,
   IntradayChart,
+  TickView,
   MarketOverview,
   MarketRegime,
   NewsFeedResponse,
@@ -51,6 +52,9 @@ export const stocksApi = {
   },
   intradayChart(code: string, interval: '1m' | '5m' | '60m'): Promise<IntradayChart> {
     return get(`/stocks/${encodeURIComponent(code)}/chart?${toQuery({ interval })}`);
+  },
+  tickView(code: string): Promise<TickView> {
+    return get(`/stocks/${encodeURIComponent(code)}/ticks`);
   },
 };
 

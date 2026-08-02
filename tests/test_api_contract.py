@@ -240,3 +240,16 @@ def test_earnings_upcoming_view_contract(client):
     # 未定は本流から隔離される
     for item in body["tbd_items"]:
         assert item["date"] is None
+
+
+def test_stock_ticks_contract(client):
+    """ティック: ルート健在 + 正直な not_fetched 形状（夹具にティック無し）。"""
+
+    response = client.get("/api/stocks/7203/ticks")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["display_code"] == "7203"
+    assert body["available"] is False
+    assert body["reason"] in ("not_fetched", "plan_not_included")
+    assert body["points"] == [] and body["tape"] == []
+    assert {"availability", "trade_date", "tick_count"} <= set(body)

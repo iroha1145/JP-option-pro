@@ -28,11 +28,12 @@ import type {
   MarginInterestRow,
   ShortPositionRow,
   TechnicalStructure,
+  TickView,
 } from '@/api/types';
 
 type Range = '3m' | '6m' | '1y' | '3y' | '10y';
 type PriceMode = 'adjusted' | 'raw';
-type Interval = '1d' | '60m' | '5m' | '1m';
+type Interval = '1d' | '60m' | '5m' | '1m' | 'tick';
 
 export default function StockDetail() {
   const { code = '' } = useParams();
@@ -43,9 +44,14 @@ export default function StockDetail() {
   const chart = usePolling(() => stocksApi.chart(code, range), null, [code, range]);
   const intraday = usePolling(
     () =>
-      interval === '1d'
+      interval === '1d' || interval === 'tick'
         ? Promise.resolve(null)
         : stocksApi.intradayChart(code, interval),
+    null,
+    [code, interval],
+  );
+  const ticks = usePolling(
+    () => (interval === 'tick' ? stocksApi.tickView(code) : Promise.resolve(null)),
     null,
     [code, interval],
   );
@@ -234,6 +240,7 @@ export default function StockDetail() {
                   { value: '60m', label: t('60分') },
                   { value: '5m', label: t('5分') },
                   { value: '1m', label: t('1分') },
+                  { value: 'tick', label: t('逐笔') },
                 ]}
                 value={interval}
                 onChange={setInterval}
@@ -271,6 +278,22 @@ export default function StockDetail() {
             ) : (
               <EmptyState title={t('暂无数据')} />
             )
+          ) : interval === 'tick' ? (
+            <TickPane
+              data={ticks.data ?? null}
+              loading={ticks.loading}
+              isOwner={isOwner}
+              fetchNote={fetchNote}
+              onFetch={async () => {
+                try {
+                  await workerApi.trigger('tick_fetch', { code: security.canonical_code });
+                  setFetchNote(t('已提交，数据到达后刷新本页'));
+                } catch (error) {
+                  setFetchNote(String((error as Error).message ?? error));
+                }
+              }}
+              onRefresh={() => ticks.refresh({ force: true })}
+            />
           ) : (
             <IntradayPane
               data={intraday.data ?? null}
@@ -472,6 +495,153 @@ function IntradayPane({
       </span>
     </div>
   );
+}
+
+/* ---------------- 逐笔（ティック・歩み値） ---------------- */
+
+function TickPane({
+  data,
+  loading,
+  isOwner,
+  fetchNote,
+  onFetch,
+  onRefresh,
+}: {
+  data: TickView | null;
+  loading: boolean;
+  isOwner: boolean;
+  fetchNote: string | null;
+  onFetch: () => void;
+  onRefresh: () => void;
+}) {
+  const option = useMemo(() => {
+    const points = data?.points ?? [];
+    if (points.length === 0) return null;
+    const labels = points.map((point) => point.t);
+    return {
+      /* 服务端已间引到 ≤1200 点；关动画保证低端机切标签页零卡顿 */
+      animation: false,
+      grid: [
+        baseGrid({ top: 8, bottom: '24%', left: 4, right: 48 }),
+        baseGrid({ top: '80%', bottom: 2, left: 4, right: 48 }),
+      ],
+      tooltip: glassTooltip({ trigger: 'axis' }),
+      xAxis: [
+        { ...categoryAxis(labels), gridIndex: 0 },
+        { ...categoryAxis(labels), gridIndex: 1, axisLabel: { show: false } },
+      ],
+      yAxis: [
+        { ...valueAxis({ scale: true, position: 'right' }), gridIndex: 0 },
+        { ...valueAxis(), gridIndex: 1, axisLabel: { show: false }, splitLine: { show: false } },
+      ],
+      series: [
+        {
+          type: 'line' as const,
+          data: points.map((point) => point.price),
+          xAxisIndex: 0,
+          yAxisIndex: 0,
+          showSymbol: false,
+          lineStyle: { width: 1.2, color: CH.brand600 },
+          areaStyle: { color: CH.brand400, opacity: 0.08 },
+        },
+        {
+          type: 'bar' as const,
+          data: points.map((point) => point.volume),
+          xAxisIndex: 1,
+          yAxisIndex: 1,
+          itemStyle: { color: CH.brand400, opacity: 0.4 },
+        },
+      ],
+    };
+  }, [data]);
+
+  if (loading && !data) return <SkeletonCard className="h-72" />;
+  if (data && data.available && option) {
+    return (
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_232px]">
+        <div className="min-w-0">
+          <ReactECharts className="h-72 w-full" option={option} ariaLabel="tick chart" />
+          <p className="mt-1 text-right text-micro text-ink-400">
+            {data.trade_date} · {data.tick_count.toLocaleString()} {t('笔')} ·{' '}
+            {t('约 {n} 秒/点', { n: data.bucket_seconds ?? 1 })}
+            {data.truncated ? ` · ${t('已达单日行数上限，尾部截断')}` : ''} ·{' '}
+            {t('逐笔为未复权原始价')}
+          </p>
+        </div>
+        <aside className="min-w-0">
+          <p className="mb-1 flex items-baseline justify-between text-caption text-ink-500">
+            {t('歩み值 · 最近 {n} 笔', { n: data.tape.length })}
+            <button type="button" onClick={onRefresh} className="text-micro text-brand-700 hover:underline">
+              {t('刷新')}
+            </button>
+          </p>
+          <div className="max-h-72 overflow-y-auto overscroll-contain rounded-md border border-line bg-paper-2">
+            <table className="w-full border-collapse font-mono text-micro tnum">
+              <tbody>
+                {data.tape.map((row, index) => (
+                  <tr key={`${row.time}-${index}`} className="border-b border-line/60 last:border-b-0">
+                    <td className="px-2 py-1 text-ink-400">{row.time}</td>
+                    <td
+                      className={cnTick(row.direction)}
+                    >
+                      {row.price != null ? fmtPrice(row.price) : '—'}
+                    </td>
+                    <td className="px-2 py-1 text-right text-ink-500">
+                      {row.volume != null ? row.volume.toLocaleString() : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </aside>
+      </div>
+    );
+  }
+  const planBlocked = data?.reason === 'plan_not_included';
+  return (
+    <div className="flex h-72 flex-col items-center justify-center gap-3 rounded-md bg-paper-2">
+      <p className="max-w-md px-6 text-center text-body-s text-ink-600">
+        {planBlocked
+          ? t('逐笔需要 J-Quants Tick 加购（刚购买时，API 侧生效可能有延迟）')
+          : t('该股票的逐笔数据尚未取得')}
+      </p>
+      {data?.note_ja && <p className="max-w-md px-6 text-center text-caption text-ink-400">{data.note_ja}</p>}
+      {isOwner && !planBlocked && (
+        <button
+          type="button"
+          onClick={onFetch}
+          className="rounded-md bg-brand-600 px-3 py-1.5 text-body-s font-medium text-white"
+        >
+          {t('取得最近交易日的逐笔数据')}
+        </button>
+      )}
+      {isOwner && planBlocked && (
+        <button
+          type="button"
+          onClick={onFetch}
+          className="rounded-md border border-line px-3 py-1.5 text-caption text-ink-500 hover:bg-brand-50"
+          title={t('重新检测订阅状态')}
+        >
+          {t('重新检测订阅状态')}
+        </button>
+      )}
+      <span className="flex items-center gap-2">
+        {fetchNote && <span className="text-caption text-ink-400">{fetchNote}</span>}
+        <button type="button" onClick={onRefresh} className="text-caption text-brand-700 hover:underline">
+          {t('刷新')}
+        </button>
+      </span>
+    </div>
+  );
+}
+
+/** 歩み值行的价格着色：红涨绿跌（日本/中华圈惯例，全站禁止反转） */
+function cnTick(direction: 'up' | 'down' | 'flat'): string {
+  const base = 'px-2 py-1 text-right font-medium';
+  if (direction === 'up') return `${base} text-up-600`;
+  if (direction === 'down') return `${base} text-down-600`;
+  return `${base} text-ink-600`;
 }
 
 /* ---------------- 技术结构面板（美版算法输出） ---------------- */

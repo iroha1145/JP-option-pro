@@ -14,11 +14,12 @@ from typing import Any, Iterable, Mapping
 
 from app.providers.jquants.client import JQuantsClient
 from app.providers.jquants.errors import JQuantsError, JQuantsPlanError
-from app.providers.jquants.mapping import map_minute_bar
+from app.providers.jquants.mapping import map_minute_bar, map_trade_tick
 from app.repositories.core import CoreRepository
 from app.repositories.intraday_store import (
     AVAILABILITY_AVAILABLE,
     AVAILABILITY_PLAN_NOT_INCLUDED,
+    DATASET_TICK,
     IntradayStore,
 )
 
@@ -26,6 +27,14 @@ INTRADAY_INTERVALS = ("1m", "5m", "60m")
 CHART_INTERVALS = ("1d", *INTRADAY_INTERVALS)
 FETCH_TRADING_DAYS = 5
 RETENTION_TRADING_DAYS = 30
+
+# ティック: 1 銘柄 1 日で数万〜数十万行になり得る。取得は直近取引日のみ、
+# 行数に硬い上限を置き（超過は truncated として正直に記録）、チャート用には
+# サーバ側で秒バケットへ間引いた ≤ TICK_CHART_MAX_POINTS 点だけを返す。
+TICK_FETCH_MAX_ROWS = 200_000
+TICK_RETENTION_TRADING_DAYS = 7
+TICK_CHART_MAX_POINTS = 1_200
+TICK_TAPE_ROWS = 60
 
 
 def fetch_recent_minutes(
@@ -170,12 +179,202 @@ def intraday_chart(
     }
 
 
+# ---------------------------------------------------------------------------
+# ティック（/equities/trades アドオン）
+# ---------------------------------------------------------------------------
+
+
+def fetch_latest_ticks(
+    *,
+    client: JQuantsClient,
+    store: IntradayStore,
+    core: CoreRepository,
+    canonical_code: str,
+) -> dict[str, Any]:
+    """直近取引日のティックを取得して丸ごと置換キャッシュする。
+
+    完了日は不変なので、既にキャッシュ済み（非 truncated）ならスキップ。
+    未契約（403）は addon_state('tick') に正直に記録する。
+    """
+
+    latest = core.latest_bar_date() or core.latest_trading_day("2099-12-31")
+    if latest is None:
+        return {"status": "error", "error_code": "trading_calendar_empty"}
+    cached = store.tick_days_for(canonical_code).get(latest)
+    if cached and cached["tick_count"] > 0 and not cached["truncated"]:
+        return {
+            "status": "ok", "trade_date": latest,
+            "ticks": cached["tick_count"], "cached": True,
+        }
+    rows: list[dict[str, Any]] = []
+    truncated = False
+    try:
+        for raw in client.fetch_rows(
+            "/equities/trades", {"code": canonical_code, "date": latest}
+        ):
+            mapped = map_trade_tick(raw)
+            if mapped is not None:
+                rows.append(mapped)
+            if len(rows) >= TICK_FETCH_MAX_ROWS:
+                truncated = True
+                break
+    except JQuantsPlanError:
+        store.record_availability(
+            AVAILABILITY_PLAN_NOT_INCLUDED,
+            error_code="jquants_plan_not_included",
+            dataset=DATASET_TICK,
+        )
+        return {"status": "plan_not_included", "trade_date": latest}
+    except JQuantsError as exc:
+        return {"status": "error", "error_code": exc.code, "trade_date": latest}
+    stored = store.replace_ticks(canonical_code, latest, rows, truncated=truncated)
+    store.record_availability(AVAILABILITY_AVAILABLE, dataset=DATASET_TICK)
+    return {"status": "ok", "trade_date": latest, "ticks": stored, "truncated": truncated}
+
+
+def _tick_seconds(tick_time: str) -> int:
+    """'HH:MM[:SS[.ffff]]' → 当日通算秒。秒欠落は :00 扱い。"""
+
+    parts = tick_time.split(":")
+    hours = int(parts[0])
+    minutes = int(parts[1]) if len(parts) > 1 else 0
+    seconds = int(float(parts[2])) if len(parts) > 2 else 0
+    return hours * 3600 + minutes * 60 + seconds
+
+
+def downsample_ticks(
+    rows: list[dict[str, Any]], *, max_points: int = TICK_CHART_MAX_POINTS
+) -> tuple[list[dict[str, Any]], int]:
+    """秒バケットで間引く: (points, bucket_seconds)。
+
+    各バケットは {t, price(=last), high, low, volume(=sum)}。
+    昼休みなど取引の無い区間はバケット自体が生まれない（埋めない）。
+    """
+
+    if not rows:
+        return [], 1
+    first = _tick_seconds(rows[0]["tick_time"])
+    last = _tick_seconds(rows[-1]["tick_time"])
+    span = max(1, last - first)
+    bucket_seconds = max(1, -(-span // max(1, int(max_points))))
+    points: list[dict[str, Any]] = []
+    current_key: int | None = None
+    for row in rows:
+        price = row.get("price")
+        if price is None:
+            continue
+        key = _tick_seconds(row["tick_time"]) // bucket_seconds
+        volume = row.get("volume") or 0.0
+        if key != current_key:
+            seconds = key * bucket_seconds
+            points.append(
+                {
+                    "t": f"{seconds // 3600:02d}:{seconds % 3600 // 60:02d}:{seconds % 60:02d}",
+                    "price": price,
+                    "high": price,
+                    "low": price,
+                    "volume": volume,
+                }
+            )
+            current_key = key
+            continue
+        point = points[-1]
+        point["price"] = price
+        if price > point["high"]:
+            point["high"] = price
+        if price < point["low"]:
+            point["low"] = price
+        point["volume"] += volume
+    return points, bucket_seconds
+
+
+def tick_tape(rows: list[dict[str, Any]], *, limit: int = TICK_TAPE_ROWS) -> list[dict[str, Any]]:
+    """歩み値: 直近 limit 件（新しい順）に前値比方向を付ける。"""
+
+    tape: list[dict[str, Any]] = []
+    start = max(0, len(rows) - int(limit) - 1)
+    window = rows[start:]
+    for index in range(1 if start > 0 or len(window) > int(limit) else 0, len(window)):
+        row = window[index]
+        prev = window[index - 1] if index > 0 else None
+        price = row.get("price")
+        prev_price = prev.get("price") if prev else None
+        direction = "flat"
+        if price is not None and prev_price is not None:
+            direction = "up" if price > prev_price else "down" if price < prev_price else "flat"
+        tape.append(
+            {
+                "time": row["tick_time"],
+                "price": price,
+                "volume": row.get("volume"),
+                "direction": direction,
+            }
+        )
+    tape.reverse()
+    return tape[: int(limit)]
+
+
+def tick_view(
+    store: IntradayStore,
+    canonical_code: str,
+    *,
+    max_points: int = TICK_CHART_MAX_POINTS,
+    tape_rows: int = TICK_TAPE_ROWS,
+) -> dict[str, Any]:
+    """ティックチャート＋歩み値ビュー。可用性を必ず宣言する。"""
+
+    empty = {"points": [], "tape": [], "trade_date": None, "tick_count": 0}
+    if not store.exists():
+        return {"available": False, "reason": "not_fetched", "availability": "unknown", **empty}
+    state = store.availability(DATASET_TICK)
+    if state["availability"] == AVAILABILITY_PLAN_NOT_INCLUDED:
+        return {
+            "available": False,
+            "reason": "plan_not_included",
+            "availability": state["availability"],
+            "note_ja": "ティックは J-Quants の Tick アドオン契約が必要です。契約直後は API 側の有効化まで時間がかかることがあります。",
+            **empty,
+        }
+    days = store.tick_days_for(canonical_code)
+    if not days:
+        return {
+            "available": False,
+            "reason": "not_fetched",
+            "availability": state["availability"],
+            "note_ja": "この銘柄のティックはまだ取得されていません。",
+            **empty,
+        }
+    trade_date = max(days.keys())
+    meta = days[trade_date]
+    rows = store.ticks_for(canonical_code, trade_date)
+    points, bucket_seconds = downsample_ticks(rows, max_points=max_points)
+    return {
+        "available": True,
+        "availability": state["availability"],
+        "trade_date": trade_date,
+        "tick_count": meta["tick_count"],
+        "truncated": bool(meta["truncated"]),
+        "fetched_at": meta["fetched_at"],
+        "bucket_seconds": bucket_seconds,
+        "points": points,
+        "tape": tick_tape(rows, limit=tape_rows),
+    }
+
+
 __all__ = [
     "CHART_INTERVALS",
     "FETCH_TRADING_DAYS",
     "INTRADAY_INTERVALS",
     "RETENTION_TRADING_DAYS",
+    "TICK_CHART_MAX_POINTS",
+    "TICK_FETCH_MAX_ROWS",
+    "TICK_RETENTION_TRADING_DAYS",
+    "TICK_TAPE_ROWS",
+    "downsample_ticks",
+    "fetch_latest_ticks",
     "fetch_recent_minutes",
     "intraday_chart",
     "resample_minutes",
+    "tick_tape",
+    "tick_view",
 ]

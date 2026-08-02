@@ -58,5 +58,25 @@ def data_status_empty(*, jquants_configured: bool) -> dict:
             }
             for capability in CAPABILITIES
         ],
-        "intraday": {"enabled": False},
+        "intraday": _intraday_addon_status(),
+    }
+
+
+def _intraday_addon_status() -> dict:
+    """分足・ティックのアドオン実況（addon_state をそのまま宣言）。"""
+
+    from app.data_paths import get_data_paths
+    from app.repositories.intraday_store import DATASET_MINUTE, DATASET_TICK, IntradayStore
+
+    store = IntradayStore(get_data_paths().intraday_db, read_only=True)
+    if not store.exists():
+        return {
+            "enabled": True,
+            "minute": {"availability": "unknown"},
+            "tick": {"availability": "unknown"},
+        }
+    return {
+        "enabled": True,
+        "minute": store.availability(DATASET_MINUTE),
+        "tick": store.availability(DATASET_TICK),
     }

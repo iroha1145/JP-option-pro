@@ -59,6 +59,7 @@ MANUAL_ACTION_TYPES: tuple[str, ...] = (
     "radar_refresh",
     "news_sync",
     "intraday_fetch",
+    "tick_fetch",
 )
 
 _BACKFILL_DATASET_ORDER = (
@@ -82,6 +83,11 @@ class TaskContext:
         self.paths = get_data_paths()
         self.repository = CoreRepository(self.paths.core_db)
         self.repository.initialize()
+        # intraday は起動時に必ず初期化（v1→v2 移行含む）: API 側は read_only で
+        # 開くだけなので、移行前の旧ファイルを読ませない。
+        from app.repositories.intraday_store import IntradayStore
+
+        IntradayStore(self.paths.intraday_db).initialize()
 
     @property
     def client(self) -> JQuantsClient:
@@ -315,12 +321,18 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
         )
 
     def intraday_fetch_task(payload: dict[str, Any] | None) -> TaskResult:
-        """手動専用: 指定銘柄の直近分足をキャッシュ（アドオン未契約は正直に記録）。"""
+        """手動専用: 指定銘柄の直近分足/ティックをキャッシュ（未契約は正直に記録）。
+
+        payload["dataset"]: "minute"（既定）| "tick" — アクション種別はランタイムが
+        payload から剥がすので、データセットは payload 自身で運ぶ。
+        """
 
         from app.repositories.intraday_store import IntradayStore
         from app.services.intraday import (
             FETCH_TRADING_DAYS,
             RETENTION_TRADING_DAYS,
+            TICK_RETENTION_TRADING_DAYS,
+            fetch_latest_ticks,
             fetch_recent_minutes,
         )
         from app.domain.timeutil import add_days, iso_date, today_jst
@@ -331,19 +343,29 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             return idle
         if not context.jquants_ready():
             return _not_configured()
+        dataset = (payload or {}).get("dataset") or "minute"
         store = IntradayStore(context.paths.intraday_db)
         store.initialize()
-        result = fetch_recent_minutes(
-            client=context.client, store=store, core=context.repository,
-            canonical_code=str(code), days=FETCH_TRADING_DAYS,
-        )
-        store.prune_older_than(add_days(iso_date(today_jst()), -RETENTION_TRADING_DAYS * 2))
+        if dataset == "tick":
+            result = fetch_latest_ticks(
+                client=context.client, store=store, core=context.repository,
+                canonical_code=str(code),
+            )
+            store.prune_ticks_older_than(
+                add_days(iso_date(today_jst()), -TICK_RETENTION_TRADING_DAYS * 2)
+            )
+        else:
+            result = fetch_recent_minutes(
+                client=context.client, store=store, core=context.repository,
+                canonical_code=str(code), days=FETCH_TRADING_DAYS,
+            )
+            store.prune_older_than(add_days(iso_date(today_jst()), -RETENTION_TRADING_DAYS * 2))
         status = "completed" if result.get("status") in ("ok", "plan_not_included") else "failed"
         return TaskResult(
             status=status,
             error_code=result.get("error_code"),
             next_delay_seconds=6 * 3600.0,
-            details={"code": code, **result},
+            details={"code": code, "dataset": dataset, **result},
         )
 
     def ai_jobs_task(_payload: dict[str, Any] | None) -> TaskResult:
@@ -408,7 +430,7 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             name=TASK_INTRADAY,
             run=intraday_fetch_task,
             initial_delay_seconds=120.0,
-            action_types=("intraday_fetch",),
+            action_types=("intraday_fetch", "tick_fetch"),
         ),
     ]
 

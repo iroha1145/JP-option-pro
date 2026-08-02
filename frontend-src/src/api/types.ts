@@ -428,6 +428,38 @@ export interface IntradayChart {
   bars: IntradayBar[];
 }
 
+/** ティック（歩み値）— サーバ側で秒バケットに間引いたチャート点 + 直近テープ */
+export interface TickPoint {
+  t: string; // HH:MM:SS（バケット開始）
+  price: number; // バケット内の最終価格
+  high: number;
+  low: number;
+  volume: number;
+}
+
+export interface TickTapeRow {
+  time: string;
+  price: number | null;
+  volume: number | null;
+  direction: 'up' | 'down' | 'flat';
+}
+
+export interface TickView {
+  canonical_code: string;
+  display_code: string;
+  available: boolean;
+  availability?: string;
+  reason?: 'plan_not_included' | 'not_fetched';
+  note_ja?: string;
+  trade_date: string | null;
+  tick_count: number;
+  truncated?: boolean;
+  fetched_at?: string;
+  bucket_seconds?: number;
+  points: TickPoint[];
+  tape: TickTapeRow[];
+}
+
 /* ---------------- 决算日历（高密度视图） ---------------- */
 
 /** released=已公布（带实绩）/ confirmed=官方確定（仅次一交易日）/ estimated=目安（前年同期推导）/ tbd=未定 */

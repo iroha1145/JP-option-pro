@@ -78,6 +78,21 @@ def get_chart(
     }
 
 
+@router.get("/{code}/ticks")
+def get_ticks(code: str) -> dict:
+    """ティックチャート＋歩み値（サーバ側で ≤1200 点へ間引き済み）。"""
+
+    canonical = _resolve_or_404(code)
+    from app.data_paths import get_data_paths
+    from app.domain.symbols import display_code as to_display
+    from app.repositories.intraday_store import IntradayStore
+    from app.services.intraday import tick_view
+
+    store = IntradayStore(get_data_paths().intraday_db, read_only=True)
+    view = tick_view(store, canonical)
+    return {"canonical_code": canonical, "display_code": to_display(canonical), **view}
+
+
 @router.get("/{code}/resolve")
 def resolve(code: str) -> dict:
     canonical = normalize_input_code(code)

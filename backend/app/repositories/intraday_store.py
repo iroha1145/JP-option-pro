@@ -1,18 +1,54 @@
-"""jp-intraday.db — 分足キャッシュ（worker 専用ライタ）。
+"""jp-intraday.db — 分足・ティックキャッシュ（worker 専用ライタ）。
 
-J-Quants 分足はアドオン契約。未契約なら 403 が返るので、その事実を
-availability として保存し、UI が「未契約」を正直に表示できるようにする。
-完了した取引日の分足は不変データとしてキャッシュされ、再取得しない。
+J-Quants 分足（OHLC-Min）とティック（Tick）はアドオン契約。未契約なら 403 が
+返るので、その事実を addon_state に **データセット別** に保存し、UI が
+「未契約 / 未有効化」を正直に表示できるようにする。完了した取引日の分足・
+ティックは不変データとしてキャッシュされ、再取得しない。
+
+v2: ticks / tick_days / addon_state(dataset 別)。旧 intraday_state（単一行）は
+addon_state('minute') へ移行して廃止。
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Sequence
 
 from .base import SQLiteRepository, utc_now_iso
 
-INTRADAY_SCHEMA_VERSION = "jp-intraday-v1"
+INTRADAY_SCHEMA_VERSION = "jp-intraday-v2"
+
+_ADDON_STATE_DDL = """
+    CREATE TABLE IF NOT EXISTS addon_state (
+        dataset TEXT PRIMARY KEY,
+        availability TEXT NOT NULL DEFAULT 'unknown',
+        last_checked_at TEXT,
+        last_error_code TEXT
+    ) WITHOUT ROWID
+    """
+
+_TICKS_DDL = """
+    CREATE TABLE IF NOT EXISTS ticks (
+        canonical_code TEXT NOT NULL,
+        trade_date TEXT NOT NULL,
+        seq INTEGER NOT NULL,
+        tick_time TEXT NOT NULL,
+        price REAL,
+        volume REAL,
+        PRIMARY KEY (canonical_code, trade_date, seq)
+    ) WITHOUT ROWID
+    """
+
+_TICK_DAYS_DDL = """
+    CREATE TABLE IF NOT EXISTS tick_days (
+        canonical_code TEXT NOT NULL,
+        trade_date TEXT NOT NULL,
+        fetched_at TEXT NOT NULL,
+        tick_count INTEGER NOT NULL,
+        truncated INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (canonical_code, trade_date)
+    ) WITHOUT ROWID
+    """
 
 INTRADAY_DDL: tuple[str, ...] = (
     """
@@ -26,14 +62,6 @@ INTRADAY_DDL: tuple[str, ...] = (
     ) WITHOUT ROWID
     """,
     """
-    CREATE TABLE IF NOT EXISTS intraday_state (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
-        availability TEXT NOT NULL DEFAULT 'unknown',
-        last_checked_at TEXT,
-        last_error_code TEXT
-    )
-    """,
-    """
     CREATE TABLE IF NOT EXISTS fetched_days (
         canonical_code TEXT NOT NULL,
         trade_date TEXT NOT NULL,
@@ -42,37 +70,76 @@ INTRADAY_DDL: tuple[str, ...] = (
         PRIMARY KEY (canonical_code, trade_date)
     ) WITHOUT ROWID
     """,
+    _ADDON_STATE_DDL,
+    _TICKS_DDL,
+    _TICK_DAYS_DDL,
 )
+
+INTRADAY_MIGRATIONS: dict[str, tuple[tuple[str, ...], str]] = {
+    "jp-intraday-v1": (
+        (
+            _ADDON_STATE_DDL,
+            _TICKS_DDL,
+            _TICK_DAYS_DDL,
+            "INSERT INTO addon_state (dataset, availability, last_checked_at, last_error_code) "
+            "SELECT 'minute', availability, last_checked_at, last_error_code "
+            "FROM intraday_state WHERE id = 1",
+            "DROP TABLE intraday_state",
+        ),
+        INTRADAY_SCHEMA_VERSION,
+    ),
+}
 
 AVAILABILITY_UNKNOWN = "unknown"
 AVAILABILITY_AVAILABLE = "available"
 AVAILABILITY_PLAN_NOT_INCLUDED = "plan_not_included"
+
+DATASET_MINUTE = "minute"
+DATASET_TICK = "tick"
+
+_TICK_INSERT_CHUNK = 5_000
 
 
 class IntradayStore(SQLiteRepository):
     SCHEMA_NAME = "jp_intraday"
     SCHEMA_VERSION = INTRADAY_SCHEMA_VERSION
     DDL = INTRADAY_DDL
+    MIGRATIONS = INTRADAY_MIGRATIONS
 
     def __init__(self, db_path: Path, *, read_only: bool = False) -> None:
         super().__init__(db_path, read_only=read_only)
 
-    def availability(self) -> dict[str, Any]:
+    # ---------------- 可用性（データセット別） ----------------
+
+    def availability(self, dataset: str = DATASET_MINUTE) -> dict[str, Any]:
         with self.read() as connection:
-            row = connection.execute("SELECT * FROM intraday_state WHERE id = 1").fetchone()
+            row = connection.execute(
+                "SELECT dataset, availability, last_checked_at, last_error_code "
+                "FROM addon_state WHERE dataset = ?",
+                (dataset,),
+            ).fetchone()
         if row is None:
-            return {"availability": AVAILABILITY_UNKNOWN, "last_checked_at": None, "last_error_code": None}
+            return {
+                "dataset": dataset,
+                "availability": AVAILABILITY_UNKNOWN,
+                "last_checked_at": None,
+                "last_error_code": None,
+            }
         return dict(row)
 
-    def record_availability(self, availability: str, *, error_code: str | None = None) -> None:
+    def record_availability(
+        self, availability: str, *, error_code: str | None = None, dataset: str = DATASET_MINUTE
+    ) -> None:
         with self.write() as connection:
             connection.execute(
-                "INSERT INTO intraday_state (id, availability, last_checked_at, last_error_code) "
-                "VALUES (1, ?, ?, ?) "
-                "ON CONFLICT (id) DO UPDATE SET availability = excluded.availability, "
+                "INSERT INTO addon_state (dataset, availability, last_checked_at, last_error_code) "
+                "VALUES (?, ?, ?, ?) "
+                "ON CONFLICT (dataset) DO UPDATE SET availability = excluded.availability, "
                 "last_checked_at = excluded.last_checked_at, last_error_code = excluded.last_error_code",
-                (availability, utc_now_iso(), error_code),
+                (dataset, availability, utc_now_iso(), error_code),
             )
+
+    # ---------------- 分足 ----------------
 
     def upsert_minute_bars(self, rows: Iterable[Mapping[str, Any]]) -> int:
         prepared = [
@@ -144,11 +211,78 @@ class IntradayStore(SQLiteRepository):
             connection.execute("DELETE FROM fetched_days WHERE trade_date < ?", (cutoff_date,))
             return cursor.rowcount or 0
 
+    # ---------------- ティック ----------------
+
+    def replace_ticks(
+        self,
+        canonical_code: str,
+        trade_date: str,
+        rows: Sequence[Mapping[str, Any]],
+        *,
+        truncated: bool = False,
+    ) -> int:
+        """当日分を丸ごと置換（部分日→完全日への育ちを単純に保つ）。
+
+        一つの書き込みトランザクション内で DELETE + チャンク insert する:
+        原子性が保たれ、読者は常に「無い or 完全なスナップショット」を見る。
+        """
+
+        prepared = [
+            (canonical_code, trade_date, seq, row["tick_time"], row.get("price"), row.get("volume"))
+            for seq, row in enumerate(rows)
+            if row.get("tick_time")
+        ]
+        with self.write() as connection:
+            connection.execute(
+                "DELETE FROM ticks WHERE canonical_code = ? AND trade_date = ?",
+                (canonical_code, trade_date),
+            )
+            for start in range(0, len(prepared), _TICK_INSERT_CHUNK):
+                connection.executemany(
+                    "INSERT INTO ticks (canonical_code, trade_date, seq, tick_time, price, volume) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    prepared[start : start + _TICK_INSERT_CHUNK],
+                )
+            connection.execute(
+                "INSERT INTO tick_days (canonical_code, trade_date, fetched_at, tick_count, truncated) "
+                "VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT (canonical_code, trade_date) DO UPDATE SET "
+                "fetched_at = excluded.fetched_at, tick_count = excluded.tick_count, "
+                "truncated = excluded.truncated",
+                (canonical_code, trade_date, utc_now_iso(), len(prepared), 1 if truncated else 0),
+            )
+        return len(prepared)
+
+    def tick_days_for(self, canonical_code: str) -> dict[str, dict[str, Any]]:
+        with self.read() as connection:
+            rows = connection.execute(
+                "SELECT * FROM tick_days WHERE canonical_code = ?", (canonical_code,)
+            ).fetchall()
+        return {row["trade_date"]: dict(row) for row in rows}
+
+    def ticks_for(self, canonical_code: str, trade_date: str) -> list[dict[str, Any]]:
+        with self.read() as connection:
+            rows = connection.execute(
+                "SELECT seq, tick_time, price, volume FROM ticks "
+                "WHERE canonical_code = ? AND trade_date = ? ORDER BY seq",
+                (canonical_code, trade_date),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def prune_ticks_older_than(self, cutoff_date: str) -> int:
+        with self.write() as connection:
+            cursor = connection.execute("DELETE FROM ticks WHERE trade_date < ?", (cutoff_date,))
+            connection.execute("DELETE FROM tick_days WHERE trade_date < ?", (cutoff_date,))
+            return cursor.rowcount or 0
+
 
 __all__ = [
     "AVAILABILITY_AVAILABLE",
     "AVAILABILITY_PLAN_NOT_INCLUDED",
     "AVAILABILITY_UNKNOWN",
+    "DATASET_MINUTE",
+    "DATASET_TICK",
+    "INTRADAY_MIGRATIONS",
     "INTRADAY_SCHEMA_VERSION",
     "IntradayStore",
 ]

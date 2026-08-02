@@ -156,6 +156,40 @@ def map_minute_bar(row: Mapping[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _first_num(row: Mapping[str, Any], keys: tuple[str, ...]) -> float | None:
+    for key in keys:
+        value = _num(row, key)
+        if value is not None:
+            return value
+    return None
+
+
+def map_trade_tick(row: Mapping[str, Any]) -> dict[str, Any] | None:
+    """ティック（/equities/trades）。
+
+    契約前でフィールド実物を照合できていないため、V2 の略記慣習
+    （分足の Date/Time/Code/Vo）に沿った候補キーで防御的にマップする。
+    価格・数量のキーが全て外れた行は None（歩み値として無意味）。
+    """
+
+    code = _code(row)
+    trade_date = _text(row, "Date")
+    tick_time = _text(row, "Time") or _text(row, "T")
+    if not code or not trade_date or not tick_time:
+        return None
+    price = _first_num(row, ("P", "Price", "Pr", "C"))
+    volume = _first_num(row, ("Vo", "V", "Size", "Qty"))
+    if price is None:
+        return None
+    return {
+        "canonical_code": code,
+        "trade_date": trade_date,
+        "tick_time": tick_time,
+        "price": price,
+        "volume": volume,
+    }
+
+
 def map_trading_day(row: Mapping[str, Any]) -> dict[str, Any] | None:
     date = _text(row, "Date")
     division = _text(row, "HolDiv")

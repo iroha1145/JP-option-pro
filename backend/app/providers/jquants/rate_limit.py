@@ -69,28 +69,34 @@ class MinuteRateLimiter:
 
 
 class JQuantsRateLimits:
-    """The two documented buckets: global and financial endpoints."""
+    """The documented buckets: global, financial, and intraday add-ons."""
 
     def __init__(
         self,
         *,
         global_per_minute: int = 100,
         fins_per_minute: int = 50,
+        addon_per_minute: int = 50,
         clock=time.monotonic,
     ) -> None:
         self.global_bucket = MinuteRateLimiter(global_per_minute, clock=clock)
         self.fins_bucket = MinuteRateLimiter(fins_per_minute, clock=clock)
+        # 分足（OHLC-Min）とティック（Tick）のアドオンは各 60/min の独立枠。
+        self.addon_bucket = MinuteRateLimiter(addon_per_minute, clock=clock)
 
     def acquire_for_path(self, path: str, *, sleep=time.sleep) -> None:
         # /fins/summary and /fins/details carry their own 60/min cap; the
         # request still counts against the global bucket as well.
         if path.startswith("/fins/"):
             self.fins_bucket.acquire(sleep=sleep)
+        if path.startswith("/equities/bars/minute") or path.startswith("/equities/trades"):
+            self.addon_bucket.acquire(sleep=sleep)
         self.global_bucket.acquire(sleep=sleep)
 
     def block_all_for(self, seconds: float) -> None:
         self.global_bucket.block_for(seconds)
         self.fins_bucket.block_for(seconds)
+        self.addon_bucket.block_for(seconds)
 
 
 __all__ = ["JQuantsRateLimits", "MinuteRateLimiter"]
