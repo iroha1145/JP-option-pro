@@ -33,6 +33,8 @@ TASK_FINS_EVENING = "fins_evening_sync"
 TASK_FINS_LATE = "fins_late_sync"
 TASK_BACKFILL = "history_backfill"
 TASK_MAINTENANCE = "maintenance"
+TASK_NEWS_SYNC = "news_sync"
+TASK_AI_JOBS = "ai_jobs"
 
 DEFAULT_TASK_NAMES: tuple[str, ...] = (
     TASK_CALENDAR_MASTER,
@@ -41,6 +43,8 @@ DEFAULT_TASK_NAMES: tuple[str, ...] = (
     TASK_FINS_LATE,
     TASK_BACKFILL,
     TASK_MAINTENANCE,
+    TASK_NEWS_SYNC,
+    TASK_AI_JOBS,
 )
 
 MANUAL_ACTION_TYPES: tuple[str, ...] = (
@@ -49,6 +53,7 @@ MANUAL_ACTION_TYPES: tuple[str, ...] = (
     "fins_sync",
     "backfill_step",
     "radar_refresh",
+    "news_sync",
 )
 
 _BACKFILL_DATASET_ORDER = (
@@ -260,6 +265,73 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             payload = {**payload, "__radar_only": True}
         return post_close(payload)
 
+    def news_sync_task(_payload: dict[str, Any] | None) -> TaskResult:
+        from app.repositories.news_store import NewsStore
+        from app.repositories.app_store import AppStore
+        from app.services.ai_jobs.store import AIJobStore
+        from app.services.news.service import enqueue_ai_jobs, rebuild_entity_catalog, sync_feeds_once
+        from app.services.radar.lifecycle import TERMINAL_STATES as RADAR_TERMINAL
+
+        if config.features.news_mode == "off":
+            return TaskResult(status="skipped", next_delay_seconds=1800.0, details={"reason": "news_mode_off"})
+        store = NewsStore(context.paths.news_db)
+        store.initialize()
+        rebuild_entity_catalog(context.repository, store)
+        watchlist: set[str] = set()
+        app_db = AppStore(context.paths.app_db, read_only=True)
+        if app_db.exists():
+            try:
+                watchlist = set(app_db.watchlist_codes())
+            except Exception:  # noqa: BLE001 — 自選が読めなくても同期は続行
+                watchlist = set()
+        radar_codes = {
+            event["canonical_code"]
+            for event in context.repository.open_radar_events(terminal_states=sorted(RADAR_TERMINAL))
+        }
+        summary = sync_feeds_once(
+            core=context.repository, store=store,
+            watchlist_codes=watchlist, radar_codes=radar_codes,
+        )
+        if config.features.news_mode == "scheduled" and context.settings.openai_configured():
+            jobs = AIJobStore(context.paths.ai_jobs_db)
+            jobs.initialize()
+            summary["ai_enqueue"] = enqueue_ai_jobs(
+                store=store, jobs=jobs,
+                daily_token_limit=config.ai.daily_token_limit,
+                max_items=config.news.max_ai_items_per_run,
+            )
+        cutoff_days = context.config.storage.news_retention_days
+        from datetime import datetime, timedelta, timezone
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=cutoff_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        summary["pruned"] = store.prune_older_than(cutoff)
+        return TaskResult(
+            status="completed", next_delay_seconds=float(config.news.sync_seconds), details=summary
+        )
+
+    def ai_jobs_task(_payload: dict[str, Any] | None) -> TaskResult:
+        from app.repositories.news_store import NewsStore
+        from app.services.ai_jobs.runtime import OpenAIRuntime
+        from app.services.ai_jobs.store import AIJobStore
+        from app.services.news.service import process_ai_jobs_once
+
+        if config.features.news_mode != "scheduled":
+            return TaskResult(status="skipped", next_delay_seconds=1800.0, details={"reason": "news_mode_not_scheduled"})
+        if not context.settings.openai_configured():
+            return TaskResult(status="skipped", next_delay_seconds=1800.0, details={"reason": "openai_api_key_not_configured"})
+        jobs = AIJobStore(context.paths.ai_jobs_db)
+        jobs.initialize()
+        store = NewsStore(context.paths.news_db)
+        store.initialize()
+        runtime = OpenAIRuntime(context.settings.OPENAI_API_KEY.get_secret_value())
+        outcome = process_ai_jobs_once(store=store, jobs=jobs, runtime=runtime)
+        busy = outcome.get("submitted") or outcome.get("pending")
+        return TaskResult(
+            status="completed",
+            next_delay_seconds=5.0 if busy else 30.0,
+            details={**outcome, "queue": jobs.status_counts()},
+        )
+
     return [
         TaskSpec(
             name=TASK_CALENDAR_MASTER,
@@ -288,6 +360,13 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             action_types=("backfill_step",),
         ),
         TaskSpec(name=TASK_MAINTENANCE, run=maintenance, initial_delay_seconds=300.0),
+        TaskSpec(
+            name=TASK_NEWS_SYNC,
+            run=news_sync_task,
+            initial_delay_seconds=45.0,
+            action_types=("news_sync",),
+        ),
+        TaskSpec(name=TASK_AI_JOBS, run=ai_jobs_task, initial_delay_seconds=60.0),
     ]
 
 
