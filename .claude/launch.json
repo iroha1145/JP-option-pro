@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "optix-japan",
+      "runtimeExecutable": "/Users/admin/Downloads/Claude/JP-option-pro/scripts/dev-server.sh",
+      "runtimeArgs": [],
+      "port": 2100
+    }
+  ]
+}
