@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+machine.env
+secrets.env
+config/secrets.env
+data/
+*.db
+*.db-wal
+*.db-shm
+frontend-src/node_modules/
+frontend-src/dist/
+frontend-src/test-results/
+.pytest_cache/
+.DS_Store

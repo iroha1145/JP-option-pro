@@ -1,0 +1,48 @@
+# Optix Japan — オーナー設定（git 管理; 秘密情報は secrets.env へ）
+
+[access]
+# private_network: 承認済みプライベート CIDR からのアクセスのみ（Cookie 不要）
+# password: APP_PASSWORD_HASH による単一オーナーセッション（HTTPS 必須）
+mode = "private_network"
+allowed_private_cidrs = [
+  "127.0.0.0/8",
+  "10.0.0.0/8",
+  "172.16.0.0/12",
+  "192.168.0.0/16",
+  "::1/128",
+]
+
+[features]
+radar_enabled = true
+# off | read | scheduled — ニュース同期と AI ジョブ（フェーズ5）
+news_mode = "off"
+
+[ai]
+daily_token_limit = 8000000
+cooldown_seconds = 20
+max_queued = 200
+
+[sync]
+backfill_years = 10
+daily_batch_time_jst = "17:00"
+fins_evening_time_jst = "18:40"
+fins_late_time_jst = "01:10"
+
+[radar]
+enabled = true
+market_codes = ["0111", "0112", "0113"]
+min_avg_turnover_jpy = 100000000.0
+min_listed_days = 120
+lookback_days = 320
+expiry_days = 40
+max_events_per_scan = 400
+
+[news]
+sync_seconds = 900
+window_hours = 72
+max_ai_items_per_run = 12
+feed_urls = []
+
+[storage]
+backup_keep = 7
+news_retention_days = 30
