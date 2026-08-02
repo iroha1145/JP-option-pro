@@ -9,9 +9,19 @@ from __future__ import annotations
 from typing import Any
 
 from app.domain.constants import HOME_INDEX_CODES, INDEX_CODES, SECTOR33, TOPIX_INDEX_CODE
+from app.domain.symbols import display_code
 from app.repositories.core import CoreRepository
 
 MARKET_OVERVIEW_VERSION = "jp-market-v1"
+SECTOR_MEMBERS_VERSION = "jp-sector-members-v1"
+
+# 「人気（最も注目されている）」の並び順は許可制。ユーザー文字列は SQL に触れない。
+SECTOR_MEMBER_SORTS: dict[str, str] = {
+    "turnover": "turnover_value DESC",       # 売買代金（絶対額）
+    "heat": "turnover_ratio DESC",           # 出来高倍率（20日平均比＝注目度の急変）
+    "change": "return_1d DESC",              # 当日騰落率
+}
+SECTOR_MEMBERS_DEFAULT_LIMIT = 12
 
 
 def _index_summary(repository: CoreRepository, index_code: str) -> dict[str, Any] | None:
@@ -142,4 +152,96 @@ def market_overview(repository: CoreRepository) -> dict[str, Any]:
     }
 
 
-__all__ = ["MARKET_OVERVIEW_VERSION", "market_overview"]
+def sector_members(
+    repository: CoreRepository,
+    *,
+    sector33_code: str,
+    sort: str = "turnover",
+    limit: int = SECTOR_MEMBERS_DEFAULT_LIMIT,
+) -> dict[str, Any] | None:
+    """業種の「人気銘柄」断面。未知の業種コードは None（API が 404 にする）。
+
+    オーバービューに 33 業種 × N 銘柄を積むとペイロードが数倍になるため、
+    選択された業種だけをオンデマンドで返す（米版 IV ランキングと同じ形）。
+    """
+
+    if sector33_code not in SECTOR33:
+        return None
+    order_sql = SECTOR_MEMBER_SORTS.get(sort) or SECTOR_MEMBER_SORTS["turnover"]
+    trade_date = repository.screener_trade_date()
+    if trade_date is None:
+        return {
+            "version": SECTOR_MEMBERS_VERSION,
+            "sector33_code": sector33_code,
+            "sector33_name": SECTOR33[sector33_code],
+            "trade_date": None,
+            "sort": sort,
+            "member_count": 0,
+            "sector_turnover_value": None,
+            "rows": [],
+        }
+    # where_sql は固定文字列 + バインド変数のみ（ユーザー入力は結合しない）。
+    rows, total = repository.screener_query(
+        where_sql="sector33_code = ?",
+        params=[sector33_code],
+        order_sql=f"{order_sql}, canonical_code ASC",
+        limit=max(1, min(50, int(limit))),
+        offset=0,
+    )
+    sector_turnover = _sector_turnover_total(repository, sector33_code)
+    items = []
+    for row in rows:
+        metrics = row.get("metrics") or {}
+        turnover = row.get("turnover_value")
+        items.append(
+            {
+                "canonical_code": row["canonical_code"],
+                "display_code": display_code(row["canonical_code"]),
+                "name_ja": metrics.get("name_ja"),
+                "market_name": metrics.get("market_name"),
+                "radar_state": metrics.get("radar_state"),
+                "close": row.get("close"),
+                "return_1d": row.get("return_1d"),
+                "return_20d": row.get("return_20d"),
+                "turnover_value": turnover,
+                "turnover_ratio": row.get("turnover_ratio"),
+                "avg_turnover_20d": row.get("avg_turnover_20d"),
+                "pct_from_high_252": row.get("pct_from_high_252"),
+                "rs_sector_63d": row.get("rs_sector_63d"),
+                # 業種売買代金に占めるシェア（「その業種で今日どれだけ注目されたか」）
+                "turnover_share": (
+                    (turnover / sector_turnover) if turnover and sector_turnover else None
+                ),
+            }
+        )
+    return {
+        "version": SECTOR_MEMBERS_VERSION,
+        "sector33_code": sector33_code,
+        "sector33_name": SECTOR33[sector33_code],
+        "trade_date": trade_date,
+        "sort": sort,
+        "member_count": total,
+        "sector_turnover_value": sector_turnover,
+        "rows": items,
+    }
+
+
+def _sector_turnover_total(repository: CoreRepository, sector33_code: str) -> float | None:
+    rows, _total = repository.screener_query(
+        where_sql="sector33_code = ?",
+        params=[sector33_code],
+        order_sql="canonical_code ASC",
+        limit=10000,
+        offset=0,
+    )
+    total = sum(float(row["turnover_value"]) for row in rows if row.get("turnover_value"))
+    return total or None
+
+
+__all__ = [
+    "MARKET_OVERVIEW_VERSION",
+    "SECTOR_MEMBERS_VERSION",
+    "SECTOR_MEMBER_SORTS",
+    "market_overview",
+    "sector_members",
+]

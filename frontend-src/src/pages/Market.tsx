@@ -1,6 +1,6 @@
 /** 日本市场页：指数走势 + 全部33业种强弱 + 广度与空卖。 */
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { marketApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { remoteState } from '@/hooks/remoteState';
@@ -13,15 +13,50 @@ import { SkeletonCard } from '@/components/shared/Skeleton';
 import ReactECharts from '@/components/charts/ReactECharts';
 import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart';
 import { CodeCell, DataThrough } from '@/components/domain';
+import HeatMatrix, { HeatMatrixSkeleton, metricValue, type HeatMetric } from '@/components/sectors/HeatMatrix';
+import SectorMembersPanel from '@/components/sectors/SectorMembersPanel';
 import { t } from '@/i18n/core';
 import { fmtPct, fmtPrice, fmtYenCompact } from '@/lib/format';
-import type { SectorStrength } from '@/api/types';
+import type { SectorMemberSort, SectorStrength } from '@/api/types';
 
 export default function Market() {
   const market = usePolling(() => marketApi.overview(), 120_000);
   const [indexCode, setIndexCode] = useState('0000');
   const series = usePolling(() => marketApi.indexSeries(indexCode, 250), null, [indexCode]);
   const state = remoteState(market, (d) => d.indices.length === 0);
+
+  const [heatMetric, setHeatMetric] = useState<HeatMetric>('r1');
+  const [sectorView, setSectorView] = useState<'heat' | 'list'>('heat');
+  const [selectedSector, setSelectedSector] = useState<string | null>(null);
+  const [memberSort, setMemberSort] = useState<SectorMemberSort>('turnover');
+
+  /* 砖块按当前口径排序：热力图第一眼要看到最强/最弱聚在两端 */
+  const sectorsSorted = useMemo(() => {
+    const rows = market.data?.sectors ?? [];
+    return [...rows].sort((a, b) => {
+      const va = metricValue(a, heatMetric);
+      const vb = metricValue(b, heatMetric);
+      if (va === null) return 1;
+      if (vb === null) return -1;
+      return vb - va;
+    });
+  }, [market.data, heatMetric]);
+
+  /* 未选板块时默认落在当前口径最强的那个（面板永远有内容，不是空壳） */
+  useEffect(() => {
+    if (selectedSector === null && sectorsSorted.length > 0) {
+      setSelectedSector(sectorsSorted[0].sector33_code);
+    }
+  }, [selectedSector, sectorsSorted]);
+
+  const members = usePolling(
+    () =>
+      selectedSector
+        ? marketApi.sectorMembers(selectedSector, memberSort)
+        : Promise.resolve(null),
+    null,
+    [selectedSector, memberSort],
+  );
 
   const sectorColumns: Column<SectorStrength>[] = [
     {
@@ -151,23 +186,66 @@ export default function Market() {
             </section>
           </div>
 
+          {/* 板块透视：热力砖（当日/近20日/今日领涨同砖）+ 列表视图 */}
           <section className="card-surface rounded-lg p-4">
             <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-h3 text-ink-900">{t('行业强弱')}</h2>
-              <span className="text-caption text-ink-400">
-                {t('成交额')}: {fmtYenCompact(market.data?.breadth.total_turnover_value)} ·{' '}
-                {t('上涨')} {market.data?.breadth.advancers ?? '—'} / {t('下跌')}{' '}
-                {market.data?.breadth.decliners ?? '—'}
-              </span>
+              <div className="min-w-0">
+                <p className="eyebrow">SECTOR MATRIX · 33 業種</p>
+                <h2 className="mt-0.5 text-h3 text-ink-900">{t('板块透视')}</h2>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="hidden text-caption text-ink-400 lg:inline">
+                  {t('成交额')}: {fmtYenCompact(market.data?.breadth.total_turnover_value)} ·{' '}
+                  {t('上涨')} {market.data?.breadth.advancers ?? '—'} / {t('下跌')}{' '}
+                  {market.data?.breadth.decliners ?? '—'}
+                </span>
+                <Segmented<HeatMetric>
+                  options={[
+                    { value: 'r1', label: t('当日') },
+                    { value: 'r20', label: t('近20日') },
+                  ]}
+                  value={heatMetric}
+                  onChange={setHeatMetric}
+                />
+                <Segmented<'heat' | 'list'>
+                  options={[
+                    { value: 'heat', label: t('热力') },
+                    { value: 'list', label: t('列表') },
+                  ]}
+                  value={sectorView}
+                  onChange={setSectorView}
+                />
+              </div>
             </header>
-            <DataTable
-              columns={sectorColumns}
-              rows={market.data?.sectors ?? []}
-              rowKey={(row) => row.sector33_code}
-              rowHeight={44}
-              defaultSort={{ key: 'r1', desc: true }}
-            />
+
+            {sectorsSorted.length === 0 ? (
+              <HeatMatrixSkeleton />
+            ) : sectorView === 'heat' ? (
+              <HeatMatrix
+                sectors={sectorsSorted}
+                metric={heatMetric}
+                selectedCode={selectedSector}
+                onSelect={setSelectedSector}
+              />
+            ) : (
+              <DataTable
+                columns={sectorColumns}
+                rows={sectorsSorted}
+                rowKey={(row) => row.sector33_code}
+                rowHeight={44}
+                defaultSort={{ key: heatMetric === 'r1' ? 'r1' : 'r20', desc: true }}
+                onRowClick={(row) => setSelectedSector(row.sector33_code)}
+              />
+            )}
           </section>
+
+          {/* 该板块最热门个股（美版此处是板块 IV 横截面排名） */}
+          <SectorMembersPanel
+            data={members.data ?? null}
+            loading={members.loading}
+            sort={memberSort}
+            onSortChange={setMemberSort}
+          />
         </>
       )}
     </div>

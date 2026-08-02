@@ -563,4 +563,24 @@ export const DICT: Record<string, [string, string]> = {
     'Fetch ticks for the latest trading day',
     '直近取引日のティックを取得',
   ],
+
+  /* ---- 第九轮：板块透视 ---- */
+  板块透视: ['Sector Matrix', 'セクター俯瞰'],
+  热力: ['Heat', 'ヒート'],
+  无领涨数据: ['No leader data', '値上がり上位なし'],
+  '{name}，当日 {r1}，近20日 {r20}': ['{name}, today {r1}, 20d {r20}', '{name}、当日 {r1}、20日 {r20}'],
+  板块最热门个股: ['Most active in sector', '業種の売買代金上位'],
+  量比: ['Vol ratio', '出来高倍率'],
+  涨幅: ['Change', '騰落率'],
+  份额: ['Share', 'シェア'],
+  该业种在当前断面没有可用个股: [
+    'No members available in this sector snapshot',
+    'この業種には利用可能な銘柄がありません',
+  ],
+  '量比=当日成交额/20日均额 · 份额=占本业种当日成交额比重': [
+    'Vol ratio = today turnover / 20d average · Share = of sector turnover today',
+    '出来高倍率=当日売買代金/20日平均 · シェア=当該業種の当日売買代金に占める割合',
+  ],
+  成交额份额: ['Turnover share', '売買代金シェア'],
+  '量比=当日成交额/20日均额': ['Vol ratio = today turnover / 20d average', '出来高倍率=当日売買代金/20日平均'],
 };

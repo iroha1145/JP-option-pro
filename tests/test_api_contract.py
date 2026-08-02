@@ -253,3 +253,28 @@ def test_stock_ticks_contract(client):
     assert body["reason"] in ("not_fetched", "plan_not_included")
     assert body["points"] == [] and body["tape"] == []
     assert {"availability", "trade_date", "tick_count"} <= set(body)
+
+
+def test_sector_members_contract(client):
+    """業種の人気銘柄断面: 許可制の並び順 + シェアが 0..1 に収まる。"""
+
+    overview = client.get("/api/market/overview").json()
+    assert overview["sectors"], "fixture should produce sectors"
+    code = overview["sectors"][0]["sector33_code"]
+
+    body = client.get(f"/api/market/sectors/{code}/members?sort=turnover&limit=5").json()
+    assert body["sector33_code"] == code
+    assert body["sector33_name"]
+    assert body["sort"] == "turnover"
+    assert len(body["rows"]) <= 5
+    for row in body["rows"]:
+        assert row["display_code"]
+        share = row["turnover_share"]
+        assert share is None or 0.0 <= share <= 1.0
+    # 売買代金降順（None は末尾）
+    turnovers = [row["turnover_value"] or 0.0 for row in body["rows"]]
+    assert turnovers == sorted(turnovers, reverse=True)
+
+    # 並び順は許可制 / 未知の業種は 404（9999「その他」は実在コードなので反例にならない）
+    assert client.get(f"/api/market/sectors/{code}/members?sort=drop%20table").status_code == 422
+    assert client.get("/api/market/sectors/0001/members").status_code == 404

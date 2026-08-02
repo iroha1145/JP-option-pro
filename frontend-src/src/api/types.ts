@@ -20,6 +20,37 @@ export interface SectorStrength {
   leaders: { canonical_code: string; name_ja: string | null; return_1d: number | null }[];
 }
 
+/** 板块最热门个股（美版「板块 IV 横截面排名」的日股替代） */
+export type SectorMemberSort = 'turnover' | 'heat' | 'change';
+
+export interface SectorMemberRow {
+  canonical_code: string;
+  display_code: string;
+  name_ja: string | null;
+  market_name: string | null;
+  radar_state: string | null;
+  close: number | null;
+  return_1d: number | null;
+  return_20d: number | null;
+  turnover_value: number | null;
+  turnover_ratio: number | null;
+  avg_turnover_20d: number | null;
+  pct_from_high_252: number | null;
+  rs_sector_63d: number | null;
+  turnover_share: number | null;
+}
+
+export interface SectorMembersView {
+  version: string;
+  sector33_code: string;
+  sector33_name: string;
+  trade_date: string | null;
+  sort: SectorMemberSort;
+  member_count: number;
+  sector_turnover_value: number | null;
+  rows: SectorMemberRow[];
+}
+
 export interface MarketOverview {
   version: string;
   data_through: string | null;
