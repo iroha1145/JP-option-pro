@@ -390,3 +390,124 @@ def test_nothing_to_do_is_not_reported_as_a_successful_fetch():
     ).read_text(encoding="utf-8")
     marker = 'return SyncResult(\n                    dataset=DATASET_SHORT_POSITIONS, status="up_to_date"'
     assert marker in source, "何もしていない日が ok を名乗っている"
+
+
+# ---------------------------------------------------------------------------
+# 6. 空売り残高の集計（合計に何を足すか）
+# ---------------------------------------------------------------------------
+
+
+def _sp(holder, calc, ratio, prev=None, disc=None):
+    return {
+        "holder_name": holder, "calculated_date": calc,
+        "disclosed_date": disc or calc, "short_position_ratio": ratio,
+        "previous_ratio": prev,
+    }
+
+
+def test_total_excludes_holders_who_fell_below_the_threshold():
+    """0.5% 割れの最終報告を合計に足さない。
+
+    3905 の実データで言うと Barclays 0.40%・Jump 0.42%・UBS 0.43%・
+    JPM 0.34%・Citigroup 0.49% … を足すと 4.64% になるが、これらは全て
+    「0.5% を割ったので以後報告しません」という最終報告で、実際の建玉は
+    その値以下のどこか（とっくにゼロかもしれない）。足すと居ない売り方を
+    数えることになる。
+    """
+
+    from app.services import short_interest as si
+
+    rows = [
+        _sp("モルガン", "2026-07-31", 0.0123),
+        _sp("Barclays", "2026-07-30", 0.0040, 0.0051),   # 義務消失
+        _sp("Jump", "2026-07-17", 0.0042, 0.0055),       # 義務消失
+        _sp("UBS", "2026-06-18", 0.0043),                # 義務消失（古い）
+        _sp("Nomura", "2025-11-07", 0.0),                # 解消
+    ]
+    summary = si.summarise(rows)
+    assert summary.reporting_total == pytest.approx(0.0123), "閾値割れを合計に混ぜている"
+    assert summary.reporting_holders == 1
+    assert summary.below_threshold_holders == 3
+    assert summary.closed_holders == 1
+
+
+def test_position_as_of_uses_the_last_report_before_the_date():
+    """残高報告はイベント駆動。その日の断面は存在しないので再構成する。"""
+
+    from app.services import short_interest as si
+
+    rows = [
+        _sp("A", "2026-07-31", 0.0123),
+        _sp("A", "2026-07-16", 0.0076),
+        _sp("B", "2026-07-10", 0.0060),
+    ]
+    at_month_end = si.positions_as_of(rows, "2026-07-31")
+    mid_july = si.positions_as_of(rows, "2026-07-20")
+    assert at_month_end["A"] == pytest.approx(0.0123)
+    assert mid_july["A"] == pytest.approx(0.0076), "その日より後の報告を使っている"
+    assert mid_july["B"] == pytest.approx(0.0060)
+
+
+def test_corrections_take_the_newer_disclosure_for_the_same_calc_date():
+    from app.services import short_interest as si
+
+    rows = [
+        _sp("A", "2026-07-31", 0.0100, disc="2026-08-03"),
+        _sp("A", "2026-07-31", 0.0123, disc="2026-08-04"),   # 訂正
+    ]
+    assert si.positions_as_of(rows)["A"] == pytest.approx(0.0123)
+
+
+def test_every_report_in_the_window_is_listed_not_aggregated():
+    """同じ保有者が窓の中で 3 回報告したら 3 行出す。
+
+    保有者単位で差し引きすると「いつ何が起きたか」が読めなくなる。
+    """
+
+    from app.services import short_interest as si
+
+    rows = [
+        _sp("A", "2026-07-30", 0.0040, 0.0051),
+        _sp("A", "2026-07-29", 0.0051, 0.0077),
+        _sp("A", "2026-07-23", 0.0077, 0.0089),
+        _sp("A", "2026-07-01", 0.0089, 0.0098),   # 窓の外
+    ]
+    changes = si.changes_within(rows, since="2026-07-20")
+    assert len(changes) == 3, "窓の中の報告を集約している"
+    assert [c["calculated_date"] for c in changes] == [
+        "2026-07-30", "2026-07-29", "2026-07-23",
+    ]
+    assert changes[0]["delta"] == pytest.approx(-0.0011)
+    assert changes[0]["kind"] == si.MOVE_BELOW_THRESHOLD
+
+
+def test_change_kinds_are_distinguished():
+    from app.services import short_interest as si
+
+    rows = [
+        _sp("new", "2026-07-30", 0.0060, 0.0),          # 新規
+        _sp("closed", "2026-07-30", 0.0, 0.0057),       # 解消
+        _sp("down", "2026-07-30", 0.0070, 0.0090),      # 減
+        _sp("up", "2026-07-30", 0.0090, 0.0070),        # 増
+        _sp("below", "2026-07-30", 0.0040, 0.0051),     # 義務消失
+    ]
+    kinds = {c["holder_name"]: c["kind"] for c in si.changes_within(rows, since="2026-07-01")}
+    assert kinds["new"] == si.MOVE_NEW
+    assert kinds["closed"] == si.MOVE_CLOSED
+    assert kinds["down"] == si.MOVE_DECREASED
+    assert kinds["up"] == si.MOVE_INCREASED
+    assert kinds["below"] == si.MOVE_BELOW_THRESHOLD
+
+
+def test_window_change_compares_reporting_totals_only():
+    from app.services import short_interest as si
+
+    rows = [
+        _sp("A", "2026-07-31", 0.0123),      # 新規（窓の中）
+        _sp("B", "2026-07-30", 0.0040, 0.0051),  # 義務消失（窓の中）
+        _sp("B", "2026-07-10", 0.0051),      # 窓の外の状態
+    ]
+    summary = si.summarise(rows, baseline_date="2026-07-20")
+    assert summary.baseline_total == pytest.approx(0.0051)   # B のみ報告義務中
+    assert summary.reporting_total == pytest.approx(0.0123)  # A のみ報告義務中
+    assert summary.change == pytest.approx(0.0072)

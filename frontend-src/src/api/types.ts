@@ -210,6 +210,7 @@ export interface StockOverview {
   margin_interest: MarginInterestRow[];
   margin_alerts: Record<string, unknown>[];
   short_positions: ShortPositionRow[];
+  short_interest: ShortInterestSummary | null;
   radar_events: RadarEvent[];
   technical: TechnicalStructure | null;
 }
@@ -283,6 +284,34 @@ export interface MarginInterestRow {
   short_standardized: number | null;
   long_standardized: number | null;
   issue_type: string | null;
+}
+
+/** 空売り残高: 2週間の変化一覧 + 報告義務中の合計 */
+export interface ShortInterestChange {
+  holder_name: string | null;
+  calculated_date: string;
+  disclosed_date: string | null;
+  ratio: number | null;
+  previous_ratio: number | null;
+  delta: number | null;
+  /** new | increased | decreased | below_threshold | closed */
+  kind: string;
+  state: string;
+}
+
+export interface ShortInterestSummary {
+  as_of: string | null;
+  baseline_date: string | null;
+  window_trading_days: number;
+  /** 報告義務が続いている保有者だけの合計。閾値割れの最終報告は含まない。 */
+  reporting_total: number | null;
+  reporting_holders: number;
+  below_threshold_holders: number;
+  closed_holders: number;
+  baseline_total: number | null;
+  change: number | null;
+  reporting_threshold: number;
+  changes: ShortInterestChange[];
 }
 
 export interface ShortPositionRow {
