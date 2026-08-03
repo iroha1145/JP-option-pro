@@ -956,4 +956,10 @@ export const DICT: Record<string, [string, string]> = {
     '1d = intraday, {n}-min delayed ({q}/{u} covered) · 20d = official daily {date}',
     '1日=ザラ場 {n}分遅延（{q}/{u} 銘柄カバー）· 20日=公式日足 {date}',
   ],
+  盘中站上枢轴: ['Above pivot now', '現在ピボット上'],
+  盘中价: ['Intraday', 'ザラ場値'],
+  '用延迟{n}分的盘中价与夜间枢轴比较': [
+    'Compares the {n}-min delayed price against last night\u2019s pivot',
+    '{n}分遅延のザラ場値を前夜のピボットと比較します',
+  ],
 };

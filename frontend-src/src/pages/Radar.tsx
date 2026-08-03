@@ -3,8 +3,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { radarApi, stocksApi, workerApi } from '@/api/modules';
+import { quotesApi, radarApi, stocksApi, workerApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
+import { cn } from '@/lib/utils';
 import { remoteState } from '@/hooks/remoteState';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
@@ -43,7 +44,18 @@ export default function Radar() {
     [group],
   );
   const state = remoteState(query, (d) => d.events.length === 0);
-  const events = query.data?.events ?? [];
+
+  /* 夜間断面に遅延気配を重ねる（再スキャンではない）。答えたい問いは
+     「昨夜の候補のうち、今ピボットを超えているのはどれか」。 */
+  const overlay = usePolling(() => quotesApi.overlay('radar', 200), 60_000, []);
+  const overlayRows = overlay.data?.enabled ? overlay.data.rows : {};
+  const [onlyAbovePivot, setOnlyAbovePivot] = useState(false);
+
+  const events = useMemo(() => {
+    const all = query.data?.events ?? [];
+    if (!onlyAbovePivot) return all;
+    return all.filter((event) => overlayRows[event.event_id]?.above_pivot);
+  }, [query.data, onlyAbovePivot, overlayRows]);
 
   // Lead = 明示選択 or 優先度トップ。フィルタ変更で選択が消えたら先頭へ戻す。
   const lead = useMemo(() => {
@@ -101,6 +113,23 @@ export default function Radar() {
           value={group}
           onChange={setGroup}
         />
+        {overlay.data?.enabled && (
+          <button
+            type="button"
+            onClick={() => setOnlyAbovePivot((v) => !v)}
+            className={cn(
+              'flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-caption transition-colors',
+              onlyAbovePivot
+                ? 'border-up-600/40 bg-up-50 text-up-700'
+                : 'border-line bg-card text-ink-600 hover:border-brand-400',
+            )}
+            title={t('用延迟{n}分的盘中价与夜间枢轴比较', { n: overlay.data?.delayed_minutes ?? 15 })}
+          >
+            <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
+            {t('盘中站上枢轴')}
+            <span className="font-mono tnum">{overlay.data?.above_pivot_count ?? 0}</span>
+          </button>
+        )}
         <Segmented<ViewMode>
           options={[
             { value: 'cards', label: t('卡片') },
@@ -131,6 +160,7 @@ export default function Radar() {
                   <EventCard
                     key={event.event_id}
                     event={event}
+                    live={overlayRows[event.event_id]}
                     onSelect={() => {
                       setLeadId(event.event_id);
                       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -317,9 +347,15 @@ function LeadChart({ bars, event }: { bars: StockBar[]; event: RadarEvent }) {
 
 /* ---------------- イベントカード ---------------- */
 
-function EventCard({ event, onSelect }: { event: RadarEvent; onSelect: () => void }) {
+function EventCard({ event, onSelect, live }: {
+  event: RadarEvent;
+  onSelect: () => void;
+  live?: { live_price: number; pivot_distance_pct?: number; above_pivot?: boolean };
+}) {
   const quality = event.scores?.breakout_quality?.score ?? null;
   const structure = event.structure ?? null;
+  /* 遅延気配なので必ず「遅延」と分かる見た目にする。スコアは夜間のまま。 */
+  const above = live?.above_pivot === true;
   return (
     <button
       type="button"
@@ -336,9 +372,24 @@ function EventCard({ event, onSelect }: { event: RadarEvent; onSelect: () => voi
         <SignalChip signal={event.signal_type} />
         <StateChip state={event.state} />
         {structure?.setup_label && <Tag tone="ai">{t(structure.setup_label)}</Tag>}
+        {above && (
+          <span className="inline-flex items-center gap-1 rounded-pill bg-up-50 px-2 py-0.5 text-micro font-medium text-up-700">
+            <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
+            {t('盘中站上枢轴')}
+          </span>
+        )}
       </div>
       <div className="grid grid-cols-3 gap-1 text-caption">
-        <CardFact label={t('收盘')} value={fmtPrice(event.snapshot.close as number | null)} />
+        {live ? (
+          <CardFact
+            label={t('盘中价')}
+            value={`${fmtPrice(live.live_price)}${
+              live.pivot_distance_pct != null ? ` (${fmtPct(live.pivot_distance_pct)})` : ''
+            }`}
+          />
+        ) : (
+          <CardFact label={t('收盘')} value={fmtPrice(event.snapshot.close as number | null)} />
+        )}
         <CardFact label={t('枢轴价')} value={fmtPrice(event.pivot_price)} />
         <CardFact label={t('成交额')} value={fmtYenCompact(event.snapshot.turnover_today as number | null)} />
       </div>

@@ -14,6 +14,7 @@ import type {
   MarketOverview,
   IntradayQuotesResponse,
   IntradaySectorsResponse,
+  IntradayOverlayResponse,
   SectorMemberSort,
   SectorMembersView,
   MarketRegime,
@@ -136,6 +137,12 @@ export const earningsApi = {
   },
   recent(days = 7): Promise<{ items: EarningsRecentItem[] }> {
     return days === 7 ? registryGet('/earnings/recent') : get(`/earnings/recent?${toQuery({ days })}`);
+  },
+};
+
+export const quotesApi = {
+  overlay(scope: 'radar' | 'screener', limit = 200): Promise<IntradayOverlayResponse> {
+    return get(`/quotes/overlay?${toQuery({ scope, limit })}`);
   },
 };
 

@@ -171,3 +171,73 @@ async def intraday_sectors() -> dict:
         }
 
     return await shared_cache.get_or_set("quotes:sectors:intraday", _SECTOR_CACHE_SECONDS, build)
+
+
+@router.get("/overlay")
+async def intraday_overlay_view(
+    scope: str = Query(default="radar", pattern="^(radar|screener)$"),
+    limit: int = Query(default=200, ge=1, le=1000),
+) -> dict:
+    """夜間断面 × 遅延気配のオーバーレイ（再スキャンではない）。
+
+    scope=radar    : 生存中のレーダー事件に「今ピボットの上か」を付ける
+    scope=screener : スクリーナー断面に「今の値段/高値からの距離」を付ける
+
+    スコアは書き換えない。出来高由来の指標にも触れない（場中の部分出来高を
+    1 日平均と比べるのは誤り）。
+    """
+
+    config = get_personal_config()
+    if not config.features.intraday_quotes:
+        return {**_disabled(), "scope": scope, "rows": []}
+    repository = core_repository()
+    if not repository.exists():
+        raise HTTPException(status_code=503, detail={"code": "data_not_initialized"})
+
+    from app.services.intraday_overlay import build_overlay, overlay_event
+    from app.services.radar.lifecycle import TERMINAL_STATES
+
+    if scope == "radar":
+        events = repository.open_radar_events(terminal_states=sorted(TERMINAL_STATES))[:limit]
+        codes = [event["canonical_code"] for event in events]
+    else:
+        rows, _total = repository.screener_query(
+            where_sql="1=1", params=[], order_sql="canonical_code ASC", limit=limit, offset=0
+        )
+        codes = [row["canonical_code"] for row in rows]
+
+    def _collect() -> dict:
+        provider = YahooQuoteProvider(max_workers=6)
+        found: dict = {}
+        for start in range(0, len(codes), 60):
+            found.update(provider.quotes_for_codes(codes[start : start + 60]))
+        return found
+
+    cache_key = f"quotes:overlay:{scope}:{limit}"
+
+    async def build() -> dict:
+        quotes = await asyncio.to_thread(_collect)
+        if scope == "radar":
+            packs = {}
+            for event in events:
+                quote = quotes.get(event["canonical_code"])
+                pack = overlay_event(event, getattr(quote, "price", None) if quote else None)
+                if pack is not None:
+                    packs[event["event_id"]] = pack
+            above = sum(1 for pack in packs.values() if pack.get("above_pivot"))
+            return {
+                "version": QUOTES_VERSION, "enabled": True, "scope": scope,
+                "source": QUOTE_SOURCE, "delayed": True, "delayed_minutes": 15,
+                "requested": len(events), "quoted": len(packs),
+                "above_pivot_count": above,
+                "rows": packs,
+            }
+        packs = build_overlay(rows, quotes)
+        return {
+            "version": QUOTES_VERSION, "enabled": True, "scope": scope,
+            "source": QUOTE_SOURCE, "delayed": True, "delayed_minutes": 15,
+            "requested": len(rows), "quoted": len(packs),
+            "rows": packs,
+        }
+
+    return await shared_cache.get_or_set(cache_key, _CACHE_SECONDS, build)

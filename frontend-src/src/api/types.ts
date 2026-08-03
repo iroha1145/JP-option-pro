@@ -83,6 +83,26 @@ export interface IntradaySectorsResponse {
   sectors: { sector33_code: string; sector33_name: string; median_return_1d: number; advancers_share: number; covered: number }[];
 }
 
+/** 夜間断面 × 遅延気配のオーバーレイ（再スキャンではない） */
+export interface IntradayOverlayRow {
+  live_price: number;
+  pivot_price?: number;
+  pivot_distance_pct?: number;
+  above_pivot?: boolean;
+  live_change_pct?: number;
+  live_pct_from_high_252?: number | null;
+}
+
+export interface IntradayOverlayResponse {
+  enabled: boolean;
+  scope: 'radar' | 'screener';
+  delayed_minutes?: number;
+  requested?: number;
+  quoted?: number;
+  above_pivot_count?: number;
+  rows: Record<string, IntradayOverlayRow>;
+}
+
 export interface MarketOverview {
   version: string;
   data_through: string | null;
