@@ -20,7 +20,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from app.api.deps import core_repository
 from app.domain.symbols import display_code, normalize_input_code
 from app.services.short_monitor import explain
-from app.services.short_monitor.scoring import SCORE_VALIDATED, SCORE_VERSION
+from app.services.short_monitor.scoring import SCORE_VALIDATED, SCORE_VERSION, VALIDATION
 from app.services.short_monitor.snapshot import SNAPSHOT_VERSION
 from app.services.short_monitor.states import (
     GATES_VALIDATED,
@@ -188,8 +188,10 @@ def overview(request: Request, response: Response, date: str | None = Query(defa
         "note": DISCLOSURE_NOTE,
         "algorithm_version": SNAPSHOT_VERSION,
         "score_version": SCORE_VERSION,
-        # 未検証であることを API 自身が名乗る。画面はこれを見て表示を変える。
+        # 検証の状況を API 自身が名乗る。「まだやっていない」と「やったが
+        # 通らなかった」は別のことなので、結果も一緒に返す。
         "validated": {"gates": GATES_VALIDATED, "score": SCORE_VALIDATED},
+        "validation": VALIDATION,
         "api_version": SHORT_MONITOR_API_VERSION,
     }
 
@@ -405,6 +407,7 @@ def status() -> dict:
         "algorithm_version": SNAPSHOT_VERSION,
         "score_version": SCORE_VERSION,
         "validated": {"gates": GATES_VALIDATED, "score": SCORE_VALIDATED},
+        "validation": VALIDATION,
         "note": DISCLOSURE_NOTE,
     }
 

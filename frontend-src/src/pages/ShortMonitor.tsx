@@ -94,6 +94,9 @@ export default function ShortMonitor() {
   }, [view, minConfidence]);
 
   const activeView = useMemo(() => VIEWS.find((v) => v.key === view) ?? VIEWS[0], [view]);
+  // 「まだ検証していない」と「検証したが通らなかった」を区別する。
+  // 通らなかったのに「未検証」と出し続けるのは、事実を弱めて伝えること。
+  const validation = overview?.validation;
   const unvalidated = overview?.validated && !overview.validated.score;
 
   return (
@@ -112,11 +115,16 @@ export default function ShortMonitor() {
 
       {overview && <OverviewStrip overview={overview} />}
 
-      {unvalidated && (
+      {validation?.status === 'failed' ? (
+        <p className="rounded-md border border-warn-200 bg-warn-50 px-3 py-2 text-caption text-warn-700">
+          {validation.summary}
+          {validation.run ? `（${validation.run}，${validation.signals ?? 0} 个信号，${validation.windows ?? 0} 个走步窗口）` : ''}
+        </p>
+      ) : unvalidated ? (
         <p className="rounded-md border border-warn-200 bg-warn-50 px-3 py-2 text-caption text-warn-700">
           {t('当前门槛与权重为初始参数，尚未通过历史验证，仅作研究排序使用。')}
         </p>
-      )}
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-1.5">
         {VIEWS.map((item) => (

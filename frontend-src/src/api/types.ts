@@ -1009,6 +1009,15 @@ export interface ShortMonitorOverview {
   score_version?: string;
   /** 门槛与权重是否已通过历史验证。未验证时界面必须说出来。 */
   validated?: { gates: boolean; score: boolean };
+  /** 验证的**结果**。「还没验证」和「验证过但没通过」是两回事。 */
+  validation?: {
+    status: string;
+    run?: string;
+    signals?: number;
+    windows?: number;
+    summary: string;
+    document?: string;
+  };
 }
 
 export interface ShortMonitorRankings {

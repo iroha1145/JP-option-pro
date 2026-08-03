@@ -236,3 +236,19 @@ def test_explanation_row_count_matches_the_summed_ratio():
     assert "报告义务中的机构 1 家" in joined
     assert "1423 个交易日之前" in joined
     assert "未计入合计" in joined
+
+
+def test_the_api_says_the_validation_failed_not_that_it_never_ran(client):
+    """「まだ検証していない」と「検証したが通らなかった」は別のこと。
+
+    通らなかったのに `未検証` と出し続けるのは、事実を弱めて伝えることになる。
+    """
+
+    payload = client.get("/api/short-monitor/overview").json()
+    assert payload["validated"]["score"] is False
+    assert payload["validation"]["status"] == "failed"
+    assert payload["validation"]["signals"] > 0
+    assert "跑输" in payload["validation"]["summary"]
+
+    status = client.get("/api/short-monitor/status").json()
+    assert status["validation"]["status"] == "failed"

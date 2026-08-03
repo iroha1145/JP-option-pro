@@ -1,0 +1,1 @@
+import{j as e,c as r,t as s}from"./index-DsyP_sgf.js";function a({className:t,text:n=s("行情为延迟数据 · 仅供研究参考")}){return e.jsxs("p",{className:r("flex items-center gap-1.5 border-t border-line pt-3 text-micro text-ink-400",t),children:[e.jsx("span",{children:n}),e.jsx("span",{className:"text-[8px] leading-none text-ink-400","aria-hidden":"true",children:"◆"})]})}export{a as S};

@@ -16,6 +16,25 @@ SCORE_VERSION = "sbscore-v1"
 #: 歴史検証を通っていないので、影子評分としてしか使わない。
 SCORE_VALIDATED = False
 
+#: 検証の**結果**。「まだ検証していない」と「検証したが通らなかった」は別のこと。
+#: 通らなかったのに `未検証` と出し続けるのは、事実を弱めて伝えることになる。
+#:
+#: 2017-01〜2026-06、62,609 信号、16 窓（走步）。すべての状態がすべての保有
+#: 期間で TOPIX を下回り、重みが最大の `absorption`（0.30）が最悪だった。
+#: 詳細は docs/round-12-delivery.md §12。
+VALIDATION: dict[str, Any] = {
+    "status": "failed",
+    "run": "2017-01-01..2026-06-30",
+    "signals": 62609,
+    "windows": 16,
+    "summary": (
+        "首次走步验证结论为否定：所有状态在所有持有期都跑输 TOPIX，"
+        "权重最高的「卖压吸收」表现最差。分数目前只能作为描述性分类，"
+        "不能作为预期超额收益的排序。"
+    ),
+    "document": "docs/round-12-delivery.md#12",
+}
+
 #: 初期重み（合計 1.0）。検証前に「最適」と書かないこと。
 WEIGHTS: dict[str, float] = {
     "absorption": 0.30,
@@ -96,6 +115,7 @@ def monitor_priority(score: float | None, confidence: float | None) -> float | N
 __all__ = [
     "MAX_RISK_PENALTY",
     "SCORE_VALIDATED",
+    "VALIDATION",
     "SCORE_VERSION",
     "WEIGHTS",
     "behavior_score",
