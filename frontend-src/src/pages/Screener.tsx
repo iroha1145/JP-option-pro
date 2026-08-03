@@ -8,7 +8,7 @@
  * 无「客户端条件只作用于前 N 名」问题；新闻摘要一次批量取回。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { newsApi, strengthApi, type StrengthScanParams } from '@/api/modules';
+import { newsApi, quotesApi, strengthApi, type StrengthScanParams } from '@/api/modules';
 import { ApiError } from '@/api/client';
 import type { StrengthProfilesMeta, StrengthScanResponse, StrengthRow } from '@/api/types';
 import { useAccess } from '@/hooks/useAccess';
@@ -40,6 +40,8 @@ import {
   type TierFilter,
 } from '@/components/screener/types';
 import { t } from '@/i18n/core';
+import { usePolling } from '@/hooks/usePolling';
+import { quoteSourceLabel } from '@/lib/quoteSource';
 import { fmtYenCompact } from '@/lib/format';
 
 const PAGE_SIZE = 20;
@@ -178,8 +180,27 @@ export default function Screener() {
     [applied, runScan],
   );
 
+  /* ---------------- 盘中叠加（表示専用・スコアには入らない） ----------------
+     再スキャンではない。夜間に確定した断面はそのままに、「今の値段が
+     どこにいるか」だけを重ねる。出来高由来の指標には触れない —— 場中の
+     部分出来高を 20 日平均と比べると、朝は全滅・大引け前は全通過になる。 */
+  const overlay = usePolling(() => quotesApi.overlay('screener', 200), 60_000, []);
+  const overlayRows = overlay.data?.rows ?? {};
+  const [onlyLiveUp, setOnlyLiveUp] = useState(false);
+
   /* ---------------- 排序（确定性 / 最新催化 / 影响力） ---------------- */
-  const rows = useMemo(() => response?.rows ?? [], [response]);
+  const allRows = useMemo(() => response?.rows ?? [], [response]);
+  const liveUpCount = useMemo(
+    () => allRows.filter((row) => (overlayRows[row.canonical_code]?.live_change_pct ?? 0) > 0).length,
+    [allRows, overlayRows],
+  );
+  const rows = useMemo(
+    () =>
+      onlyLiveUp
+        ? allRows.filter((row) => (overlayRows[row.canonical_code]?.live_change_pct ?? 0) > 0)
+        : allRows,
+    [allRows, onlyLiveUp, overlayRows],
+  );
   const sorted = useMemo(() => {
     const out = [...rows];
     const byScore = (a: StrengthRow, b: StrengthRow) =>
@@ -218,11 +239,11 @@ export default function Screener() {
   const tierCounts = tierCountsFromDistribution(response?.tier_distribution ?? null);
   const hitsByTier = useMemo(() => {
     const acc: Record<Tier, number> = { S: 0, A: 0, B: 0, C: 0, D: 0 };
-    rows.forEach((row) => {
+    allRows.forEach((row) => {
       if (row.ranking_score !== null) acc[tierOf(row.ranking_score)] += 1;
     });
     return acc;
-  }, [rows]);
+  }, [allRows]);
 
   const chips = useMemo(() => {
     const list: { key: string; label: string; onRemove: () => void }[] = [];
@@ -389,6 +410,28 @@ export default function Screener() {
                     {t('本次扫描失败，显示上次成功结果')}
                   </p>
                 )}
+                {/* 盘中叠加。分数と並び順は夜間の確定断面のまま —— ここで
+                    絞り込むのは「今の値段の位置」だけ（doc §八）。 */}
+                {overlay.data?.enabled && liveUpCount > 0 && (
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setOnlyLiveUp((prev) => !prev)}
+                      title={t('用{n}分延迟的盘中价筛选，分数与排序仍来自夜间官方数据', {
+                        n: overlay.data?.delayed_minutes ?? 15,
+                      })}
+                      className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-caption transition-colors duration-fast ${
+                        onlyLiveUp
+                          ? 'border-brand-400 bg-brand-50 text-brand-700'
+                          : 'border-line bg-card text-ink-600 hover:border-brand-400 hover:text-brand-600'
+                      }`}
+                    >
+                      <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
+                      {t('盘中上涨')} {liveUpCount}
+                    </button>
+                    <span className="text-micro text-ink-400">{quoteSourceLabel(overlay.data).text}</span>
+                  </div>
+                )}
                 <div className={scanState === 'scanning' ? 'hidden opacity-60 md:block' : 'hidden md:block'}>
                   <ResultTable
                     rows={pageRows}
@@ -403,6 +446,7 @@ export default function Screener() {
                     weights={familyWeights}
                     canManageWatchlist={canManageWatchlist}
                     animKey={animKey}
+                    overlay={overlayRows}
                   />
                 </div>
                 <div className={scanState === 'scanning' ? 'opacity-60 md:hidden' : 'md:hidden'}>
@@ -416,6 +460,7 @@ export default function Screener() {
                     canManageWatchlist={canManageWatchlist}
                     animKey={animKey}
                     page={safePage}
+                    overlay={overlayRows}
                   />
                   {totalPages > 1 && (
                     <div className="mt-4 flex items-center justify-center gap-2">

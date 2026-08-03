@@ -25,6 +25,8 @@ export interface ResultCardsProps {
   canManageWatchlist: boolean;
   animKey: string;
   page?: number;
+  /** 盘中叠加（表示専用）。夜間断面のスコアは書き換えない。 */
+  overlay?: Record<string, { live_price: number; live_change_pct?: number; live_pct_from_high_252?: number | null }>;
 }
 
 export default function ResultCards({
@@ -37,6 +39,7 @@ export default function ResultCards({
   canManageWatchlist,
   animKey,
   page = 1,
+  overlay,
 }: ResultCardsProps) {
   return (
     <div className="grid grid-cols-1 gap-3" key={animKey}>
@@ -117,7 +120,7 @@ export default function ResultCards({
                   transition={{ duration: 0.26, ease: EASE_PAPER }}
                   className="overflow-hidden"
                 >
-                  <RowExpansion row={row} weights={weights} canManageWatchlist={canManageWatchlist} />
+                  <RowExpansion row={row} weights={weights} canManageWatchlist={canManageWatchlist} live={overlay?.[row.canonical_code]} />
                 </motion.div>
               )}
             </AnimatePresence>

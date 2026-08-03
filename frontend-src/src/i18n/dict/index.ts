@@ -904,6 +904,11 @@ export const DICT: Record<string, [string, string]> = {
     'Market open · today’s data lands after the close',
     'ザラ場中 · 当日データは引け後に更新',
   ],
+  '盘中上涨': ['Up intraday', 'ザラ場で上昇'],
+  '用{n}分延迟的盘中价筛选，分数与排序仍来自夜间官方数据': [
+    'Filters on the {n}-min delayed price; scores and ranking still come from the official nightly data',
+    '{n}分遅延の気配で絞り込む。スコアと並び順は夜間の公式データのまま',
+  ],
   '原始分': ['Raw score', '素点'],
   '最终优先级': ['Final priority', '最終優先度'],
   '业种相对（20日）': ['Sector RS (20d)', '業種相対（20日）'],

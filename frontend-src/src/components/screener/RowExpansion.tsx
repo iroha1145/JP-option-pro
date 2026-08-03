@@ -26,11 +26,13 @@ function barClass(value: number): string {
 
 export interface RowExpansionProps {
   row: StrengthRow;
+  /** 盘中叠加。無ければ何も出さない（古い値で埋めない）。 */
+  live?: { live_price: number; live_change_pct?: number; live_pct_from_high_252?: number | null };
   weights: Record<string, number> | null;
   canManageWatchlist: boolean;
 }
 
-export default function RowExpansion({ row, weights, canManageWatchlist }: RowExpansionProps) {
+export default function RowExpansion({ row, weights, canManageWatchlist, live }: RowExpansionProps) {
   const [added, setAdded] = useState(false);
   const technicals = row.structure.technicals;
   const priceAction = row.structure.price_action;
@@ -180,6 +182,23 @@ export default function RowExpansion({ row, weights, canManageWatchlist }: RowEx
               {row.sector_rank_percentile !== null ? `${row.sector_rank_percentile.toFixed(1)}%` : '—'}
             </span>
           </div>
+          {live && (
+            <div className="flex items-center justify-between border-b border-line pb-2">
+              <span className="flex items-center gap-1 text-warn-700">
+                <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
+                {t('盘中价')}
+              </span>
+              <span className="font-mono text-ink-800 tnum">
+                {live.live_price.toLocaleString('ja-JP')}
+                {live.live_change_pct != null && (
+                  <span className={live.live_change_pct >= 0 ? 'ml-1 text-up-600' : 'ml-1 text-down-600'}>
+                    {live.live_change_pct >= 0 ? '+' : ''}
+                    {(live.live_change_pct * 100).toFixed(2)}%
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
           {/* 素点 → 減点 → 最終 を並べる。以前は減点だけ見えていて、
               それが順位に効いているのかが画面から読めなかった。 */}
           <div className="flex items-center justify-between">
