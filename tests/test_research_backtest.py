@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import pathlib
+
 import pytest
 
 from app.repositories.core import CoreRepository
@@ -423,3 +425,61 @@ def test_top_bottom_spread_is_none_when_either_end_is_underpowered():
         records, ("2026-01-01", "2026-01-31", "2026-02-01", "2026-02-28"), horizon=20
     )
     assert result.top_bottom_spread is None
+
+
+# ---------------------------------------------------------------------------
+# 8. 研究 API は読むだけ（ページ表示が履歴計算を起動しない）
+# ---------------------------------------------------------------------------
+
+
+def test_research_api_never_triggers_a_computation(tmp_path, monkeypatch):
+    """API から run を作れないこと。
+
+    ページを開くたびに数時間の履歴計算が走る、という事故を構造的に防ぐ
+    （doc §十一）。API モジュールは runner を import すらしない。
+    """
+
+    import app.api.research as research_api
+
+    source = pathlib.Path(research_api.__file__).read_text(encoding="utf-8")
+    assert "run_backtest" not in source, "API がバックテスト実行を参照している"
+    assert "evaluate_run" not in source
+    # 読み取り専用で開いていること
+    assert "mode=ro" in source and "query_only" in source
+
+
+def test_research_api_reports_missing_database_as_unavailable(tmp_path, monkeypatch):
+    import app.api.research as research_api
+    from fastapi import HTTPException
+
+    monkeypatch.setattr(research_api, "_db_path", lambda: tmp_path / "absent.db")
+    for call in (research_api.list_runs, research_api.get_report):
+        try:
+            call(20) if call is research_api.list_runs else call(None)
+        except HTTPException as error:
+            assert error.status_code == 503
+        else:
+            raise AssertionError("欠落を成功として返している")
+
+
+def test_research_api_distinguishes_running_from_missing(tmp_path, monkeypatch):
+    """走行中（レポート未確定）を 404 でも 200 でもなく 409 で返す。"""
+
+    import app.api.research as research_api
+    from fastapi import HTTPException
+
+    store = ResearchStore(tmp_path / "research.db")
+    store.initialize()
+    params = RunParams(start_date="2026-01-01", end_date="2026-02-01")
+    store.start_run(params.run_id(), params)          # 開始のみ、未完了
+
+    monkeypatch.setattr(research_api, "_db_path", lambda: tmp_path / "research.db")
+    runs = research_api.list_runs(limit=20)
+    assert runs["runs"][0]["complete"] is False
+    assert runs["runs"][0]["has_report"] is False
+    try:
+        research_api.get_report(run_id=params.run_id())
+    except HTTPException as error:
+        assert error.status_code == 409
+    else:
+        raise AssertionError("未完了のレポートを返している")

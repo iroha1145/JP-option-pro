@@ -862,3 +862,50 @@ export interface SettingsView {
   app_version: string;
   app_commit: string;
 }
+
+/** 走步検証レポート（読み取り専用・研究ページ用） */
+export interface ResearchBucket {
+  bucket: string;
+  samples: number;
+  median_return: number | null;
+  median_excess_topix: number | null;
+  hit_rate: number | null;
+  median_mfe: number | null;
+  median_mae: number | null;
+  target_before_stop: number | null;
+  /** 標本不足の層も返す。隠すと上位だけ綺麗に見えるため。 */
+  reliable: boolean;
+}
+
+export interface ResearchWindow {
+  train: [string, string];
+  test: [string, string];
+  horizon_trading_days: number;
+  samples: number;
+  buckets: ResearchBucket[];
+  deciles: ResearchBucket[];
+  monotonic: boolean | null;
+  decile_monotonic: boolean | null;
+  top_bottom_spread: number | null;
+}
+
+export interface ResearchReport {
+  run_id: string;
+  finished_at?: string | null;
+  score_version: string;
+  replay_version: string;
+  signals: number;
+  evaluation_dates: number;
+  windows: ResearchWindow[];
+  summary: {
+    windows: number;
+    windows_judged: number;
+    windows_monotonic: number;
+    windows_with_spread?: number;
+    windows_positive_spread?: number;
+    median_top_bottom_spread?: number | null;
+    verdict: 'monotonic' | 'weak' | 'not_monotonic' | 'insufficient_data';
+    note: string;
+  };
+  point_in_time_limits: string[];
+}

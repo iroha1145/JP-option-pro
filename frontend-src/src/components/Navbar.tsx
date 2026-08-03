@@ -18,6 +18,7 @@ export const NAV_ITEMS: { path: string; label: string; index: string }[] = [
   { path: '/earnings', label: '决算', index: '06' },
   { path: '/news', label: '新闻', index: '07' },
   { path: '/data-status', label: '数据', index: '08' },
+  { path: '/research', label: '验证', index: '09' },
 ];
 
 export default function Navbar() {
