@@ -7,7 +7,7 @@ sync for the same date set must be a no-op apart from ``ingested_at``.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -769,6 +769,315 @@ class CoreRepository(SQLiteRepository):
                 (canonical_code, int(limit)),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def iter_short_positions_by_code(self) -> Iterator[tuple[str, list[dict[str, Any]]]]:
+        """全銘柄の空売り残高報告を **銘柄ごとにまとめて** 流す。
+
+        イベント導出は「初出か再登場か」を判定するために、その銘柄の履歴を
+        最初から見る必要がある。銘柄ごとに投げ直すと 4,400 回のクエリになるので、
+        1 本の順序付きスキャンで区切る。
+        """
+
+        with self.read() as connection:
+            cursor = connection.execute(
+                "SELECT * FROM short_positions "
+                "ORDER BY canonical_code, disclosed_date, calculated_date, holder_name"
+            )
+            current: str | None = None
+            batch: list[dict[str, Any]] = []
+            for row in cursor:
+                code = row["canonical_code"]
+                if current is not None and code != current:
+                    yield current, batch
+                    batch = []
+                current = code
+                batch.append(dict(row))
+            if current is not None and batch:
+                yield current, batch
+
+    def latest_short_position_date(self) -> str | None:
+        with self.read() as connection:
+            row = connection.execute("SELECT MAX(disclosed_date) FROM short_positions").fetchone()
+        return row[0] if row and row[0] else None
+
+    # ------------------------------------------------------------------
+    # 機関空売り行動モニター
+    # ------------------------------------------------------------------
+
+    _INSTITUTION_COLUMNS = (
+        "legal_id", "display_name", "normalized_name", "group_id", "group_name",
+        "country_hint", "first_seen_date", "last_seen_date", "report_count", "updated_at",
+    )
+    _ALIAS_COLUMNS = (
+        "raw_name", "legal_id", "match_kind", "confidence", "raw_address",
+        "manager_name", "updated_at",
+    )
+    _EVENT_COLUMNS = (
+        "event_id", "canonical_code", "legal_id", "group_id", "raw_holder_name",
+        "position_date", "published_date", "effective_trade_date", "short_ratio",
+        "short_shares", "previous_ratio", "previous_report_date", "ratio_delta",
+        "shares_delta", "event_type", "visibility_status", "correction_status",
+        "is_hedge_disclosed", "mapping_confidence", "algorithm_version", "ingested_at",
+    )
+    _LAST_KNOWN_COLUMNS = (
+        "canonical_code", "legal_id", "group_id", "last_reported_ratio",
+        "last_reported_shares", "last_position_date", "last_published_date",
+        "visibility_status", "exact_position_known", "state_age_trading_days",
+        "is_hedge_disclosed", "mapping_confidence", "updated_at",
+    )
+    _SNAPSHOT_COLUMNS = (
+        "canonical_code", "as_of_date", "close", "adv20_shares", "adv20_value",
+        "drawdown_52w", "price_percentile_252", "rel_topix_20d", "rel_sector_20d",
+        "visible_short_shares", "visible_short_ratio", "visible_institution_count",
+        "below_threshold_count", "largest_institution_ratio", "concentration",
+        "ratio_change_1d", "ratio_change_5d", "ratio_change_20d",
+        "shares_change_5d", "shares_change_20d", "pressure_adv20_5d", "pressure_adv20_20d",
+        "visible_days_to_cover", "entry_count_20d", "reentry_count_20d",
+        "reduction_count_20d", "threshold_exit_count_20d", "low_position_score",
+        "short_pressure_score", "price_damage_score", "absorption_score",
+        "covering_score", "rotation_score", "catalyst_score", "risk_score",
+        "data_confidence", "behavior_score", "monitor_priority", "primary_state",
+        "flags_json", "components_json", "algorithm_version", "generated_at",
+    )
+    _SIGNAL_COLUMNS = (
+        "signal_id", "canonical_code", "signal_date", "primary_state", "previous_state",
+        "behavior_score", "components_json", "evidence_json", "source_cutoff",
+        "algorithm_version", "created_at",
+    )
+
+    def _upsert_many(
+        self, table: str, columns: Sequence[str], keys: Sequence[str],
+        rows: Iterable[Mapping[str, Any]], *, stamp: str | None = None,
+    ) -> int:
+        now = utc_now_iso()
+        prepared = []
+        for row in rows:
+            values = {column: row.get(column) for column in columns}
+            if stamp:
+                values[stamp] = now
+            prepared.append(tuple(values[column] for column in columns))
+        if not prepared:
+            return 0
+        sql = _upsert_sql(table, columns, keys)
+        with self.write() as connection:
+            connection.executemany(sql, prepared)
+        return len(prepared)
+
+    def upsert_institution_entities(self, rows: Iterable[Mapping[str, Any]]) -> int:
+        return self._upsert_many(
+            "institution_entities", self._INSTITUTION_COLUMNS, ("legal_id",),
+            rows, stamp="updated_at",
+        )
+
+    def upsert_institution_aliases(self, rows: Iterable[Mapping[str, Any]]) -> int:
+        return self._upsert_many(
+            "institution_aliases", self._ALIAS_COLUMNS, ("raw_name",), rows, stamp="updated_at",
+        )
+
+    def upsert_short_position_events(self, rows: Iterable[Mapping[str, Any]]) -> int:
+        return self._upsert_many(
+            "short_position_events", self._EVENT_COLUMNS, ("event_id",),
+            rows, stamp="ingested_at",
+        )
+
+    def upsert_short_position_last_known(self, rows: Iterable[Mapping[str, Any]]) -> int:
+        return self._upsert_many(
+            "short_position_last_known", self._LAST_KNOWN_COLUMNS,
+            ("canonical_code", "legal_id"), rows, stamp="updated_at",
+        )
+
+    def upsert_short_behavior_snapshots(self, rows: Iterable[Mapping[str, Any]]) -> int:
+        return self._upsert_many(
+            "short_behavior_snapshots", self._SNAPSHOT_COLUMNS,
+            ("canonical_code", "as_of_date"), rows, stamp="generated_at",
+        )
+
+    def upsert_short_behavior_signals(self, rows: Iterable[Mapping[str, Any]]) -> int:
+        return self._upsert_many(
+            "short_behavior_signals", self._SIGNAL_COLUMNS, ("signal_id",),
+            rows, stamp="created_at",
+        )
+
+    def institution_alias_map(self) -> dict[str, str]:
+        with self.read() as connection:
+            rows = connection.execute(
+                "SELECT raw_name, legal_id FROM institution_aliases WHERE match_kind = 'curated'"
+            ).fetchall()
+        return {row[0]: row[1] for row in rows}
+
+    def latest_short_behavior_date(self) -> str | None:
+        with self.read() as connection:
+            row = connection.execute("SELECT MAX(as_of_date) FROM short_behavior_snapshots").fetchone()
+        return row[0] if row and row[0] else None
+
+    def short_behavior_state_map(self, as_of_date: str) -> dict[str, str]:
+        with self.read() as connection:
+            rows = connection.execute(
+                "SELECT canonical_code, primary_state FROM short_behavior_snapshots "
+                "WHERE as_of_date = ?",
+                (as_of_date,),
+            ).fetchall()
+        return {row[0]: row[1] for row in rows}
+
+    def short_behavior_snapshot(self, canonical_code: str, as_of_date: str) -> dict[str, Any] | None:
+        with self.read() as connection:
+            row = connection.execute(
+                "SELECT * FROM short_behavior_snapshots WHERE canonical_code = ? AND as_of_date = ?",
+                (canonical_code, as_of_date),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def short_behavior_history(
+        self, canonical_code: str, *, limit: int = 260
+    ) -> list[dict[str, Any]]:
+        with self.read() as connection:
+            rows = connection.execute(
+                "SELECT as_of_date, visible_short_ratio, visible_short_shares, "
+                "visible_institution_count, below_threshold_count, behavior_score, primary_state "
+                "FROM short_behavior_snapshots WHERE canonical_code = ? "
+                "ORDER BY as_of_date DESC LIMIT ?",
+                (canonical_code, int(limit)),
+            ).fetchall()
+        return [dict(row) for row in reversed(rows)]
+
+    def short_position_events_for_code(
+        self, canonical_code: str, *, limit: int = 200, offset: int = 0
+    ) -> list[dict[str, Any]]:
+        with self.read() as connection:
+            rows = connection.execute(
+                "SELECT * FROM short_position_events WHERE canonical_code = ? "
+                "ORDER BY published_date DESC, position_date DESC LIMIT ? OFFSET ?",
+                (canonical_code, int(limit), int(offset)),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def short_position_event_count(self, canonical_code: str) -> int:
+        with self.read() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) FROM short_position_events WHERE canonical_code = ?",
+                (canonical_code,),
+            ).fetchone()
+        return int(row[0] or 0)
+
+    def short_position_last_known_for_code(self, canonical_code: str) -> list[dict[str, Any]]:
+        with self.read() as connection:
+            rows = connection.execute(
+                "SELECT k.*, e.display_name, e.group_name FROM short_position_last_known k "
+                "LEFT JOIN institution_entities e ON e.legal_id = k.legal_id "
+                "WHERE k.canonical_code = ? ORDER BY k.last_reported_ratio DESC",
+                (canonical_code,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def institution_directory(self, *, limit: int = 200) -> list[dict[str, Any]]:
+        with self.read() as connection:
+            rows = connection.execute(
+                "SELECT * FROM institution_entities ORDER BY report_count DESC LIMIT ?",
+                (int(limit),),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def short_behavior_rankings(
+        self,
+        as_of_date: str,
+        *,
+        states: Sequence[str] | None = None,
+        flags: Sequence[str] | None = None,
+        markets: Sequence[str] | None = None,
+        sectors: Sequence[str] | None = None,
+        codes: Sequence[str] | None = None,
+        min_confidence: float | None = None,
+        min_turnover: float | None = None,
+        min_score: float | None = None,
+        order_by: str = "monitor_priority",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """ランキングは **スナップショット表だけ** を読む（再計算しない）。"""
+
+        allowed_order = {
+            "monitor_priority": "s.monitor_priority",
+            "behavior_score": "s.behavior_score",
+            "absorption_score": "s.absorption_score",
+            "covering_score": "s.covering_score",
+            "low_position_score": "s.low_position_score",
+            "pressure_adv20_20d": "s.pressure_adv20_20d",
+            "visible_days_to_cover": "s.visible_days_to_cover",
+            "drawdown_52w": "s.drawdown_52w",
+            "ratio_change_5d": "s.ratio_change_5d",
+            "rotation_score": "s.rotation_score",
+        }
+        order_column = allowed_order.get(order_by, allowed_order["monitor_priority"])
+
+        clauses = ["s.as_of_date = ?"]
+        params: list[Any] = [as_of_date]
+        if states:
+            clauses.append(f"s.primary_state IN ({', '.join('?' for _ in states)})")
+            params.extend(states)
+        if markets:
+            clauses.append(f"sec.market_code IN ({', '.join('?' for _ in markets)})")
+            params.extend(markets)
+        if sectors:
+            clauses.append(f"sec.sector33_code IN ({', '.join('?' for _ in sectors)})")
+            params.extend(sectors)
+        if codes:
+            clauses.append(f"s.canonical_code IN ({', '.join('?' for _ in codes)})")
+            params.extend(codes)
+        if min_confidence is not None:
+            clauses.append("s.data_confidence >= ?")
+            params.append(float(min_confidence))
+        if min_turnover is not None:
+            clauses.append("s.adv20_value >= ?")
+            params.append(float(min_turnover))
+        if min_score is not None:
+            clauses.append("s.behavior_score >= ?")
+            params.append(float(min_score))
+        for flag in flags or ():
+            # flags_json は短い JSON 配列。件数が小さいので LIKE で足りる。
+            clauses.append("s.flags_json LIKE ?")
+            params.append(f'%"{flag}"%')
+
+        where = " AND ".join(clauses)
+        with self.read() as connection:
+            total = connection.execute(
+                f"SELECT COUNT(*) FROM short_behavior_snapshots s "
+                f"LEFT JOIN securities sec ON sec.canonical_code = s.canonical_code WHERE {where}",
+                params,
+            ).fetchone()[0]
+            rows = connection.execute(
+                f"SELECT s.*, sec.display_code, sec.name_ja, sec.market_code, sec.market_name, "
+                f"sec.sector33_code, sec.sector33_name "
+                f"FROM short_behavior_snapshots s "
+                f"LEFT JOIN securities sec ON sec.canonical_code = s.canonical_code "
+                f"WHERE {where} ORDER BY {order_column} IS NULL, {order_column} DESC, "
+                f"s.canonical_code LIMIT ? OFFSET ?",
+                [*params, int(limit), int(offset)],
+            ).fetchall()
+        return [dict(row) for row in rows], int(total or 0)
+
+    def short_behavior_state_counts(self, as_of_date: str) -> dict[str, int]:
+        with self.read() as connection:
+            rows = connection.execute(
+                "SELECT primary_state, COUNT(*) FROM short_behavior_snapshots "
+                "WHERE as_of_date = ? GROUP BY primary_state",
+                (as_of_date,),
+            ).fetchall()
+        return {row[0]: int(row[1]) for row in rows}
+
+    def short_behavior_coverage(self, as_of_date: str) -> dict[str, Any]:
+        with self.read() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) total, "
+                "SUM(visible_institution_count > 0) with_visible, "
+                "SUM(data_confidence < 0.35) low_confidence "
+                "FROM short_behavior_snapshots WHERE as_of_date = ?",
+                (as_of_date,),
+            ).fetchone()
+        return {
+            "covered": int((row[0] if row else 0) or 0),
+            "with_visible_short": int((row[1] if row else 0) or 0),
+            "low_confidence": int((row[2] if row else 0) or 0),
+        }
 
     # ------------------------------------------------------------------
     # radar events
