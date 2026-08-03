@@ -127,6 +127,8 @@ def _core_with_calendar(tmp_path):
 
 
 def test_fetch_ticks_records_plan_not_included_isolated_from_minute(tmp_path):
+    """bulk/list が 403 = アドオン未契約。分足の可用性は汚染しない。"""
+
     core = _core_with_calendar(tmp_path)
     store = IntradayStore(tmp_path / "intraday.db")
     store.initialize()
@@ -137,31 +139,99 @@ def test_fetch_ticks_records_plan_not_included_isolated_from_minute(tmp_path):
     result = fetch_latest_ticks(client=client, store=store, core=core, canonical_code="72030")
     assert result["status"] == "plan_not_included"
     assert store.availability(DATASET_TICK)["availability"] == AVAILABILITY_PLAN_NOT_INCLUDED
-    # 分足の可用性はティックの 403 に汚染されない
     assert store.availability(DATASET_MINUTE)["availability"] == AVAILABILITY_UNKNOWN
 
 
-def test_fetch_ticks_stores_then_serves_cache(tmp_path):
+def _tick_csv(rows: list[tuple[str, str, str, str]]) -> bytes:
+    """Date,Code,Time,SessionDistinction,Price,TradingVolume,TransactionId"""
+
+    head = "Date,Code,Time,SessionDistinction,Price,TradingVolume,TransactionId\n"
+    body = "".join(
+        f"2026-07-31,{code},{time},01,{price},{volume},000000000001\n"
+        for code, time, price, volume in rows
+    )
+    return (head + body).encode("utf-8")
+
+
+def _bulk_transport(csv_bytes: bytes, counter: dict, *, file_date: str = "20260731"):
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/bulk/list"):
+            counter["list"] = counter.get("list", 0) + 1
+            return httpx.Response(200, json={"data": [
+                {"Key": f"equities/trades/live/equities_trades_{file_date}.csv.gz", "Size": 1},
+            ]})
+        if path.endswith("/bulk/get"):
+            counter["get"] = counter.get("get", 0) + 1
+            return httpx.Response(200, json={"url": "https://example.invalid/presigned.csv"})
+        counter["download"] = counter.get("download", 0) + 1
+        return httpx.Response(200, content=csv_bytes)
+
+    return handler
+
+
+def test_fetch_ticks_uses_bulk_csv_and_caches(tmp_path, monkeypatch):
+    """ティックは CSV 一括配信から取る（REST エンドポイントは存在しない）。"""
+
     core = _core_with_calendar(tmp_path)
     store = IntradayStore(tmp_path / "intraday.db")
     store.initialize()
-    calls = {"count": 0}
+    counter: dict = {}
+    csv_bytes = _tick_csv([
+        ("72030", "09:00:00.043728", "3181", "1999100"),
+        ("72030", "09:00:01.100000", "3180", "4600"),
+        ("99840", "09:00:02.000000", "5000", "100"),
+    ])
+
+    client = JQuantsClient(
+        "k", transport=httpx.MockTransport(_bulk_transport(csv_bytes, counter)), sleep=lambda s: None
+    )
+
+    # presigned URL は API キーを付けない別クライアントで取りに行く。ここだけ差し替える
+    # （JQuantsClient 生成後にパッチしないと、クライアント自身の httpx まで潰れる）。
+    import app.providers.jquants.client as client_module
+
+    class _FakeRaw:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def get(self, url):
+            counter["download"] = counter.get("download", 0) + 1
+            return httpx.Response(200, content=csv_bytes)
+
+    monkeypatch.setattr(client_module.httpx, "Client", _FakeRaw)
+
+    result = fetch_latest_ticks(
+        client=client, store=store, core=core, canonical_code="72030", extra_codes={"99840"}
+    )
+    assert result["status"] == "ok"
+    assert result["ticks"] == 2
+    # 同じ 1 パスで自選銘柄も入る（50MB を 1 銘柄のために落とさない）
+    assert result["codes_stored"] == 2
+    assert len(store.ticks_for("99840", "2026-07-31")) == 1
+    assert counter["list"] == 1
+
+    # 完了日はキャッシュ済み → 再ダウンロードしない
+    again = fetch_latest_ticks(client=client, store=store, core=core, canonical_code="72030")
+    assert again.get("cached") is True
+    assert counter["list"] == 1
+
+
+def test_fetch_ticks_reports_not_published_when_file_missing(tmp_path):
+    """営業日でもファイルが無い（当日引け前）なら not_published。"""
+
+    core = _core_with_calendar(tmp_path)
+    store = IntradayStore(tmp_path / "intraday.db")
+    store.initialize()
 
     def handler(request: httpx.Request) -> httpx.Response:
-        calls["count"] += 1
-        return httpx.Response(200, json={"data": [
-            {"Date": "2026-07-31", "Time": "09:00:00", "Code": "72030", "P": 100, "Vo": 10},
-            {"Date": "2026-07-31", "Time": "09:00:01", "Code": "72030", "P": 101, "Vo": 20},
-        ]})
+        return httpx.Response(200, json={"data": []})
 
     client = JQuantsClient("k", transport=httpx.MockTransport(handler), sleep=lambda s: None)
-    first = fetch_latest_ticks(client=client, store=store, core=core, canonical_code="72030")
-    assert first["status"] == "ok" and first["ticks"] == 2 and not first["truncated"]
-    assert calls["count"] == 1
-    # 完了日（非 truncated）はキャッシュ扱いで再取得しない
-    second = fetch_latest_ticks(client=client, store=store, core=core, canonical_code="72030")
-    assert second["status"] == "ok" and second.get("cached") is True
-    assert calls["count"] == 1
+    result = fetch_latest_ticks(client=client, store=store, core=core, canonical_code="72030")
+    assert result["status"] == "not_published"
+    # 「未契約」と混同しない
+    assert store.availability(DATASET_TICK)["availability"] != AVAILABILITY_PLAN_NOT_INCLUDED
 
 
 # ---------------- v1 → v2 前方移行 ----------------

@@ -374,9 +374,26 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
         store = IntradayStore(context.paths.intraday_db)
         store.initialize()
         if dataset == "tick":
+            # ティックの日次 CSV は全市場 50〜70MB。1 銘柄のために毎回落とすのは
+            # 高すぎるので、同じ 1 パスで自選＋レーダー中の銘柄も抽出しておく。
+            from app.repositories.app_store import AppStore
+
+            extra: set[str] = set()
+            app_db = AppStore(context.paths.app_db, read_only=True)
+            if app_db.exists():
+                try:
+                    extra |= set(app_db.watchlist_codes())
+                except Exception:  # noqa: BLE001 — 自選が読めなくても本体は続行
+                    pass
+            extra |= {
+                event["canonical_code"]
+                for event in context.repository.open_radar_events(
+                    terminal_states=sorted(TERMINAL_STATES)
+                )
+            }
             result = fetch_latest_ticks(
                 client=context.client, store=store, core=context.repository,
-                canonical_code=str(code),
+                canonical_code=str(code), extra_codes=extra,
             )
             store.prune_ticks_older_than(
                 add_days(iso_date(today_jst()), -TICK_RETENTION_TRADING_DAYS * 2)

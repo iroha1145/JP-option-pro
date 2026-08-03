@@ -41,7 +41,9 @@
 - `/markets/breakdown` 卖买内訳（Premium）
 - `/equities/bars/daily/am` 前场四本值（Premium）
 - `/derivatives/bars/daily/futures`、`/derivatives/bars/daily/options`（Premium）
-- `/equities/bars/minute` 分钟线（加购，60/min）、`/equities/trades` tick（加购）
+- `/equities/bars/minute` 分钟线（加购，60/min）
+- **tick（加购）没有 REST 端点**：官方仅以 CSV 一括配信提供 —— `/bulk/list?endpoint=equities/trades` 列文件 → `/bulk/get` 取预签名 URL。字段 `Date,Code,Time(微秒),SessionDistinction(01前場/02後場),Price,TradingVolume(单笔),TransactionId`；过去 2 年、仅东证上市。日次全市场 50–70MB gz / 约 650 万行
+- ⚠️ 该网关对**任何未知路径**都返回 403 `plan_not_included`，因此 403 不能用来判断「是否已加购」——我曾据此误判 tick 未激活
 - TDnet 全文（`/td-*`，加购，100/min）
 - `fins/summary` 的 `cursor` 增量参数（Premium 专属）→ Standard 用 date 查询做增量
 

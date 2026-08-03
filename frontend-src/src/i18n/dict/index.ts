@@ -552,8 +552,8 @@ export const DICT: Record<string, [string, string]> = {
   逐笔为未复权原始价: ['Ticks are raw unadjusted prices', 'ティックは未調整の生値'],
   '歩み值 · 最近 {n} 笔': ['Time & sales · last {n}', '歩み値 · 直近 {n} 件'],
   '逐笔需要 J-Quants Tick 加购（刚购买时，API 侧生效可能有延迟）': [
-    'Ticks require the J-Quants Tick add-on (activation may lag right after purchase)',
-    'ティックは J-Quants の Tick アドオンが必要です（契約直後は有効化に時間がかかることがあります）',
+    'Ticks require the J-Quants Tick add-on',
+    'ティックは J-Quants の Tick アドオン契約が必要です',
   ],
   该股票的逐笔数据尚未取得: [
     'Ticks for this stock have not been fetched yet',

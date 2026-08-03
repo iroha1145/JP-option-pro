@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import csv
 from typing import Any, Iterable, Mapping
 
 from app.providers.jquants.client import JQuantsClient
@@ -35,6 +36,8 @@ TICK_FETCH_MAX_ROWS = 200_000
 TICK_RETENTION_TRADING_DAYS = 7
 TICK_CHART_MAX_POINTS = 1_200
 TICK_TAPE_ROWS = 60
+# 公式仕様: ティックは CSV 一括配信のみ。REST エンドポイントは存在しない。
+TICK_BULK_ENDPOINT = "equities/trades"
 
 
 def fetch_recent_minutes(
@@ -190,11 +193,16 @@ def fetch_latest_ticks(
     store: IntradayStore,
     core: CoreRepository,
     canonical_code: str,
+    extra_codes: Iterable[str] | None = None,
 ) -> dict[str, Any]:
     """直近取引日のティックを取得して丸ごと置換キャッシュする。
 
+    配信形態は CSV 一括のみ（公式仕様: 「本データはCSV形式でのみ提供しており、
+    API経由での取得はできません」）。REST を叩くと存在しないパスとして 403 が
+    返り、未契約と見分けが付かない —— このゲートウェイは未知パスにも 403 を返す。
+
     完了日は不変なので、既にキャッシュ済み（非 truncated）ならスキップ。
-    未契約（403）は addon_state('tick') に正直に記録する。
+    extra_codes を渡すと同じダウンロード 1 パスでまとめて抽出する。
     """
 
     latest = core.latest_bar_date() or core.latest_trading_day("2099-12-31")
@@ -206,18 +214,42 @@ def fetch_latest_ticks(
             "status": "ok", "trade_date": latest,
             "ticks": cached["tick_count"], "cached": True,
         }
-    rows: list[dict[str, Any]] = []
-    truncated = False
+
+    # ティックは REST では取れない（公式仕様: CSV 一括配信のみ）。日次ファイルは
+    # 全市場 600 万行・50〜70MB gz なので、1 銘柄のために毎回落とすのは高い。
+    # 同じ 1 パスで「今欲しい銘柄＋自選＋レーダー中」をまとめて抽出して償却する。
+    wanted = {str(canonical_code)} | {str(code) for code in (extra_codes or ())}
     try:
-        for raw in client.fetch_rows(
-            "/equities/trades", {"code": canonical_code, "date": latest}
-        ):
+        key = _tick_file_key(client, latest)
+    except JQuantsPlanError:
+        # bulk/list 自体が弾かれる = アドオン未契約。正直に記録する。
+        store.record_availability(
+            AVAILABILITY_PLAN_NOT_INCLUDED,
+            error_code="jquants_plan_not_included",
+            dataset=DATASET_TICK,
+        )
+        return {"status": "plan_not_included", "trade_date": latest}
+    except JQuantsError as exc:
+        return {"status": "error", "error_code": exc.code, "trade_date": latest}
+    if key is None:
+        # 営業日なのにファイルが無い = まだ publish されていない（当日は引け後）。
+        store.record_availability(AVAILABILITY_AVAILABLE, dataset=DATASET_TICK)
+        return {"status": "not_published", "trade_date": latest}
+
+    collected: dict[str, list[dict[str, Any]]] = {code: [] for code in wanted}
+    truncated: set[str] = set()
+    try:
+        stream = client.bulk_download_csv(key)
+        for raw in csv.DictReader(stream):
+            code = (raw.get("Code") or "").strip()
+            if code not in collected:
+                continue
+            if len(collected[code]) >= TICK_FETCH_MAX_ROWS:
+                truncated.add(code)
+                continue
             mapped = map_trade_tick(raw)
             if mapped is not None:
-                rows.append(mapped)
-            if len(rows) >= TICK_FETCH_MAX_ROWS:
-                truncated = True
-                break
+                collected[code].append(mapped)
     except JQuantsPlanError:
         store.record_availability(
             AVAILABILITY_PLAN_NOT_INCLUDED,
@@ -227,9 +259,34 @@ def fetch_latest_ticks(
         return {"status": "plan_not_included", "trade_date": latest}
     except JQuantsError as exc:
         return {"status": "error", "error_code": exc.code, "trade_date": latest}
-    stored = store.replace_ticks(canonical_code, latest, rows, truncated=truncated)
+
+    stored_by_code = {}
+    for code, rows in collected.items():
+        if not rows:
+            continue
+        stored_by_code[code] = store.replace_ticks(
+            code, latest, rows, truncated=code in truncated
+        )
     store.record_availability(AVAILABILITY_AVAILABLE, dataset=DATASET_TICK)
-    return {"status": "ok", "trade_date": latest, "ticks": stored, "truncated": truncated}
+    return {
+        "status": "ok",
+        "trade_date": latest,
+        "ticks": stored_by_code.get(str(canonical_code), 0),
+        "truncated": str(canonical_code) in truncated,
+        "codes_stored": len(stored_by_code),
+        "file": key,
+    }
+
+
+def _tick_file_key(client: JQuantsClient, trade_date: str) -> str | None:
+    """その営業日のティック CSV のキー。まだ publish されていなければ None。"""
+
+    compact = trade_date.replace("-", "")
+    for entry in client.bulk_list(endpoint=TICK_BULK_ENDPOINT, date_from=trade_date, date_to=trade_date):
+        key = entry.get("Key") or entry.get("key") or ""
+        if compact in key:
+            return key
+    return None
 
 
 def _tick_seconds(tick_time: str) -> int:
@@ -332,7 +389,7 @@ def tick_view(
             "available": False,
             "reason": "plan_not_included",
             "availability": state["availability"],
-            "note_ja": "ティックは J-Quants の Tick アドオン契約が必要です。契約直後は API 側の有効化まで時間がかかることがあります。",
+            "note_ja": "ティックは J-Quants の Tick アドオン契約が必要です（CSV 一括配信）。",
             **empty,
         }
     days = store.tick_days_for(canonical_code)
@@ -341,7 +398,7 @@ def tick_view(
             "available": False,
             "reason": "not_fetched",
             "availability": state["availability"],
-            "note_ja": "この銘柄のティックはまだ取得されていません。",
+            "note_ja": "この銘柄のティックはまだ取得されていません。取得は日次 CSV（全市場 50MB 超）からの抽出になるため、必要な時だけ実行します。",
             **empty,
         }
     trade_date = max(days.keys())
@@ -369,6 +426,7 @@ __all__ = [
     "TICK_CHART_MAX_POINTS",
     "TICK_FETCH_MAX_ROWS",
     "TICK_RETENTION_TRADING_DAYS",
+    "TICK_BULK_ENDPOINT",
     "TICK_TAPE_ROWS",
     "downsample_ticks",
     "fetch_latest_ticks",
