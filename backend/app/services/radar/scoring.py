@@ -112,8 +112,9 @@ CONFIRMATION_WEIGHTS = {
 }
 
 RELATIVE_STRENGTH_WEIGHTS = {
-    "rs_topix": 0.60,
-    "rs_sector": 0.40,
+    "rs_topix": 0.55,
+    "rs_sector": 0.30,      # 20 日: 突破環境
+    "rs_sector_mid": 0.15,  # 63 日: 中期トレンド
 }
 
 PARTICIPATION_WEIGHTS = {
@@ -138,6 +139,9 @@ PRIORITY_WEIGHTS = {
 # Penalties are bounded so a single risk dimension cannot zero out an event.
 CHASE_PENALTY_RATE = 0.25   # per point of chase risk above 50
 CROWDING_PENALTY_RATE = 0.15
+# 信用規制は独立した次元。無条件否定はしない（増担保でも走る銘柄は走る）が、
+# 建てにくさ・強制解消リスクは実在するので優先度は下げる。
+REGULATION_PENALTY_RATE = 0.18
 
 
 def alert_priority(
@@ -150,6 +154,7 @@ def alert_priority(
     data_confidence: float | None,
     chase_risk: float | None,
     crowding_risk: float | None,
+    regulation_risk: float | None = None,
 ) -> WeightedScore:
     base = weighted_score(
         {
@@ -169,6 +174,10 @@ def alert_priority(
         penalty += CHASE_PENALTY_RATE * (chase_risk - 50.0)
     if crowding_risk is not None and crowding_risk > 50.0:
         penalty += CROWDING_PENALTY_RATE * (crowding_risk - 50.0)
+    # None = 判定不能。規制ありとしても無しとしても扱わない（減点しない代わり、
+    # data_confidence 側が下がって基礎点そのものが控えめになる）。
+    if regulation_risk is not None and regulation_risk > 0.0:
+        penalty += REGULATION_PENALTY_RATE * regulation_risk
     return WeightedScore(
         score=clamp_score(base.score - penalty),
         confidence=base.confidence,

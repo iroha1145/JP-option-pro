@@ -7,6 +7,7 @@ import sqlite3
 import pytest
 
 from app.repositories.core import CoreRepository
+from app.repositories.core_schema import CORE_SCHEMA_VERSION
 from app.services.strength_scan import (
     build_strength_rows,
     build_view_rows,
@@ -171,7 +172,7 @@ def test_core_v1_database_migrates_forward(tmp_path):
         )
         connection.commit()
     migrated = CoreRepository(db_path)
-    migrated.initialize()  # v1 → v2 → v3 の連鎖前方移行
+    migrated.initialize()  # v1 → v2 → v3 → v4 の連鎖前方移行
     assert migrated.strength_meta() is None  # 表はあるが断面は未生成
     with sqlite3.connect(db_path) as connection:
         row = connection.execute(
@@ -180,8 +181,13 @@ def test_core_v1_database_migrates_forward(tmp_path):
         indexes = {r[0] for r in connection.execute(
             "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='daily_bars'"
         )}
-    assert row[0] == "jp-core-v3"
+    # 版数はコード側の定数に追随させる（スキーマを上げるたびに落ちないように）
+    assert row[0] == CORE_SCHEMA_VERSION
     assert "idx_daily_bars_date_quote" in indexes
+    # v4 で足した列が実在すること（ALTER が本当に流れたか）
+    with sqlite3.connect(db_path) as connection:
+        columns = {r[1] for r in connection.execute("PRAGMA table_info(screener_rows)")}
+    assert {"rs_sector_20d", "regulation_level", "regulation_severity"} <= columns
     # 未知の版数は従来通り拒否。
     with sqlite3.connect(db_path) as connection:
         connection.execute(

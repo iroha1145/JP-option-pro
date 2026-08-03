@@ -15,6 +15,7 @@ from typing import Any, Mapping
 from app.domain.constants import TOPIX_INDEX_CODE
 from app.personal_config import RadarConfig
 from app.repositories.core import CoreRepository
+from app.services import margin_regulation as mreg
 
 from . import lifecycle as lc
 from .base_detector import detect_base
@@ -74,7 +75,10 @@ _STRONG_CLOSE_LOCATION = 0.70
 _STRONG_TURNOVER_RATIO = 2.5
 _VOLUME_BREAK_RATIO = 3.0
 _CONFIRM_HOLD_DAYS = 2
-_CONFIRMED_MAX_AGE_DAYS = 90
+# 業種中位を基準として信用できる最低銘柄数（これ未満は基準を作らない）
+_MIN_SECTOR_SAMPLE = 5
+# 営業日で数える（暦日 90 日 ≒ 営業日 61 日。連休を跨いでも老化しない）
+_CONFIRMED_MAX_AGE_TRADING_DAYS = 61
 
 
 def _signal_pivot(features: Mapping[str, Any], signal_type: str) -> float | None:
@@ -160,10 +164,14 @@ def compute_scores(
     pivot_price: float | None,
     hold_days: int,
     rs_topix_63d: float | None,
-    rs_sector_63d: float | None,
+    # 業種相対は 20 日（短期強度・突破環境）と 63 日（中期トレンド）を
+    # 別々に持つ。以前は 20 日の値を 63 日の名前で運んでいた。
+    rs_sector_20d: float | None = None,
+    rs_sector_63d: float | None = None,
     sector_fit: float | None,
     market_fit: float | None,
     crowding_risk: float | None,
+    regulation_risk: float | None = None,
     base_structure: Mapping[str, Any] | None = None,
     price_action: Mapping[str, Any] | None = None,
     vol_price: Mapping[str, Any] | None = None,
@@ -234,7 +242,10 @@ def compute_scores(
     relative = weighted_score(
         {
             "rs_topix": linear_score(rs_topix_63d, -0.05, 0.25),
-            "rs_sector": linear_score(rs_sector_63d, -0.05, 0.25),
+            # 突破環境の判定なので業種相対は短期側（20 日）を使う。閾値も
+            # 20 日リターン差のスケールに合わせる（63 日と同じ幅は広すぎる）。
+            "rs_sector": linear_score(rs_sector_20d, -0.03, 0.15),
+            "rs_sector_mid": linear_score(rs_sector_63d, -0.05, 0.25),
         },
         RELATIVE_STRENGTH_WEIGHTS,
     )
@@ -253,7 +264,9 @@ def compute_scores(
             "avg_turnover_score": linear_score(
                 math.log10(avg_turnover) if avg_turnover and avg_turnover > 0 else None, 7.7, 10.0
             ),
-            "turnover_stability": 100.0 if features.get("turnover_today") is not None else None,
+            # 旧実装は「売買代金の欄が埋まっていれば 100」だった。普段ほぼ商いが
+            # 無く 1 日だけ爆発した銘柄が満点になるので、実測の安定性に置換。
+            "turnover_stability": features.get("turnover_stability"),
         },
         LIQUIDITY_WEIGHTS,
     )
@@ -296,6 +309,7 @@ def compute_scores(
         data_confidence=data_confidence,
         chase_risk=chase_risk,
         crowding_risk=crowding_risk,
+        regulation_risk=regulation_risk,
     )
 
     quality_pack = _score_pack(quality)
@@ -317,6 +331,7 @@ def compute_scores(
         "data_confidence": data_confidence,
         "chase_risk": chase_risk,
         "crowding_risk": crowding_risk,
+        "regulation_risk": regulation_risk,
         "alert_priority": _score_pack(priority),
     }
 
@@ -405,10 +420,12 @@ class RadarEngine:
         topix_r63 = index_return(topix, 63)
         market_fit = market_fit_score(topix)
         margin_map = self._repository.latest_margin_map()
+        regulation_map = self._build_regulation_map(target_date, equities.keys())
 
         features_by_code: dict[str, dict[str, Any]] = {}
         structure_by_code: dict[str, dict[str, Any]] = {}
         sector_returns: dict[str, list[float]] = {}
+        sector_returns_63d: dict[str, list[float]] = {}
         for code, security in equities.items():
             bars = bars_by_code.get(code)
             if not bars or bars[-1].get("trade_date") != target_date:
@@ -424,6 +441,10 @@ class RadarEngine:
             avg_turnover = features.get("avg_turnover_20d")
             if avg_turnover is not None and avg_turnover < self._config.min_avg_turnover_jpy:
                 continue
+            # 売買代金が **取れない** 銘柄を「閾値未満ではない」として通していた。
+            # 欠損は合格ではない: 流動性は判定不能なので低信頼として印を付け、
+            # 新規採用は正規プールの後ろに回す（0 や中央値で埋めない）。
+            features["liquidity_known"] = avg_turnover is not None
             features_by_code[code] = features
             # 構造分析: ベースは「当日を除いた」列で検出（先読み禁止）。
             prior_series = series_excluding_last(series)
@@ -436,11 +457,22 @@ class RadarEngine:
             sector = security.get("sector33_code")
             if sector and features.get("return_20d") is not None:
                 sector_returns.setdefault(sector, []).append(features["return_20d"])
+            if sector and features.get("return_63d") is not None:
+                sector_returns_63d.setdefault(sector, []).append(features["return_63d"])
 
+        # 業種の中位を基準にする以上、標本が数銘柄しかない業種の「中位」は
+        # 業種の実勢ではなく個別銘柄そのもの。相対強度が自分自身との比較に
+        # 縮退するので、標本不足の業種は基準を作らない（= rs_sector は None、
+        # 欠損として重みから外れる。0 で埋めない）。
         sector_median_returns = {
             sector: sorted(values)[len(values) // 2]
             for sector, values in sector_returns.items()
-            if values
+            if len(values) >= _MIN_SECTOR_SAMPLE
+        }
+        sector_median_returns_63d = {
+            sector: sorted(values)[len(values) // 2]
+            for sector, values in sector_returns_63d.items()
+            if len(values) >= _MIN_SECTOR_SAMPLE
         }
         sector_fit = sector_fit_scores(sector_median_returns)
 
@@ -453,7 +485,9 @@ class RadarEngine:
             events_by_code.setdefault(event["canonical_code"], []).append(event)
 
         updated: list[dict[str, Any]] = []
-        created = 0
+        # 新規イベントは一旦ここに溜め、**優先度で並べてから**上限で切る。
+        # 走査順（銘柄コード順）で切ると強いシグナルが黙って捨てられる。
+        new_candidates: list[dict[str, Any]] = []
         transitions = 0
 
         for code, features in features_by_code.items():
@@ -462,17 +496,26 @@ class RadarEngine:
             rs_topix = None
             if features.get("return_63d") is not None and topix_r63 is not None:
                 rs_topix = features["return_63d"] - topix_r63
-            sector_median = sector_median_returns.get(sector)
-            rs_sector = None
-            if features.get("return_20d") is not None and sector_median is not None:
-                rs_sector = features["return_20d"] - sector_median
-            regulated = False
+            # 行業相対は 20 日リターン同士の比較 → 20 日指標。63 日の名前で
+            # 保存していたため、UI も DB も API も 63 日だと言いながら中身は
+            # 20 日だった。窓は名前と一致させる（混用しない）。
+            sector_median_20d = sector_median_returns.get(sector)
+            rs_sector_20d = None
+            if features.get("return_20d") is not None and sector_median_20d is not None:
+                rs_sector_20d = features["return_20d"] - sector_median_20d
+            sector_median_63d = sector_median_returns_63d.get(sector)
+            rs_sector_63d = None
+            if features.get("return_63d") is not None and sector_median_63d is not None:
+                rs_sector_63d = features["return_63d"] - sector_median_63d
+            regulation = regulation_map.get(code, mreg.UNKNOWN_STATE)
             margin_row = margin_map.get(code)
-            crowding = crowding_score(margin_row, regulated=regulated)
+            crowding = crowding_score(margin_row, regulated=bool(regulation.regulated))
             structure = structure_by_code.get(code) or {}
             score_kwargs = {
                 "rs_topix_63d": rs_topix,
-                "rs_sector_63d": rs_sector,
+                "rs_sector_20d": rs_sector_20d,
+                "rs_sector_63d": rs_sector_63d,
+                "regulation_risk": regulation.risk_score(),
                 "sector_fit": sector_fit.get(sector),
                 "market_fit": market_fit,
                 "crowding_risk": crowding,
@@ -545,7 +588,7 @@ class RadarEngine:
                 hold_days=hold_days,
                 **score_kwargs,
             )
-            updated.append(
+            new_candidates.append(
                 {
                     "event_id": event_id,
                     "canonical_code": code,
@@ -562,13 +605,31 @@ class RadarEngine:
                         "engine_version": ENGINE_VERSION,
                         "hold_days": hold_days,
                         "event_high": features.get("close"),
+                        "liquidity_known": bool(features.get("liquidity_known")),
                         "snapshot": _feature_snapshot(features),
                         "structure": _structure_snapshot(structure),
                     },
                     "transitions": transitions_log,
                 }
             )
-            created += 1
+
+        # 新規イベントの採用: シグナル強度 → アラート優先度 の順で並べ、上限で切る。
+        # 既存イベントの更新（`updated`）は無条件に保存する —— 上限は「今日新しく
+        # 監視対象を何件増やすか」の話で、追跡中の事件を捨てる理由にはならない。
+        signal_rank = {name: index for index, name in enumerate(SIGNAL_PRIORITY)}
+        new_candidates.sort(
+            key=lambda item: (
+                # 流動性不明は正規プールの後ろ（枠が余ったときだけ採用）
+                0 if (item.get("features") or {}).get("liquidity_known") else 1,
+                signal_rank.get(item["signal_type"], len(signal_rank)),
+                -(item.get("alert_priority") or 0.0),
+                item["canonical_code"],
+            )
+        )
+        cap = self._config.max_new_events_per_scan
+        accepted = new_candidates[:cap]
+        dropped = len(new_candidates) - len(accepted)
+        updated.extend(accepted)
 
         if updated:
             self._repository.upsert_radar_events(updated)
@@ -578,13 +639,19 @@ class RadarEngine:
             "target_date": target_date,
             "scanned": len(features_by_code),
             "events_written": len(updated),
-            "events_created": created,
+            "events_created": len(accepted),
+            # 上限で落とした件数を黙って隠さない（0 でも必ず返す）
+            "events_detected": len(new_candidates),
+            "events_dropped_by_cap": dropped,
+            "new_event_cap": cap,
             "state_transitions": transitions,
             "market_fit": market_fit,
             "sector_fit": sector_fit,
             "features_by_code": features_by_code,
             "structure_by_code": structure_by_code,
             "sector_median_returns": sector_median_returns,
+            "sector_median_returns_63d": sector_median_returns_63d,
+            "regulation_map": regulation_map,
             "rs_context": {"topix_return_63d": topix_r63},
         }
 
@@ -603,7 +670,7 @@ class RadarEngine:
         event_high = float(event_features.get("event_high") or 0.0)
         atr = features.get("atr14")
 
-        days_open = _date_diff_days(event["discovered_date"], target_date)
+        days_open = self._trading_days_open(event["discovered_date"], target_date)
         confirmed_family = state in (
             lc.STATE_CONFIRMED, lc.STATE_HOLDING, lc.STATE_RETESTING,
             lc.STATE_RETEST_HELD, lc.STATE_REACCELERATING, lc.STATE_EXTENDED,
@@ -611,8 +678,8 @@ class RadarEngine:
         observation = {
             "failed": close < pivot * _FAIL_BUFFER,
             "expired": (
-                days_open > self._config.expiry_days if not confirmed_family
-                else days_open > _CONFIRMED_MAX_AGE_DAYS
+                days_open > self._config.expiry_trading_days if not confirmed_family
+                else days_open > _CONFIRMED_MAX_AGE_TRADING_DAYS
             ),
             "triggered": close > pivot,
             "holding": close > pivot,
@@ -621,32 +688,86 @@ class RadarEngine:
             "new_event_high": event_high > 0.0 and close > event_high,
             "extended": bool(atr and atr > 0 and (close - pivot) / atr > _EXTENDED_ATR_MULTIPLE),
         }
-        if state == lc.STATE_TRIGGERED:
-            next_hold = hold_days + 1 if close > pivot else 0
+        # 確認判定は「今日ピボットの上で引けた」なら状態を問わず評価する。
+        # TRIGGERED のときだけ計算していたため、同じ 1 日の値動きでも新規検出
+        # なら CONFIRMED、既存の WATCHING なら TRIGGERED 止まり、という食い違いが
+        # あった（新規側は scan() で strong を見て CONFIRMED を積んでいる）。
+        if close > pivot:
+            next_hold = hold_days + 1
             observation["confirmed_hold"] = next_hold >= _CONFIRM_HOLD_DAYS
             observation["confirmed_strong"] = (
-                close > pivot
-                and (features.get("close_location") or 0.0) >= _STRONG_CLOSE_LOCATION
+                (features.get("close_location") or 0.0) >= _STRONG_CLOSE_LOCATION
                 and (features.get("turnover_ratio") or 0.0) >= _STRONG_TURNOVER_RATIO
             )
-
-        target_state, reason = lc.resolve_target(state, observation)
-        result = lc.transition(state, target_state, reason)
 
         event_features["hold_days"] = hold_days + 1 if close > pivot else 0
         event_features["event_high"] = max(event_high, close)
         event_features["snapshot"] = _feature_snapshot(features)
         event["features"] = event_features
         event["last_scanned_date"] = target_date
-        if result.changed:
-            event["state"] = result.state
-            event["state_changed_date"] = target_date
-            log = list(event.get("transitions") or [])
+
+        # 1 日で 2 段進むことがある（窓開け突破 = TRIGGERED → EXTENDED）。
+        # 途中で棄却された場合はそこで打ち切り、状態を巻き戻さない。
+        changed = False
+        log = list(event.get("transitions") or [])
+        for target_state, reason in lc.resolve_path(state, observation):
+            result = lc.transition(state, target_state, reason)
+            if not result.changed:
+                break
+            state = result.state
             log.append(
                 {"date": target_date, "from": result.previous_state, "to": result.state, "reason": result.reason}
             )
+            changed = True
+        if changed:
+            event["state"] = state
+            event["state_changed_date"] = target_date
             event["transitions"] = log[-40:]
-        return event, result.changed
+        return event, changed
+
+    def _build_regulation_map(
+        self, target_date: str, universe: Any
+    ) -> dict[str, mreg.RegulationState]:
+        """走査日時点の信用規制状態。リストが古ければ全銘柄「判定不能」。
+
+        日々公表は営業日ごとに出る。同期が止まっている日に「リストに無い =
+        規制なし」と読むと、実際には増担保が掛かっている銘柄を無印で上位に
+        出してしまう。鮮度が測れないときは無規制ではなく unknown に倒す。
+        """
+
+        try:
+            alerts = self._repository.latest_margin_alert_map()
+            latest = self._repository.latest_margin_alert_date()
+        except Exception:  # noqa: BLE001 — 規制が読めなくても走査自体は続ける
+            return {}
+        gap: int | None = None
+        if latest:
+            try:
+                days = self._repository.trading_days_between(latest, target_date)
+                gap = max(0, len(days) - 1) if days else None
+            except Exception:  # noqa: BLE001
+                gap = None
+        return mreg.build_regulation_map(
+            alerts.values(), as_of=target_date, trading_days_since=gap, universe=universe
+        )
+
+    def _trading_days_open(self, discovered_date: str, target_date: str) -> int:
+        """発見日から経過した **営業日** 数。
+
+        暦日差だと週末・祝日・GW・年末年始で新しい取引情報が 1 つも増えて
+        いないのにイベントが老化し、連休明けに一斉失効する。取引所カレンダー
+        が無い場合のみ暦日にフォールバックする（その旨は data_confidence 側で
+        は扱わない —— 期限判定を止めるほうが害が大きいため）。
+        """
+
+        try:
+            days = self._repository.trading_days_between(discovered_date, target_date)
+        except Exception:  # noqa: BLE001 — カレンダー未同期でも走査は止めない
+            days = []
+        if days:
+            # 発見日自身を 0 日目とする（片端を除く）
+            return max(0, len(days) - 1)
+        return _date_diff_days(discovered_date, target_date)
 
 
 def _structure_snapshot(structure: Mapping[str, Any]) -> dict[str, Any]:
@@ -693,7 +814,7 @@ def _feature_snapshot(features: Mapping[str, Any]) -> dict[str, Any]:
         "turnover_ratio", "return_5d", "return_20d", "return_63d",
         "pct_from_high_252", "ma25_gap_pct", "ma75_gap_pct", "ma_alignment",
         "close_location", "volatility_contraction", "overheat_atr_multiple",
-        "data_days", "upper_limit_today",
+        "data_days", "upper_limit_today", "liquidity_known",
     )
     return {key: features.get(key) for key in keys}
 

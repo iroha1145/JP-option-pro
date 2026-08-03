@@ -7,7 +7,7 @@ upserts that keep ``ingested_at`` as the revision stamp.
 
 from __future__ import annotations
 
-CORE_SCHEMA_VERSION = "jp-core-v3"
+CORE_SCHEMA_VERSION = "jp-core-v4"
 
 # v3: 全市場スナップショット照会（決算カレンダーの終値/前日比マップ等）を
 # カバリングインデックスで賄う。272MB の WITHOUT ROWID 主表への 4千回の
@@ -285,7 +285,10 @@ CORE_DDL: tuple[str, ...] = (
         ma200_gap_pct REAL,
         ma_alignment INTEGER,
         rs_topix_63d REAL,
+        rs_sector_20d REAL,
         rs_sector_63d REAL,
+        regulation_level TEXT,
+        regulation_severity INTEGER,
         volatility_contraction REAL,
         drawdown_63d REAL,
         overheat_atr_multiple REAL,
@@ -315,10 +318,25 @@ CORE_DDL: tuple[str, ...] = (
     *_QUOTE_INDEX_DDL,
 )
 
-#: 前方マイグレーション連鎖: v1 → v2（強度断面）→ v3（クオート索引）。
+#: v4: 業種相対の 20 日/63 日分離 + 信用規制状態。
+#: 既存行は NULL のまま（= 欠損）。夜間バッチが翌営業日に埋め直す。
+#: 20 日の値を 63 日の名前で保存していた過去分は、意味が違うので移し替えない
+#: —— 移すと「昔から 63 日で測っていた」という嘘の履歴ができる。
+_RS_SECTOR_SPLIT_DDL: tuple[str, ...] = (
+    "ALTER TABLE screener_rows ADD COLUMN rs_sector_20d REAL",
+    "ALTER TABLE screener_rows ADD COLUMN regulation_level TEXT",
+    "ALTER TABLE screener_rows ADD COLUMN regulation_severity INTEGER",
+    # 旧 rs_sector_63d の中身は実際には 20 日だったので、名前どおりの値が
+    # 入り直すまで区別できるよう一度 NULL に戻す（誤った値を残さない）。
+    "UPDATE screener_rows SET rs_sector_63d = NULL",
+)
+
+#: 前方マイグレーション連鎖: v1 → v2（強度断面）→ v3（クオート索引）
+#: → v4（業種相対の周期分離・信用規制）。
 CORE_MIGRATIONS: dict[str, tuple[tuple[str, ...], str]] = {
     "jp-core-v1": (_STRENGTH_DDL, "jp-core-v2"),
-    "jp-core-v2": (_QUOTE_INDEX_DDL, CORE_SCHEMA_VERSION),
+    "jp-core-v2": (_QUOTE_INDEX_DDL, "jp-core-v3"),
+    "jp-core-v3": (_RS_SECTOR_SPLIT_DDL, CORE_SCHEMA_VERSION),
 }
 
 __all__ = ["CORE_DDL", "CORE_MIGRATIONS", "CORE_SCHEMA_VERSION"]

@@ -490,6 +490,8 @@ def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str,
     features_by_code = summary.pop("features_by_code")
     structure_by_code = summary.pop("structure_by_code")
     sector_median_returns = summary.pop("sector_median_returns")
+    sector_median_returns_63d = summary.pop("sector_median_returns_63d", {})
+    regulation_map = summary.pop("regulation_map", {})
     rs_context = summary.pop("rs_context")
 
     securities = {
@@ -505,9 +507,11 @@ def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str,
         features_by_code=features_by_code,
         securities=securities,
         sector_median_returns=sector_median_returns,
+        sector_median_returns_63d=sector_median_returns_63d,
         topix_return_63d=rs_context.get("topix_return_63d"),
         margin_map=context.repository.latest_margin_map(),
         radar_state_by_code=radar_state_by_code,
+        regulation_map=regulation_map,
     )
     written = context.repository.replace_screener_rows(rows)
     context.repository.record_sync_success(

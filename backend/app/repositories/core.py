@@ -575,6 +575,35 @@ class CoreRepository(SQLiteRepository):
             ).fetchall()
         return {row["canonical_code"]: dict(row) for row in rows}
 
+    def latest_margin_alert_map(self) -> dict[str, dict[str, Any]]:
+        """銘柄ごとの最新の日々公表行（規制状態の判定に使う）。
+
+        訂正は「同じ申込日 × 新しい公表日」で入るので、申込日 → 公表日 の
+        順で最新を採る。載っていない銘柄は結果に入らない —— それは
+        「規制なし」の意味だが、リスト自体の鮮度は呼び出し側が見ること。
+        """
+
+        with self.read() as connection:
+            rows = connection.execute(
+                """
+                SELECT ma.* FROM margin_alerts ma
+                JOIN (
+                    SELECT canonical_code,
+                           MAX(application_date || '|' || published_date) AS latest_key
+                    FROM margin_alerts GROUP BY canonical_code
+                ) latest ON latest.canonical_code = ma.canonical_code
+                    AND ma.application_date || '|' || ma.published_date = latest.latest_key
+                """
+            ).fetchall()
+        return {row["canonical_code"]: dict(row) for row in rows}
+
+    def latest_margin_alert_date(self) -> str | None:
+        with self.read() as connection:
+            row = connection.execute(
+                "SELECT MAX(application_date) AS latest FROM margin_alerts"
+            ).fetchone()
+        return (row["latest"] if row else None) or None
+
     _MARGIN_ALERT_COLUMNS = (
         "canonical_code", "published_date", "application_date",
         "short_outstanding", "long_outstanding", "short_long_ratio",
@@ -814,7 +843,8 @@ class CoreRepository(SQLiteRepository):
         "turnover_value", "avg_turnover_20d", "turnover_ratio", "return_1d", "return_5d",
         "return_20d", "return_63d", "pct_from_high_252", "ma25_gap_pct",
         "ma75_gap_pct", "ma200_gap_pct", "ma_alignment", "rs_topix_63d",
-        "rs_sector_63d", "volatility_contraction", "drawdown_63d",
+        "rs_sector_20d", "rs_sector_63d", "regulation_level", "regulation_severity",
+        "volatility_contraction", "drawdown_63d",
         "overheat_atr_multiple", "listed_days", "data_days",
         "margin_long_short_ratio", "metrics_json", "updated_at",
     )

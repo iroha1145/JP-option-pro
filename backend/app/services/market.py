@@ -215,6 +215,7 @@ def sector_members(
                 "turnover_ratio": row.get("turnover_ratio"),
                 "avg_turnover_20d": row.get("avg_turnover_20d"),
                 "pct_from_high_252": row.get("pct_from_high_252"),
+                "rs_sector_20d": row.get("rs_sector_20d"),
                 "rs_sector_63d": row.get("rs_sector_63d"),
                 # 業種売買代金に占めるシェア（「その業種で今日どれだけ注目されたか」）
                 "turnover_share": (

@@ -40,6 +40,9 @@ FAMILY_WEIGHTS = {
 
 #: 流動性リスクの基準線: 20日平均売買代金 1 億円。
 _LIQUIDITY_BASE_JPY = 100_000_000.0
+# 日本株の売買単位は 2018 年の統一以降ほぼ全て 100 株。最低購入金額 =
+# 株価 × 100 で、これが大きい銘柄は分割売買も損切り調整もしづらい。
+_SHARES_PER_LOT = 100.0
 _MIN_HISTORY_FOR_52W = 240
 
 TIER_FLOORS: tuple[tuple[str, float], ...] = (
@@ -446,8 +449,20 @@ def score_market_fit(regime: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def score_profile_fit(row: Mapping[str, Any], profile: str) -> dict[str, Any]:
-    intrinsic = _score(row.get("intrinsic_score"))
-    atr_pct = _finite(row.get("atr_pct"), 0.0)
+    """「この銘柄がその取引スタイルに向くか」だけを測る。
+
+    **銘柄の良し悪し（intrinsic）は入れない。** 旧実装は intrinsic を
+    0.45〜0.60 の重みで抱え込み、その上で最終ランキングが intrinsic に 0.78 を
+    与えていたため、実効重みは 0.78 + 0.14×0.55 ≒ 0.86。稳健/均衡/进取 の
+    3 モードは残り 0.06 の中でしか動けず、「別のプロファイル」を名乗りながら
+    実質同じ並びを返していた。ここは向き不向きの軸だけで構成する。
+
+    使う軸はどれも intrinsic に含まれないもの: ボラティリティ・流動性・
+    直近の落ち込み・最低購入金額（日本株は 100 株単位なので効く）・信用の
+    偏り。ma_alignment は intrinsic の mid/long に既に入っているので使わない。
+    """
+
+    atr_pct = _finite(row.get("atr_pct"))
     if atr_pct is None:
         volatility_fit = None
     elif profile == "conservative":
@@ -456,24 +471,66 @@ def score_profile_fit(row: Mapping[str, Any], profile: str) -> dict[str, Any]:
         volatility_fit = max(0.0, min(100.0, 45.0 + atr_pct * 7.0))
     else:
         volatility_fit = max(0.0, min(100.0, 100.0 - abs(atr_pct - 3.0) * 12.0))
-    avg_turnover = _finite(row.get("avg_turnover_20d"), 0.0)
+
+    avg_turnover = _finite(row.get("avg_turnover_20d"))
     liquidity_fit = None
     if avg_turnover is not None and avg_turnover > 0:
         # 1億円 → 約20、10億円 → 約50、100億円 → 約80（米国版の $1m/10m/100m と同形）。
         liquidity_fit = max(
             0.0, min(100.0, 20.0 + math.log10(avg_turnover / _LIQUIDITY_BASE_JPY) * 30.0)
         )
-    trend_fit = _score(row.get("ma_alignment_pct"))
-    weights = {"intrinsic": 0.55, "volatility_fit": 0.20, "liquidity_fit": 0.15, "trend_fit": 0.10}
-    if profile == "conservative":
-        weights = {"intrinsic": 0.45, "volatility_fit": 0.25, "liquidity_fit": 0.20, "trend_fit": 0.10}
+
+    # 直近の落ち込み耐性。稳健は浅い押ししか許さず、进取は深い押しも許容する。
+    drawdown = _finite(row.get("drawdown_63d_pct"))
+    if drawdown is None:
+        drawdown_fit = None
+    elif profile == "conservative":
+        drawdown_fit = max(0.0, min(100.0, 100.0 + drawdown * 5.0))
     elif profile == "aggressive":
-        weights = {"intrinsic": 0.60, "volatility_fit": 0.20, "liquidity_fit": 0.10, "trend_fit": 0.10}
+        drawdown_fit = max(0.0, min(100.0, 100.0 + drawdown * 1.8))
+    else:
+        drawdown_fit = max(0.0, min(100.0, 100.0 + drawdown * 3.0))
+
+    # 日本株は単元 100 株。1 単元の金額が大きいほど分割売買しづらく、
+    # 損切り幅も粗くなる。少額運用ほど効く軸（米国版には無い次元）。
+    close = _finite(row.get("close"))
+    lot_value = close * _SHARES_PER_LOT if close is not None else None
+    if lot_value is None or lot_value <= 0:
+        lot_fit = None
+    else:
+        # 10万円 → 100、50万円 → 約58、100万円 → 約40、500万円 → 0 付近。
+        lot_fit = max(0.0, min(100.0, 100.0 - (math.log10(lot_value / 100_000.0) * 60.0)))
+        if profile == "aggressive":
+            lot_fit = max(0.0, min(100.0, 40.0 + lot_fit * 0.6))  # 進取は許容度高め
+
+    # 信用買いの偏り（信用倍率）。高いほど需給の重石。
+    margin_ratio = _finite(row.get("margin_long_short_ratio"))
+    if margin_ratio is None or margin_ratio <= 0:
+        crowding_fit = None
+    else:
+        crowding_fit = max(0.0, min(100.0, 100.0 - math.log10(max(margin_ratio, 0.1)) * 55.0))
+
+    weights = {
+        "volatility_fit": 0.32, "liquidity_fit": 0.24, "drawdown_fit": 0.20,
+        "lot_fit": 0.12, "crowding_fit": 0.12,
+    }
+    if profile == "conservative":
+        weights = {
+            "volatility_fit": 0.34, "liquidity_fit": 0.26, "drawdown_fit": 0.22,
+            "lot_fit": 0.08, "crowding_fit": 0.10,
+        }
+    elif profile == "aggressive":
+        weights = {
+            "volatility_fit": 0.34, "liquidity_fit": 0.18, "drawdown_fit": 0.14,
+            "lot_fit": 0.18, "crowding_fit": 0.16,
+        }
     return weighted_available(
-        {"intrinsic": intrinsic, "volatility_fit": volatility_fit,
-         "liquidity_fit": liquidity_fit, "trend_fit": trend_fit},
+        {
+            "volatility_fit": volatility_fit, "liquidity_fit": liquidity_fit,
+            "drawdown_fit": drawdown_fit, "lot_fit": lot_fit, "crowding_fit": crowding_fit,
+        },
         weights,
-        min_active_weight=0.45,
+        min_active_weight=0.40,
     )
 
 
@@ -489,7 +546,11 @@ def score_ranking(
             "market_fit": market_fit.get("score"),
             "profile_fit": profile_fit.get("score"),
         },
-        {"intrinsic": 0.78, "market_fit": 0.08, "profile_fit": 0.14},
+        # profile_fit から intrinsic を抜いたので、実効重みは名目どおりになった。
+        # 旧: intrinsic 0.78 + profile 0.14×0.55 ≒ 0.86 が実効。新: 0.66。
+        # プロファイル差が最終順位に届くだけの重みを与える（同点崩し用の
+        # 飾りにしない）。市場環境は「門」であって主たる得点ではないので薄い。
+        {"intrinsic": 0.66, "market_fit": 0.08, "profile_fit": 0.26},
         {
             "intrinsic": intrinsic_confidence,
             "market_fit": float(market_fit.get("confidence") or 0.0),
@@ -504,13 +565,15 @@ def risk_penalty(row: Mapping[str, Any], profile: str) -> tuple[float, list[str]
     penalty = 0.0
     flags: list[str] = []
     warnings: list[str] = []
+    # ボラティリティと押しの深さは **好みの軸** なので profile_fit 側だけで
+    # 扱う（进取は高ボラを加点、稳健は減点）。ここで再度減点すると、同じ ATR を
+    # 一方で褒めて他方で罰することになり、3 モードの差が打ち消し合う。
+    # 表示のための注記は残す（順位には効かない情報として）。
     atr_pct = _finite(row.get("atr_pct"))
     if atr_pct is not None and atr_pct > 7:
-        penalty += 12
         flags.append("高波动")
         warnings.append(f"ATR约{atr_pct:.1f}%，波动风险高")
     elif atr_pct is not None and atr_pct > 5:
-        penalty += 7
         flags.append("波动偏高")
     details = row.get("details") or {}
     gap200 = (details.get("snapshot") or {}).get("ma200_gap_pct")
@@ -522,9 +585,14 @@ def risk_penalty(row: Mapping[str, Any], profile: str) -> tuple[float, list[str]
     if avg_turnover is not None and avg_turnover < _LIQUIDITY_BASE_JPY * 1.4:
         penalty += 4
         flags.append("流动性边缘")
+    # 通常の押しの深さは drawdown_fit（好みの軸）に任せる。ここで減点するのは
+    # 好みで済まない水準 —— 3 ヶ月で 4 割の毀損は構造そのものが壊れている。
     drawdown = _finite(row.get("drawdown_63d_pct"))
-    if drawdown is not None and drawdown < -22:
-        penalty += 7
+    if drawdown is not None and drawdown < -40:
+        penalty += 10
+        flags.append("深度回撤")
+        warnings.append(f"63日最大回撤约{drawdown:.0f}%，趋势结构已受损")
+    elif drawdown is not None and drawdown < -22:
         flags.append("回撤较深")
     vol_price = details.get("vol_price") or {}
     vol_adjustment = _finite(vol_price.get("risk_penalty_adjustment")) or 0.0
@@ -762,10 +830,28 @@ def build_view_rows(
             profile_fit,
         )
         penalty, flags, warnings = risk_penalty(row, profile)
-        ranking_score = _finite(ranking.get("score"))
+        raw_ranking_score = _finite(ranking.get("score"))
+        # リスク減点を **実際に順位へ効かせる**。以前は penalty を計算して
+        # 画面にも出していたが、並べ替えは減点前のスコアで行っていたため、
+        # 「高リスク」と表示された銘柄がそのまま上位に居座っていた。
+        final_ranking_score = (
+            max(0.0, min(100.0, raw_ranking_score - penalty))
+            if raw_ranking_score is not None
+            else None
+        )
         merged = dict(row)
         merged.update(
-            ranking_score=round(ranking_score, 1) if ranking_score is not None else None,
+            raw_ranking_score=(
+                round(raw_ranking_score, 1) if raw_ranking_score is not None else None
+            ),
+            final_ranking_score=(
+                round(final_ranking_score, 1) if final_ranking_score is not None else None
+            ),
+            # 互換: 既存の消費者は ranking_score を見ている。名前は残しつつ
+            # 中身をリスク調整後に揃える（表示と挙動の食い違いを解消する）。
+            ranking_score=(
+                round(final_ranking_score, 1) if final_ranking_score is not None else None
+            ),
             market_fit_score=(
                 round(market_fit["score"], 1) if market_fit.get("score") is not None else None
             ),
@@ -774,7 +860,8 @@ def build_view_rows(
             ),
             ranking_confidence=float(ranking.get("confidence") or 0.0),
             risk_penalty=penalty,
-            classification=classify(row, ranking_score, penalty),
+            # 分層・分類も最終スコア基準に統一（同じ数字で語る）。
+            classification=classify(row, final_ranking_score, penalty),
         )
         merged["tags"], merged["reasons"], merged["warnings"] = _annotate(
             merged, flags, warnings, market_fit
@@ -842,13 +929,15 @@ def _annotate(
 
 
 def sort_view_rows(rows: list[dict[str, Any]], timeframe: str) -> None:
+    """並べ替えは必ず **リスク調整後**（final_ranking_score）で行う。"""
+
     if timeframe in {"short", "mid", "long"}:
         key = f"score_{timeframe}"
         rows.sort(
             key=lambda item: (
                 item.get(key) is not None,
                 (_finite(item.get(key)) or 0.0) * 0.94
-                + (_finite(item.get("ranking_score")) or 0.0) * 0.06,
+                + (_finite(item.get("final_ranking_score")) or 0.0) * 0.06,
                 item.get("canonical_code") or "",
             ),
             reverse=True,
@@ -856,8 +945,8 @@ def sort_view_rows(rows: list[dict[str, Any]], timeframe: str) -> None:
         return
     rows.sort(
         key=lambda item: (
-            item.get("ranking_score") is not None,
-            _finite(item.get("ranking_score")) or 0.0,
+            item.get("final_ranking_score") is not None,
+            _finite(item.get("final_ranking_score")) or 0.0,
             item.get("canonical_code") or "",
         ),
         reverse=True,

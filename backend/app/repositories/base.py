@@ -30,6 +30,32 @@ def schema_checksum(ddl_statements: tuple[str, ...]) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
+_ADD_COLUMN_PREFIX = "alter table "
+
+
+def _column_already_present(connection: sqlite3.Connection, statement: str) -> bool:
+    """`ALTER TABLE x ADD COLUMN y ...` の y が既に在るか。
+
+    SQLite に `ADD COLUMN IF NOT EXISTS` が無いため、マイグレーションの
+    再実行や「新しい DDL で作った DB に古いバージョンが刻まれている」状態で
+    `duplicate column name` に当たる。ここで潰すのはその 1 ケースだけで、
+    ADD COLUMN 以外の文には一切触れない（本物のエラーは握り潰さない）。
+    """
+
+    text = " ".join(statement.split())
+    lowered = text.lower()
+    if not lowered.startswith(_ADD_COLUMN_PREFIX) or " add column " not in lowered:
+        return False
+    head, _, tail = text.partition(" ADD COLUMN " if " ADD COLUMN " in text else " add column ")
+    table = head[len(_ADD_COLUMN_PREFIX):].strip().strip('"').strip("'")
+    column = tail.strip().split()[0].strip('"').strip("'")
+    try:
+        rows = connection.execute(f'PRAGMA table_info("{table}")').fetchall()
+    except sqlite3.Error:
+        return False
+    return any(str(row[1]) == column for row in rows)
+
+
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -97,6 +123,12 @@ class SQLiteRepository:
                     while version != self.SCHEMA_VERSION and version in self.MIGRATIONS:
                         statements, next_version = self.MIGRATIONS[version]
                         for statement in statements:
+                            if _column_already_present(connection, statement):
+                                # ADD COLUMN で既に在る列だけを飛ばす。SQLite に
+                                # IF NOT EXISTS が無いので、再実行や「新 DDL で
+                                # 作った DB に旧版が刻まれている」ケースで詰まる。
+                                # それ以外のエラーは従来どおり送出してロールバック。
+                                continue
                             connection.execute(statement)
                         version = next_version
                         migrated = True

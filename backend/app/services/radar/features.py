@@ -20,6 +20,8 @@ FEATURE_VERSION = "jp-features-v2"  # v2: +return_126d/+return_252d（強度ス�
 
 MIN_BARS_FOR_FEATURES = 30
 
+from .turnover_quality import turnover_stability as compute_turnover_stability
+
 
 def _pick_price(bar: Mapping[str, Any], adj_key: str, raw_key: str) -> float | None:
     value = bar.get(adj_key)
@@ -157,6 +159,9 @@ def compute_features_from_series(series: dict[str, list]) -> dict[str, Any] | No
         if turnover_today is not None and turnover_median_20
         else None
     )
+    # 「毎日ちゃんと商いがあるか」は 60 日で測る（20 日だと 1 回の突発が
+    # 窓の 5% を占めてしまい、突発と常態の区別が付かない）。
+    turnover_stability_60 = compute_turnover_stability(turnover[-60:])
     recent5 = [value for value in turnover[-5:] if value is not None]
     turnover_trend = (
         (sum(recent5) / len(recent5)) / avg_turnover_20
@@ -239,6 +244,7 @@ def compute_features_from_series(series: dict[str, list]) -> dict[str, Any] | No
         "avg_turnover_20d": avg_turnover_20,
         "turnover_ratio": turnover_ratio,
         "turnover_trend": turnover_trend,
+        "turnover_stability": turnover_stability_60,
         "prior_high_20": prior_high_20,
         "prior_high_60": prior_high_60,
         "prior_high_120": prior_high_120,
