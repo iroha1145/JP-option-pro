@@ -27,6 +27,14 @@ from .short_behavior import evaluate_signals
 #: 足の読み込み窓。スナップショットが 252 日分位と 200 日線を要求する。
 BAR_LOOKBACK = pipeline.BAR_LOOKBACK_TRADING_DAYS
 
+#: 再生時に評価する銘柄を、直近この営業日数の中に公開イベントがあるものに絞る。
+#:
+#: 吸収の横断面分位に載るのは「圧力が ADV20 の 2% 以上」の銘柄だけで、それには
+#: 20 営業日以内の建玉変化が要る。イベントが無い銘柄は分位の母集団にも入らず、
+#: 状態も `no_signal` にしかならないので、母集団も信号も変わらない。
+#: 全銘柄を毎回組み立てると 1 評価日あたり約 5 分（10 年で 10 時間）かかる。
+EVENT_WINDOW_TRADING_DAYS = 30
+
 
 def _slice_until(series: Sequence[Mapping[str, Any]], day: str, lookback: int) -> list[dict[str, Any]]:
     out = [bar for bar in series if str(bar.get("trade_date") or "") <= day]
@@ -64,17 +72,23 @@ def replay(
     previous_states: dict[str, str] = {}
     for position, day in enumerate(evaluation_days):
         window = [d for d in calendar if d <= day][-BAR_LOOKBACK:]
+        event_floor = window[-EVENT_WINDOW_TRADING_DAYS] if len(window) > EVENT_WINDOW_TRADING_DAYS else window[0]
         stocks: list[snap.StockInputs] = []
         for code, series in bars.items():
-            trimmed = _slice_until(series, day, BAR_LOOKBACK)
-            if len(trimmed) < 60:
-                continue
-            security = securities.get(code) or {}
             # 公開日で切る。仓位日で切ると未来の情報が入る。
             code_events = [
                 event for event in events_all.get(code, [])
                 if str(event.get("published_date") or "") <= day
             ]
+            if not code_events:
+                continue
+            # 直近に動きが無い銘柄は分位の母集団にも信号にも寄与しない。
+            if str(code_events[-1].get("effective_trade_date") or "") < event_floor:
+                continue
+            trimmed = _slice_until(series, day, BAR_LOOKBACK)
+            if len(trimmed) < 60:
+                continue
+            security = securities.get(code) or {}
             stocks.append(snap.StockInputs(
                 canonical_code=code, bars=trimmed, events=code_events,
                 sector33_code=security.get("sector33_code"),
