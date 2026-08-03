@@ -67,13 +67,26 @@ def describe(
 
     lines: list[str] = []
 
-    reporting = [h for h in holders if h.get("visibility_status") == "reporting"]
+    # 「報告義務中」でも報告が止まっているものは合計に入っていない。
+    # 件数だけ数えて比率を合計から取ると、行数と合計が食い違う。
+    reporting = [
+        h for h in holders
+        if h.get("visibility_status") == "reporting" and not h.get("stale_reporting")
+    ]
+    stale = [h for h in holders if h.get("stale_reporting")]
     below = [h for h in holders if h.get("visibility_status") == "below_public_threshold"]
     ratio = _pct(snapshot.get("visible_short_ratio"))
     if ratio and reporting:
         lines.append(f"当前处于报告义务中的机构 {len(reporting)} 家，公开可见空头比例合计 {ratio}。")
     elif not reporting:
         lines.append("当前没有处于报告义务中的机构，公开可见空头比例为 0。")
+    if stale:
+        oldest = max((h.get("state_age_trading_days") or 0) for h in stale)
+        lines.append(
+            f"另有 {len(stale)} 家仍标记为报告义务中，但最后一次报告已是 "
+            f"{oldest} 个交易日之前——报告义务下每变动 0.1% 就应报告，"
+            "因此该数值不能作为当前仓位的证据，未计入合计。"
+        )
     if below:
         lines.append(
             f"另有 {len(below)} 家已跌破公开披露门槛——该机构已降至门槛以下，"

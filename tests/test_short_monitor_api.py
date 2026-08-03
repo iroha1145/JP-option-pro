@@ -213,3 +213,26 @@ def test_explanation_never_claims_intent():
             assert word not in text or "不代表" in text or "不表示" in text, (
                 f"{state} の文言に断定的な表現がある: {word}"
             )
+
+
+def test_explanation_row_count_matches_the_summed_ratio():
+    """行数と合計が食い違わないこと。
+
+    「報告義務中 2 家、合計 1.23%」と出ていたが、1.23% は 1 家ぶんだった
+    —— もう 1 家は 1,423 営業日前の報告で合計から除いていた。数え方が
+    2 か所でずれると、画面の数字が内部で矛盾する。
+    """
+
+    described = explain.describe(
+        {"visible_short_ratio": 0.0123, "primary_state": states.STATE_NORMAL_SHORTING},
+        [
+            {"visibility_status": "reporting", "stale_reporting": False},
+            {"visibility_status": "reporting", "stale_reporting": True,
+             "state_age_trading_days": 1423},
+            {"visibility_status": "below_public_threshold"},
+        ],
+    )
+    joined = " ".join(described["lines"])
+    assert "报告义务中的机构 1 家" in joined
+    assert "1423 个交易日之前" in joined
+    assert "未计入合计" in joined
