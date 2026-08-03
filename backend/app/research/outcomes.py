@@ -17,6 +17,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
+from app.services.radar.adjustment import cumulative_factors
+
 # 評価する保有期間（営業日）
 HORIZONS = (1, 3, 5, 10, 20)
 
@@ -87,18 +89,30 @@ def forward_bars(bars: Sequence[Mapping[str, Any]], signal_date: str, horizon: i
     値動きが「シグナル後の成績」に混ざる（先読み）。
     """
 
+    # 分割・併合を除いてから測る。生値のままだと 1:2 分割が −50% の
+    # 最大不利変動（MAE）として、10:1 併合が +900% の含み益として記録され、
+    # その銘柄の成績は全て無意味になる（本番 10 年で 1,959 銘柄が該当）。
+    factors = cumulative_factors(bars)
+
+    def _price(row: Mapping[str, Any], adj_key: str, raw_key: str, factor: float):
+        stored = _finite(row.get(adj_key))
+        if stored is not None and stored > 0:
+            return stored
+        raw = _finite(row.get(raw_key))
+        return (raw * factor) if raw is not None else None
+
     out: list[Bar] = []
-    for row in bars:
+    for row, factor in zip(bars, factors):
         date = str(row.get("trade_date") or "")
         if date <= signal_date:
             continue
         out.append(
             Bar(
                 trade_date=date,
-                open=_finite(row.get("adj_open") if row.get("adj_open") is not None else row.get("open")),
-                high=_finite(row.get("adj_high") if row.get("adj_high") is not None else row.get("high")),
-                low=_finite(row.get("adj_low") if row.get("adj_low") is not None else row.get("low")),
-                close=_finite(row.get("adj_close") if row.get("adj_close") is not None else row.get("close")),
+                open=_price(row, "adj_open", "open", factor),
+                high=_price(row, "adj_high", "high", factor),
+                low=_price(row, "adj_low", "low", factor),
+                close=_price(row, "adj_close", "close", factor),
             )
         )
         if len(out) >= horizon:
@@ -136,11 +150,17 @@ def compute_outcome(
     outcome.forward_bars = len(ahead)
     outcome.truncated = len(ahead) < horizon_max
 
+    # 基準価格も前向きバーと **同じ調整基準**で取る。片方だけ調整すると、
+    # 分割を挟んだシグナルのリターンが丸ごと係数分ずれる。
     base = _finite(signal_close)
     if base is None:
-        for row in bars:
+        factors_all = cumulative_factors(bars)
+        for row, factor in zip(bars, factors_all):
             if str(row.get("trade_date") or "") == signal_date:
-                base = _finite(row.get("adj_close") or row.get("close"))
+                stored = _finite(row.get("adj_close"))
+                base = stored if (stored and stored > 0) else (
+                    (_finite(row.get("close")) or 0.0) * factor or None
+                )
                 break
     outcome.entry_reference_close = base
     if base is None or base <= 0 or not ahead:

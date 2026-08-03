@@ -20,16 +20,28 @@ FEATURE_VERSION = "jp-features-v2"  # v2: +return_126d/+return_252d（強度ス�
 
 MIN_BARS_FOR_FEATURES = 30
 
+from .adjustment import cumulative_factors
 from .turnover_quality import turnover_stability as compute_turnover_stability
 
 
-def _pick_price(bar: Mapping[str, Any], adj_key: str, raw_key: str) -> float | None:
+def _pick_price(
+    bar: Mapping[str, Any], adj_key: str, raw_key: str, factor: float = 1.0
+) -> float | None:
+    """調整後の値。取り込み済みの adj_* があれば優先、無ければ生値 × 累積係数。
+
+    一括配信 CSV には adj_* 列が無く AdjFactor しか来ないため、ここで作らないと
+    分割が前日比 −50% の暴落として指標に入る（本番 10 年で 1,959 銘柄が該当）。
+    """
+
     value = bar.get(adj_key)
-    if value is None:
-        value = bar.get(raw_key)
+    if value is not None:
+        number = float(value)
+        if math.isfinite(number) and number > 0.0:
+            return number
+    value = bar.get(raw_key)
     if value is None:
         return None
-    number = float(value)
+    number = float(value) * factor
     if not math.isfinite(number) or number <= 0.0:
         return None
     return number
@@ -43,11 +55,14 @@ def clean_series(bars: Sequence[Mapping[str, Any]]) -> dict[str, list] | None:
     opens: list[float] = []
     turnover: list[float | None] = []
     upper_limit: list[bool] = []
-    for bar in bars:
-        close = _pick_price(bar, "adj_close", "close")
-        high = _pick_price(bar, "adj_high", "high")
-        low = _pick_price(bar, "adj_low", "low")
-        open_ = _pick_price(bar, "adj_open", "open")
+    # そのバーより後に起きた調整の累積。窓の最終バーは必ず 1.0 なので、
+    # 直近の値は生値のまま（画面の現在値と約定可能価格の意味を変えない）。
+    factors = cumulative_factors(bars)
+    for bar, factor in zip(bars, factors):
+        close = _pick_price(bar, "adj_close", "close", factor)
+        high = _pick_price(bar, "adj_high", "high", factor)
+        low = _pick_price(bar, "adj_low", "low", factor)
+        open_ = _pick_price(bar, "adj_open", "open", factor)
         if close is None:
             continue  # 取引成立なし日はスキップ（穴は補間しない）
         if high is None or low is None:
