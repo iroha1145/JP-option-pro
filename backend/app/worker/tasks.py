@@ -448,7 +448,20 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             details={**outcome, "queue": jobs.status_counts()},
         )
 
-    def short_monitor_task(_payload: dict[str, Any] | None) -> TaskResult:
+    def short_monitor_task(payload: dict[str, Any] | None) -> TaskResult:
+        """手動更新の受け口。**定時では走らない。**
+
+        再構築は引け後バッチの中で雷達の後に走る。ここでも定時に走らせると、
+        単一ライターの SQLite を 9 分ぶん取り合って両方が `database is locked`
+        で落ちる（実際そうなった）。定時のティックは何もせず、手動の
+        `short_monitor_refresh` が来たときだけ同じ関数を呼ぶ。
+        """
+
+        if not payload:
+            return TaskResult(
+                status="completed", next_delay_seconds=6 * 3600.0,
+                details={"reason": "runs_inside_post_close_batch"},
+            )
         target = context.latest_completed_trading_day()
         if target is None:
             return TaskResult(
@@ -456,6 +469,11 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
                 details={"reason": "trading_calendar_empty_or_non_trading_day"},
             )
         result = _run_short_monitor(context, target)
+        if result.get("status") == "busy":
+            # 書き込みロックの取り合いは「壊れている」ではない。少し待って戻る。
+            return TaskResult(
+                status="skipped", next_delay_seconds=300.0, details=result,
+            )
         return TaskResult(
             status="failed" if result.get("status") == "error" else "completed",
             error_code=result.get("error_code"),
@@ -561,7 +579,11 @@ def _run_short_monitor(context: TaskContext, target_date: str) -> dict[str, Any]
             radar_confirmations=_radar_confirmations(context),
         )
     except Exception as exc:  # noqa: BLE001 - 全市場バッチを 1 件で落とさない
-        return {"status": "error", "error_code": type(exc).__name__, "message": str(exc)[:200]}
+        message = str(exc)
+        # 単一ライターの SQLite でロックがぶつかるのは想定内。障害ではない。
+        if "locked" in message or "busy" in message:
+            return {"status": "busy", "message": message[:200]}
+        return {"status": "error", "error_code": type(exc).__name__, "message": message[:200]}
 
     context.repository.record_sync_success(
         "short_behavior",

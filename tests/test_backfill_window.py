@@ -114,6 +114,9 @@ class _FakeContext:
     def jquants_ready(self) -> bool:
         return True
 
+    def latest_completed_trading_day(self):
+        return "2026-08-03"
+
 
 def _seed_up_to_date(core, engine, *, skip=None):
     """`skip` 以外のデータセットを「現在の窓で取り込み済み」にしておく。
@@ -353,3 +356,45 @@ def test_a_genuinely_failed_task_still_makes_the_worker_unhealthy(tmp_path):
         )
     state.acquire_lease("worker-test")
     assert state.health(names)["degraded_tasks"] == ["maintenance"]
+
+
+def _short_monitor_task(context):
+    for spec in build_default_tasks(context):
+        if spec.name == "short_monitor_refresh":
+            return spec.run
+    raise AssertionError("short_monitor_refresh task not registered")
+
+
+def test_the_scheduled_tick_does_not_duplicate_the_post_close_work(tmp_path):
+    """定時でも走らせると、単一ライターの SQLite を 9 分ぶん取り合う。
+
+    実際に `database is locked` で 2 回連続失敗し、コンテナが unhealthy に
+    なった。再構築は引け後バッチの中だけで走らせ、ここは手動の受け口にする。
+    """
+
+    core = _core(tmp_path)
+    engine = _engine(core, _window)
+    run = _short_monitor_task(_FakeContext(core, engine))
+
+    scheduled = run(None)
+    assert scheduled.status == "completed"
+    assert scheduled.details["reason"] == "runs_inside_post_close_batch"
+
+
+def test_a_locked_database_is_reported_as_busy_not_failed(tmp_path, monkeypatch):
+    """ロックの取り合いは「壊れている」ではない。少し待って戻る。"""
+
+    import app.worker.tasks as tasks
+
+    core = _core(tmp_path)
+    engine = _engine(core, _window)
+    context = _FakeContext(core, engine)
+    monkeypatch.setattr(context, "latest_completed_trading_day", lambda: "2026-08-03", raising=False)
+    monkeypatch.setattr(
+        tasks, "_run_short_monitor",
+        lambda _ctx, _target: {"status": "busy", "message": "database is locked"},
+    )
+
+    result = _short_monitor_task(context)({"manual": True})
+    assert result.status == "skipped"
+    assert result.next_delay_seconds <= 600.0
