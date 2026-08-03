@@ -273,3 +273,31 @@ def test_checkpoint_json_round_trips(tmp_path):
     assert checkpoint == json.loads(
         '{"bulk_history_from": "2016-08-01", "last_synced_date": "2026-08-03"}'
     )
+
+
+def test_a_newly_added_task_is_in_the_inventory_before_it_first_runs(tmp_path):
+    """在庫を「消すだけ」にしていると、タスクを 1 つ足すたびにデプロイが落ちる。
+
+    実際に起きたこと: `short_monitor_refresh` を足した直後、そのタスクの
+    初回遅延（180 秒）のあいだ `task_inventory_complete` が false のままで、
+    コンテナが unhealthy 判定 → `deploy.sh --wait-timeout 180` が失敗した。
+    まだ一度も走っていないことと、存在しないことは別。
+    """
+
+    from app.worker.state import WorkerStateRepository
+
+    state = WorkerStateRepository(tmp_path / "worker.db")
+    state.initialize()
+
+    names = ("post_close_batch", "history_backfill", "short_monitor_refresh")
+    state.reconcile_task_inventory(names)
+
+    health = state.health(names)
+    assert health["missing_tasks"] == []
+    assert health["task_inventory_complete"] is True
+    assert health["degraded_tasks"] == [], "未実行を degraded と混同している"
+
+    # 消えたタスクは在庫から落ちる（元の役割は保つ）
+    state.reconcile_task_inventory(("post_close_batch",))
+    remaining = {item["task_name"] for item in state.task_statuses()}
+    assert remaining == {"post_close_batch"}

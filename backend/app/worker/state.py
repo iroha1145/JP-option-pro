@@ -139,11 +139,25 @@ class WorkerStateRepository(SQLiteRepository):
             )
 
     def reconcile_task_inventory(self, task_names: tuple[str, ...]) -> None:
+        """在庫を起動時に揃える。**消すだけでなく、足りない行を作る。**
+
+        以前は削除しかしていなかったので、新しいタスクを 1 つ足すと、その
+        タスクが初回に走るまで `task_inventory_complete` が false のまま
+        —— つまり **コンテナが unhealthy** で、`deploy.sh --wait` が
+        初回遅延より短ければデプロイが失敗する（実際そうなった）。
+        まだ一度も走っていないことと、存在しないことは別。
+        """
+
         placeholders = ", ".join("?" for _ in task_names) or "''"
         with self.write() as connection:
             connection.execute(
                 f"DELETE FROM worker_task_status WHERE task_name NOT IN ({placeholders})",
                 task_names,
+            )
+            connection.executemany(
+                "INSERT INTO worker_task_status (task_name, status) VALUES (?, 'pending') "
+                "ON CONFLICT (task_name) DO NOTHING",
+                [(name,) for name in task_names],
             )
 
     # -- task status ------------------------------------------------------
