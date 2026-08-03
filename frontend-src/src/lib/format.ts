@@ -119,3 +119,10 @@ export function direction(value: number | null | undefined): 'up' | 'down' | 'fl
   if (value < -0.00005) return 'down';
   return 'flat';
 }
+
+/** epoch 秒 → JST の HH:MM（遅延気配の「いつの値か」表示用） */
+export function fmtTimeJst(epochSeconds: number): string {
+  return new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(new Date(epochSeconds * 1000));
+}

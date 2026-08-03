@@ -21,7 +21,7 @@ import { DataThrough, ScoreBar, SignalChip, StateChip } from '@/components/domai
 import { useAccess } from '@/hooks/useAccess';
 import { STRUCTURE_HINTS, TECHNICAL_HINTS, type ScoreHint } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
-import { fmtDate, fmtPct, fmtPrice, fmtYenCompact } from '@/lib/format';
+import { fmtDate, fmtPct, fmtPrice, fmtTimeJst, fmtYenCompact } from '@/lib/format';
 import type {
   FinancialSummaryView,
   IntradayChart,
@@ -55,11 +55,15 @@ export default function StockDetail() {
     null,
     [code, interval],
   );
+  /* 遅延気配は 1 分ポーリング。J-Quants は場中に何も出さないので、
+     「今いくらか」はこの非公式・15分遅延の値でしか埋められない。 */
+  const live = usePolling(() => stocksApi.intradayQuotes([code]), 60_000, [code]);
   const { isOwner } = useAccess();
   const [watchNote, setWatchNote] = useState<string | null>(null);
   const [fetchNote, setFetchNote] = useState<string | null>(null);
 
   const state = remoteState(overview);
+  const liveQuote = live.data?.enabled ? (live.data.quotes[Object.keys(live.data.quotes)[0]] ?? null) : null;
   const technical = overview.data?.technical ?? null;
 
   const chartOption = useMemo(() => {
@@ -220,8 +224,32 @@ export default function StockDetail() {
           {security.margin_name && <span>{security.margin_name}</span>}
         </div>
         <div className="mt-2 flex flex-wrap items-end gap-4">
-          <span className="font-mono text-display-l tnum text-ink-900">{fmtPrice(data.quote.close)}</span>
-          <ChangeBadge value={data.quote.change_pct} />
+          {liveQuote ? (
+            <>
+              {/* 遅延気配を主表示にするが、必ず「遅延・非公式」と併記する。
+                  公式の確定終値は隣に小さく残し、どちらの数字かを曖昧にしない。 */}
+              <span className="flex flex-col">
+                <span className="flex items-baseline gap-2">
+                  <span className="font-mono text-display-l tnum text-ink-900">{fmtPrice(liveQuote.price)}</span>
+                  <ChangeBadge value={liveQuote.change_pct} />
+                </span>
+                <span className="mt-0.5 flex items-center gap-1 text-micro text-warn-700">
+                  <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
+                  {t('延迟{n}分 · 非官方源', { n: live.data?.delayed_minutes ?? 15 })}
+                  {liveQuote.as_of_epoch ? ` · ${fmtTimeJst(liveQuote.as_of_epoch)}` : ''}
+                </span>
+              </span>
+              <span className="flex flex-col text-caption text-ink-400">
+                <span className="font-mono tnum text-ink-600">{fmtPrice(data.quote.close)}</span>
+                <span>{t('官方终值')} {data.quote.trade_date ?? ''}</span>
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="font-mono text-display-l tnum text-ink-900">{fmtPrice(data.quote.close)}</span>
+              <ChangeBadge value={data.quote.change_pct} />
+            </>
+          )}
           <span className="text-body-s text-ink-500">
             {t('成交额')} <span className="font-mono tnum">{fmtYenCompact(data.quote.turnover_value)}</span>
           </span>

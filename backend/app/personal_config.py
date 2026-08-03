@@ -48,6 +48,8 @@ class AccessConfig(StrictConfigModel):
 class FeatureConfig(StrictConfigModel):
     radar_enabled: bool = True
     news_mode: Literal["off", "read", "scheduled"] = "off"
+    # 遅延ザラ場気配（Yahoo・非公式）。表示専用でスコアには一切入らない。
+    intraday_quotes: bool = True
 
 
 class AIConfig(StrictConfigModel):

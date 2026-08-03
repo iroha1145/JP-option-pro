@@ -12,6 +12,7 @@ import type {
   IntradayChart,
   TickView,
   MarketOverview,
+  IntradayQuotesResponse,
   SectorMemberSort,
   SectorMembersView,
   MarketRegime,
@@ -57,6 +58,9 @@ export const stocksApi = {
   },
   intradayChart(code: string, interval: '1m' | '5m' | '60m'): Promise<IntradayChart> {
     return get(`/stocks/${encodeURIComponent(code)}/chart?${toQuery({ interval })}`);
+  },
+  intradayQuotes(codes: string[]): Promise<IntradayQuotesResponse> {
+    return get(`/quotes/intraday?${toQuery({ codes: codes.join(',') })}`);
   },
   tickView(code: string): Promise<TickView> {
     return get(`/stocks/${encodeURIComponent(code)}/ticks`);

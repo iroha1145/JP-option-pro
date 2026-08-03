@@ -53,6 +53,27 @@ export interface SectorMembersView {
   rows: SectorMemberRow[];
 }
 
+/** 遅延ザラ場気配（Yahoo・非公式・表示専用）。公式値と混ぜないこと。 */
+export interface IntradayQuote {
+  key: string;
+  symbol: string;
+  price: number;
+  previous_close: number | null;
+  change_pct: number | null;
+  as_of_epoch: number | null;
+  source: string;
+}
+
+export interface IntradayQuotesResponse {
+  version: string;
+  enabled: boolean;
+  source: string;
+  delayed?: boolean;
+  delayed_minutes?: number;
+  quotes: Record<string, IntradayQuote>;
+  indices?: Record<string, IntradayQuote & { name: string }>;
+}
+
 export interface MarketOverview {
   version: string;
   data_through: string | null;

@@ -904,4 +904,6 @@ export const DICT: Record<string, [string, string]> = {
     'Market open · today’s data lands after the close',
     'ザラ場中 · 当日データは引け後に更新',
   ],
+  '延迟{n}分 · 非官方源': ['{n}-min delayed · unofficial', '{n}分遅延 · 非公式ソース'],
+  官方终值: ['Official close', '公式終値'],
 };

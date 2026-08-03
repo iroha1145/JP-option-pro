@@ -13,6 +13,8 @@ allowed_private_cidrs = [
 ]
 
 [features]
+# 遅延ザラ場気配（Yahoo・非公式・表示専用）。スコアには一切入らない。
+intraday_quotes = true
 radar_enabled = true
 # off | read | scheduled — ニュース同期と AI ジョブ
 # read: RSS取込+実体照合+分類+去重（AI 翻訳/分析は scheduled + OPENAI_API_KEY で有効化）
