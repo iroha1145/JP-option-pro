@@ -185,6 +185,9 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
                 results[name] = dict(step())
         scan_summary = _run_radar_and_screener(context, target)
         results["radar"] = scan_summary
+        # 雷達の後に回す。突破確認と出来高確認を「挤空確認」の条件に使うので、
+        # その日の雷達が終わっていないと判定材料が揃わない。
+        results["short_monitor"] = _run_short_monitor(context, target)
         failed = [
             name for name, value in results.items()
             if isinstance(value, dict) and value.get("status") == "error"
@@ -484,6 +487,62 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             action_types=("intraday_fetch", "tick_fetch"),
         ),
     ]
+
+
+#: 突破が確認済みと呼べる雷達状態。挤空確認の「価格突破」条件に使う。
+_RADAR_BREAKOUT_STATES = frozenset({
+    "confirmed", "holding", "retest_held", "reaccelerating", "extended",
+})
+
+
+def _radar_confirmations(context: TaskContext) -> dict[str, dict[str, bool]]:
+    """雷達の突破確認と出来高確認を、銘柄ごとの真偽に落とす。
+
+    空売り側で価格を再判定しない —— 突破の定義は 1 か所（雷達）に置く。
+    """
+
+    out: dict[str, dict[str, bool]] = {}
+    for event in context.repository.open_radar_events(terminal_states=sorted(TERMINAL_STATES)):
+        code = event.get("canonical_code")
+        if not code:
+            continue
+        breakout = str(event.get("state") or "") in _RADAR_BREAKOUT_STATES
+        scores = event.get("scores") or {}
+        confirmation = scores.get("breakout_confirmation") or {}
+        turnover = confirmation.get("score") if isinstance(confirmation, dict) else None
+        current = out.setdefault(code, {"breakout": False, "turnover": False})
+        current["breakout"] = current["breakout"] or breakout
+        current["turnover"] = current["turnover"] or bool(turnover is not None and turnover >= 60.0)
+    return out
+
+
+def _run_short_monitor(context: TaskContext, target_date: str) -> dict[str, Any]:
+    """機関空売り行動モニターの再構築 + 当日スナップショット。
+
+    1 銘柄の異常で全市場を止めない。失敗したら前回の有効なスナップショットを
+    そのまま残す（消さない）。
+    """
+
+    from app.services.short_monitor import pipeline as short_monitor
+
+    if not context.repository.latest_short_position_date():
+        return {"status": "skipped", "reason": "no_short_position_data"}
+    try:
+        rebuilt = short_monitor.rebuild_events(context.repository)
+        refreshed = short_monitor.refresh_snapshots(
+            context.repository,
+            as_of_date=target_date,
+            radar_confirmations=_radar_confirmations(context),
+        )
+    except Exception as exc:  # noqa: BLE001 - 全市場バッチを 1 件で落とさない
+        return {"status": "error", "error_code": type(exc).__name__, "message": str(exc)[:200]}
+
+    context.repository.record_sync_success(
+        "short_behavior",
+        rows_total=refreshed.snapshots,
+        data_through=refreshed.as_of_date,
+    )
+    return {"status": "ok", "rebuild": rebuilt.as_dict(), "refresh": refreshed.as_dict()}
 
 
 def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str, Any]:
