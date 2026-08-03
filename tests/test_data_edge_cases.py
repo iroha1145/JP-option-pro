@@ -245,3 +245,55 @@ def test_regulation_map_is_empty_when_nothing_is_published(tmp_path):
     repo.initialize()
     assert repo.latest_margin_alert_map() == {}
     assert repo.latest_margin_alert_date() is None
+
+
+# ---------------------------------------------------------------------------
+# 5. 全市場スキャンの入力に必要な列が揃っているか
+# ---------------------------------------------------------------------------
+
+
+def test_scan_input_carries_raw_ohlc_and_the_adjustment_factor(tmp_path):
+    """`bars_matrix_since` が high/low/adjustment_factor を返すこと。
+
+    ここが欠けると例外は出ず、静かに壊れる:
+      * high/low 欠落 → clean_series の欠測フォールバックで high=low=close。
+        ATR が日中レンジを失い、prior_high_N が「終値の高値」になって
+        ピボットが本来より低くなる ＝ 突破が実際より出やすくなる。
+      * adjustment_factor 欠落 → 分割・併合の調整が一切効かない。
+    本番では adj_* が全行 NULL なので、生の列が唯一の情報源になる。
+    """
+
+    repo = CoreRepository(tmp_path / "core.db")
+    repo.initialize()
+    repo.upsert_daily_bars([{
+        "canonical_code": "72030", "trade_date": "2026-07-31",
+        "open": 3000.0, "high": 3200.0, "low": 2950.0, "close": 3100.0,
+        "adjustment_factor": 0.5, "turnover_value": 1e9, "volume": 1e6,
+        "upper_limit": 0,
+    }])
+
+    bars = repo.bars_matrix_since("2026-07-01")["72030"]
+    for column in ("open", "high", "low", "close", "adjustment_factor"):
+        assert column in bars[0], f"{column} がスキャン入力から欠けている"
+    assert bars[0]["high"] == 3200.0
+    assert bars[0]["adjustment_factor"] == 0.5
+
+
+def test_scan_input_does_not_collapse_high_low_into_close(tmp_path):
+    """実データ経路で high/low が close に潰れないこと（回帰）。"""
+
+    repo = CoreRepository(tmp_path / "core.db")
+    repo.initialize()
+    dates = _dates(40)
+    repo.upsert_daily_bars([
+        {"canonical_code": "72030", "trade_date": date,
+         "open": 100.0, "high": 108.0, "low": 96.0, "close": 100.0,
+         "adjustment_factor": 1.0, "turnover_value": 8e8, "volume": 8e6,
+         "upper_limit": 0}
+        for date in dates
+    ])
+    series = clean_series(repo.bars_matrix_since(dates[0])["72030"])
+    assert series is not None
+    assert series["highs"] != series["closes"], "high が close に潰れている"
+    assert max(series["highs"]) == 108.0
+    assert min(series["lows"]) == 96.0

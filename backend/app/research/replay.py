@@ -34,10 +34,13 @@ from app.services.radar.technicals import compute_technicals
 from app.services.radar.vol_price_match import compute_vol_price_match
 from app.services.strength_scan import score_intrinsic_jp
 
-#: v2: 株式分割・併合の遡及調整を適用。v1 の断面は未調整の生値で作られて
-#: おり、会社行動のあった銘柄（本番 10 年で 1,959 銘柄）の指標が壊れている。
-#: 版を上げることで v1 の結果と混ざらない（同じ run_id に追記されない）。
-REPLAY_VERSION = "jp-replay-v2"
+#: v2: 株式分割・併合の遡及調整を適用。
+#: v3: スキャン入力に生の high/low/adjustment_factor を含める。v1/v2 は
+#:     `bars_matrix_since` が close と（全行 NULL の）adj_* しか返して
+#:     いなかったため、high=low=close に潰れ、調整係数も届いていなかった。
+#:     ATR は日中レンジを失い、ピボットは終値の高値になっていた。
+#: 版を上げるたびに run_id が変わるので、古い断面と混ざらない。
+REPLAY_VERSION = "jp-replay-v3"
 
 #: 現時点で真の点時版が用意できない項目。結果に必ず添えて、無バイアスの
 #: ふりをしない（doc §五「明确标记限制，不要假装无偏」）。

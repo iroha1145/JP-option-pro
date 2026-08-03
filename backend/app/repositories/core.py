@@ -283,11 +283,21 @@ class CoreRepository(SQLiteRepository):
     def bars_matrix_since(self, start_date: str) -> dict[str, list[dict[str, Any]]]:
         """Per-code bar lists for the radar/screener full-market scan."""
 
+        # 生の OHLC と調整係数を必ず含める。
+        #
+        # 以前は close と adj_* だけを引いていた。本番では adj_* が全行 NULL
+        # （一括配信 CSV にその列が無い）なので、全市場スキャンは
+        #   * high/low を欠いたまま走り → clean_series の欠測フォールバックで
+        #     high = low = close に潰れる。ATR は日中レンジを失い、
+        #     prior_high_N は「終値の高値」になってピボットが本来より低くなる
+        #     ＝ 突破が実際より出やすくなる。
+        #   * adjustment_factor を欠く → 分割・併合の調整が効かない。
         with self.read() as connection:
             rows = connection.execute(
                 """
-                SELECT canonical_code, trade_date, close, adj_close, adj_open, adj_high, adj_low,
-                       turnover_value, volume, adj_volume, upper_limit
+                SELECT canonical_code, trade_date, open, high, low, close,
+                       adj_open, adj_high, adj_low, adj_close,
+                       adjustment_factor, turnover_value, volume, adj_volume, upper_limit
                 FROM daily_bars WHERE trade_date >= ?
                 ORDER BY canonical_code, trade_date
                 """,
