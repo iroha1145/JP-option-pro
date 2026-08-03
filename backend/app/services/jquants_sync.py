@@ -63,6 +63,19 @@ _BULK_BACKFILL_ENDPOINTS = {
 }
 
 
+def _bulk_file_date(key: str) -> str | None:
+    """`.../markets_short-sale-report_20260803.csv.gz` → `2026-08-03`。
+
+    月次ファイル（`..._202607.csv.gz`）は日次の対象外なので None を返す。
+    """
+
+    stem = key.rsplit("/", 1)[-1].split(".", 1)[0]
+    digits = stem.rsplit("_", 1)[-1]
+    if len(digits) != 8 or not digits.isdigit():
+        return None
+    return f"{digits[:4]}-{digits[4:6]}-{digits[6:]}"
+
+
 class SyncResult(dict):
     """Plain dict subclass so task status JSON stays trivially serializable."""
 
@@ -395,6 +408,20 @@ class JQuantsSyncEngine:
         )
 
     def sync_short_positions(self, target_date: str) -> SyncResult:
+        """空売り残高の日次取り込み。
+
+        **REST の `/markets/short-sale-report` は `code` 必須**で、日付範囲だけの
+        問い合わせは 400 を返す（`disc_date_from`/`disc_date_to`、`from`/`to`、
+        `disclosed_date` いずれも実測で 400。`code` を付けた瞬間に 200）。
+        全銘柄を code ごとに回すのは現実的でないので、バックフィルと同じ
+        **一括配信の日次ファイル**を使う。
+
+        以前はここで日付範囲の REST を叩いており、増分取り込みは一度も
+        成立していなかった（データは全て bulk 回填由来）。しかも
+        `start > target_date` の分岐が「取りに行かずに ok」を返すため、
+        取り込めていない日が続いても同期状態は成功のまま見えていた。
+        """
+
         def work() -> SyncResult:
             checkpoint = self._checkpoint(DATASET_SHORT_POSITIONS)
             last = checkpoint.get("last_synced_date")
@@ -402,23 +429,50 @@ class JQuantsSyncEngine:
                 return SyncResult(dataset=DATASET_SHORT_POSITIONS, status="backfill_required", rows=0)
             start = add_days(last, 1)
             if start > target_date:
-                return SyncResult(dataset=DATASET_SHORT_POSITIONS, status="ok", rows=0)
-            rows = [
-                mapped
-                for row in self._client.fetch_rows(
-                    "/markets/short-sale-report",
-                    {"disc_date_from": start, "disc_date_to": target_date},
+                # 取りに行っていないことを "ok" と呼ばない。何もしていない日は
+                # そう名乗る（取り込みが壊れていても成功に見える、を防ぐ）。
+                return SyncResult(
+                    dataset=DATASET_SHORT_POSITIONS, status="up_to_date", rows=0,
+                    data_through=last,
                 )
-                if (mapped := mapping.map_short_position(row))
-            ]
-            count = self._repository.upsert_short_positions(rows)
+
+            endpoint = _BULK_BACKFILL_ENDPOINTS[DATASET_SHORT_POSITIONS]
+            files = self._client.bulk_list(endpoint=endpoint, date_from=start)
+            keys = sorted(str(item.get("Key")) for item in files if item.get("Key"))
+            # 一括ファイル名の末尾は YYYYMMDD。開始日より前のものは捨てる。
+            wanted = [key for key in keys if _bulk_file_date(key) and start <= _bulk_file_date(key) <= target_date]
+            if not wanted:
+                return SyncResult(
+                    dataset=DATASET_SHORT_POSITIONS, status="not_published", rows=0,
+                    data_through=last,
+                )
+
+            total = 0
+            latest_date = last
+            for key in wanted:
+                handle = self._client.bulk_download_csv(key)
+                batch: list[dict[str, Any]] = []
+                for raw in csv.DictReader(handle):
+                    mapped = mapping.map_short_position(raw)
+                    if mapped is not None:
+                        batch.append(mapped)
+                    if len(batch) >= 20000:
+                        total += self._repository.upsert_short_positions(batch)
+                        batch = []
+                if batch:
+                    total += self._repository.upsert_short_positions(batch)
+                latest_date = max(latest_date, _bulk_file_date(key) or last)
+
             self._repository.record_sync_success(
                 DATASET_SHORT_POSITIONS,
-                checkpoint={"last_synced_date": target_date},
-                rows_total=count,
-                data_through=target_date,
+                checkpoint={"last_synced_date": latest_date},
+                rows_total=total,
+                data_through=latest_date,
             )
-            return SyncResult(dataset=DATASET_SHORT_POSITIONS, status="ok", rows=count)
+            return SyncResult(
+                dataset=DATASET_SHORT_POSITIONS, status="ok", rows=total,
+                data_through=latest_date, files=len(wanted),
+            )
 
         return self._run_dataset(DATASET_SHORT_POSITIONS, work)
 

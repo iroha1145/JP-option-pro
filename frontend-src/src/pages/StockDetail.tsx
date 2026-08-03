@@ -889,13 +889,35 @@ function ShortPositionsPanel({ rows }: { rows: ShortPositionRow[] }) {
   if (rows.length === 0) return <p className="text-body-s text-ink-400">{t('暂无数据')}</p>;
   return (
     <ul className="divide-y divide-line">
-      {rows.slice(0, 5).map((row, index) => (
-        <li key={index} className="flex items-center justify-between gap-2 py-1.5 text-body-s">
-          <span className="min-w-0 truncate text-ink-700">{row.holder_name ?? '—'}</span>
-          <span className="shrink-0 font-mono tnum text-ink-900">{fmtPct(row.short_position_ratio, 2)}</span>
-          <span className="shrink-0 text-micro text-ink-400">{fmtDate(row.calculated_date)}</span>
-        </li>
-      ))}
+      {rows.slice(0, 6).map((row, index) => {
+        // 残高比率は **水準**（発行済株式の何%を売り建てているか）であって
+        // 騰落率ではない。fmtPct は符号を付けるので、0.51% が「+0.51%」に
+        // 見えてしまい「0.51% 増えた」と読めてしまう（実際は前回比 −0.26%）。
+        const ratio = row.short_position_ratio;
+        const prev = row.previous_ratio;
+        const delta = ratio != null && prev != null ? ratio - prev : null;
+        return (
+          <li key={index} className="flex items-center justify-between gap-2 py-1.5 text-body-s">
+            <span className="min-w-0 flex-1 truncate text-ink-700">{row.holder_name ?? '—'}</span>
+            <span className="shrink-0 font-mono tnum text-ink-900">
+              {ratio != null ? `${(ratio * 100).toFixed(2)}%` : '—'}
+            </span>
+            {/* 変化は別枠。水準と変化を一つの数字に混ぜない。 */}
+            <span
+              className={`w-16 shrink-0 text-right font-mono text-micro tnum ${
+                delta == null ? 'text-ink-400' : delta > 0 ? 'text-up-600' : delta < 0 ? 'text-down-600' : 'text-ink-400'
+              }`}
+            >
+              {delta == null
+                ? (ratio === 0 ? t('解消') : '—')
+                : delta === 0
+                  ? '±0.00%'
+                  : `${delta > 0 ? '+' : '−'}${Math.abs(delta * 100).toFixed(2)}%`}
+            </span>
+            <span className="w-20 shrink-0 text-right text-micro text-ink-400">{fmtDate(row.calculated_date)}</span>
+          </li>
+        );
+      })}
     </ul>
   );
 }

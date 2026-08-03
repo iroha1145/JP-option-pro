@@ -337,3 +337,56 @@ def test_latest_quote_map_does_not_show_a_split_as_a_crash(tmp_path):
     ])
     change = repo.latest_quote_map()["76780"]["change_pct"]
     assert change == pytest.approx(-4.1, abs=0.2), f"分割が {change}% の下落として出ている"
+
+
+# ---------------------------------------------------------------------------
+# 5. 空売り残高の日次取り込み
+# ---------------------------------------------------------------------------
+
+
+def test_short_position_rest_endpoint_requires_a_code():
+    """日付範囲だけの REST 問い合わせはもう組み立てないこと。
+
+    `/markets/short-sale-report` は `code` 必須で、`disc_date_from`/`disc_date_to`
+    だけだと 400（実測）。この形の呼び出しが残っていると、増分取り込みは
+    毎回失敗するのに「バックフィル済みのデータがある」ので画面は動いて見える。
+    """
+
+    import pathlib
+
+    source = pathlib.Path(
+        pathlib.Path(__file__).resolve().parents[1]
+        / "backend/app/services/jquants_sync.py"
+    ).read_text(encoding="utf-8")
+    # 説明のための言及ではなく、実際の呼び出し（辞書リテラルのキー）を見る。
+    assert '"disc_date_from"' not in source, (
+        "code 無しの日付範囲クエリが残っている（実測で 400 を返す）"
+    )
+    assert "'disc_date_from'" not in source
+
+
+def test_bulk_file_date_parses_daily_files_and_skips_monthly():
+    from app.services.jquants_sync import _bulk_file_date
+
+    daily = "markets/short-sale-report/live/markets_short-sale-report_20260803.csv.gz"
+    monthly = "markets/short-sale-report/historical/2026/markets_short-sale-report_202607.csv.gz"
+    assert _bulk_file_date(daily) == "2026-08-03"
+    assert _bulk_file_date(monthly) is None      # 月次は日次取り込みの対象外
+    assert _bulk_file_date("garbage") is None
+
+
+def test_nothing_to_do_is_not_reported_as_a_successful_fetch():
+    """取りに行っていない日を "ok" と名乗らない。
+
+    以前は `start > target_date` で `status="ok", rows=0` を返しており、
+    取り込みが壊れていても同期状態は成功のまま見えていた。
+    """
+
+    import pathlib
+
+    source = pathlib.Path(
+        pathlib.Path(__file__).resolve().parents[1]
+        / "backend/app/services/jquants_sync.py"
+    ).read_text(encoding="utf-8")
+    marker = 'return SyncResult(\n                    dataset=DATASET_SHORT_POSITIONS, status="up_to_date"'
+    assert marker in source, "何もしていない日が ok を名乗っている"
