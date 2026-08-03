@@ -253,9 +253,11 @@ def test_verdict_requires_stability_across_windows():
     from app.research.walk_forward import WindowResult
 
     def _window(monotonic):
+        # 判定の主軸は分位（絶対点の閾値は日本株で校正されていない）
         return WindowResult(
             train_start="a", train_end="b", test_start="c", test_end="d",
-            horizon=20, samples=100, monotonic=monotonic,
+            horizon=20, samples=100,
+            monotonic=monotonic, decile_monotonic=monotonic,
         )
 
     assert summarise_run([_window(True)] * 5)["verdict"] == "monotonic"
@@ -354,3 +356,70 @@ def test_report_declares_its_point_in_time_limits(tmp_path):
     assert report["summary"]["verdict"] in {
         "monotonic", "weak", "not_monotonic", "insufficient_data",
     }
+
+
+# ---------------------------------------------------------------------------
+# 7. 分位バケット（絶対閾値に頼らない順位付け能力の判定）
+# ---------------------------------------------------------------------------
+
+
+def test_deciles_are_cut_per_evaluation_date():
+    """全期間まとめて切らないこと。
+
+    まとめて切ると相場が強かった年の銘柄が丸ごと上位に入り、「スコアが
+    効いた」のか「その年が良かった」のかを分離できない。
+    """
+
+    from app.research.walk_forward import DECILE_LABELS, assign_deciles
+
+    # 日Aは全体的に低スコア、日Bは全体的に高スコア。日ごとに切れば
+    # それぞれの日の最上位が D1 になる。
+    day_a = [{"signal_date": "2026-01-05", "score": 10.0 + i} for i in range(20)]
+    day_b = [{"signal_date": "2026-02-05", "score": 70.0 + i} for i in range(20)]
+    labels = assign_deciles(day_a + day_b)
+
+    top_a = max(day_a, key=lambda r: r["score"])
+    top_b = max(day_b, key=lambda r: r["score"])
+    assert labels[id(top_a)] == DECILE_LABELS[0], "低スコアの日にも上位10%が要る"
+    assert labels[id(top_b)] == DECILE_LABELS[0]
+
+
+def test_a_thin_day_is_not_forced_into_deciles():
+    from app.research.walk_forward import assign_deciles
+
+    thin = [{"signal_date": "2026-01-05", "score": float(i)} for i in range(4)]
+    assert assign_deciles(thin) == {}, "4 銘柄を十分位に割っている"
+
+
+def test_decile_summary_orders_by_score_and_detects_ranking_power():
+    from app.research.walk_forward import DECILE_LABELS, check_monotonic, summarise_deciles
+
+    # スコアが高いほど超過リターンが高い、という理想的な断面を作る
+    records = []
+    for date in ("2026-01-05", "2026-01-12", "2026-01-19"):
+        for i in range(200):
+            score = 100.0 - i * 0.4
+            records.append({
+                "signal_date": date, "score": score,
+                "return_20d": score / 1000.0,
+                "excess_topix_20d": score / 1000.0,
+            })
+    deciles = summarise_deciles(records, horizon=20)
+    assert deciles[0].label == DECILE_LABELS[0]
+    assert deciles[0].median_excess_topix > deciles[-1].median_excess_topix
+    monotonic, _detail = check_monotonic(deciles)
+    assert monotonic is True
+
+
+def test_top_bottom_spread_is_none_when_either_end_is_underpowered():
+    from app.research.walk_forward import evaluate_window
+
+    records = [
+        {"signal_date": "2026-02-10", "score": 50.0 + i,
+         "return_20d": 0.01, "excess_topix_20d": 0.01}
+        for i in range(12)          # 十分位に割れない薄さ
+    ]
+    result = evaluate_window(
+        records, ("2026-01-01", "2026-01-31", "2026-02-01", "2026-02-28"), horizon=20
+    )
+    assert result.top_bottom_spread is None

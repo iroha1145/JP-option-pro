@@ -331,9 +331,28 @@ def run_backtest(
         if progress and index % 10 == 0:
             progress(f"  {index}/{len(evaluation_dates)} {as_of} 累計={total_snapshots}")
 
+    return evaluate_run(store, params, calendar=calendar, run_id=run_id)
+
+
+def evaluate_run(
+    store: "ResearchStore",
+    params: RunParams,
+    *,
+    calendar: Sequence[str] | None = None,
+    run_id: str | None = None,
+) -> dict[str, Any]:
+    """保存済みスナップショットだけで走步検証をやり直す。
+
+    断面の再計算（数時間）を伴わずに評価軸だけ変えられる。スナップショットを
+    残している意味はここにある —— 判定の切り方を変えるたびに履歴を作り直す
+    必要はないし、作り直せば「同じ過去」が版ごとに変わってしまう。
+    """
+
+    run_id = run_id or params.run_id()
     records = store.joined_records(run_id)
+    days = list(calendar or sorted({str(r.get("signal_date")) for r in records}))
     windows = walk_forward_windows(
-        calendar, train_days=params.train_days, test_days=params.test_days
+        days, train_days=params.train_days, test_days=params.test_days
     )
     results = [
         evaluate_window(records, window, horizon=params.horizon) for window in windows
@@ -344,8 +363,8 @@ def run_backtest(
         "score_version": SCORE_VERSION,
         "strength_version": STRENGTH_SCORE_VERSION,
         "replay_version": REPLAY_VERSION,
-        "trading_days": len(calendar),
-        "evaluation_dates": len(evaluation_dates),
+        "trading_days": len(days),
+        "evaluation_dates": len({str(r.get("signal_date")) for r in records}),
         "signals": len(records),
         "windows": [result.as_dict() for result in results],
         "summary": summarise_run(results),

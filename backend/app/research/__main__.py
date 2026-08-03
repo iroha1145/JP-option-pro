@@ -15,7 +15,7 @@ from pathlib import Path
 from app.data_paths import get_data_paths
 from app.repositories.core import CoreRepository
 
-from .runner import ResearchStore, RunParams, run_backtest
+from .runner import ResearchStore, RunParams, evaluate_run, run_backtest
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -30,6 +30,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--core-db", default=None)
     parser.add_argument("--research-db", default=None)
     parser.add_argument("--json", action="store_true", help="レポートを JSON で出す")
+    parser.add_argument(
+        "--report-only", action="store_true",
+        help="断面は再計算せず、保存済みスナップショットだけで評価をやり直す",
+    )
     args = parser.parse_args(argv)
 
     # パスは data_paths に一本化する（ここで独自に組み立てると、本番の
@@ -49,10 +53,15 @@ def main(argv: list[str] | None = None) -> int:
         train_days=args.train_days, test_days=args.test_days, horizon=args.horizon,
         min_avg_turnover_jpy=args.min_turnover,
     )
-    report = run_backtest(
-        repository, ResearchStore(research_path), params,
-        progress=lambda message: print(message, flush=True),
-    )
+    store = ResearchStore(research_path)
+    if args.report_only:
+        store.initialize()
+        report = evaluate_run(store, params)
+    else:
+        report = run_backtest(
+            repository, store, params,
+            progress=lambda message: print(message, flush=True),
+        )
 
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
@@ -64,16 +73,23 @@ def main(argv: list[str] | None = None) -> int:
     print(f"評価日 {report['evaluation_dates']} / シグナル {report['signals']} 件")
     print(f"窓 {summary['windows']} 個（判定可 {summary['windows_judged']}）"
           f" 単調 {summary['windows_monotonic']} → 結論: {summary['verdict']}")
+    if summary.get("median_top_bottom_spread") is not None:
+        print(f"上位10% − 下位10% の中央値: {summary['median_top_bottom_spread']:+.4f}"
+              f"（{summary['windows_positive_spread']}/{summary['windows_with_spread']} 窓で正）")
     print()
     for window in report["windows"]:
         head = f"検証 {window['test'][0]}〜{window['test'][1]}  n={window['samples']}"
-        print(f"{head}  単調={window['monotonic']}")
-        for bucket in window["buckets"]:
+        print(f"{head}  分位単調={window['decile_monotonic']}  絶対点単調={window['monotonic']}")
+        for bucket in window["deciles"]:
             excess = bucket["median_excess_topix"]
             mark = "" if bucket["reliable"] else "  (標本不足)"
             shown = f"{excess:+.4f}" if excess is not None else "   n/a "
-            print(f"    {bucket['bucket']:>7}  n={bucket['samples']:>5}  "
-                  f"超過中位={shown}{mark}")
+            hit = bucket["hit_rate"]
+            hit_shown = f"{hit*100:5.1f}%" if hit is not None else "  n/a"
+            print(f"    {bucket['bucket']:>12}  n={bucket['samples']:>6}  "
+                  f"超過中位={shown}  勝率={hit_shown}{mark}")
+        if window.get("top_bottom_spread") is not None:
+            print(f"    上位10% − 下位10% = {window['top_bottom_spread']:+.4f}")
         print()
     print("点時の制約:")
     for limit in report["point_in_time_limits"]:

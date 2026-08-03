@@ -90,8 +90,14 @@ class WindowResult:
     horizon: int
     samples: int
     buckets: list[BucketStats] = field(default_factory=list)
+    deciles: list[BucketStats] = field(default_factory=list)
     monotonic: bool | None = None
     monotonic_detail: str = ""
+    decile_monotonic: bool | None = None
+    decile_detail: str = ""
+    #: 上位10% と下位10% の超過中位の差。単調性より鈍いが、順位付け能力の
+    #: 有無だけならこれが一番読みやすい（0 以下なら効いていない）。
+    top_bottom_spread: float | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -100,9 +106,87 @@ class WindowResult:
             "horizon_trading_days": self.horizon,
             "samples": self.samples,
             "buckets": [bucket.as_dict() for bucket in self.buckets],
+            "deciles": [bucket.as_dict() for bucket in self.deciles],
             "monotonic": self.monotonic,
             "monotonic_detail": self.monotonic_detail,
+            "decile_monotonic": self.decile_monotonic,
+            "decile_detail": self.decile_detail,
+            "top_bottom_spread": self.top_bottom_spread,
         }
+
+
+#: 分位バケット（上位から）。絶対点のバケットと違い、**その日の断面の中で
+#: 相対的にどこか**を見る。日本株の絶対閾値は米国版から持ち込んだもので
+#: 校正されていないので、順位付け能力そのものを測るにはこちらが素直
+#: （doc §七「横截面归一化」）。
+DECILE_LABELS = ("D1(上位10%)", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10(下位10%)")
+
+
+def assign_deciles(
+    records: Sequence[Mapping[str, Any]], *, score_field: str = "score"
+) -> dict[int, str]:
+    """`id(record)` → 十分位ラベル。**評価日ごとに**切る。
+
+    全期間まとめて切ると、相場が強かった年の銘柄が丸ごと上位に入り、
+    「スコアが効いた」のか「その年が良かった」のかが分離できない。
+    """
+
+    by_date: dict[str, list[Mapping[str, Any]]] = {}
+    for record in records:
+        value = _finite(record.get(score_field))
+        if value is None:
+            continue
+        by_date.setdefault(str(record.get("signal_date") or ""), []).append(record)
+
+    labels: dict[int, str] = {}
+    for rows in by_date.values():
+        if len(rows) < len(DECILE_LABELS):
+            continue          # その日は十分位に割れない（黙って混ぜない）
+        ordered = sorted(rows, key=lambda r: -(_finite(r.get(score_field)) or 0.0))
+        size = len(ordered)
+        for index, record in enumerate(ordered):
+            slot = min(len(DECILE_LABELS) - 1, index * len(DECILE_LABELS) // size)
+            labels[id(record)] = DECILE_LABELS[slot]
+    return labels
+
+
+def summarise_deciles(
+    records: Sequence[Mapping[str, Any]], *, horizon: int, score_field: str = "score"
+) -> list[BucketStats]:
+    """日ごとの十分位で層別した成績。"""
+
+    labels = assign_deciles(records, score_field=score_field)
+    grouped: dict[str, list[Mapping[str, Any]]] = {label: [] for label in DECILE_LABELS}
+    for record in records:
+        label = labels.get(id(record))
+        if label is not None:
+            grouped[label].append(record)
+    return [_stats_for(label, grouped[label], horizon) for label in DECILE_LABELS]
+
+
+def _stats_for(
+    label: str, rows: Sequence[Mapping[str, Any]], horizon: int
+) -> BucketStats:
+    returns = [v for v in (_finite(r.get(f"return_{horizon}d")) for r in rows) if v is not None]
+    excess = [
+        v for v in (_finite(r.get(f"excess_topix_{horizon}d")) for r in rows) if v is not None
+    ]
+    mfe = [v for v in (_finite(r.get("mfe_pct")) for r in rows) if v is not None]
+    mae = [v for v in (_finite(r.get("mae_pct")) for r in rows) if v is not None]
+    decided = [str(r.get("hit_r_multiple")) for r in rows if r.get("hit_r_multiple")]
+    return BucketStats(
+        label=label,
+        samples=len(rows),
+        median_return=_median(returns),
+        median_excess_topix=_median(excess),
+        hit_rate=(sum(1 for v in excess if v > 0) / len(excess) if excess else None),
+        median_mfe=_median(mfe),
+        median_mae=_median(mae),
+        target_before_stop=(
+            sum(1 for v in decided if v == "target") / len(decided) if decided else None
+        ),
+        reliable=len(rows) >= MIN_BUCKET_SAMPLES,
+    )
 
 
 def summarise_buckets(
@@ -204,19 +288,40 @@ def evaluate_window(
     ]
     buckets = summarise_buckets(in_test, horizon=horizon, score_field=score_field)
     monotonic, detail = check_monotonic(buckets)
+    deciles = summarise_deciles(in_test, horizon=horizon, score_field=score_field)
+    decile_monotonic, decile_detail = check_monotonic(deciles)
+
+    top = next((b for b in deciles if b.label == DECILE_LABELS[0]), None)
+    bottom = next((b for b in deciles if b.label == DECILE_LABELS[-1]), None)
+    spread = None
+    if (
+        top is not None and bottom is not None
+        and top.reliable and bottom.reliable
+        and top.median_excess_topix is not None and bottom.median_excess_topix is not None
+    ):
+        spread = top.median_excess_topix - bottom.median_excess_topix
+
     return WindowResult(
         train_start=train_start, train_end=train_end,
         test_start=test_start, test_end=test_end,
         horizon=horizon, samples=len(in_test),
-        buckets=buckets, monotonic=monotonic, monotonic_detail=detail,
+        buckets=buckets, deciles=deciles,
+        monotonic=monotonic, monotonic_detail=detail,
+        decile_monotonic=decile_monotonic, decile_detail=decile_detail,
+        top_bottom_spread=spread,
     )
 
 
 def summarise_run(results: Sequence[WindowResult]) -> dict[str, Any]:
     """複数窓をまとめた結論。「一度でも単調」ではなく「安定して単調」を見る。"""
 
-    judged = [result for result in results if result.monotonic is not None]
-    monotonic_count = sum(1 for result in judged if result.monotonic)
+    # 絶対点のバケットは米国版由来の閾値なので、日本株の断面では上位層に
+    # ほとんど入らないことがある。順位付け能力の判定は **分位** を主とし、
+    # 絶対点の結果は参考として併記する。
+    judged = [result for result in results if result.decile_monotonic is not None]
+    monotonic_count = sum(1 for result in judged if result.decile_monotonic)
+    spreads = [r.top_bottom_spread for r in results if r.top_bottom_spread is not None]
+    positive_spread = sum(1 for value in spreads if value > 0)
     verdict = "insufficient_data"
     if judged:
         share = monotonic_count / len(judged)
@@ -230,6 +335,11 @@ def summarise_run(results: Sequence[WindowResult]) -> dict[str, Any]:
         "windows": len(results),
         "windows_judged": len(judged),
         "windows_monotonic": monotonic_count,
+        "windows_with_spread": len(spreads),
+        "windows_positive_spread": positive_spread,
+        "median_top_bottom_spread": (
+            sorted(spreads)[len(spreads) // 2] if spreads else None
+        ),
         "verdict": verdict,
         "note": (
             "verdict=monotonic 以外のとき、100 点満点の分数を『確率的な意味を持つ』"
@@ -240,6 +350,9 @@ def summarise_run(results: Sequence[WindowResult]) -> dict[str, Any]:
 
 __all__ = [
     "BUCKET_LABELS",
+    "DECILE_LABELS",
+    "assign_deciles",
+    "summarise_deciles",
     "BucketStats",
     "MIN_BUCKET_SAMPLES",
     "SCORE_BUCKETS",
