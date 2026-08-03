@@ -252,3 +252,23 @@ def test_the_api_says_the_validation_failed_not_that_it_never_ran(client):
 
     status = client.get("/api/short-monitor/status").json()
     assert status["validation"]["status"] == "failed"
+
+
+def test_rankings_can_filter_by_institution(client):
+    """§十一 のフィルタ項目「机构」。**今も見えている** 機関だけで絞る。"""
+
+    directory = client.get("/api/short-monitor/institutions").json()["institutions"]
+    alpha = next(row["legal_id"] for row in directory if row["name"] == "Alpha Capital Ltd")
+    beta = next(row["legal_id"] for row in directory if row["name"] == "Beta Securities Ltd")
+
+    by_alpha = client.get(
+        "/api/short-monitor/rankings", params={"institutions": alpha},
+    ).json()
+    assert [r["display_code"] for r in by_alpha["rows"]] == ["1000"]
+
+    # Beta は閾値割れなので、この機関で絞っても銘柄は出てこない
+    # （見えなくなった機関で絞ると、居ない売り方で絞ることになる）
+    by_beta = client.get(
+        "/api/short-monitor/rankings", params={"institutions": beta},
+    ).json()
+    assert by_beta["rows"] == []

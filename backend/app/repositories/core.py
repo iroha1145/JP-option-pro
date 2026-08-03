@@ -987,6 +987,7 @@ class CoreRepository(SQLiteRepository):
         markets: Sequence[str] | None = None,
         sectors: Sequence[str] | None = None,
         codes: Sequence[str] | None = None,
+        institutions: Sequence[str] | None = None,
         min_confidence: float | None = None,
         min_turnover: float | None = None,
         min_score: float | None = None,
@@ -1024,6 +1025,16 @@ class CoreRepository(SQLiteRepository):
         if codes:
             clauses.append(f"s.canonical_code IN ({', '.join('?' for _ in codes)})")
             params.extend(codes)
+        if institutions:
+            # その機関が **今も見えている** 銘柄だけ。閾値割れや報告停止で
+            # 見えなくなった機関で絞ると、居ない売り方で絞ることになる。
+            placeholders = ", ".join("?" for _ in institutions)
+            clauses.append(
+                "s.canonical_code IN (SELECT canonical_code FROM short_position_last_known "
+                f"WHERE legal_id IN ({placeholders}) AND visibility_status = 'reporting' "
+                "AND stale_reporting = 0)"
+            )
+            params.extend(institutions)
         if min_confidence is not None:
             clauses.append("s.data_confidence >= ?")
             params.append(float(min_confidence))

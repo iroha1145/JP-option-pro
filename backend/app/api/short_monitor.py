@@ -207,6 +207,7 @@ def rankings(
     markets: str | None = Query(default=None),
     sectors: str | None = Query(default=None),
     codes: str | None = Query(default=None),
+    institutions: str | None = Query(default=None),
     min_confidence: float | None = Query(default=None, ge=0.0, le=1.0),
     min_turnover: float | None = Query(default=None, ge=0.0),
     min_score: float | None = Query(default=None, ge=0.0, le=100.0),
@@ -227,7 +228,7 @@ def rankings(
     order = order_by or preset.get("order_by") or "monitor_priority"
 
     etag = _etag(
-        "rankings", as_of, view, states, flags, markets, sectors, codes,
+        "rankings", as_of, view, states, flags, markets, sectors, codes, institutions,
         min_confidence, min_turnover, min_score, order, limit, offset, SNAPSHOT_VERSION,
     )
     if _maybe_304(request, response, etag):
@@ -241,6 +242,7 @@ def rankings(
         markets=_csv(markets) or None,
         sectors=_csv(sectors) or None,
         codes=[normalize_input_code(c) or c for c in _csv(codes)] or None,
+        institutions=_csv(institutions) or None,
         min_confidence=min_confidence,
         min_turnover=min_turnover,
         min_score=min_score,
