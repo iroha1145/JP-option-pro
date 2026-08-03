@@ -483,3 +483,14 @@ def test_research_api_distinguishes_running_from_missing(tmp_path, monkeypatch):
         assert error.status_code == 409
     else:
         raise AssertionError("未完了のレポートを返している")
+
+    # run_id を指定しない既定の呼び方でも「走行中」と分かること。
+    # 本番でここが 404（= 一度も走っていない）を返していた。
+    try:
+        research_api.get_report(run_id=None)
+    except HTTPException as error:
+        assert error.status_code == 409, (
+            f"走行中なのに {error.status_code} を返した（404 は「未実行」の意味）"
+        )
+    else:
+        raise AssertionError("未完了のレポートを返している")

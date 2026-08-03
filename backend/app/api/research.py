@@ -87,6 +87,20 @@ def get_report(run_id: str | None = Query(default=None)) -> dict[str, Any]:
         connection.close()
 
     if row is None:
+        # 完了済みが 1 つも無い。ここで「一度も走っていない」と言い切ると、
+        # 走行中の run があるときに嘘になる（実際に本番で 404 を返していた）。
+        # 未完了の run があるなら「走行中」と区別して返す。
+        connection = _connect()
+        try:
+            pending = connection.execute(
+                "SELECT 1 FROM research_runs WHERE report_json IS NULL LIMIT 1"
+            ).fetchone()
+        except sqlite3.Error:
+            pending = None
+        finally:
+            connection.close()
+        if pending is not None:
+            raise HTTPException(status_code=409, detail={"code": "run_in_progress"})
         raise HTTPException(status_code=404, detail={"code": "run_not_found"})
     if not row["report_json"]:
         # 走行中。checkpoint まで進んでいることは分かるので、その旨を返す。
