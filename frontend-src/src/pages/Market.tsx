@@ -16,6 +16,7 @@ import { CodeCell, DataThrough } from '@/components/domain';
 import HeatMatrix, { HeatMatrixSkeleton, metricValue, type HeatMetric } from '@/components/sectors/HeatMatrix';
 import SectorMembersPanel from '@/components/sectors/SectorMembersPanel';
 import { t } from '@/i18n/core';
+import { quoteSourceLabel } from '@/lib/quoteSource';
 import { fmtPct, fmtPrice, fmtTimeJst, fmtYenCompact } from '@/lib/format';
 import type { IntradayQuote, SectorMemberSort, SectorStrength } from '@/api/types';
 
@@ -173,7 +174,7 @@ export default function Market() {
               </span>
               <span className="flex items-center gap-1 text-micro text-warn-700">
                 <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
-                {t('延迟{n}分 · 非官方源', { n: live.data?.delayed_minutes ?? 15 })}
+                {quoteSourceLabel(live.data).text}
                 {n225.as_of_epoch ? ` · ${fmtTimeJst(n225.as_of_epoch)}` : ''}
               </span>
             </section>

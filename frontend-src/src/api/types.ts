@@ -64,20 +64,27 @@ export interface IntradayQuote {
   source: string;
 }
 
-export interface IntradayQuotesResponse {
-  version: string;
-  enabled: boolean;
+/** 供給元の素性。値の意味はこれで決まるので、画面はベンダ名を焼き込まない。 */
+export interface QuoteSourceEnvelope {
   source: string;
+  /** realtime | delayed | end_of_day | unknown */
+  delay_class?: string;
+  is_official?: boolean;
+  is_realtime?: boolean;
+  source_detail?: string | null;
   delayed?: boolean;
   delayed_minutes?: number;
+}
+
+export interface IntradayQuotesResponse extends QuoteSourceEnvelope {
+  version: string;
+  enabled: boolean;
   quotes: Record<string, IntradayQuote>;
   indices?: Record<string, IntradayQuote & { name: string }>;
 }
 
-export interface IntradaySectorsResponse {
+export interface IntradaySectorsResponse extends QuoteSourceEnvelope {
   enabled: boolean;
-  source: string;
-  delayed_minutes?: number;
   universe?: number;
   quoted?: number;
   sectors: { sector33_code: string; sector33_name: string; median_return_1d: number; advancers_share: number; covered: number }[];
@@ -93,10 +100,9 @@ export interface IntradayOverlayRow {
   live_pct_from_high_252?: number | null;
 }
 
-export interface IntradayOverlayResponse {
+export interface IntradayOverlayResponse extends QuoteSourceEnvelope {
   enabled: boolean;
   scope: 'radar' | 'screener';
-  delayed_minutes?: number;
   requested?: number;
   quoted?: number;
   above_pivot_count?: number;

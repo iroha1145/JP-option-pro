@@ -279,3 +279,41 @@ def test_sector_members_contract(client):
     # 並び順は許可制 / 未知の業種は 404（9999「その他」は実在コードなので反例にならない）
     assert client.get(f"/api/market/sectors/{code}/members?sort=drop%20table").status_code == 422
     assert client.get("/api/market/sectors/0001/members").status_code == 404
+
+
+def test_quote_sources_endpoint_declares_every_provider(client):
+    """供給元の素性が API から見えること（画面がベンダ名を焼き込まないため）。"""
+
+    body = client.get("/api/quotes/sources").json()
+    assert body["selected"]["name"]
+    names = {provider["name"] for provider in body["providers"]}
+    # 未接続のリレーも隠さずに出す（「なぜリアルタイムでないか」が説明できる）
+    assert {"kabu-station-relay", "market-speed-relay", "yahoo-delayed"} <= names
+    for provider in body["providers"]:
+        for field in ("available", "delay_class", "is_official", "is_realtime", "delay_minutes"):
+            assert field in provider, f"{provider['name']}: {field} が無い"
+    relay = next(p for p in body["providers"] if p["name"] == "kabu-station-relay")
+    assert relay["available"] is False and relay["is_realtime"] is True
+
+
+def test_intraday_quotes_envelope_keeps_legacy_and_new_fields(client, monkeypatch):
+    """外部に触らずにエンベロープだけ検査する（CI は実プロバイダを叩かない）。"""
+
+    # api.quotes は import 時に名前を束縛済み。service 側を差し替えても
+    # 効かず、実際に Yahoo を叩いてしまう（netguard で検出した）。
+    import app.api.quotes as quotes_api
+
+    monkeypatch.setattr(quotes_api, "fetch_quotes_and_indices", _empty_quotes)
+    body = client.get("/api/quotes/intraday?codes=7203").json()
+
+    # 新しい素性
+    for field in ("source", "delay_class", "is_official", "is_realtime"):
+        assert field in body
+    # 既存画面が読んでいる旧キー（プロバイダの申告から導出）
+    assert body["delayed"] is True
+    assert body["delayed_minutes"] == 15
+    assert body["is_official"] is False
+
+
+async def _empty_quotes(codes):
+    return {}, {}

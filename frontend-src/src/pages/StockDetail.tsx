@@ -22,6 +22,7 @@ import { DataThrough, ScoreBar, SignalChip, StateChip } from '@/components/domai
 import { useAccess } from '@/hooks/useAccess';
 import { STRUCTURE_HINTS, TECHNICAL_HINTS, type ScoreHint } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
+import { quoteSourceLabel } from '@/lib/quoteSource';
 import { fmtDate, fmtPct, fmtPrice, fmtTimeJst, fmtYenCompact } from '@/lib/format';
 import type {
   FinancialSummaryView,
@@ -236,7 +237,7 @@ export default function StockDetail() {
                 </span>
                 <span className="mt-0.5 flex items-center gap-1 text-micro text-warn-700">
                   <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
-                  {t('延迟{n}分 · 非官方源', { n: live.data?.delayed_minutes ?? 15 })}
+                  {quoteSourceLabel(live.data).text}
                   {liveQuote.as_of_epoch ? ` · ${fmtTimeJst(liveQuote.as_of_epoch)}` : ''}
                 </span>
               </span>
