@@ -203,6 +203,47 @@ SELECT canonical_code, trade_date, close, adj_close, adj_open, adj_high, adj_low
 
 ---
 
+## 4d. 同一个形状的第三例，以及一次系统性排查
+
+前两处（§4b、§4c）是同一个形状：**查询的列清单少了消费方需要的东西，
+而某个 guard 把「缺失」变成了沉默而不是报错**。找到第二处后我专门去找第三处。
+
+`latest_quote_map` 的前日比只从 `adj_close` 推：
+
+```python
+if adj and prev: quote["change_pct"] = ...
+```
+
+`adj_close` 在生产全行是 NULL，所以 `adj` 永远为假，这个分支**从未执行过**。
+实测：**4,444 只全部 `change_pct = None`**。它供给决算日历页——那一列一直是空的。
+
+修复后落回生值，并用当日调整系数缩放前一日（这样分割当天显示的是真实涨跌，
+不是 −50%）。部署后 **4,139 / 4,444 有值**；剩下 305 只没有前一日的 bar
+（新上市或停牌），保持空白是对的。
+
+### 系统性排查结果
+
+对全部仓储层的显式列查询逐个核对消费方需要的字段：
+
+| 查询 | 结论 |
+|---|---|
+| `bars_matrix_since` | **缺 open/high/low/adjustment_factor** → 已修（§4c） |
+| `latest_quote_map` | **缺 adjustment_factor，且只看 adj_close** → 已修 |
+| `ticks_for` | price/tick_time/volume 齐全 ✓ |
+| `strength_meta` | trade_date/regime_json/universe_count/built_at 齐全 ✓ |
+| 其余为子查询的 `MAX()/COUNT()` | 不涉及 ✓ |
+
+**没有第四例。**
+
+### 教训
+
+这三处都不会抛异常。`bars_matrix_since` 缺列时有 `high = high or close` 兜底，
+`latest_quote_map` 缺值时有 `if adj and prev` 守卫——**为坏数据准备的兜底，
+在结构性缺列面前变成了永久静默**。写兜底时值得问一句：如果它每次都触发，
+我看得出来吗？
+
+---
+
 ## 5. 盘中行情提供器重构
 
 ```
