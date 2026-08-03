@@ -297,3 +297,43 @@ def test_scan_input_does_not_collapse_high_low_into_close(tmp_path):
     assert series["highs"] != series["closes"], "high が close に潰れている"
     assert max(series["highs"]) == 108.0
     assert min(series["lows"]) == 96.0
+
+
+def test_latest_quote_map_computes_change_even_without_stored_adjusted_close(tmp_path):
+    """前日比が adj_close の有無に依存しないこと。
+
+    本番では adj_close が全行 NULL なので、adj_close だけを見る実装だと
+    change_pct が **4,444 銘柄すべてで None** になっていた（決算カレンダーの
+    騰落欄が全部空）。生値でも計算できること。
+    """
+
+    repo = CoreRepository(tmp_path / "core.db")
+    repo.initialize()
+    repo.upsert_daily_bars([
+        {"canonical_code": "72030", "trade_date": "2026-07-30", "close": 3000.0,
+         "open": 3000.0, "high": 3010.0, "low": 2990.0, "adjustment_factor": 1.0,
+         "turnover_value": 1e9, "volume": 1e6, "upper_limit": 0},
+        {"canonical_code": "72030", "trade_date": "2026-07-31", "close": 3150.0,
+         "open": 3100.0, "high": 3160.0, "low": 3090.0, "adjustment_factor": 1.0,
+         "turnover_value": 1e9, "volume": 1e6, "upper_limit": 0},
+    ])
+    quotes = repo.latest_quote_map()
+    assert quotes["72030"]["change_pct"] == pytest.approx(5.0)
+
+
+def test_latest_quote_map_does_not_show_a_split_as_a_crash(tmp_path):
+    """分割当日に前日の生値と比べると −50% の下落に見える。"""
+
+    repo = CoreRepository(tmp_path / "core.db")
+    repo.initialize()
+    repo.upsert_daily_bars([
+        {"canonical_code": "76780", "trade_date": "2026-07-29", "close": 6330.0,
+         "open": 6300.0, "high": 6350.0, "low": 6280.0, "adjustment_factor": 1.0,
+         "turnover_value": 1e9, "volume": 1e6, "upper_limit": 0},
+        # 1:2 分割。生値では 6330 → 3035 だが、実質は −4.1%
+        {"canonical_code": "76780", "trade_date": "2026-07-30", "close": 3035.0,
+         "open": 3100.0, "high": 3120.0, "low": 3020.0, "adjustment_factor": 0.5,
+         "turnover_value": 1e9, "volume": 2e6, "upper_limit": 0},
+    ])
+    change = repo.latest_quote_map()["76780"]["change_pct"]
+    assert change == pytest.approx(-4.1, abs=0.2), f"分割が {change}% の下落として出ている"

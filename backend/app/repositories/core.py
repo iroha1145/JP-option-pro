@@ -325,26 +325,56 @@ class CoreRepository(SQLiteRepository):
             prior = connection.execute(
                 "SELECT MAX(trade_date) FROM daily_bars WHERE trade_date < ?", (latest,)
             ).fetchone()[0]
+            # adjustment_factor も引く。本番では adj_close が全行 NULL なので、
+            # これが無いと前日比が **常に None** になる（実際そうなっていた:
+            # 4,444 銘柄すべてで change_pct が空だった）。
             rows = connection.execute(
-                "SELECT canonical_code, trade_date, close, adj_close FROM daily_bars "
-                "WHERE trade_date IN (?, ?)",
+                "SELECT canonical_code, trade_date, close, adj_close, adjustment_factor "
+                "FROM daily_bars WHERE trade_date IN (?, ?)",
                 (latest, prior or latest),
             ).fetchall()
-        prior_adj: dict[str, float] = {}
+
+        def _price(row: Any) -> float | None:
+            for key in ("adj_close", "close"):
+                value = row[key]
+                if value is not None:
+                    try:
+                        number = float(value)
+                    except (TypeError, ValueError):
+                        continue
+                    if number > 0:
+                        return number
+            return None
+
+        prior_close: dict[str, float] = {}
+        latest_factor: dict[str, float] = {}
         result: dict[str, dict[str, Any]] = {}
         for row in rows:
+            code = row["canonical_code"]
             if row["trade_date"] == latest:
-                result[row["canonical_code"]] = {
-                    "close": row["close"], "adj_close": row["adj_close"], "change_pct": None,
-                }
+                result[code] = {"close": row["close"], "change_pct": None}
+                factor = row["adjustment_factor"]
+                try:
+                    latest_factor[code] = float(factor) if factor is not None else 1.0
+                except (TypeError, ValueError):
+                    latest_factor[code] = 1.0
+                result[code]["_price"] = _price(row)
             else:
-                if row["adj_close"] is not None:
-                    prior_adj[row["canonical_code"]] = row["adj_close"]
+                value = _price(row)
+                if value is not None:
+                    prior_close[code] = value
+
         for code, quote in result.items():
-            adj = quote.pop("adj_close", None)
-            prev = prior_adj.get(code)
-            if adj and prev:
-                quote["change_pct"] = round((adj / prev - 1.0) * 100.0, 2)
+            today = quote.pop("_price", None)
+            prev = prior_close.get(code)
+            if not today or not prev:
+                continue
+            # 前日の値は当日の調整係数で揃える。分割当日に前日の生値と
+            # 比べると、1:2 分割が −50% の下落として表示される。
+            factor = latest_factor.get(code, 1.0)
+            baseline = prev * (factor if factor > 0 else 1.0)
+            if baseline > 0:
+                quote["change_pct"] = round((today / baseline - 1.0) * 100.0, 2)
         return result
 
     def latest_bar_date(self) -> str | None:
