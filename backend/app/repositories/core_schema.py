@@ -7,7 +7,7 @@ upserts that keep ``ingested_at`` as the revision stamp.
 
 from __future__ import annotations
 
-CORE_SCHEMA_VERSION = "jp-core-v4"
+CORE_SCHEMA_VERSION = "jp-core-v5"
 
 # v3: 全市場スナップショット照会（決算カレンダーの終値/前日比マップ等）を
 # カバリングインデックスで賄う。272MB の WITHOUT ROWID 主表への 4千回の
@@ -44,6 +44,8 @@ _STRENGTH_DDL: tuple[str, ...] = (
         drawdown_63d_pct REAL,
         ma_alignment_pct REAL,
         rs_topix_63d REAL,
+        regulation_level TEXT,
+        regulation_severity INTEGER,
         market_code TEXT,
         sector33_code TEXT,
         details_json TEXT NOT NULL DEFAULT '{}',
@@ -319,24 +321,33 @@ CORE_DDL: tuple[str, ...] = (
 )
 
 #: v4: 業種相対の 20 日/63 日分離 + 信用規制状態。
-#: 既存行は NULL のまま（= 欠損）。夜間バッチが翌営業日に埋め直す。
-#: 20 日の値を 63 日の名前で保存していた過去分は、意味が違うので移し替えない
-#: —— 移すと「昔から 63 日で測っていた」という嘘の履歴ができる。
+#:
+#: 旧 `rs_sector_63d` に入っていたのは **実際には 20 日**の値だった（20 日
+#: リターンと業種 20 日中位の差）。なので中身を捨てるのではなく、正しい名前の
+#: ほうへ移す —— これは履歴の捏造ではなく、値に本当の名前を付け直す作業。
+#: 逆に 63 日は一度も計算されたことがないので NULL のままにし、夜間バッチが
+#: 翌営業日に初めて埋める（存在しなかった履歴をでっち上げない）。
 _RS_SECTOR_SPLIT_DDL: tuple[str, ...] = (
     "ALTER TABLE screener_rows ADD COLUMN rs_sector_20d REAL",
     "ALTER TABLE screener_rows ADD COLUMN regulation_level TEXT",
     "ALTER TABLE screener_rows ADD COLUMN regulation_severity INTEGER",
-    # 旧 rs_sector_63d の中身は実際には 20 日だったので、名前どおりの値が
-    # 入り直すまで区別できるよう一度 NULL に戻す（誤った値を残さない）。
+    "UPDATE screener_rows SET rs_sector_20d = rs_sector_63d",
     "UPDATE screener_rows SET rs_sector_63d = NULL",
 )
 
 #: 前方マイグレーション連鎖: v1 → v2（強度断面）→ v3（クオート索引）
 #: → v4（業種相対の周期分離・信用規制）。
+#: v5: 強度断面にも信用規制を持たせる（リスク減点が規制を見るため）。
+_STRENGTH_REGULATION_DDL: tuple[str, ...] = (
+    "ALTER TABLE strength_rows ADD COLUMN regulation_level TEXT",
+    "ALTER TABLE strength_rows ADD COLUMN regulation_severity INTEGER",
+)
+
 CORE_MIGRATIONS: dict[str, tuple[tuple[str, ...], str]] = {
     "jp-core-v1": (_STRENGTH_DDL, "jp-core-v2"),
     "jp-core-v2": (_QUOTE_INDEX_DDL, "jp-core-v3"),
-    "jp-core-v3": (_RS_SECTOR_SPLIT_DDL, CORE_SCHEMA_VERSION),
+    "jp-core-v3": (_RS_SECTOR_SPLIT_DDL, "jp-core-v4"),
+    "jp-core-v4": (_STRENGTH_REGULATION_DDL, CORE_SCHEMA_VERSION),
 }
 
 __all__ = ["CORE_DDL", "CORE_MIGRATIONS", "CORE_SCHEMA_VERSION"]

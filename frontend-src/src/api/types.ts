@@ -38,6 +38,8 @@ export interface SectorMemberRow {
   turnover_ratio: number | null;
   avg_turnover_20d: number | null;
   pct_from_high_252: number | null;
+  /** 業種相対は 20 日と 63 日で別物。以前は 20 日の値を 63 日の名前で運んでいた。 */
+  rs_sector_20d?: number | null;
   rs_sector_63d: number | null;
   turnover_share: number | null;
 }
@@ -393,7 +395,11 @@ export interface ScreenerRow {
   ma200_gap_pct: number | null;
   ma_alignment: number | null;
   rs_topix_63d: number | null;
+  rs_sector_20d?: number | null;
   rs_sector_63d: number | null;
+  /** none | precaution | daily_publication | restricted | severe | unknown */
+  regulation_level?: string | null;
+  regulation_severity?: number | null;
   volatility_contraction: number | null;
   drawdown_63d: number | null;
   margin_long_short_ratio: number | null;
@@ -657,7 +663,12 @@ export interface StrengthRow {
   close: number | null;
   change_pct: number | null;
   intrinsic_score: number | null;
+  /** リスク調整後（並べ替えに使われる値）。raw − penalty。 */
   ranking_score: number | null;
+  /** 減点前の素点 */
+  raw_ranking_score?: number | null;
+  /** 明示的な最終値（ranking_score と同値。意図を読めるように併記） */
+  final_ranking_score?: number | null;
   market_fit_score: number | null;
   profile_fit_score: number | null;
   confidence: number | null;

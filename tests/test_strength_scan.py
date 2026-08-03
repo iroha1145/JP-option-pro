@@ -197,3 +197,39 @@ def test_core_v1_database_migrates_forward(tmp_path):
     stranger = CoreRepository(db_path)
     with pytest.raises(Exception):
         stranger.initialize()
+
+
+def test_v4_migration_relabels_the_sector_rs_value(tmp_path):
+    """旧 rs_sector_63d の中身は 20 日だったので、20 日の名前へ移すこと。
+
+    捨てると画面が翌営業日まで空欄になる。63 日のほうへ残すと「昔から 63 日で
+    測っていた」という嘘の履歴になる。正しいのは名前の付け直し。
+    """
+
+    db_path = tmp_path / "core.db"
+    repo = CoreRepository(db_path)
+    repo.initialize()
+    repo.replace_screener_rows([
+        {"canonical_code": "72030", "trade_date": "2026-07-31",
+         "rs_sector_20d": 0.031, "rs_sector_63d": None, "close": 3000.0},
+    ])
+
+    # v3 の実ファイルを再現: 新しい列を落とし、20 日の値を旧名に戻す。
+    with sqlite3.connect(db_path) as connection:
+        connection.execute("UPDATE screener_rows SET rs_sector_63d = rs_sector_20d")
+        connection.execute("ALTER TABLE screener_rows DROP COLUMN rs_sector_20d")
+        connection.execute("ALTER TABLE screener_rows DROP COLUMN regulation_level")
+        connection.execute("ALTER TABLE screener_rows DROP COLUMN regulation_severity")
+        connection.execute(
+            "UPDATE jp_core_schema SET version='jp-core-v3', checksum='deadbeef' WHERE id=1"
+        )
+        connection.commit()
+
+    CoreRepository(db_path).initialize()   # v3 → v4 → v5
+
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT rs_sector_20d, rs_sector_63d FROM screener_rows WHERE canonical_code='72030'"
+        ).fetchone()
+    assert row[0] == 0.031, "20 日の値が失われた"
+    assert row[1] is None, "計算されたことのない 63 日に値が残っている"

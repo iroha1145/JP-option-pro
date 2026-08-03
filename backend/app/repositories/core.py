@@ -911,7 +911,8 @@ class CoreRepository(SQLiteRepository):
         "global_rank_percentile", "sector_rank_percentile",
         "close", "change_pct", "atr_pct", "avg_turnover_20d",
         "turnover_ratio", "ath_proximity", "drawdown_63d_pct",
-        "ma_alignment_pct", "rs_topix_63d", "market_code", "sector33_code",
+        "ma_alignment_pct", "rs_topix_63d",
+        "regulation_level", "regulation_severity", "market_code", "sector33_code",
         "details_json", "built_at",
     )
 

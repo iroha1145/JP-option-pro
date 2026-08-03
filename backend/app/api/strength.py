@@ -155,6 +155,9 @@ def _public_row(row: dict) -> dict:
         "rs_topix_63d": row.get("rs_topix_63d"),
         "ma_alignment_pct": row.get("ma_alignment_pct"),
         "risk_penalty": row.get("risk_penalty"),
+        # 信用规制は独立したリスク次元として出す（severity<0 = 判定不能）
+        "regulation_level": row.get("regulation_level"),
+        "regulation_severity": row.get("regulation_severity"),
         "classification": row.get("classification"),
         "tags": row.get("tags") or [],
         "reasons": row.get("reasons") or [],

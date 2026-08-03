@@ -594,6 +594,25 @@ def risk_penalty(row: Mapping[str, Any], profile: str) -> tuple[float, list[str]
         warnings.append(f"63日最大回撤约{drawdown:.0f}%，趋势结构已受损")
     elif drawdown is not None and drawdown < -22:
         flags.append("回撤较深")
+    # 信用規制は独立したリスク次元（doc §三-3）。無条件否定はしないが、
+    # 建てにくさ・強制解消リスクは実在するので優先度は下げる。判定不能
+    # （severity < 0）は減点しない —— 知らないことを有罪にも無罪にもしない。
+    severity = _finite(row.get("regulation_severity"))
+    if severity is not None and severity >= 1:
+        penalty += {1: 3.0, 2: 6.0, 3: 10.0, 4: 16.0}.get(int(severity), 0.0)
+        flags.append("信用规制")
+        level = str(row.get("regulation_level") or "")
+        warnings.append(
+            {
+                "precaution": "日证金注意喚起銘柄",
+                "daily_publication": "东证日々公表銘柄",
+                "restricted": "信用取引规制中（增担保/申込停止）",
+                "severe": "监理・整理・不明确信息",
+            }.get(level, "信用规制あり")
+        )
+    elif severity is not None and severity < 0:
+        warnings.append("信用规制状态未知（数据未更新）")
+
     vol_price = details.get("vol_price") or {}
     vol_adjustment = _finite(vol_price.get("risk_penalty_adjustment")) or 0.0
     if vol_adjustment:
@@ -660,6 +679,7 @@ def build_strength_rows(
     structure_by_code: Mapping[str, Mapping[str, Any]],
     securities: Mapping[str, Mapping[str, Any]],
     topix_return_63d: float | None,
+    regulation_map: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for code, features in features_by_code.items():
@@ -692,6 +712,12 @@ def build_strength_rows(
                 "trend_score": intrinsic["trend_score"],
                 "breakout_quality_score": intrinsic["breakout_quality_score"],
                 "price_action_score": intrinsic["price_action_score"],
+                "regulation_level": getattr(
+                    (regulation_map or {}).get(code), "level", None
+                ),
+                "regulation_severity": getattr(
+                    (regulation_map or {}).get(code), "severity", None
+                ),
                 "close": close,
                 "change_pct": (
                     round(features["return_1d"] * 100.0, 2)

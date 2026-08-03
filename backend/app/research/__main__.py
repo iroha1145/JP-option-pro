@@ -12,7 +12,7 @@ import json
 import sys
 from pathlib import Path
 
-from app.config import get_settings
+from app.data_paths import get_data_paths
 from app.repositories.core import CoreRepository
 
 from .runner import ResearchStore, RunParams, run_backtest
@@ -32,11 +32,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="レポートを JSON で出す")
     args = parser.parse_args(argv)
 
-    settings = get_settings()
-    core_path = Path(args.core_db) if args.core_db else Path(settings.DATA_DIR) / "jp-core.db"
+    # パスは data_paths に一本化する（ここで独自に組み立てると、本番の
+    # DATA_DIR 解決規則と食い違って別のファイルを掴む）。
+    paths = get_data_paths()
+    core_path = Path(args.core_db) if args.core_db else paths.core_db
     research_path = (
-        Path(args.research_db) if args.research_db
-        else Path(settings.DATA_DIR) / "jp-research.db"
+        Path(args.research_db) if args.research_db else paths.root / "jp-research.db"
     )
     repository = CoreRepository(core_path)
     if not repository.exists():

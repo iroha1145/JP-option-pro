@@ -537,6 +537,7 @@ def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str,
         structure_by_code=structure_by_code,
         securities=securities,
         topix_return_63d=rs_context.get("topix_return_63d"),
+        regulation_map=regulation_map,
     )
     strength_written = context.repository.replace_strength_rows(
         strength_rows, trade_date=target_date, regime=regime

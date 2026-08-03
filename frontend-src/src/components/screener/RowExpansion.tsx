@@ -180,9 +180,25 @@ export default function RowExpansion({ row, weights, canManageWatchlist }: RowEx
               {row.sector_rank_percentile !== null ? `${row.sector_rank_percentile.toFixed(1)}%` : '—'}
             </span>
           </div>
+          {/* 素点 → 減点 → 最終 を並べる。以前は減点だけ見えていて、
+              それが順位に効いているのかが画面から読めなかった。 */}
+          <div className="flex items-center justify-between">
+            <span className="text-ink-400">{t('原始分')}</span>
+            <span className="font-mono text-ink-800 tnum">
+              {row.raw_ranking_score != null ? row.raw_ranking_score.toFixed(1) : '—'}
+            </span>
+          </div>
           <div className="flex items-center justify-between">
             <span className="text-ink-400">{t('风险减分')}</span>
-            <span className="font-mono text-ink-800 tnum">{row.risk_penalty !== null ? `−${row.risk_penalty}` : '—'}</span>
+            <span className="font-mono text-warn-700 tnum">{row.risk_penalty !== null ? `−${row.risk_penalty}` : '—'}</span>
+          </div>
+          <div className="flex items-center justify-between border-t border-line pt-2">
+            <span className="text-ink-500">{t('最终优先级')}</span>
+            <span className="font-mono font-semibold text-ink-900 tnum">
+              {(row.final_ranking_score ?? row.ranking_score) != null
+                ? (row.final_ranking_score ?? row.ranking_score)!.toFixed(1)
+                : '—'}
+            </span>
           </div>
         </div>
         <div className="mt-3 flex items-center justify-between border-t border-line pt-3">
