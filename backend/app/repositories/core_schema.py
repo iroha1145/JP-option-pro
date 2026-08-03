@@ -7,7 +7,7 @@ upserts that keep ``ingested_at`` as the revision stamp.
 
 from __future__ import annotations
 
-CORE_SCHEMA_VERSION = "jp-core-v6"
+CORE_SCHEMA_VERSION = "jp-core-v7"
 
 # -- 機関空売り行動モニター（v6 追加）--------------------------------------
 #
@@ -89,6 +89,8 @@ _SHORT_MONITOR_DDL: tuple[str, ...] = (
         last_published_date TEXT,
         visibility_status TEXT NOT NULL,
         exact_position_known INTEGER NOT NULL DEFAULT 1,
+        -- 報告義務中の表示のまま古くなった（閾値割れとは別）
+        stale_reporting INTEGER NOT NULL DEFAULT 0,
         state_age_trading_days INTEGER,
         is_hedge_disclosed INTEGER NOT NULL DEFAULT 0,
         mapping_confidence REAL,
@@ -113,6 +115,9 @@ _SHORT_MONITOR_DDL: tuple[str, ...] = (
         visible_short_ratio REAL,
         visible_institution_count INTEGER NOT NULL DEFAULT 0,
         below_threshold_count INTEGER NOT NULL DEFAULT 0,
+        -- 閾値を割ったのではなく、割らないまま報告が止まったもの。
+        -- どちらも合計には入れないが、意味は別なので列を分ける。
+        stale_reporting_count INTEGER NOT NULL DEFAULT 0,
         largest_institution_ratio REAL,
         concentration REAL,
         ratio_change_1d REAL,
@@ -524,12 +529,19 @@ _SHORT_MONITOR_MIGRATION: tuple[str, ...] = (
     *_SHORT_MONITOR_DDL,
 )
 
+#: v7: 「報告義務中のまま古くなった」件数を分けて持つ。
+_STALE_REPORTING_DDL: tuple[str, ...] = (
+    "ALTER TABLE short_behavior_snapshots ADD COLUMN stale_reporting_count INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE short_position_last_known ADD COLUMN stale_reporting INTEGER NOT NULL DEFAULT 0",
+)
+
 CORE_MIGRATIONS: dict[str, tuple[tuple[str, ...], str]] = {
     "jp-core-v1": (_STRENGTH_DDL, "jp-core-v2"),
     "jp-core-v2": (_QUOTE_INDEX_DDL, "jp-core-v3"),
     "jp-core-v3": (_RS_SECTOR_SPLIT_DDL, "jp-core-v4"),
     "jp-core-v4": (_STRENGTH_REGULATION_DDL, "jp-core-v5"),
-    "jp-core-v5": (_SHORT_MONITOR_MIGRATION, CORE_SCHEMA_VERSION),
+    "jp-core-v5": (_SHORT_MONITOR_MIGRATION, "jp-core-v6"),
+    "jp-core-v6": (_STALE_REPORTING_DDL, CORE_SCHEMA_VERSION),
 }
 
 __all__ = ["CORE_DDL", "CORE_MIGRATIONS", "CORE_SCHEMA_VERSION"]

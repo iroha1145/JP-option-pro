@@ -244,8 +244,10 @@ function RankingTable({ rankings }: { rankings: ShortMonitorRankings }) {
                 </td>
                 <td className="py-1.5 pr-2 text-right font-mono tnum">
                   {row.visible_institution_count}
-                  {row.below_threshold_count > 0 && (
-                    <span className="ml-1 text-micro text-ink-400">+{row.below_threshold_count}?</span>
+                  {row.below_threshold_count + (row.stale_reporting_count ?? 0) > 0 && (
+                    <span className="ml-1 text-micro text-ink-400">
+                      +{row.below_threshold_count + (row.stale_reporting_count ?? 0)}?
+                    </span>
                   )}
                 </td>
                 <td className="py-1.5 pr-2 text-right font-mono tnum">
@@ -262,7 +264,7 @@ function RankingTable({ rankings }: { rankings: ShortMonitorRankings }) {
           </tbody>
         </table>
         <p className="mt-1 text-micro text-ink-400">
-          {t('机构数后的 +N? 表示已跌破公开门槛、实际持仓不再披露的机构家数（不计入合计）')}
+          {t('机构数后的 +N? 是实际持仓不可见的机构家数（跌破门槛，或未跌破但报告长期停止），均不计入合计')}
         </p>
       </div>
 
@@ -300,7 +302,9 @@ function MobileCard({ row }: { row: ShortMonitorRow }) {
         </span>
         <span>
           {t('机构数')} {row.visible_institution_count}
-          {row.below_threshold_count > 0 ? ` +${row.below_threshold_count}?` : ''}
+          {row.below_threshold_count + (row.stale_reporting_count ?? 0) > 0
+            ? ` +${row.below_threshold_count + (row.stale_reporting_count ?? 0)}?`
+            : ''}
         </span>
         <span>
           {t('52周回撤')} {fmtPct(row.drawdown_52w)}

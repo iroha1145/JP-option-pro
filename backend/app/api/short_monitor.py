@@ -130,6 +130,7 @@ def _row_view(row: dict[str, Any]) -> dict[str, Any]:
         "visible_short_shares": row.get("visible_short_shares"),
         "visible_institution_count": row.get("visible_institution_count"),
         "below_threshold_count": row.get("below_threshold_count"),
+        "stale_reporting_count": row.get("stale_reporting_count"),
         "largest_institution_ratio": row.get("largest_institution_ratio"),
         "concentration": row.get("concentration"),
         "ratio_change_5d": row.get("ratio_change_5d"),
@@ -317,6 +318,8 @@ def _holder_view(row: dict[str, Any]) -> dict[str, Any]:
         "last_position_date": row.get("last_position_date"),
         "last_published_date": row.get("last_published_date"),
         "visibility_status": row.get("visibility_status"),
+        # 閾値を割ったのか、割らないまま報告が止まったのか。別の事象。
+        "stale_reporting": bool(row.get("stale_reporting")),
         # 「見えている値 = 今の建玉」ではない。線を 0 に落とさないための旗。
         "exact_position_known": known,
         "state_age_trading_days": row.get("state_age_trading_days"),

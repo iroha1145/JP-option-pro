@@ -242,3 +242,59 @@ def test_concentration_falls_when_the_position_is_spread_across_institutions():
     rows = [_row(name, "2026-07-31", 0.0100) for name in ("A", "B", "C", "D")]
     totals = ev.visible_totals(ev.last_known_as_of(_events(rows), published_cutoff="2026-08-03"))
     assert totals["concentration"] == pytest.approx(0.25)
+
+
+# -- 報告義務中のまま古くなったもの -----------------------------------------
+
+def test_a_reporting_state_that_stopped_updating_is_not_summed():
+    """報告義務は 0.1% 動くたびに発生する。
+
+    0.5% 以上の建玉が半年間 1 度も 0.1% 動かない、は実務上ほぼ無い。本番
+    データでは `reporting` 4,352 件のうち 940 件が 250 営業日超（685 銘柄）で、
+    ある銘柄では合計が「公開空売り 39.77%」になっていた。閾値割れを足すのと
+    同じ誤り —— いない売り方を数えている。
+    """
+
+    rows = [
+        _row("Fresh", "2026-07-31", 0.0123, shares=395_600),
+        _row("Abandoned", "2026-07-16", 0.0400, shares=1_000_000),
+    ]
+    events = _events(rows)
+    # 「Abandoned」の報告だけ、窓の先頭より前に置く
+    for event in events:
+        if event["raw_holder_name"] == "Abandoned":
+            event["published_date"] = "2019-01-04"
+
+    known = ev.last_known_as_of(
+        events, published_cutoff=TRADING_DAYS[-1],
+        trading_days=TRADING_DAYS, stale_after=5,
+    )
+    totals = ev.visible_totals(known)
+
+    abandoned = InstitutionResolver().resolve("Abandoned").legal_id
+    assert known[abandoned]["stale_reporting"] is True
+    assert totals["visible_short_ratio"] == pytest.approx(0.0123), "古い報告を合計に足している"
+    assert totals["visible_institution_count"] == 1
+    assert totals["stale_reporting_count"] == 1
+    assert totals["below_threshold_count"] == 0, "閾値割れと混同している"
+
+
+def test_a_fresh_reporting_state_is_still_summed():
+    rows = [_row("Fresh", "2026-07-31", 0.0123, shares=395_600)]
+    known = ev.last_known_as_of(
+        _events(rows), published_cutoff=TRADING_DAYS[-1], trading_days=TRADING_DAYS,
+    )
+    state = next(iter(known.values()))
+    assert state["stale_reporting"] is False
+    assert state["exact_position_known"] is True
+    assert ev.visible_totals(known)["visible_short_ratio"] == pytest.approx(0.0123)
+
+
+def test_staleness_needs_a_calendar_and_defaults_to_not_stale():
+    """営業日列が無ければ古さを判定できない。判定できないものを stale にしない。"""
+
+    rows = [_row("A", "2026-07-31", 0.0123)]
+    known = ev.last_known_as_of(_events(rows), published_cutoff="2026-08-03")
+    state = next(iter(known.values()))
+    assert state["state_age_trading_days"] is None
+    assert state["stale_reporting"] is False

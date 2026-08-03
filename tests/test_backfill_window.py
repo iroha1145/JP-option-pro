@@ -243,8 +243,14 @@ def test_migration_from_v5_adds_the_party_columns(tmp_path):
     with core.write() as connection:
         columns = {r[1] for r in connection.execute("PRAGMA table_info(short_positions)")}
     assert {"holder_address", "manager_name", "manager_address"} <= columns
-    assert core_schema.CORE_SCHEMA_VERSION == "jp-core-v6"
-    # v5 の移行元が連鎖に残っていること（既存本番 DB はここから上がる）
+    # 既存本番 DB が古いままでも、連鎖で最新まで上がれること
+    version = core_schema.CORE_SCHEMA_VERSION
+    seen = {"jp-core-v1"}
+    while version not in seen:
+        previous = [k for k, (_ddl, nxt) in core_schema.CORE_MIGRATIONS.items() if nxt == version]
+        assert previous, f"{version} への移行元が連鎖から欠けている"
+        version = previous[0]
+        seen.add(version)
     assert "jp-core-v5" in core_schema.CORE_MIGRATIONS
 
 

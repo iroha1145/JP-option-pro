@@ -822,14 +822,15 @@ class CoreRepository(SQLiteRepository):
     _LAST_KNOWN_COLUMNS = (
         "canonical_code", "legal_id", "group_id", "last_reported_ratio",
         "last_reported_shares", "last_position_date", "last_published_date",
-        "visibility_status", "exact_position_known", "state_age_trading_days",
+        "visibility_status", "exact_position_known", "stale_reporting", "state_age_trading_days",
         "is_hedge_disclosed", "mapping_confidence", "updated_at",
     )
     _SNAPSHOT_COLUMNS = (
         "canonical_code", "as_of_date", "close", "adv20_shares", "adv20_value",
         "drawdown_52w", "price_percentile_252", "rel_topix_20d", "rel_sector_20d",
         "visible_short_shares", "visible_short_ratio", "visible_institution_count",
-        "below_threshold_count", "largest_institution_ratio", "concentration",
+        "below_threshold_count", "stale_reporting_count",
+        "largest_institution_ratio", "concentration",
         "ratio_change_1d", "ratio_change_5d", "ratio_change_20d",
         "shares_change_5d", "shares_change_20d", "pressure_adv20_5d", "pressure_adv20_20d",
         "visible_days_to_cover", "entry_count_20d", "reentry_count_20d",

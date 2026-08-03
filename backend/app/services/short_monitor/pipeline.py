@@ -92,15 +92,11 @@ def rebuild_events(
         result.codes += 1
         event_batch.extend(events)
 
-        known = ev.last_known_as_of(events, published_cutoff=latest_published)
+        known = ev.last_known_as_of(
+            events, published_cutoff=latest_published, trading_days=age_calendar,
+        )
         for legal_id, state in known.items():
-            known_batch.append({
-                "canonical_code": code,
-                "state_age_trading_days": _age_in_trading_days(
-                    age_calendar, state.get("last_published_date")
-                ),
-                **state,
-            })
+            known_batch.append({"canonical_code": code, **state})
 
         for event in events:
             raw = str(event["raw_holder_name"])

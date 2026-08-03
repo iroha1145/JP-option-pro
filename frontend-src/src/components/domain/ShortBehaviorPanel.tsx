@@ -62,6 +62,7 @@ export default function ShortBehaviorPanel({ code }: { code: string }) {
 
   const reporting = detail.holders.filter((h) => h.visibility_status === 'reporting');
   const below = detail.holders.filter((h) => h.visibility_status === 'below_public_threshold');
+  const stale = detail.holders.filter((h) => h.stale_reporting);
 
   return (
     <div className="space-y-3">
@@ -88,7 +89,8 @@ export default function ShortBehaviorPanel({ code }: { code: string }) {
       {/* 中层：各机构最新公开状态 */}
       <div>
         <p className="mb-1 text-micro text-ink-400">
-          {t('机构公开空头')}（{t('报告义务中')} {reporting.length} · {t('跌破门槛')} {below.length}）
+          {t('机构公开空头')}（{t('报告义务中')} {reporting.length - stale.length} · {t('跌破门槛')} {below.length}
+          {stale.length > 0 ? ` · ${t('报告已停止')} ${stale.length}` : ''}）
         </p>
         {detail.holders.length === 0 ? (
           <p className="text-body-s text-ink-400">{t('当前没有公开披露的机构空头')}</p>
@@ -161,7 +163,7 @@ function HolderRow({ holder }: { holder: ShortMonitorHolder }) {
         <span
           className={`shrink-0 whitespace-nowrap text-micro ${known ? 'text-ink-400' : 'text-up-600'}`}
         >
-          {known ? t('报告义务中') : t('跌破门槛')}
+          {known ? t('报告义务中') : holder.stale_reporting ? t('报告已停止') : t('跌破门槛')}
         </span>
         <span className="shrink-0 whitespace-nowrap font-mono text-micro tnum text-ink-400">
           {fmtDateShort(holder.last_position_date)}

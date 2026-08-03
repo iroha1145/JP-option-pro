@@ -27,7 +27,19 @@ from app.services.short_interest import REPORTING_THRESHOLD
 from .institutions import InstitutionResolver
 
 #: イベント導出の版。分類規則を変えたら上げる。
-EVENT_VERSION = "evt-v1"
+EVENT_VERSION = "evt-v2"
+
+#: 「まだ報告義務中」の最終報告が、これより古ければ現在の建玉の証拠にならない。
+#:
+#: 報告義務は 0.1% 動くたびに発生する。0.5% 以上の建玉が半年間 1 度も 0.1%
+#: 動かない、ということは実務上ほぼ無い。にもかかわらず本番データでは
+#: `reporting` 状態 4,352 件のうち **940 件が 250 営業日超**（685 銘柄）で、
+#: 経過日数の分布は 20 日以内 3,035 件 → 61〜250 日 106 件 → 250 日超 940 件
+#: と明確に二峰。間の谷がそのまま境目になる。
+#:
+#: これを合計に入れると、ある銘柄では「公開空売り 39.77%」という値が出る。
+#: 閾値割れを足すのと同じ誤り —— いない売り方を数えている。
+STALE_REPORT_TRADING_DAYS = 125
 
 # 可視性
 VISIBLE_REPORTING = "reporting"
@@ -178,12 +190,20 @@ def build_events(
 
 
 def last_known_as_of(
-    events: Iterable[Mapping[str, Any]], *, published_cutoff: str
+    events: Iterable[Mapping[str, Any]],
+    *,
+    published_cutoff: str,
+    trading_days: Sequence[str] | None = None,
+    stale_after: int = STALE_REPORT_TRADING_DAYS,
 ) -> dict[str, dict[str, Any]]:
     """公開日 `published_cutoff` 時点で市場が知りえた「最後の公開状態」。
 
     訂正は **その訂正が公開された後** にしか効かない。締切以前で最も新しい
     公開日の報告を機関ごとに採る（同じ公開日なら計算日が新しいほう）。
+
+    `trading_days`（締切までの営業日列）を渡すと経過営業日を数え、
+    `stale_after` を超えた「報告義務中」を `stale = True` にする。古すぎる
+    最終報告は現在の建玉の証拠にならないので、合計には足さない。
     """
 
     latest: dict[str, tuple[tuple[str, str], Mapping[str, Any]]] = {}
@@ -199,9 +219,14 @@ def last_known_as_of(
         if current is None or key > current[0]:
             latest[legal_id] = (key, event)
 
+    calendar = list(trading_days or ())
     out: dict[str, dict[str, Any]] = {}
     for legal_id, (_key, event) in latest.items():
         status = str(event.get("visibility_status") or VISIBLE_CLOSED)
+        age = _age_in_trading_days(calendar, event.get("published_date"))
+        stale = bool(
+            status == VISIBLE_REPORTING and age is not None and age > stale_after
+        )
         out[legal_id] = {
             "legal_id": legal_id,
             "group_id": event.get("group_id"),
@@ -210,13 +235,28 @@ def last_known_as_of(
             "last_position_date": event.get("position_date"),
             "last_published_date": event.get("published_date"),
             "visibility_status": status,
-            # 「見えている」のは報告義務が続いている間だけ。閾値割れの後の
-            # 実際の建玉は不明であって、ゼロではない。
-            "exact_position_known": status == VISIBLE_REPORTING,
+            "state_age_trading_days": age,
+            # 報告義務中でも、最終報告が古すぎれば現在の建玉は分からない。
+            "stale_reporting": stale,
+            # 「見えている」のは報告義務が続いていて、かつ報告が新しい間だけ。
+            # 閾値割れの後の実際の建玉は不明であって、ゼロではない。
+            "exact_position_known": status == VISIBLE_REPORTING and not stale,
             "is_hedge_disclosed": int(event.get("is_hedge_disclosed") or 0),
             "mapping_confidence": event.get("mapping_confidence"),
         }
     return out
+
+
+def _age_in_trading_days(calendar: Sequence[str], day: Any) -> int | None:
+    text = str(day or "")
+    if not text or not calendar:
+        return None
+    import bisect
+
+    index = bisect.bisect_left(calendar, text)
+    if index >= len(calendar):
+        return 0
+    return max(0, len(calendar) - 1 - index)
 
 
 def visible_totals(last_known: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
@@ -228,9 +268,14 @@ def visible_totals(last_known: Mapping[str, Mapping[str, Any]]) -> dict[str, Any
     below = 0
     closed = 0
     hedge = 0
+    stale = 0
     for state in last_known.values():
         status = state.get("visibility_status")
-        if status == VISIBLE_REPORTING:
+        if status == VISIBLE_REPORTING and state.get("stale_reporting"):
+            # 報告義務中の表示のまま何年も更新が無いもの。閾値割れと同じで
+            # 「その値だった」ことしか分からないので、数えるが足さない。
+            stale += 1
+        elif status == VISIBLE_REPORTING:
             ratio = _finite(state.get("last_reported_ratio"))
             if ratio is not None:
                 ratios.append(ratio)
@@ -249,6 +294,7 @@ def visible_totals(last_known: Mapping[str, Mapping[str, Any]]) -> dict[str, Any
         # 欠損を 0 として足すと合計が黙って小さく出る。1 件でも欠けたら出さない。
         "visible_short_shares": None if shares_missing else (sum(shares) if shares else 0.0),
         "visible_institution_count": len(ratios),
+        "stale_reporting_count": stale,
         "below_threshold_count": below,
         "closed_count": closed,
         "hedge_institution_count": hedge,
@@ -276,6 +322,7 @@ __all__ = [
     "EVENT_NEW",
     "EVENT_REENTRY",
     "EVENT_VERSION",
+    "STALE_REPORT_TRADING_DAYS",
     "VISIBLE_BELOW_THRESHOLD",
     "VISIBLE_CLOSED",
     "VISIBLE_REPORTING",

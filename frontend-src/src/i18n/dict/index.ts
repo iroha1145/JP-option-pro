@@ -1036,10 +1036,6 @@ export const DICT: Record<string, [string, string]> = {
   '相对TOPIX': ['vs TOPIX', '対TOPIX'],
   '相对行业': ['vs sector', '対業種'],
   '标签': ['Labels', 'ラベル'],
-  '机构数后的 +N? 表示已跌破公开门槛、实际持仓不再披露的机构家数（不计入合计）': [
-    'The +N? after the institution count is how many fell below the public threshold and no longer disclose their actual position (not included in the total)',
-    '機関数の後の +N? は、公開閾値を割って実際の建玉を開示しなくなった機関の数（合計には入れない）',
-  ],
   '正常做空': ['Normal shorting', '通常の空売り'],
   '低位冲突': ['Low conflict', '低位での衝突'],
   '回补启动': ['Covering start', '回補の開始'],
@@ -1059,6 +1055,11 @@ export const DICT: Record<string, [string, string]> = {
   '仅1家可见': ['Only 1 visible', '可視は1社のみ'],
   '读取失败': ['Failed to load', '読み込みに失敗'],
   '不限': ['No limit', '制限なし'],
+  '报告已停止': ['Reporting stopped', '報告が停止'],
+  '机构数后的 +N? 是实际持仓不可见的机构家数（跌破门槛，或未跌破但报告长期停止），均不计入合计': [
+    'The +N? after the institution count is how many hold a position we cannot see — either below the disclosure threshold, or above it but no longer reporting. Neither is included in the total.',
+    '機関数の後の +N? は、実際の建玉が見えない機関の数（閾値割れ、または割らないまま報告が止まったもの）。どちらも合計には入れない。',
+  ],
   '机构空卖行为': ['Institutional short behavior', '機関の空売り行動'],
   '该股票暂无机构空卖行为快照': ['No short-behavior snapshot for this stock yet', 'この銘柄の空売り行動スナップショットはまだありません'],
   '跌破公开披露门槛不代表实际空头仓位归零，后续精确仓位不可见。': [

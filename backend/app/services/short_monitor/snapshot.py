@@ -83,8 +83,15 @@ def _window_date(trading_days: Sequence[str], back: int) -> str | None:
     return trading_days[-1 - back]
 
 
-def _visible_at(events: Sequence[Mapping[str, Any]], cutoff: str) -> dict[str, Any]:
-    return ev.visible_totals(ev.last_known_as_of(events, published_cutoff=cutoff))
+def _visible_at(
+    events: Sequence[Mapping[str, Any]], cutoff: str, trading_days: Sequence[str]
+) -> dict[str, Any]:
+    """その締切時点の可視合計。営業日列を渡して「古すぎる報告」を弾く。"""
+
+    past = [day for day in trading_days if day <= cutoff]
+    return ev.visible_totals(
+        ev.last_known_as_of(events, published_cutoff=cutoff, trading_days=past)
+    )
 
 
 def _count_events(
@@ -189,9 +196,9 @@ def build_raw_rows(
         if not price.get("known"):
             continue
 
-        now = _visible_at(stock.events, market.as_of_date)
-        prev_5 = _visible_at(stock.events, cutoff_5) if cutoff_5 else None
-        prev_20 = _visible_at(stock.events, cutoff_20) if cutoff_20 else None
+        now = _visible_at(stock.events, market.as_of_date, market.trading_days)
+        prev_5 = _visible_at(stock.events, cutoff_5, market.trading_days) if cutoff_5 else None
+        prev_20 = _visible_at(stock.events, cutoff_20, market.trading_days) if cutoff_20 else None
         counts = _count_events(stock.events, since=since_20)
 
         rows.append({
@@ -389,6 +396,7 @@ def _finalize(
         "data_confidence": confidence["confidence"],
         "visible_institution_count": now.get("visible_institution_count"),
         "below_threshold_count": now.get("below_threshold_count"),
+        "stale_reporting_count": now.get("stale_reporting_count"),
         "hedge_institution_count": now.get("hedge_institution_count"),
         "concentration": now.get("concentration"),
         "entry_count_20d": counts["entry"],
@@ -436,6 +444,9 @@ def _finalize(
         "visible_short_ratio": now.get("visible_short_ratio"),
         "visible_institution_count": int(now.get("visible_institution_count") or 0),
         "below_threshold_count": int(now.get("below_threshold_count") or 0),
+        # 報告義務中の表示のまま古くなったもの。合計には入れないが、
+        # 「閾値を割った」とは別の事象なので列を分ける。
+        "stale_reporting_count": int(now.get("stale_reporting_count") or 0),
         "largest_institution_ratio": now.get("largest_institution_ratio"),
         "concentration": now.get("concentration"),
         "ratio_change_1d": None,

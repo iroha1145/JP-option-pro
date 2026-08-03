@@ -974,6 +974,8 @@ export interface ShortMonitorRow {
   visible_short_shares: number | null;
   visible_institution_count: number;
   below_threshold_count: number;
+  /** 未跌破门槛但报告已停止更新。同样不计入合计，但与跌破门槛是两回事。 */
+  stale_reporting_count: number | null;
   largest_institution_ratio: number | null;
   concentration: number | null;
   ratio_change_5d: number | null;
@@ -1029,7 +1031,9 @@ export interface ShortMonitorHolder {
   last_position_date: string | null;
   last_published_date: string | null;
   visibility_status: string;
-  /** false = 跌破门槛后实际仓位不可见。绝不把线画到 0。 */
+  /** true = 未跌破门槛，但报告已长期停止更新。 */
+  stale_reporting?: boolean;
+  /** false = 实际仓位不可见。绝不把线画到 0。 */
   exact_position_known: boolean;
   state_age_trading_days: number | null;
   is_hedge_disclosed: boolean;
