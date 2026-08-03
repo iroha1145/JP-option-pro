@@ -29,10 +29,35 @@ export default function Market() {
   const [sectorView, setSectorView] = useState<'heat' | 'list'>('heat');
   const [selectedSector, setSelectedSector] = useState<string | null>(null);
   const [memberSort, setMemberSort] = useState<SectorMemberSort>('turnover');
+  const [tileSource, setTileSource] = useState<'official' | 'intraday'>('intraday');
 
-  /* 砖块按当前口径排序：热力图第一眼要看到最强/最弱聚在两端 */
+  /* 業種断面のザラ場版: 全 1,587 銘柄を 80 バッチで撫でて中央値を作る。
+     遅延 15 分なので 3 分ポーリング（それ以上速くしても新しい値は出ない）。 */
+  const liveSectors = usePolling(
+    () => (tileSource === 'intraday' ? marketApi.intradaySectors() : Promise.resolve(null)),
+    180_000,
+    [tileSource],
+  );
+
+  /* 砖块按当前口径排序：热力图第一眼要看到最强/最弱聚在两端。
+     ザラ場口径のときは遅延気配から作った 1 日騰落で差し替える（20 日は
+     公式日足のまま —— 20 日リターンはザラ場気配からは作れない）。 */
+  const liveByCode = useMemo(() => {
+    const map = new Map<string, { median_return_1d: number; advancers_share: number }>();
+    for (const row of liveSectors.data?.sectors ?? []) map.set(row.sector33_code, row);
+    return map;
+  }, [liveSectors.data]);
+
   const sectorsSorted = useMemo(() => {
-    const rows = market.data?.sectors ?? [];
+    const base = market.data?.sectors ?? [];
+    const rows = tileSource === 'intraday' && liveByCode.size
+      ? base.map((row) => {
+          const live = liveByCode.get(row.sector33_code);
+          return live
+            ? { ...row, median_return_1d: live.median_return_1d, advancers_share: live.advancers_share }
+            : row;
+        })
+      : base;
     return [...rows].sort((a, b) => {
       const va = metricValue(a, heatMetric);
       const vb = metricValue(b, heatMetric);
@@ -40,7 +65,7 @@ export default function Market() {
       if (vb === null) return -1;
       return vb - va;
     });
-  }, [market.data, heatMetric]);
+  }, [market.data, heatMetric, tileSource, liveByCode]);
 
   /* 未选板块时默认落在当前口径最强的那个（面板永远有内容，不是空壳） */
   useEffect(() => {
@@ -228,9 +253,16 @@ export default function Market() {
                 <p className="eyebrow">SECTOR MATRIX · 33 業種</p>
                 <h2 className="mt-0.5 text-h3 text-ink-900">{t('板块透视')}</h2>
                 <p className="mt-0.5 text-micro text-ink-400">
-                  {t('业种断面 · J-Quants 官方日线 {date} 收盘（盘中不更新）', {
-                    date: market.data?.data_through ?? '—',
-                  })}
+                  {tileSource === 'intraday' && liveByCode.size
+                    ? t('1日=盘中延迟{n}分（{q}/{u} 只覆盖）· 20日=官方日线 {date}', {
+                        n: liveSectors.data?.delayed_minutes ?? 15,
+                        q: liveSectors.data?.quoted ?? 0,
+                        u: liveSectors.data?.universe ?? 0,
+                        date: market.data?.data_through ?? '—',
+                      })
+                    : t('业种断面 · J-Quants 官方日线 {date} 收盘（盘中不更新）', {
+                        date: market.data?.data_through ?? '—',
+                      })}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -246,6 +278,14 @@ export default function Market() {
                   ]}
                   value={heatMetric}
                   onChange={setHeatMetric}
+                />
+                <Segmented<'official' | 'intraday'>
+                  options={[
+                    { value: 'intraday', label: t('盘中') },
+                    { value: 'official', label: t('官方收盘') },
+                  ]}
+                  value={tileSource}
+                  onChange={setTileSource}
                 />
                 <Segmented<'heat' | 'list'>
                   options={[

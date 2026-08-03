@@ -13,6 +13,7 @@ import type {
   TickView,
   MarketOverview,
   IntradayQuotesResponse,
+  IntradaySectorsResponse,
   SectorMemberSort,
   SectorMembersView,
   MarketRegime,
@@ -40,6 +41,9 @@ export const marketApi = {
     return get<{ index_code: string; name: string; data_through: string | null; bars: { trade_date: string; close: number | null }[] }>(
       `/market/indices/${encodeURIComponent(code)}?${toQuery({ limit })}`,
     );
+  },
+  intradaySectors(): Promise<IntradaySectorsResponse> {
+    return get('/quotes/sectors/intraday');
   },
   sectorMembers(code: string, sort: SectorMemberSort, limit = 12): Promise<SectorMembersView> {
     return get(`/market/sectors/${encodeURIComponent(code)}/members?${toQuery({ sort, limit })}`);

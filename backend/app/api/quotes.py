@@ -10,6 +10,8 @@ J-Quants は場中に一切 publish しない（実測: 場中の分足・日足
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Query
 
 from app.api.deps import core_repository
@@ -21,6 +23,7 @@ from app.providers.yahoo_quotes import (
     QUOTE_SOURCE,
     YahooQuoteProvider,
 )
+from app.domain.constants import SECTOR33
 from app.services.cache import cache as shared_cache
 
 router = APIRouter(prefix="/api/quotes", tags=["quotes"])
@@ -69,10 +72,17 @@ async def intraday_quotes(codes: str = Query(default="", max_length=800)) -> dic
 
     key = "quotes:intraday:" + ",".join(sorted(canonical))
 
-    async def build() -> dict:
+    def _collect() -> tuple[dict, dict]:
         provider = YahooQuoteProvider()
-        found = provider.quotes_for_codes(canonical) if canonical else {}
-        indices = provider.index_quotes()
+        return (
+            provider.quotes_for_codes(canonical) if canonical else {},
+            provider.index_quotes(),
+        )
+
+    async def build() -> dict:
+        # プロバイダは同期 HTTP。async ハンドラ内で直に回すとイベントループを
+        # 止め、同じプロセスの他リクエスト（市場ページ本体）まで道連れにする。
+        found, indices = await asyncio.to_thread(_collect)
         return {
             "version": QUOTES_VERSION,
             "enabled": True,
@@ -88,3 +98,76 @@ async def intraday_quotes(codes: str = Query(default="", max_length=800)) -> dic
         }
 
     return await shared_cache.get_or_set(key, _CACHE_SECONDS, build)
+
+
+# 全市場 1,587 銘柄 = 80 バッチ ≈ 6 秒。遅延 15 分のデータを 1 分ごとに撫でても
+# 情報は増えないので 3 分キャッシュ（Yahoo への負荷を 1/3 に）。
+_SECTOR_CACHE_SECONDS = 180
+
+
+@router.get("/sectors/intraday")
+async def intraday_sectors() -> dict:
+    """業種別のザラ場断面（遅延気配から中央値を作る・表示専用）。
+
+    公式日足の断面（/api/market/overview の sectors）とは別物として返す。
+    値は非公式・15 分遅延であり、レーダーやスコアには一切入らない。
+    """
+
+    config = get_personal_config()
+    if not config.features.intraday_quotes:
+        return {**_disabled(), "sectors": []}
+    repository = core_repository()
+    if not repository.exists():
+        raise HTTPException(status_code=503, detail={"code": "data_not_initialized"})
+
+    rows, _total = repository.screener_query(
+        where_sql="1=1", params=[], order_sql="canonical_code ASC", limit=10000, offset=0
+    )
+    universe = [(row["canonical_code"], row.get("sector33_code")) for row in rows]
+
+    def _collect_all() -> dict:
+        provider = YahooQuoteProvider(max_workers=6)
+        codes = [code for code, _sector in universe]
+        found: dict = {}
+        # プロバイダ側の 60 件ガードに合わせて分割（内部でさらに 20 件バッチ）
+        for start in range(0, len(codes), 60):
+            found.update(provider.quotes_for_codes(codes[start : start + 60]))
+        return found
+
+    async def build() -> dict:
+        # 1,587 銘柄で 5 秒超。ここを await せずに回すとページ全体が落ちる
+        # （実測: 市場ページ本体が「請求超時」になった）。
+        found = await asyncio.to_thread(_collect_all)
+        by_sector: dict[str, list[float]] = {}
+        for code, sector in universe:
+            quote = found.get(code)
+            if sector is None or quote is None or quote.change_pct is None:
+                continue
+            by_sector.setdefault(sector, []).append(quote.change_pct)
+        sectors = []
+        for sector_code, changes in by_sector.items():
+            changes.sort()
+            median = changes[len(changes) // 2]
+            advancing = sum(1 for value in changes if value > 0.0005)
+            sectors.append(
+                {
+                    "sector33_code": sector_code,
+                    "sector33_name": SECTOR33.get(sector_code, sector_code),
+                    "median_return_1d": median,
+                    "advancers_share": advancing / len(changes),
+                    "covered": len(changes),
+                }
+            )
+        sectors.sort(key=lambda item: -item["median_return_1d"])
+        return {
+            "version": QUOTES_VERSION,
+            "enabled": True,
+            "source": QUOTE_SOURCE,
+            "delayed": True,
+            "delayed_minutes": 15,
+            "universe": len(universe),
+            "quoted": len(found),
+            "sectors": sectors,
+        }
+
+    return await shared_cache.get_or_set("quotes:sectors:intraday", _SECTOR_CACHE_SECONDS, build)

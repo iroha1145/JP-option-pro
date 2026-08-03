@@ -74,6 +74,15 @@ export interface IntradayQuotesResponse {
   indices?: Record<string, IntradayQuote & { name: string }>;
 }
 
+export interface IntradaySectorsResponse {
+  enabled: boolean;
+  source: string;
+  delayed_minutes?: number;
+  universe?: number;
+  quoted?: number;
+  sectors: { sector33_code: string; sector33_name: string; median_return_1d: number; advancers_share: number; covered: number }[];
+}
+
 export interface MarketOverview {
   version: string;
   data_through: string | null;

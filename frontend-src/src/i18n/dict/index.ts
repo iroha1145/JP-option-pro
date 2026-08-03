@@ -950,4 +950,10 @@ export const DICT: Record<string, [string, string]> = {
     'Sector cross-section · official J-Quants daily close {date} (not updated intraday)',
     '業種断面 · J-Quants 公式日足 {date} 引け（ザラ場中は更新されません）',
   ],
+  盘中: ['Intraday', 'ザラ場'],
+  官方收盘: ['Official close', '公式終値'],
+  '1日=盘中延迟{n}分（{q}/{u} 只覆盖）· 20日=官方日线 {date}': [
+    '1d = intraday, {n}-min delayed ({q}/{u} covered) · 20d = official daily {date}',
+    '1日=ザラ場 {n}分遅延（{q}/{u} 銘柄カバー）· 20日=公式日足 {date}',
+  ],
 };
