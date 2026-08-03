@@ -167,3 +167,37 @@ def test_evaluate_produces_walk_forward_windows_not_shuffled_dates(tmp_path):
         assert starts == sorted(starts), "窓が時間順になっていない"
         for window in windows:
             assert window["test"][0] <= window["test"][1]
+
+
+def test_replay_gives_the_same_answer_chunked_or_not(tmp_path, monkeypatch):
+    """足を区切って読んでも結果が変わらないこと。
+
+    10 年ぶんを一度に読むと 10M 行が辞書で乗って落ちる（実際に落ちた）ので
+    区切って読むが、区切り方で答えが変わるなら意味が無い。
+    """
+
+    import app.research.short_behavior_runner as runner
+
+    core = _core(tmp_path)
+    monkeypatch.setattr(runner, "CHUNK_EVALUATION_DAYS", 1000)
+    whole = replay(core, start="2026-05-01", end="2026-07-31", every=5)
+    monkeypatch.setattr(runner, "CHUNK_EVALUATION_DAYS", 2)
+    chunked = replay(core, start="2026-05-01", end="2026-07-31", every=5)
+
+    keys = ("canonical_code", "signal_date", "primary_state", "return_20d",
+            "excess_topix_20d", "visible_short_ratio")
+    assert [{k: r.get(k) for k in keys} for r in whole] == [
+        {k: r.get(k) for k in keys} for r in chunked
+    ]
+
+
+def test_replay_keeps_enough_forward_bars_to_measure_outcomes(tmp_path, monkeypatch):
+    """区間の末尾でも T+20 が測れること（先行足を切り落とさない）。"""
+
+    import app.research.short_behavior_runner as runner
+
+    core = _core(tmp_path)
+    monkeypatch.setattr(runner, "CHUNK_EVALUATION_DAYS", 2)
+    records = replay(core, start="2026-05-01", end="2026-06-30", every=5)
+    measurable = [r for r in records if r.get("return_20d") is not None]
+    assert measurable, "区間の切り方で先の値動きが測れなくなっている"

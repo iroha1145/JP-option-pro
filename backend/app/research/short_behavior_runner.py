@@ -21,7 +21,7 @@ from app.repositories.core import CoreRepository
 from app.services.short_monitor import pipeline, snapshot as snap
 from app.services.short_monitor.states import STATE_NO_SIGNAL
 
-from .outcomes import compute_outcome
+from .outcomes import HORIZONS, compute_outcome
 from .short_behavior import evaluate_signals
 
 #: 足の読み込み窓。スナップショットが 252 日分位と 200 日線を要求する。
@@ -34,6 +34,10 @@ BAR_LOOKBACK = pipeline.BAR_LOOKBACK_TRADING_DAYS
 #: 状態も `no_signal` にしかならないので、母集団も信号も変わらない。
 #: 全銘柄を毎回組み立てると 1 評価日あたり約 5 分（10 年で 10 時間）かかる。
 EVENT_WINDOW_TRADING_DAYS = 30
+
+#: 1 回の足読み込みでカバーする評価日数。大きいほどクエリは減るが、
+#: 保持する足も増える。10 年ぶんを一度に読むと 10M 行が乗って落ちる。
+CHUNK_EVALUATION_DAYS = 12
 
 
 def _slice_until(series: Sequence[Mapping[str, Any]], day: str, lookback: int) -> list[dict[str, Any]]:
@@ -61,16 +65,37 @@ def replay(
     if not evaluation_days:
         return []
 
-    first_needed = calendar[max(0, calendar.index(evaluation_days[0]) - BAR_LOOKBACK)]
-    bars = repository.bars_matrix_since(first_needed)
     securities = {row["canonical_code"]: row for row in repository.list_securities()}
-    topix_series = repository.index_series("0000", start_date=first_needed)
-    topix_closes = {row["trade_date"]: row.get("close") for row in topix_series}
     events_all = pipeline._events_by_code(repository, published_through=end)
 
     records: list[dict[str, Any]] = []
     previous_states: dict[str, str] = {}
+    # 足は **区切って** 読む。10 年ぶんを一度に持つと 10M 行が辞書で乗って
+    # メモリを食い尽くす（実際にそれで落ちた）。各区間は
+    # 「先頭 − 300 営業日」から「末尾 + 20 営業日」まで —— 前は指標の窓、
+    # 後ろは結果を測るための先行足。
+    bars: dict[str, list[dict[str, Any]]] = {}
+    topix_series: list[Mapping[str, Any]] = []
+    topix_closes: dict[str, Any] = {}
+    loaded_through = ""
     for position, day in enumerate(evaluation_days):
+        if day > loaded_through:
+            chunk = [d for d in evaluation_days if d >= day][:CHUNK_EVALUATION_DAYS]
+            first = calendar[max(0, calendar.index(chunk[0]) - BAR_LOOKBACK)]
+            tail = calendar.index(chunk[-1])
+            last = calendar[min(len(calendar) - 1, tail + max(HORIZONS) + 5)]
+            bars = {
+                code: [b for b in series if b["trade_date"] <= last]
+                for code, series in repository.bars_matrix_since(first).items()
+            }
+            topix_series = [
+                row for row in repository.index_series("0000", start_date=first)
+                if row["trade_date"] <= last
+            ]
+            topix_closes = {row["trade_date"]: row.get("close") for row in topix_series}
+            loaded_through = chunk[-1]
+            if progress:
+                progress(f"bars loaded {first}..{last} for {len(chunk)} evaluation days")
         window = [d for d in calendar if d <= day][-BAR_LOOKBACK:]
         event_floor = window[-EVENT_WINDOW_TRADING_DAYS] if len(window) > EVENT_WINDOW_TRADING_DAYS else window[0]
         stocks: list[snap.StockInputs] = []
