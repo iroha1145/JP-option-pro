@@ -31,6 +31,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--research-db", default=None)
     parser.add_argument("--json", action="store_true", help="レポートを JSON で出す")
     parser.add_argument(
+        "--run-id", default=None,
+        help="評価だけやり直す対象の run（保有期間だけ変えて読み直すときに使う）",
+    )
+    parser.add_argument(
         "--report-only", action="store_true",
         help="断面は再計算せず、保存済みスナップショットだけで評価をやり直す",
     )
@@ -56,7 +60,15 @@ def main(argv: list[str] | None = None) -> int:
     store = ResearchStore(research_path)
     if args.report_only:
         store.initialize()
-        report = evaluate_run(store, params)
+        # horizon / train_days / test_days は **評価だけ** のパラメータで、
+        # 保存済みスナップショットには影響しない（結果は 1/3/5/10/20 日を
+        # 全部持っている）。run_id はそれらも含めてハッシュしているので、
+        # 保有期間を変えて読み直すときは対象 run を明示する。
+        # 窓は **取引カレンダー** 上で切る。スナップショットの日付だけから
+        # 作ると、10 営業日ごとに間引いた 218 日しか無いので
+        # train 250 + test 125 が収まらず、窓が 0 個になる。
+        calendar = repository.trading_days_between(args.start, args.end)
+        report = evaluate_run(store, params, calendar=calendar, run_id=args.run_id)
     else:
         report = run_backtest(
             repository, store, params,
