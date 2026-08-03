@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { shortMonitorApi } from '@/api/modules';
 import type { ShortMonitorDetail, ShortMonitorEvent, ShortMonitorHolder } from '@/api/types';
-import { fmtDate, fmtDateShort, fmtPct, fmtShares } from '@/lib/format';
+import { fmtDate, fmtDateShort, fmtPct, fmtPctLevel, fmtShares } from '@/lib/format';
 import { t } from '@/i18n/core';
 
 const EVENT_LABELS: Record<string, string> = {
@@ -73,7 +73,7 @@ export default function ShortBehaviorPanel({ code }: { code: string }) {
       <dl className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
         <Metric label="行为分" value={detail.behavior_score?.toFixed(0) ?? '—'} />
         <Metric label="数据置信度" value={detail.data_confidence?.toFixed(2) ?? '—'} />
-        <Metric label="公开可见空头" value={fmtPct(detail.visible_short_ratio)} />
+        <Metric label="公开可见空头" value={fmtPctLevel(detail.visible_short_ratio)} />
         <Metric
           label="公开可见回补天数"
           value={detail.visible_days_to_cover?.toFixed(2) ?? '—'}
@@ -172,7 +172,7 @@ function HolderRow({ holder }: { holder: ShortMonitorHolder }) {
         <span
           className={`shrink-0 ${known ? 'text-ink-900' : 'text-ink-500 underline decoration-dotted underline-offset-2'}`}
         >
-          {fmtPct(holder.last_reported_ratio)}
+          {fmtPctLevel(holder.last_reported_ratio)}
         </span>
         <span className="min-w-0 flex-1 truncate text-micro text-ink-400">
           {holder.last_reported_shares != null
@@ -203,7 +203,7 @@ function EventRow({ event }: { event: ShortMonitorEvent }) {
         )}
       </div>
       <div className="flex items-baseline gap-2 font-mono text-micro tnum text-ink-400">
-        <span className="text-ink-900">{fmtPct(event.short_ratio)}</span>
+        <span className="text-ink-900">{fmtPctLevel(event.short_ratio)}</span>
         <span className="min-w-0 flex-1 truncate">
           {event.short_shares != null ? `${fmtShares(event.short_shares)}${t('株')}` : ''}
         </span>

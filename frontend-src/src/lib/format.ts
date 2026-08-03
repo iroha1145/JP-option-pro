@@ -44,6 +44,15 @@ export function fmtShares(value: number | null | undefined): string {
   return Math.round(value).toLocaleString('ja-JP');
 }
 
+/** 水準（比率そのもの）。**符号を付けない。**
+ *
+ * `fmtPct` は必ず符号を付けるので、変化には正しいが水準には誤り —— 空売り
+ * 残高 5.23% が「+5.23%」と出ると増加したように読める。実際そうなっていた。 */
+export function fmtPctLevel(value: number | null | undefined, digits = 2): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  return `${(value * 100).toFixed(digits)}%`;
+}
+
 export function fmtPct(value: number | null | undefined, digits = 2): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
   const pct = value * 100;

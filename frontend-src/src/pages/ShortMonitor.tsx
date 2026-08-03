@@ -14,7 +14,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import { InlineFallback } from '@/components/shared/Fallbacks';
 import { shortMonitorApi } from '@/api/modules';
 import type { ShortMonitorOverview, ShortMonitorRankings, ShortMonitorRow } from '@/api/types';
-import { fmtDate, fmtPct } from '@/lib/format';
+import { fmtDate, fmtPct, fmtPctLevel } from '@/lib/format';
 import { t } from '@/i18n/core';
 import { cn } from '@/lib/utils';
 
@@ -235,7 +235,7 @@ function RankingTable({ rankings }: { rankings: ShortMonitorRankings }) {
                   {row.data_confidence != null ? row.data_confidence.toFixed(2) : '—'}
                 </td>
                 <td className="py-1.5 pr-2 text-right font-mono tnum">{fmtPct(row.drawdown_52w)}</td>
-                <td className="py-1.5 pr-2 text-right font-mono tnum">{fmtPct(row.visible_short_ratio)}</td>
+                <td className="py-1.5 pr-2 text-right font-mono tnum">{fmtPctLevel(row.visible_short_ratio)}</td>
                 <td className="py-1.5 pr-2 text-right font-mono tnum">
                   <Signed value={row.ratio_change_5d} />
                 </td>
@@ -296,7 +296,7 @@ function MobileCard({ row }: { row: ShortMonitorRow }) {
           {t('置信度')} {row.data_confidence?.toFixed(2) ?? '—'}
         </span>
         <span>
-          {t('公开可见空头')} {fmtPct(row.visible_short_ratio)}
+          {t('公开可见空头')} {fmtPctLevel(row.visible_short_ratio)}
         </span>
         <span>
           {t('机构数')} {row.visible_institution_count}
