@@ -7,7 +7,174 @@ upserts that keep ``ingested_at`` as the revision stamp.
 
 from __future__ import annotations
 
-CORE_SCHEMA_VERSION = "jp-core-v5"
+CORE_SCHEMA_VERSION = "jp-core-v6"
+
+# -- 機関空売り行動モニター（v6 追加）--------------------------------------
+#
+# `short_positions` は J-Quants の生取り込みのまま残し、ここから **導出** する。
+# 導出物は algorithm_version 付きで、いつでも作り直せる。
+#
+# 命名の約束: 公開開示に達した分しか見えないので、どこにも
+# `total_short_*` とは書かない。`visible` / `reported` を必ず付ける。
+_SHORT_MONITOR_DDL: tuple[str, ...] = (
+    # 機関の法的実体。名前が似ているだけでは統合しない（統合は alias 表を通す）。
+    """
+    CREATE TABLE IF NOT EXISTS institution_entities (
+        legal_id TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL,
+        normalized_name TEXT NOT NULL,
+        group_id TEXT,
+        group_name TEXT,
+        country_hint TEXT,
+        first_seen_date TEXT,
+        last_seen_date TEXT,
+        report_count INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL
+    ) WITHOUT ROWID
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_institution_entities_group ON institution_entities(group_id)",
+    # 生の表記 → 法的実体。`confidence` は「この対応づけをどれだけ信じてよいか」。
+    # curated = 人手の別名表、normalized = 正規化後の完全一致、
+    # unmapped = 初出（統合せず単独の実体として立てる）。
+    """
+    CREATE TABLE IF NOT EXISTS institution_aliases (
+        raw_name TEXT PRIMARY KEY,
+        legal_id TEXT NOT NULL,
+        match_kind TEXT NOT NULL,
+        confidence REAL NOT NULL,
+        raw_address TEXT,
+        manager_name TEXT,
+        updated_at TEXT NOT NULL
+    ) WITHOUT ROWID
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_institution_aliases_legal ON institution_aliases(legal_id)",
+    # 正規化済みイベント。1 本の報告 = 1 行。
+    """
+    CREATE TABLE IF NOT EXISTS short_position_events (
+        event_id TEXT PRIMARY KEY,
+        canonical_code TEXT NOT NULL,
+        legal_id TEXT NOT NULL,
+        group_id TEXT,
+        raw_holder_name TEXT NOT NULL,
+        position_date TEXT NOT NULL,
+        published_date TEXT NOT NULL,
+        effective_trade_date TEXT NOT NULL,
+        short_ratio REAL,
+        short_shares REAL,
+        previous_ratio REAL,
+        previous_report_date TEXT,
+        ratio_delta REAL,
+        shares_delta REAL,
+        event_type TEXT NOT NULL,
+        visibility_status TEXT NOT NULL,
+        correction_status TEXT NOT NULL DEFAULT 'original',
+        is_hedge_disclosed INTEGER NOT NULL DEFAULT 0,
+        mapping_confidence REAL,
+        algorithm_version TEXT NOT NULL,
+        ingested_at TEXT NOT NULL
+    ) WITHOUT ROWID
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_spe_code_pub ON short_position_events(canonical_code, published_date)",
+    "CREATE INDEX IF NOT EXISTS idx_spe_effective ON short_position_events(effective_trade_date, canonical_code)",
+    "CREATE INDEX IF NOT EXISTS idx_spe_legal ON short_position_events(legal_id, published_date)",
+    # 「最後に公開された状態」。**その日の実仓位ではない。**
+    """
+    CREATE TABLE IF NOT EXISTS short_position_last_known (
+        canonical_code TEXT NOT NULL,
+        legal_id TEXT NOT NULL,
+        group_id TEXT,
+        last_reported_ratio REAL,
+        last_reported_shares REAL,
+        last_position_date TEXT,
+        last_published_date TEXT,
+        visibility_status TEXT NOT NULL,
+        exact_position_known INTEGER NOT NULL DEFAULT 1,
+        state_age_trading_days INTEGER,
+        is_hedge_disclosed INTEGER NOT NULL DEFAULT 0,
+        mapping_confidence REAL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (canonical_code, legal_id)
+    ) WITHOUT ROWID
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_splk_code ON short_position_last_known(canonical_code, visibility_status)",
+    # 銘柄 × 営業日の行動スナップショット。ランキングはここだけを読む。
+    """
+    CREATE TABLE IF NOT EXISTS short_behavior_snapshots (
+        canonical_code TEXT NOT NULL,
+        as_of_date TEXT NOT NULL,
+        close REAL,
+        adv20_shares REAL,
+        adv20_value REAL,
+        drawdown_52w REAL,
+        price_percentile_252 REAL,
+        rel_topix_20d REAL,
+        rel_sector_20d REAL,
+        visible_short_shares REAL,
+        visible_short_ratio REAL,
+        visible_institution_count INTEGER NOT NULL DEFAULT 0,
+        below_threshold_count INTEGER NOT NULL DEFAULT 0,
+        largest_institution_ratio REAL,
+        concentration REAL,
+        ratio_change_1d REAL,
+        ratio_change_5d REAL,
+        ratio_change_20d REAL,
+        shares_change_5d REAL,
+        shares_change_20d REAL,
+        pressure_adv20_5d REAL,
+        pressure_adv20_20d REAL,
+        visible_days_to_cover REAL,
+        entry_count_20d INTEGER NOT NULL DEFAULT 0,
+        reentry_count_20d INTEGER NOT NULL DEFAULT 0,
+        reduction_count_20d INTEGER NOT NULL DEFAULT 0,
+        threshold_exit_count_20d INTEGER NOT NULL DEFAULT 0,
+        low_position_score REAL,
+        short_pressure_score REAL,
+        price_damage_score REAL,
+        absorption_score REAL,
+        covering_score REAL,
+        rotation_score REAL,
+        catalyst_score REAL,
+        risk_score REAL,
+        data_confidence REAL,
+        behavior_score REAL,
+        monitor_priority REAL,
+        primary_state TEXT NOT NULL,
+        flags_json TEXT NOT NULL DEFAULT '[]',
+        components_json TEXT NOT NULL DEFAULT '{}',
+        algorithm_version TEXT NOT NULL,
+        generated_at TEXT NOT NULL,
+        PRIMARY KEY (canonical_code, as_of_date)
+    ) WITHOUT ROWID
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_sbs_date_score ON short_behavior_snapshots(as_of_date, behavior_score DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_sbs_date_state ON short_behavior_snapshots(as_of_date, primary_state, behavior_score DESC)",
+    # 状態が変わった日だけを残す履歴（検証の対象）。
+    """
+    CREATE TABLE IF NOT EXISTS short_behavior_signals (
+        signal_id TEXT PRIMARY KEY,
+        canonical_code TEXT NOT NULL,
+        signal_date TEXT NOT NULL,
+        primary_state TEXT NOT NULL,
+        previous_state TEXT,
+        behavior_score REAL,
+        components_json TEXT NOT NULL DEFAULT '{}',
+        evidence_json TEXT NOT NULL DEFAULT '{}',
+        source_cutoff TEXT NOT NULL,
+        algorithm_version TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    ) WITHOUT ROWID
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_sbsig_date ON short_behavior_signals(signal_date, primary_state)",
+    "CREATE INDEX IF NOT EXISTS idx_sbsig_code ON short_behavior_signals(canonical_code, signal_date)",
+)
+
+#: 既存 `short_positions` に落としていた列を足す。住所と DIC（投資一任契約の
+#: 相手方）が無いと、機関実体の正規化が名前の文字列一致だけになる。
+_SHORT_POSITION_PARTIES_DDL: tuple[str, ...] = (
+    "ALTER TABLE short_positions ADD COLUMN holder_address TEXT",
+    "ALTER TABLE short_positions ADD COLUMN manager_name TEXT",
+    "ALTER TABLE short_positions ADD COLUMN manager_address TEXT",
+)
 
 # v3: 全市場スナップショット照会（決算カレンダーの終値/前日比マップ等）を
 # カバリングインデックスで賄う。272MB の WITHOUT ROWID 主表への 4千回の
@@ -231,6 +398,12 @@ CORE_DDL: tuple[str, ...] = (
         disclosed_date TEXT NOT NULL,
         calculated_date TEXT NOT NULL,
         holder_name TEXT NOT NULL DEFAULT '',
+        -- 住所は同名別法人の切り分けに、DIC（投資一任契約の相手方）は
+        -- 「報告主体」と「実際の運用者」の切り分けに使う。落とすと機関実体の
+        -- 正規化が名前の文字列一致だけになる。
+        holder_address TEXT,
+        manager_name TEXT,
+        manager_address TEXT,
         investment_fund_name TEXT,
         short_position_ratio REAL,
         short_position_shares REAL,
@@ -318,6 +491,7 @@ CORE_DDL: tuple[str, ...] = (
     """,
     *_STRENGTH_DDL,
     *_QUOTE_INDEX_DDL,
+    *_SHORT_MONITOR_DDL,
 )
 
 #: v4: 業種相対の 20 日/63 日分離 + 信用規制状態。
@@ -343,11 +517,19 @@ _STRENGTH_REGULATION_DDL: tuple[str, ...] = (
     "ALTER TABLE strength_rows ADD COLUMN regulation_severity INTEGER",
 )
 
+#: v6: 機関空売り行動モニター。既存表には触れず、導出用の表を足すだけ
+#: （`short_positions` への 3 列追加を除く）。導出物はいつでも作り直せる。
+_SHORT_MONITOR_MIGRATION: tuple[str, ...] = (
+    *_SHORT_POSITION_PARTIES_DDL,
+    *_SHORT_MONITOR_DDL,
+)
+
 CORE_MIGRATIONS: dict[str, tuple[tuple[str, ...], str]] = {
     "jp-core-v1": (_STRENGTH_DDL, "jp-core-v2"),
     "jp-core-v2": (_QUOTE_INDEX_DDL, "jp-core-v3"),
     "jp-core-v3": (_RS_SECTOR_SPLIT_DDL, "jp-core-v4"),
-    "jp-core-v4": (_STRENGTH_REGULATION_DDL, CORE_SCHEMA_VERSION),
+    "jp-core-v4": (_STRENGTH_REGULATION_DDL, "jp-core-v5"),
+    "jp-core-v5": (_SHORT_MONITOR_MIGRATION, CORE_SCHEMA_VERSION),
 }
 
 __all__ = ["CORE_DDL", "CORE_MIGRATIONS", "CORE_SCHEMA_VERSION"]

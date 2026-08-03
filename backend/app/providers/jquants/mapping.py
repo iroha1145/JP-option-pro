@@ -367,6 +367,11 @@ def map_short_position(row: Mapping[str, Any]) -> dict[str, Any] | None:
         "disclosed_date": disclosed,
         "calculated_date": calculated,
         "holder_name": _text(row, "SSName"),
+        # 住所と DIC（投資一任契約の相手方）。同名別法人の切り分けと、
+        # 「報告主体 ≠ 実際の運用者」の切り分けに要る。
+        "holder_address": _text(row, "SSAddr"),
+        "manager_name": _text(row, "DICName"),
+        "manager_address": _text(row, "DICAddr"),
         "investment_fund_name": _text(row, "FundName"),
         "short_position_ratio": _num(row, "ShrtPosToSO"),
         "short_position_shares": _num(row, "ShrtPosShares"),

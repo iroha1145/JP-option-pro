@@ -240,11 +240,18 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
         if not context.jquants_ready():
             return _not_configured()
         # 進行中データセットを 1 ステップ（1ファイル）ずつ進める。
+        history_from = context.engine.backfill_window_start()
         for dataset in _BACKFILL_DATASET_ORDER:
             state = context.repository.sync_state(dataset)
             checkpoint = (state or {}).get("checkpoint") or {}
             pending = checkpoint.get("bulk_pending")
-            if pending is None and not checkpoint.get("last_synced_date"):
+            # 計画は **それを立てた窓に対してのみ** 完了しうる。`backfill_years`
+            # を広げても古い計画が残っていると、`pending=0` が「履歴が揃った」
+            # に見えたまま永久に固まる（実際、空売り残高は 10 年分あるうち
+            # 2025-06 以降の 35 本で止まっていた）。窓が変わったら立て直す。
+            stale_window = checkpoint.get("bulk_history_from") != history_from
+            unplanned = pending is None and not checkpoint.get("last_synced_date")
+            if unplanned or stale_window:
                 plan = context.engine.backfill_plan(dataset)
                 if plan.get("status") == "error":
                     return TaskResult(

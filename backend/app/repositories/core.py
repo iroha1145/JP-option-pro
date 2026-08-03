@@ -734,6 +734,7 @@ class CoreRepository(SQLiteRepository):
 
     _SHORT_POSITION_COLUMNS = (
         "canonical_code", "disclosed_date", "calculated_date", "holder_name",
+        "holder_address", "manager_name", "manager_address",
         "investment_fund_name", "short_position_ratio", "short_position_shares",
         "short_position_units", "previous_report_date", "previous_ratio", "notes",
         "ingested_at",

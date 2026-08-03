@@ -500,15 +500,33 @@ class JQuantsSyncEngine:
         }
         return writers[dataset]
 
+    def backfill_window_start(self) -> str:
+        """回填計画の窓の先頭。**月初に丸める**。
+
+        アーカイブの履歴ファイルは月次（`..._202001.csv.gz`）なので、計画を
+        識別する自然な粒度は月。日付のままだと窓の文字列が毎日変わり、
+        「窓が変わったら立て直す」が毎日の立て直しになってしまう。
+        """
+
+        return self._history_start_date()[:7] + "-01"
+
     def backfill_plan(self, dataset: str) -> SyncResult:
-        """List bulk files once and persist them as the pending work queue."""
+        """List bulk files and persist them as the pending work queue.
+
+        計画には **どの窓に対して立てたか**（`bulk_history_from`）を必ず残す。
+        `pending == 0` は「その窓の中では全部取り込んだ」でしかなく、
+        「履歴が揃った」ではない —— 窓が広がれば計画ごと立て直す必要がある。
+        実際、`backfill_years` を 1 から 10 に広げた後も空売り残高・空売り
+        比率・信用余額は 2025-06 起点の古い計画のまま `pending=0` を返し続け、
+        10 年分あるアーカイブのうち 35 本しか取り込めていなかった。
+        """
 
         endpoint = _BULK_BACKFILL_ENDPOINTS.get(dataset)
         if endpoint is None:
             return SyncResult(dataset=dataset, status="not_bulk", rows=0)
 
         def work() -> SyncResult:
-            start = self._history_start_date()
+            start = self.backfill_window_start()
             files = self._client.bulk_list(endpoint=endpoint, date_from=start)
             keys = sorted(str(item.get("Key")) for item in files if item.get("Key"))
             checkpoint = self._checkpoint(dataset)
@@ -516,9 +534,16 @@ class JQuantsSyncEngine:
             pending = [key for key in keys if key not in done]
             self._repository.record_sync_success(
                 dataset,
-                checkpoint={"bulk_pending": pending, "bulk_done": sorted(done)},
+                checkpoint={
+                    "bulk_pending": pending,
+                    "bulk_done": sorted(done),
+                    "bulk_history_from": start,
+                },
             )
-            return SyncResult(dataset=dataset, status="planned", pending=len(pending))
+            return SyncResult(
+                dataset=dataset, status="planned", pending=len(pending),
+                history_from=start, archive_files=len(keys),
+            )
 
         return self._run_dataset(dataset, work)
 
