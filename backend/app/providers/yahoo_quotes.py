@@ -26,9 +26,13 @@ from app.domain.symbols import display_code
 
 QUOTE_SOURCE = "yahoo-delayed"
 CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+# spark は複数シンボルを 1 リクエストで返す（v7/quote は 401＝要 crumb 認証）。
+# 実測上限は 20 シンボル/リクエスト（25 で HTTP 400）。
+SPARK_URL = "https://query1.finance.yahoo.com/v7/finance/spark"
+SPARK_BATCH_SIZE = 20
 _HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; OptixJapan/1.0)"}
 
-# 1 リクエスト 1 銘柄なので、1 回の呼び出しで撫でられる件数には上限を置く。
+# spark で 20 件ずつまとめるので、1 回の呼び出しは 3 バッチ（60 件）まで。
 MAX_SYMBOLS_PER_CALL = 60
 _MAX_WORKERS = 8
 _TIMEOUT_SECONDS = 4.0
@@ -36,6 +40,15 @@ _TIMEOUT_SECONDS = 4.0
 # ザラ場指数: Yahoo に実データがあるものだけ。TOPIX は連動 ETF しか無く、
 # ETF 価格を「TOPIX」と称するのは誤りなので載せない。
 INTRADAY_INDEX_SYMBOLS: dict[str, str] = {"^N225": "日経225"}
+
+# 連動 ETF: 指数そのもののザラ場値が無い銘柄の「方向」を出すための参考値。
+# ETF 価格を指数値として出してはいけないので、UI では必ず ETF と明示する。
+# 対応は longName で確認済み。グロース/スタンダード/Small は対応 ETF を
+# 確認できなかったので、憶測でマップしない（空のままにする）。
+INDEX_PROXY_ETF: dict[str, tuple[str, str]] = {
+    "0000": ("1306.T", "NEXT FUNDS TOPIX ETF"),      # TOPIX
+    "0028": ("1311.T", "NEXT FUNDS TOPIX Core30 ETF"),
+}
 
 
 @dataclass(frozen=True)
@@ -135,6 +148,39 @@ class YahooQuoteProvider:
         except Exception:  # noqa: BLE001 — 外部の落ち方は多様。欠落として扱う
             return None
 
+    def _fetch_batch(
+        self, client: httpx.Client, pairs: Sequence[tuple[str, str]]
+    ) -> dict[str, IntradayQuote]:
+        """spark で最大 20 シンボルを 1 往復で取る。失敗時は個別取得へ落とす。"""
+
+        by_symbol = {symbol: key for key, symbol in pairs}
+        try:
+            response = client.get(
+                SPARK_URL,
+                params={"symbols": ",".join(by_symbol), "range": "1d", "interval": "1m"},
+                timeout=self._timeout,
+            )
+            if response.status_code != 200:
+                raise ValueError(f"spark status {response.status_code}")
+            results = (response.json().get("spark") or {}).get("result") or []
+        except Exception:  # noqa: BLE001 — バッチが壊れても個別で拾えることがある
+            return {
+                quote.key: quote
+                for quote in (self._fetch_one(client, key, symbol) for key, symbol in pairs)
+                if quote is not None
+            }
+        found: dict[str, IntradayQuote] = {}
+        for entry in results:
+            symbol = entry.get("symbol")
+            key = by_symbol.get(symbol)
+            responses = entry.get("response") or []
+            if key is None or not responses:
+                continue
+            quote = _parse_chart(key, symbol, {"chart": {"result": responses}})
+            if quote is not None:
+                found[key] = quote
+        return found
+
     def quotes(self, pairs: Sequence[tuple[str, str]]) -> dict[str, IntradayQuote]:
         """[(key, yahoo_symbol)] → {key: quote}。取れなかった key は入らない。"""
 
@@ -144,10 +190,19 @@ class YahooQuoteProvider:
         owned = self._client is None
         client = self._client or httpx.Client(headers=_HEADERS, timeout=self._timeout)
         try:
-            workers = min(self._max_workers, len(targets))
-            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-                found = pool.map(lambda p: self._fetch_one(client, p[0], p[1]), targets)
-                return {quote.key: quote for quote in found if quote is not None}
+            batches = [
+                targets[start : start + SPARK_BATCH_SIZE]
+                for start in range(0, len(targets), SPARK_BATCH_SIZE)
+            ]
+            if len(batches) == 1:
+                return self._fetch_batch(client, batches[0])
+            merged: dict[str, IntradayQuote] = {}
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=min(self._max_workers, len(batches))
+            ) as pool:
+                for part in pool.map(lambda b: self._fetch_batch(client, b), batches):
+                    merged.update(part)
+            return merged
         finally:
             if owned:
                 client.close()
@@ -157,11 +212,17 @@ class YahooQuoteProvider:
         return self.quotes(pairs)
 
     def index_quotes(self) -> dict[str, IntradayQuote]:
-        return self.quotes([(symbol, symbol) for symbol in INTRADAY_INDEX_SYMBOLS])
+        """真のザラ場指数 + 連動 ETF（キーは指数コード/シンボルのまま）。"""
+
+        pairs = [(symbol, symbol) for symbol in INTRADAY_INDEX_SYMBOLS]
+        pairs += [(code, etf) for code, (etf, _name) in INDEX_PROXY_ETF.items()]
+        return self.quotes(pairs)
 
 
 __all__ = [
     "CHART_URL",
+    "INDEX_PROXY_ETF",
+    "SPARK_BATCH_SIZE",
     "INTRADAY_INDEX_SYMBOLS",
     "IntradayQuote",
     "MAX_SYMBOLS_PER_CALL",

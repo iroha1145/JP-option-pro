@@ -16,6 +16,7 @@ import DataTable, { type Column } from '@/components/shared/DataTable';
 import { SkeletonCard } from '@/components/shared/Skeleton';
 import ReactECharts from '@/components/charts/ReactECharts';
 import InfoHint from '@/components/shared/InfoHint';
+import TickAnalyticsPanel from '@/components/charts/TickAnalyticsPanel';
 import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart';
 import { DataThrough, ScoreBar, SignalChip, StateChip } from '@/components/domain';
 import { useAccess } from '@/hooks/useAccess';
@@ -586,6 +587,7 @@ function TickPane({
   if (loading && !data) return <SkeletonCard className="h-72" />;
   if (data && data.available && option) {
     return (
+      <div className="space-y-3">
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_232px]">
         <div className="min-w-0">
           <ReactECharts className="h-72 w-full" option={option} ariaLabel="tick chart" />
@@ -623,6 +625,8 @@ function TickPane({
             </table>
           </div>
         </aside>
+      </div>
+      <TickAnalyticsPanel analytics={data.analytics} />
       </div>
     );
   }

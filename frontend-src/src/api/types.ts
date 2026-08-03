@@ -498,7 +498,31 @@ export interface TickTapeRow {
   direction: 'up' | 'down' | 'flat';
 }
 
+export interface TickAnalytics {
+  available: boolean;
+  tick_count?: number;
+  vwap: { vwap: number | null; last_price: number | null; deviation_pct: number | null; total_volume?: number; series: { t: string; vwap: number; price: number }[] } | null;
+  large_prints: { threshold: number | null; median_size: number | null; count: number; volume_share: number | null; rows: { time: string; price: number | null; volume: number | null }[] } | null;
+  volume_profile: { low: number | null; high: number | null; poc: number | null; total_volume?: number; buckets: { price_low: number; price_high: number; volume: number }[] } | null;
+  auctions: {
+    day_volume: number;
+    opening: AuctionPrint | null;
+    closing: AuctionPrint | null;
+    afternoon_open: AuctionPrint | null;
+  } | null;
+  sessions: { morning: { prints: number; volume: number }; afternoon: { prints: number; volume: number } } | null;
+}
+
+export interface AuctionPrint {
+  time: string;
+  price: number | null;
+  volume: number;
+  prints: number;
+  day_volume_share: number | null;
+}
+
 export interface TickView {
+  analytics?: TickAnalytics;
   canonical_code: string;
   display_code: string;
   available: boolean;

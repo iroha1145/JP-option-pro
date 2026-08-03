@@ -177,8 +177,10 @@ def map_trade_tick(row: Mapping[str, Any]) -> dict[str, Any] | None:
     tick_time = _text(row, "Time") or _text(row, "T")
     if not code or not trade_date or not tick_time:
         return None
-    price = _first_num(row, ("P", "Price", "Pr", "C"))
-    volume = _first_num(row, ("Vo", "V", "Size", "Qty"))
+    # CSV 一括配信の実フィールドは Price / TradingVolume（略記ではない）。
+    # 略記候補も残すのは、将来 REST 版が生えた時に備えた保険。
+    price = _first_num(row, ("Price", "P", "Pr", "C"))
+    volume = _first_num(row, ("TradingVolume", "Vo", "V", "Size", "Qty"))
     if price is None:
         return None
     return {

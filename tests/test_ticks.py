@@ -31,6 +31,13 @@ def _tick(time, price, volume=100.0):
 
 def test_map_trade_tick_wire_variants():
     base = {"Date": "2026-07-31", "Time": "09:00:01", "Code": "72030"}
+    # CSV 一括配信の実フィールド名（ここを取り違えると数量が丸ごと欠測になる）
+    real = mapping.map_trade_tick({
+        **base, "SessionDistinction": "01", "Price": "3181", "TradingVolume": "1999100",
+        "TransactionId": "000000001246",
+    })
+    assert real["price"] == 3181.0
+    assert real["volume"] == 1999100.0
     assert mapping.map_trade_tick({**base, "P": "3200", "Vo": 500})["price"] == 3200.0
     assert mapping.map_trade_tick({**base, "Price": 3201.5, "V": 300})["volume"] == 300.0
     assert mapping.map_trade_tick({**base, "P": 3200, "Size": 200})["volume"] == 200.0

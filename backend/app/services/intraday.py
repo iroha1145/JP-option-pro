@@ -405,7 +405,10 @@ def tick_view(
     meta = days[trade_date]
     rows = store.ticks_for(canonical_code, trade_date)
     points, bucket_seconds = downsample_ticks(rows, max_points=max_points)
+    from app.services.tick_analytics import analyse
+
     return {
+        "analytics": analyse(rows),
         "available": True,
         "availability": state["availability"],
         "trade_date": trade_date,
