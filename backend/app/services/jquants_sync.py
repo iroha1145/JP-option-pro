@@ -191,6 +191,17 @@ class JQuantsSyncEngine:
                     for row in self._client.fetch_rows("/equities/bars/daily", {"date": day})
                     if (mapped := mapping.map_daily_bar(row))
                 ]
+                if not rows:
+                    # 営業日なのに 0 行 = J-Quants がまだ publish していない。
+                    # ここでチェックポイントを進めると次回は last+1 から探すため、
+                    # その日は二度と取得されず恒久的な穴になる。進めずに抜けて
+                    # 「未着」を宣言し、呼び出し側に短い間隔で再試行させる。
+                    return SyncResult(
+                        dataset=DATASET_DAILY_PRICES,
+                        status="not_published",
+                        rows=total,
+                        data_through=synced_through,
+                    )
                 total += self._repository.upsert_daily_bars(rows)
                 synced_through = day
                 self._repository.record_sync_success(
@@ -218,6 +229,15 @@ class JQuantsSyncEngine:
                     for row in self._client.fetch_rows("/indices/bars/daily", {"date": day})
                     if (mapped := mapping.map_index_bar(row))
                 ]
+                if not rows:
+                    # 日足と同じ規律: 未 publish の日でチェックポイントを進めない
+                    # （進めるとその営業日は恒久的に欠測になる）。
+                    return SyncResult(
+                        dataset=DATASET_INDEX_PRICES,
+                        status="not_published",
+                        rows=total,
+                        data_through=synced_through,
+                    )
                 total += self._repository.upsert_index_bars(rows)
                 synced_through = day
                 self._repository.record_sync_success(

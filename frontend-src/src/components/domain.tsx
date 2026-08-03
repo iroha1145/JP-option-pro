@@ -67,11 +67,33 @@ export function SignalChip({ signal }: { signal: string }) {
 }
 
 /** 数据基准日徽章 —— 每个数据卡都必须标注截至日期，不冒充实时。 */
+/** JST の場中（平日 9:00–15:30）か。J-Quants は場中に一切 publish しないので、
+ *  この時間帯の「データ基準日＝前営業日」は正常であり、そう明示する。 */
+function jstSessionOpen(now = new Date()): boolean {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Tokyo', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  const weekday = get('weekday');
+  if (weekday === 'Sat' || weekday === 'Sun') return false;
+  const minutes = Number(get('hour')) * 60 + Number(get('minute'));
+  return minutes >= 9 * 60 && minutes <= 15 * 60 + 30;
+}
+
 export function DataThrough({ date, className }: { date: string | null | undefined; className?: string }) {
+  /* 場中に「7/31」とだけ出ていると壊れて見える —— 日足は引け後にしか出ない、
+     という事実をその場で言う（推測ではなく提供元の仕様）。 */
+  const sessionOpen = jstSessionOpen();
   return (
-    <span className={cn('inline-flex items-center gap-1 text-caption text-ink-400', className)}>
+    <span className={cn('inline-flex flex-wrap items-center gap-1 text-caption text-ink-400', className)}>
       <span className="inline-block h-1.5 w-1.5 rounded-full bg-ink-300" aria-hidden />
       {t('数据截至')} {fmtDate(date)} · {t('日线数据')}
+      {sessionOpen && (
+        <span className="inline-flex items-center gap-1 rounded-sm bg-warn-50 px-1.5 py-0.5 text-micro text-warn-700">
+          <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
+          {t('盘中 · 当日数据收盘后更新')}
+        </span>
+      )}
     </span>
   );
 }

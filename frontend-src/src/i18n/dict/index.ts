@@ -898,4 +898,10 @@ export const DICT: Record<string, [string, string]> = {
   ],
   '进取评分 + 强度分 ≥70': ['Aggressive scoring + strength ≥70', '進取スコア ＋ 強度スコア 70 以上'],
   '稳健评分（波动惩罚加重）': ['Conservative scoring (heavier volatility penalty)', '稳健スコア（ボラティリティのペナルティを加重）'],
+
+  /* ---- 場中の「当日データ未発表」表示 ---- */
+  '盘中 · 当日数据收盘后更新': [
+    'Market open · today’s data lands after the close',
+    'ザラ場中 · 当日データは引け後に更新',
+  ],
 };

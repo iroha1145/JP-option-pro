@@ -18,7 +18,14 @@ from typing import Any
 from app.config import get_settings
 from app.data_paths import get_data_paths
 from app.domain.constants import TOPIX_INDEX_CODE
-from app.domain.timeutil import add_days, iso_date, now_jst, seconds_until_next_jst_time, today_jst
+from app.domain.timeutil import (
+    add_days,
+    iso_date,
+    now_jst,
+    parse_hhmm,
+    seconds_until_next_jst_time,
+    today_jst,
+)
 from app.personal_config import get_personal_config
 from app.providers.jquants.client import JQuantsClient
 from app.repositories.core import CoreRepository
@@ -38,6 +45,9 @@ TASK_MAINTENANCE = "maintenance"
 TASK_NEWS_SYNC = "news_sync"
 TASK_AI_JOBS = "ai_jobs"
 TASK_INTRADAY = "intraday_fetch"
+
+# 引け後バッチ時刻に J-Quants がまだ publish していない時の再試行間隔。
+POST_CLOSE_RETRY_SECONDS = 20 * 60.0
 
 DEFAULT_TASK_NAMES: tuple[str, ...] = (
     TASK_CALENDAR_MASTER,
@@ -109,12 +119,20 @@ class TaskContext:
         return self.settings.jquants_configured()
 
     def latest_completed_trading_day(self) -> str | None:
-        """The trading day whose post-close data should exist right now."""
+        """The trading day whose post-close data should exist right now.
+
+        「引け後」の境界は設定の daily_batch_time_jst に従う。ここを 17 で
+        ハードコードすると、バッチ時刻を変えた瞬間に「当日をまだ完了扱いしない
+        時刻」とズレて、当日分を一度も取りに行かない or 早すぎて空振りする。
+        """
 
         today = iso_date(today_jst())
         latest = self.repository.latest_trading_day(today)
-        if latest == today and now_jst().hour < 17:
-            latest = self.repository.latest_trading_day(add_days(today, -1))
+        if latest == today:
+            boundary = parse_hhmm(self.config.sync.daily_batch_time_jst)
+            moment = now_jst()
+            if moment.hour * 60 + moment.minute < boundary:
+                latest = self.repository.latest_trading_day(add_days(today, -1))
         return latest
 
 
@@ -171,11 +189,20 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             name for name, value in results.items()
             if isinstance(value, dict) and value.get("status") == "error"
         ]
+        # J-Quants の publish が引け後バッチ時刻に間に合わないことはある。その日を
+        # 翌日まで放置すると丸一日古いまま（かつチェックポイントは進めないので
+        # 穴にはならない）なので、短い間隔で取りに戻る。
+        pending = [
+            name for name, value in results.items()
+            if isinstance(value, dict) and value.get("status") == "not_published"
+        ]
+        if pending and not failed:
+            next_delay = min(next_delay, POST_CLOSE_RETRY_SECONDS)
         return TaskResult(
             status="failed" if failed else "completed",
             error_code=(f"step_failed:{failed[0]}" if failed else None),
             next_delay_seconds=next_delay,
-            details=results,
+            details={**results, "pending_publish": pending},
         )
 
     def fins_evening(_payload: dict[str, Any] | None) -> TaskResult:
