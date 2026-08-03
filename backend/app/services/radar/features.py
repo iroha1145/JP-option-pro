@@ -146,7 +146,11 @@ def compute_security_features(bars: Sequence[Mapping[str, Any]]) -> dict[str, An
     return compute_features_from_series(series)
 
 
-def compute_features_from_series(series: dict[str, list]) -> dict[str, Any] | None:
+def compute_features_from_series(series: dict[str, list] | None) -> dict[str, Any] | None:
+    # `compute_features_from_series(clean_series(bars))` と繋げて書くのが
+    # 自然なので、欠測をそのまま受けて None を返す（例外にしない）。
+    if series is None:
+        return None
     closes = series["closes"]
     highs = series["highs"]
     lows = series["lows"]
