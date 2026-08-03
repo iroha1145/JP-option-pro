@@ -26,6 +26,10 @@ import type {
   RadarCurrent,
   RadarEvent,
   ScreenerResponse,
+  ShortMonitorDetail,
+  ShortMonitorEvents,
+  ShortMonitorOverview,
+  ShortMonitorRankings,
   SearchResult,
   SettingsView,
   StockBar,
@@ -163,6 +167,38 @@ export const radarApi = {
   },
   forSecurity(code: string): Promise<{ canonical_code: string; display_code: string; events: RadarEvent[] }> {
     return get(`/radar/securities/${encodeURIComponent(code)}`);
+  },
+};
+
+export const shortMonitorApi = {
+  overview(date?: string): Promise<ShortMonitorOverview> {
+    return get(date ? `/short-monitor/overview?${toQuery({ date })}` : '/short-monitor/overview');
+  },
+  rankings(params: {
+    view?: string;
+    date?: string;
+    states?: string;
+    flags?: string;
+    markets?: string;
+    sectors?: string;
+    codes?: string;
+    min_confidence?: number;
+    min_turnover?: number;
+    min_score?: number;
+    order_by?: string;
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<ShortMonitorRankings> {
+    const query = toQuery(params);
+    return get(query ? `/short-monitor/rankings?${query}` : '/short-monitor/rankings');
+  },
+  stock(code: string, date?: string): Promise<ShortMonitorDetail> {
+    const suffix = date ? `?${toQuery({ date })}` : '';
+    return get(`/short-monitor/stocks/${encodeURIComponent(code)}${suffix}`);
+  },
+  events(code: string, params: { limit?: number; offset?: number } = {}): Promise<ShortMonitorEvents> {
+    const query = toQuery(params);
+    return get(`/short-monitor/stocks/${encodeURIComponent(code)}/events${query ? `?${query}` : ''}`);
   },
 };
 

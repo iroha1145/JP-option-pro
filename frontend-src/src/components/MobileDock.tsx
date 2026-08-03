@@ -26,6 +26,7 @@ const MORE_ITEMS: { label: string; path: string; icon: IconName; desc: string }[
   { label: t('决算日历'), path: '/earnings', icon: 'calendar-spark', desc: t('確定 · 目安三态日历') },
   { label: t('新闻'), path: '/news', icon: 'doc-quote', desc: t('催化剂 · 三源新闻流') },
   { label: t('数据状态'), path: '/data-status', icon: 'wallet-gauge', desc: t('同步进度 · 数据覆盖') },
+  { label: t('机构空卖行为监控'), path: '/short-monitor', icon: 'radar', desc: t('公开空头变化 · 价格反应') },
   { label: t('历史验证'), path: '/research', icon: 'wallet-gauge', desc: t('走步验证 · 分层收益') },
 ];
 

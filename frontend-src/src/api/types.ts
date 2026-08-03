@@ -942,3 +942,149 @@ export interface ResearchReport {
   };
   point_in_time_limits: string[];
 }
+
+/* -- 机构空卖行为监控 ------------------------------------------------------
+   命名规则与后端一致：只有 `visible` / `reported`，没有 total_short_*。
+   J-Quants 的机构空卖报告只覆盖达到公开披露条件的部分。 */
+
+export interface ShortMonitorScores {
+  low_position: number | null;
+  short_pressure: number | null;
+  price_damage: number | null;
+  absorption: number | null;
+  covering: number | null;
+  rotation: number | null;
+  catalyst: number | null;
+  risk: number | null;
+}
+
+export interface ShortMonitorRow {
+  canonical_code: string;
+  display_code: string;
+  name: string | null;
+  market_code: string | null;
+  market_name: string | null;
+  sector33_code: string | null;
+  sector33_name: string | null;
+  as_of_date: string;
+  close: number | null;
+  drawdown_52w: number | null;
+  price_percentile_252: number | null;
+  visible_short_ratio: number | null;
+  visible_short_shares: number | null;
+  visible_institution_count: number;
+  below_threshold_count: number;
+  largest_institution_ratio: number | null;
+  concentration: number | null;
+  ratio_change_5d: number | null;
+  ratio_change_20d: number | null;
+  shares_change_20d: number | null;
+  pressure_adv20_5d: number | null;
+  pressure_adv20_20d: number | null;
+  visible_days_to_cover: number | null;
+  rel_topix_20d: number | null;
+  rel_sector_20d: number | null;
+  entry_count_20d: number;
+  reentry_count_20d: number;
+  reduction_count_20d: number;
+  threshold_exit_count_20d: number;
+  scores: ShortMonitorScores;
+  behavior_score: number | null;
+  monitor_priority: number | null;
+  data_confidence: number | null;
+  primary_state: string;
+  flags: string[];
+  algorithm_version: string | null;
+}
+
+export interface ShortMonitorOverview {
+  as_of_date: string | null;
+  synced_at?: string | null;
+  coverage: { covered: number; with_visible_short: number; low_confidence: number } | null;
+  states: Record<string, number>;
+  note: string;
+  algorithm_version?: string;
+  score_version?: string;
+  /** 门槛与权重是否已通过历史验证。未验证时界面必须说出来。 */
+  validated?: { gates: boolean; score: boolean };
+}
+
+export interface ShortMonitorRankings {
+  as_of_date: string | null;
+  view: string;
+  order_by: string;
+  total: number;
+  limit: number;
+  offset: number;
+  rows: ShortMonitorRow[];
+  note: string;
+}
+
+export interface ShortMonitorHolder {
+  legal_id: string;
+  name: string;
+  group_name: string | null;
+  last_reported_ratio: number | null;
+  last_reported_shares: number | null;
+  last_position_date: string | null;
+  last_published_date: string | null;
+  visibility_status: string;
+  /** false = 跌破门槛后实际仓位不可见。绝不把线画到 0。 */
+  exact_position_known: boolean;
+  state_age_trading_days: number | null;
+  is_hedge_disclosed: boolean;
+  mapping_confidence: number | null;
+}
+
+export interface ShortMonitorHistoryPoint {
+  as_of_date: string;
+  visible_short_ratio: number | null;
+  visible_short_shares: number | null;
+  visible_institution_count: number;
+  below_threshold_count: number;
+  behavior_score: number | null;
+  primary_state: string;
+}
+
+export interface ShortMonitorExplanation {
+  state: string;
+  state_label: string;
+  lines: string[];
+  caveat: string | null;
+}
+
+export interface ShortMonitorDetail extends ShortMonitorRow {
+  components: Record<string, unknown>;
+  holders: ShortMonitorHolder[];
+  history: ShortMonitorHistoryPoint[];
+  explanation: ShortMonitorExplanation;
+  note: string;
+}
+
+export interface ShortMonitorEvent {
+  event_id: string;
+  institution: string;
+  legal_id: string;
+  group_id: string | null;
+  position_date: string;
+  published_date: string;
+  effective_trade_date: string;
+  short_ratio: number | null;
+  short_shares: number | null;
+  previous_ratio: number | null;
+  ratio_delta: number | null;
+  event_type: string;
+  visibility_status: string;
+  correction_status: string;
+  is_hedge_disclosed: boolean;
+  mapping_confidence: number | null;
+}
+
+export interface ShortMonitorEvents {
+  canonical_code: string;
+  total: number;
+  limit: number;
+  offset: number;
+  events: ShortMonitorEvent[];
+  note: string;
+}
