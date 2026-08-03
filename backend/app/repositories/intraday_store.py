@@ -269,6 +269,17 @@ class IntradayStore(SQLiteRepository):
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def tick_day_has_volume(self, canonical_code: str, trade_date: str) -> bool:
+        """その日のティックに数量が 1 件でも入っているか（壊れた取り込みの検出）。"""
+
+        with self.read() as connection:
+            row = connection.execute(
+                "SELECT 1 FROM ticks WHERE canonical_code = ? AND trade_date = ? "
+                "AND volume IS NOT NULL LIMIT 1",
+                (canonical_code, trade_date),
+            ).fetchone()
+        return row is not None
+
     def prune_ticks_older_than(self, cutoff_date: str) -> int:
         with self.write() as connection:
             cursor = connection.execute("DELETE FROM ticks WHERE trade_date < ?", (cutoff_date,))

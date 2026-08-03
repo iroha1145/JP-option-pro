@@ -282,3 +282,34 @@ def test_intraday_v1_database_migrates_forward(tmp_path):
     assert "intraday_state" not in tables
     assert {"ticks", "tick_days", "addon_state"} <= tables
     assert version == "jp-intraday-v2"
+
+
+def test_volume_null_day_is_refetched_not_served_from_cache(tmp_path, monkeypatch):
+    """マッパーが壊れていた時期の行はキャッシュとして信用しない（自己修復）。"""
+
+    core = _core_with_calendar(tmp_path)
+    store = IntradayStore(tmp_path / "intraday.db")
+    store.initialize()
+    # 数量が入っていない「壊れた」当日キャッシュを仕込む
+    store.replace_ticks("72030", "2026-07-31", [
+        {"tick_time": "09:00:00", "price": 100.0, "volume": None},
+    ])
+    assert store.tick_day_has_volume("72030", "2026-07-31") is False
+
+    counter: dict = {}
+    csv_bytes = _tick_csv([("72030", "09:00:00.000000", "3181", "1999100")])
+    client = JQuantsClient(
+        "k", transport=httpx.MockTransport(_bulk_transport(csv_bytes, counter)), sleep=lambda s: None
+    )
+    import app.providers.jquants.client as client_module
+
+    class _FakeRaw:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def get(self, url): return httpx.Response(200, content=csv_bytes)
+
+    monkeypatch.setattr(client_module.httpx, "Client", _FakeRaw)
+    result = fetch_latest_ticks(client=client, store=store, core=core, canonical_code="72030")
+    assert result.get("cached") is not True       # キャッシュを返さず取り直した
+    assert store.tick_day_has_volume("72030", "2026-07-31") is True

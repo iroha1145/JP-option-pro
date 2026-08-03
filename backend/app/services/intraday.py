@@ -210,10 +210,14 @@ def fetch_latest_ticks(
         return {"status": "error", "error_code": "trading_calendar_empty"}
     cached = store.tick_days_for(canonical_code).get(latest)
     if cached and cached["tick_count"] > 0 and not cached["truncated"]:
-        return {
-            "status": "ok", "trade_date": latest,
-            "ticks": cached["tick_count"], "cached": True,
-        }
+        # 「完了日は不変」だが、こちらのマッパーが壊れていた時期に取り込んだ行は
+        # 不変ではなく単に間違っている（実例: 数量列を取り違えて volume が全 NULL）。
+        # 数量が 1 件も入っていない日はキャッシュとして信用せず取り直す。
+        if store.tick_day_has_volume(canonical_code, latest):
+            return {
+                "status": "ok", "trade_date": latest,
+                "ticks": cached["tick_count"], "cached": True,
+            }
 
     # ティックは REST では取れない（公式仕様: CSV 一括配信のみ）。日次ファイルは
     # 全市場 600 万行・50〜70MB gz なので、1 銘柄のために毎回落とすのは高い。
