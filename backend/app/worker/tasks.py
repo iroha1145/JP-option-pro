@@ -45,6 +45,7 @@ TASK_MAINTENANCE = "maintenance"
 TASK_NEWS_SYNC = "news_sync"
 TASK_AI_JOBS = "ai_jobs"
 TASK_INTRADAY = "intraday_fetch"
+TASK_SHORT_MONITOR = "short_monitor_refresh"
 
 # 引け後バッチ時刻に J-Quants がまだ publish していない時の再試行間隔。
 POST_CLOSE_RETRY_SECONDS = 20 * 60.0
@@ -59,6 +60,7 @@ DEFAULT_TASK_NAMES: tuple[str, ...] = (
     TASK_NEWS_SYNC,
     TASK_AI_JOBS,
     TASK_INTRADAY,
+    TASK_SHORT_MONITOR,
 )
 
 MANUAL_ACTION_TYPES: tuple[str, ...] = (
@@ -70,6 +72,7 @@ MANUAL_ACTION_TYPES: tuple[str, ...] = (
     "news_sync",
     "intraday_fetch",
     "tick_fetch",
+    "short_monitor_refresh",
 )
 
 _BACKFILL_DATASET_ORDER = (
@@ -445,6 +448,21 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             details={**outcome, "queue": jobs.status_counts()},
         )
 
+    def short_monitor_task(_payload: dict[str, Any] | None) -> TaskResult:
+        target = context.latest_completed_trading_day()
+        if target is None:
+            return TaskResult(
+                status="skipped", next_delay_seconds=6 * 3600.0,
+                details={"reason": "trading_calendar_empty_or_non_trading_day"},
+            )
+        result = _run_short_monitor(context, target)
+        return TaskResult(
+            status="failed" if result.get("status") == "error" else "completed",
+            error_code=result.get("error_code"),
+            next_delay_seconds=6 * 3600.0,
+            details=result,
+        )
+
     return [
         TaskSpec(
             name=TASK_CALENDAR_MASTER,
@@ -485,6 +503,14 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             run=intraday_fetch_task,
             initial_delay_seconds=120.0,
             action_types=("intraday_fetch", "tick_fetch"),
+        ),
+        # 手動更新は引け後バッチと **同じ関数** を呼ぶ。別経路を作ると
+        # 「手で押したときだけ結果が違う」が起きる。
+        TaskSpec(
+            name=TASK_SHORT_MONITOR,
+            run=short_monitor_task,
+            initial_delay_seconds=180.0,
+            action_types=("short_monitor_refresh",),
         ),
     ]
 
