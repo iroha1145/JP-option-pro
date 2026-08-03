@@ -17,6 +17,7 @@ import { SkeletonCard } from '@/components/shared/Skeleton';
 import ReactECharts from '@/components/charts/ReactECharts';
 import InfoHint from '@/components/shared/InfoHint';
 import TickAnalyticsPanel from '@/components/charts/TickAnalyticsPanel';
+import ShortBehaviorPanel from '@/components/domain/ShortBehaviorPanel';
 import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart';
 import { DataThrough, ScoreBar, SignalChip, StateChip } from '@/components/domain';
 import { useAccess } from '@/hooks/useAccess';
@@ -392,6 +393,12 @@ export default function StockDetail() {
           <StructurePanel technical={technical} />
         </section>
       </div>
+
+      {/* 机构空卖行为：报告本身在下面的「空卖残高报告」，这里是行为分析 */}
+      <section className="card-surface rounded-lg p-4">
+        <h2 className="mb-3 text-h3 text-ink-900">{t('机构空卖行为')}</h2>
+        <ShortBehaviorPanel code={security.canonical_code} />
+      </section>
 
       {/* 行3: 空卖 + 发表预定 */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
