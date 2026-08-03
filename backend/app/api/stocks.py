@@ -68,6 +68,11 @@ def get_chart(
 
     store = IntradayStore(get_data_paths().intraday_db, read_only=True)
     view = intraday_chart(store, canonical, interval=interval)
+    if view.get("reason") == "not_fetched":
+        # 未取得なら黙って空を返さず、その場で取得を依頼する（分足アドオン契約済み）。
+        view["queued"] = _ensure_intraday_fetch(canonical, "minute", None)
+        if view["queued"]:
+            view["reason"] = "fetching"
     return {
         "canonical_code": canonical,
         "display_code": to_display(canonical),
@@ -90,6 +95,10 @@ def get_ticks(code: str) -> dict:
 
     store = IntradayStore(get_data_paths().intraday_db, read_only=True)
     view = tick_view(store, canonical)
+    if view.get("reason") == "not_fetched":
+        view["queued"] = _ensure_intraday_fetch(canonical, "tick", None)
+        if view["queued"]:
+            view["reason"] = "fetching"
     return {"canonical_code": canonical, "display_code": to_display(canonical), **view}
 
 
@@ -99,3 +108,28 @@ def resolve(code: str) -> dict:
     if canonical is None:
         raise HTTPException(status_code=422, detail={"code": "invalid_code_format"})
     return {"canonical_code": canonical, "display_code": display_code(canonical)}
+
+def _ensure_intraday_fetch(canonical: str, dataset: str, trade_date: str | None) -> bool:
+    """欠けている日中データの取得をワーカーに依頼する（API はプロバイダに触れない）。
+
+    個股頁を開いただけで使えるようにするための自動化。冪等キーに銘柄と日付を
+    含めるので、同じページを何度開いてもキューは 1 件しか積まれない。
+    """
+
+    from app.api.deps import worker_state_write
+
+    try:
+        repository = worker_state_write()
+        if not repository.exists():
+            repository.initialize()
+        payload = {"code": canonical}
+        if dataset == "tick":
+            payload["dataset"] = "tick"
+        repository.request_action(
+            "tick_fetch" if dataset == "tick" else "intraday_fetch",
+            idempotency_key=f"auto:{dataset}:{canonical}:{trade_date or 'latest'}",
+            payload=payload,
+        )
+        return True
+    except Exception:  # noqa: BLE001 — 取得依頼が積めなくても閲覧は続行させる
+        return False

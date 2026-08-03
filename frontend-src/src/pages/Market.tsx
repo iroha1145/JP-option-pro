@@ -210,7 +210,10 @@ export default function Market() {
                   <span className="flex flex-col items-end gap-0.5">
                     <ChangeBadge value={index.change_pct} size="sm" />
                     <span className="text-micro text-ink-400">
-                      {t('近20日')} {fmtPct(index.return_20d)}
+                      {t('20日')} {fmtPct(index.return_20d)}
+                    </span>
+                    <span className="block text-micro text-ink-300">
+                      {index.trade_date ?? '—'} {t('收盘')}
                     </span>
                   </span>
                 </button>
@@ -224,7 +227,11 @@ export default function Market() {
               <div className="min-w-0">
                 <p className="eyebrow">SECTOR MATRIX · 33 業種</p>
                 <h2 className="mt-0.5 text-h3 text-ink-900">{t('板块透视')}</h2>
-                <p className="mt-0.5 text-micro text-ink-400">{t('业种断面为 J-Quants 官方日线（1,587 只，盘中不可实时）')}</p>
+                <p className="mt-0.5 text-micro text-ink-400">
+                  {t('业种断面 · J-Quants 官方日线 {date} 收盘（盘中不更新）', {
+                    date: market.data?.data_through ?? '—',
+                  })}
+                </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="hidden text-caption text-ink-400 lg:inline">
@@ -234,8 +241,8 @@ export default function Market() {
                 </span>
                 <Segmented<HeatMetric>
                   options={[
-                    { value: 'r1', label: t('当日') },
-                    { value: 'r20', label: t('近20日') },
+                    { value: 'r1', label: t('1日') },
+                    { value: 'r20', label: t('20日') },
                   ]}
                   value={heatMetric}
                   onChange={setHeatMetric}

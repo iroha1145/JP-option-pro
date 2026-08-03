@@ -937,4 +937,17 @@ export const DICT: Record<string, [string, string]> = {
     'VWAP = Σ(price×size)/Σsize (a minute-bar mean cannot substitute) · large print = 25× the median size and ≥0.2% of the day, auctions counted separately',
     'VWAP=Σ(価格×数量)/Σ数量（分足の平均では代用不可）· 大口=中央値の25倍かつ当日出来高の0.2%以上。板寄せは別枠',
   ],
+  '正在取得分钟数据，请稍候刷新': ['Fetching minute bars — refresh shortly', '分足を取得中です。少し待って更新してください'],
+  '正在取得逐笔数据（全市场日次文件约 50MB，稍候刷新）': [
+    'Fetching ticks (the daily market-wide file is ~50MB) — refresh shortly',
+    'ティックを取得中（全市場の日次ファイルは約50MB）。少し待って更新してください',
+  ],
+  '1日': ['1d', '1日'],
+  '20日': ['20d', '20日'],
+  '1日 中位': ['1d median', '1日 中央値'],
+  '20日 中位': ['20d median', '20日 中央値'],
+  '业种断面 · J-Quants 官方日线 {date} 收盘（盘中不更新）': [
+    'Sector cross-section · official J-Quants daily close {date} (not updated intraday)',
+    '業種断面 · J-Quants 公式日足 {date} 引け（ザラ場中は更新されません）',
+  ],
 };

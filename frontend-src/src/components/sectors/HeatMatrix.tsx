@@ -41,8 +41,11 @@ function HeatTile({
 }) {
   const primary = metricValue(sector, metric);
   const secondary = metric === 'r1' ? sector.median_return_20d : sector.median_return_1d;
-  const secondaryLabel = metric === 'r1' ? t('近20日') : t('当日');
-  const primaryLabel = metric === 'r1' ? t('当日中位') : t('近20日中位');
+  /* 「当日」と書くと今日の値だと読めてしまう —— 実際は直近取引日（引け後
+     更新なので場中は前営業日）の値。期間の長さだけを名乗り、どの日かは
+     セクション見出しの日付で示す。 */
+  const secondaryLabel = metric === 'r1' ? t('20日') : t('1日');
+  const primaryLabel = metric === 'r1' ? t('1日 中位') : t('20日 中位');
   const { bg, dark } = tone(primary);
   const textMain = dark ? 'text-white' : 'text-ink-800';
   const textSub = dark ? 'text-white/75' : 'text-ink-500';

@@ -475,7 +475,8 @@ export interface IntradayChart {
   interval: '1m' | '5m' | '60m';
   available: boolean;
   availability?: string;
-  reason?: 'plan_not_included' | 'not_fetched';
+  reason?: 'plan_not_included' | 'not_fetched' | 'fetching';
+  queued?: boolean;
   note_ja?: string;
   days?: string[];
   data_through: string | null;
@@ -527,7 +528,8 @@ export interface TickView {
   display_code: string;
   available: boolean;
   availability?: string;
-  reason?: 'plan_not_included' | 'not_fetched';
+  reason?: 'plan_not_included' | 'not_fetched' | 'fetching';
+  queued?: boolean;
   note_ja?: string;
   trade_date: string | null;
   tick_count: number;

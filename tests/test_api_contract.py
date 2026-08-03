@@ -250,7 +250,8 @@ def test_stock_ticks_contract(client):
     body = response.json()
     assert body["display_code"] == "7203"
     assert body["available"] is False
-    assert body["reason"] in ("not_fetched", "plan_not_included")
+    # 未取得なら取得依頼を積んで 'fetching' を返す（黙って空にしない）
+    assert body["reason"] in ("not_fetched", "fetching", "plan_not_included")
     assert body["points"] == [] and body["tape"] == []
     assert {"availability", "trade_date", "tick_count"} <= set(body)
 
