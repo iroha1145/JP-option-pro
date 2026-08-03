@@ -1,7 +1,7 @@
 /** 日本市场页：指数走势 + 全部33业种强弱 + 广度与空卖。 */
 
 import { useEffect, useMemo, useState } from 'react';
-import { marketApi } from '@/api/modules';
+import { marketApi, stocksApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { remoteState } from '@/hooks/remoteState';
 import PageHeader from '@/components/shared/PageHeader';
@@ -16,8 +16,8 @@ import { CodeCell, DataThrough } from '@/components/domain';
 import HeatMatrix, { HeatMatrixSkeleton, metricValue, type HeatMetric } from '@/components/sectors/HeatMatrix';
 import SectorMembersPanel from '@/components/sectors/SectorMembersPanel';
 import { t } from '@/i18n/core';
-import { fmtPct, fmtPrice, fmtYenCompact } from '@/lib/format';
-import type { SectorMemberSort, SectorStrength } from '@/api/types';
+import { fmtPct, fmtPrice, fmtTimeJst, fmtYenCompact } from '@/lib/format';
+import type { IntradayQuote, SectorMemberSort, SectorStrength } from '@/api/types';
 
 export default function Market() {
   const market = usePolling(() => marketApi.overview(), 120_000);
@@ -57,6 +57,20 @@ export default function Market() {
     null,
     [selectedSector, memberSort],
   );
+
+  /* 遅延気配は 1 分ポーリング。銘柄は表示中の 12 件だけ（業種タイルの裏には
+     1,587 銘柄いるので、そこはザラ場化できない —— 公式日足のまま据え置く）。 */
+  const memberCodes = useMemo(
+    () => (members.data?.rows ?? []).map((row) => row.display_code),
+    [members.data],
+  );
+  const live = usePolling(
+    () => stocksApi.intradayQuotes(memberCodes),
+    60_000,
+    [memberCodes.join(',')],
+  );
+  const liveQuotes: Record<string, IntradayQuote> = live.data?.enabled ? live.data.quotes : {};
+  const n225 = live.data?.enabled ? (live.data.indices?.['^N225'] ?? null) : null;
 
   const sectorColumns: Column<SectorStrength>[] = [
     {
@@ -121,6 +135,25 @@ export default function Market() {
         <EmptyState variant="error" title={t('加载失败')} description={String(market.error?.message ?? '')} />
       ) : (
         <>
+          {n225 && (
+            <section className="card-surface flex flex-wrap items-end justify-between gap-3 rounded-lg p-4">
+              <span className="flex flex-col">
+                <span className="eyebrow">{t('日経225 · 盘中')}</span>
+                <span className="mt-1 flex items-baseline gap-3">
+                  <span className="font-mono text-display-m tnum text-ink-900">
+                    {n225.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </span>
+                  <ChangeBadge value={n225.change_pct} />
+                </span>
+              </span>
+              <span className="flex items-center gap-1 text-micro text-warn-700">
+                <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
+                {t('延迟{n}分 · 非官方源', { n: live.data?.delayed_minutes ?? 15 })}
+                {n225.as_of_epoch ? ` · ${fmtTimeJst(n225.as_of_epoch)}` : ''}
+              </span>
+            </section>
+          )}
+
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <section className="card-surface rounded-lg p-4 lg:col-span-2">
               {/* 窄屏竖排：并排会把「指数」压成竖字、把 Segmented 压到换行 */}
@@ -191,6 +224,7 @@ export default function Market() {
               <div className="min-w-0">
                 <p className="eyebrow">SECTOR MATRIX · 33 業種</p>
                 <h2 className="mt-0.5 text-h3 text-ink-900">{t('板块透视')}</h2>
+                <p className="mt-0.5 text-micro text-ink-400">{t('业种断面为 J-Quants 官方日线（1,587 只，盘中不可实时）')}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="hidden text-caption text-ink-400 lg:inline">
@@ -244,6 +278,8 @@ export default function Market() {
             loading={members.loading}
             sort={memberSort}
             onSortChange={setMemberSort}
+            liveQuotes={liveQuotes}
+            delayedMinutes={live.data?.delayed_minutes ?? null}
           />
         </>
       )}

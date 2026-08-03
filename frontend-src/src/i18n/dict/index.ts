@@ -906,4 +906,14 @@ export const DICT: Record<string, [string, string]> = {
   ],
   '延迟{n}分 · 非官方源': ['{n}-min delayed · unofficial', '{n}分遅延 · 非公式ソース'],
   官方终值: ['Official close', '公式終値'],
+  '日経225 · 盘中': ['Nikkei 225 · intraday', '日経225 · ザラ場'],
+  延迟盘中价: ['Delayed intraday price', '遅延のザラ場価格'],
+  '业种断面为 J-Quants 官方日线（1,587 只，盘中不可实时）': [
+    'Sector cross-section is official J-Quants daily data (1,587 names; not available intraday)',
+    '業種断面は J-Quants 公式日足（1,587 銘柄・ザラ場では取得不可）',
+  ],
+  '● = 延迟{n}分盘中价（非官方源）· 其余为 J-Quants 官方日线 · 量比=当日成交额/20日均额': [
+    '● = {n}-min delayed intraday (unofficial) · everything else is official J-Quants daily · vol ratio = today turnover / 20d average',
+    '● = {n}分遅延のザラ場価格（非公式）· その他は J-Quants 公式日足 · 出来高倍率=当日売買代金/20日平均',
+  ],
 };

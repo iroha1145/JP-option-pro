@@ -12,7 +12,7 @@ import SourceNote from '@/components/shared/SourceNote';
 import { SkeletonRows } from '@/components/shared/Skeleton';
 import { CodeCell, StateChip } from '@/components/domain';
 import { t } from '@/i18n/core';
-import type { SectorMembersView, SectorMemberSort } from '@/api/types';
+import type { IntradayQuote, SectorMembersView, SectorMemberSort } from '@/api/types';
 
 /* 列模板は見出し行と本体行の両方に必ず渡すこと（片方だけだと行が 1 列に潰れる） */
 const ROW_GRID =
@@ -29,12 +29,18 @@ export default function SectorMembersPanel({
   loading,
   sort,
   onSortChange,
+  liveQuotes,
+  delayedMinutes,
 }: {
   data: SectorMembersView | null;
   loading: boolean;
   sort: SectorMemberSort;
   onSortChange: (sort: SectorMemberSort) => void;
+  /** 遅延気配（非公式）。無い銘柄は公式終値のまま出す —— 埋めない。 */
+  liveQuotes?: Record<string, IntradayQuote>;
+  delayedMinutes?: number | null;
 }) {
+  const hasLive = Boolean(liveQuotes && Object.keys(liveQuotes).length);
   const rows = data?.rows ?? [];
   return (
     <section className="card-surface p-4 md:p-5" aria-label={t('板块最热门个股')}>
@@ -99,8 +105,20 @@ export default function SectorMembersPanel({
                     </span>
                   </span>
                   <span className="text-right">
-                    <span className="block font-mono text-body-s text-ink-900 tnum">{fmtPrice(row.close)}</span>
-                    <ChangeBadge value={row.return_1d} size="sm" />
+                    {liveQuotes?.[row.canonical_code] ? (
+                      <>
+                        <span className="block font-mono text-body-s tnum text-ink-900">
+                          {fmtPrice(liveQuotes[row.canonical_code].price)}
+                          <span className="ml-1 text-micro text-warn-700" title={t('延迟盘中价')}>●</span>
+                        </span>
+                        <ChangeBadge value={liveQuotes[row.canonical_code].change_pct} size="sm" />
+                      </>
+                    ) : (
+                      <>
+                        <span className="block font-mono text-body-s text-ink-900 tnum">{fmtPrice(row.close)}</span>
+                        <ChangeBadge value={row.return_1d} size="sm" />
+                      </>
+                    )}
                   </span>
                   <span className="text-right">
                     <span className="block font-mono text-caption text-ink-700 tnum">
@@ -125,7 +143,16 @@ export default function SectorMembersPanel({
           </ol>
         </>
       )}
-      <SourceNote className="mt-3" text={t('量比=当日成交额/20日均额 · 份额=占本业种当日成交额比重')} />
+      <SourceNote
+        className="mt-3"
+        text={
+          hasLive
+            ? t('● = 延迟{n}分盘中价（非官方源）· 其余为 J-Quants 官方日线 · 量比=当日成交额/20日均额', {
+                n: delayedMinutes ?? 15,
+              })
+            : t('量比=当日成交额/20日均额 · 份额=占本业种当日成交额比重')
+        }
+      />
     </section>
   );
 }
