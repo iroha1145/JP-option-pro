@@ -970,6 +970,7 @@ export const DICT: Record<string, [string, string]> = {
   ],
   '2周内全部变化': ['All changes in 2 weeks', '2週間の変化（全件）'],
   '2周内没有新的残高报告': ['No new reports in 2 weeks', '2週間は新しい報告なし'],
+  '株': [' sh', '株'],
   '新規': ['New', '新規'],
   '義務消失': ['Below', '義務消失'],
   '増': ['Up', '増'],

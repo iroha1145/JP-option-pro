@@ -38,6 +38,12 @@ export function fmtYenCompact(value: number | null | undefined, digits = 1): str
   return `${sign}${abs.toLocaleString('ja-JP', { maximumFractionDigits: 0 })}`;
 }
 
+/** 株数。桁を落とさずカンマ区切りで出す（karauri 等の開示元と突き合わせるため）。 */
+export function fmtShares(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  return Math.round(value).toLocaleString('ja-JP');
+}
+
 export function fmtPct(value: number | null | undefined, digits = 2): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
   const pct = value * 100;

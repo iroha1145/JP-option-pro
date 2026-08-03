@@ -397,11 +397,11 @@ def test_nothing_to_do_is_not_reported_as_a_successful_fetch():
 # ---------------------------------------------------------------------------
 
 
-def _sp(holder, calc, ratio, prev=None, disc=None):
+def _sp(holder, calc, ratio, prev=None, disc=None, shares=None):
     return {
         "holder_name": holder, "calculated_date": calc,
         "disclosed_date": disc or calc, "short_position_ratio": ratio,
-        "previous_ratio": prev,
+        "previous_ratio": prev, "short_position_shares": shares,
     }
 
 
@@ -497,6 +497,46 @@ def test_change_kinds_are_distinguished():
     assert kinds["down"] == si.MOVE_DECREASED
     assert kinds["up"] == si.MOVE_INCREASED
     assert kinds["below"] == si.MOVE_BELOW_THRESHOLD
+
+
+def test_share_total_counts_the_same_holders_as_the_ratio_total():
+    """株数合計も「報告義務中」だけ。閾値割れの株数を混ぜない。
+
+    比率で足さないと決めたものを株数では足す、が一番ありがちなズレ方。
+    """
+
+    from app.services import short_interest as si
+
+    rows = [
+        _sp("モルガン", "2026-07-31", 0.0123, shares=395_600),
+        _sp("Barclays", "2026-07-30", 0.0040, 0.0051, shares=131_200),  # 義務消失
+        _sp("Nomura", "2025-11-07", 0.0, shares=0),                     # 解消
+    ]
+    summary = si.summarise(rows)
+    assert summary.reporting_shares == pytest.approx(395_600), "閾値割れの株数を足している"
+    assert summary.reporting_total == pytest.approx(0.0123)
+
+
+def test_share_total_is_withheld_when_any_reporting_holder_lacks_shares():
+    """欠損を 0 として足すと、合計が黙って小さく出る。出さない方を選ぶ。"""
+
+    from app.services import short_interest as si
+
+    rows = [
+        _sp("A", "2026-07-31", 0.0123, shares=395_600),
+        _sp("B", "2026-07-31", 0.0080, shares=None),
+    ]
+    summary = si.summarise(rows)
+    assert summary.reporting_shares is None
+    assert summary.reporting_total == pytest.approx(0.0203), "比率の合計まで巻き添えにしている"
+
+
+def test_changes_carry_the_share_count():
+    from app.services import short_interest as si
+
+    rows = [_sp("A", "2026-07-30", 0.0040, 0.0051, shares=131_200)]
+    change = si.changes_within(rows, since="2026-07-20")[0]
+    assert change["shares"] == pytest.approx(131_200)
 
 
 def test_window_change_compares_reporting_totals_only():

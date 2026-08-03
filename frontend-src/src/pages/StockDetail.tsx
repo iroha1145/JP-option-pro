@@ -23,7 +23,7 @@ import { useAccess } from '@/hooks/useAccess';
 import { STRUCTURE_HINTS, TECHNICAL_HINTS, type ScoreHint } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { quoteSourceLabel } from '@/lib/quoteSource';
-import { fmtDate, fmtPct, fmtPrice, fmtTimeJst, fmtYenCompact } from '@/lib/format';
+import { fmtDate, fmtDateShort, fmtPct, fmtPrice, fmtShares, fmtTimeJst, fmtYenCompact } from '@/lib/format';
 import type {
   FinancialSummaryView,
   IntradayChart,
@@ -903,6 +903,15 @@ function ShortPositionsPanel({
     below_threshold: '義務消失',
     closed: '解消',
   };
+  // ラベルの色は **株にとっての向き**（赤=買い方に有利／緑=売り方に有利）。
+  // 新しい売り方が出た＝弱気で緑、義務消失・解消＝買い戻し済みで赤。
+  // 増減は隣の変化幅がすでに符号で色を持っているので、ここは無彩色にする
+  // （同じことを二度色で言わない）。
+  const KIND_TONE: Record<string, string> = {
+    new: 'text-down-600',
+    below_threshold: 'text-up-600',
+    closed: 'text-up-600',
+  };
 
   return (
     <div className="space-y-3">
@@ -913,6 +922,12 @@ function ShortPositionsPanel({
             <span className="font-mono text-data-m text-ink-900 tnum">
               {summary.reporting_total != null ? `${(summary.reporting_total * 100).toFixed(2)}%` : '—'}
             </span>
+            {summary.reporting_shares != null && (
+              <span className="font-mono text-caption tnum text-ink-500">
+                {fmtShares(summary.reporting_shares)}
+                {t('株')}
+              </span>
+            )}
             <span className="text-micro text-ink-400">
               {t('{n}家', { n: summary.reporting_holders })}
             </span>
@@ -946,35 +961,51 @@ function ShortPositionsPanel({
             {t('2周内全部变化')}
             {summary?.baseline_date ? `（${fmtDate(summary.baseline_date)} ~）` : ''}
           </p>
+          {/* 1 行 2 段。横に 5 列並べると「義務消失」が折り返して行の高さが
+              暴れるので、名前・区分・日付を上段、水準・株数・変化を下段に置く。 */}
           <ul className="divide-y divide-line">
             {changes.map((row, index) => (
-              <li key={index} className="flex items-center justify-between gap-2 py-1.5 text-body-s">
-                <span className="min-w-0 flex-1 truncate text-ink-700">{row.holder_name ?? '—'}</span>
-                {/* 水準（符号なし）と変化（符号あり）を分けて出す。 */}
-                <span className="w-14 shrink-0 text-right font-mono tnum text-ink-900">
-                  {row.ratio != null ? `${(row.ratio * 100).toFixed(2)}%` : '—'}
-                </span>
-                <span
-                  className={`w-16 shrink-0 text-right font-mono text-micro tnum ${
-                    row.delta == null
-                      ? 'text-ink-400'
-                      : row.delta > 0
-                        ? 'text-up-600'
-                        : row.delta < 0
-                          ? 'text-down-600'
-                          : 'text-ink-400'
-                  }`}
-                >
-                  {row.delta != null
-                    ? `${row.delta > 0 ? '+' : row.delta < 0 ? '−' : '±'}${Math.abs(row.delta * 100).toFixed(2)}%`
-                    : t(KIND_LABEL[row.kind] ?? '—')}
-                </span>
-                <span className="w-9 shrink-0 text-right text-micro text-ink-400">
-                  {t(KIND_LABEL[row.kind] ?? '')}
-                </span>
-                <span className="w-20 shrink-0 text-right text-micro text-ink-400">
-                  {fmtDate(row.calculated_date)}
-                </span>
+              <li key={index} className="py-1.5 text-body-s">
+                <div className="flex items-baseline gap-2">
+                  <span className="min-w-0 flex-1 truncate text-ink-700">{row.holder_name ?? '—'}</span>
+                  <span
+                    className={`shrink-0 whitespace-nowrap text-micro ${
+                      KIND_TONE[row.kind] ?? 'text-ink-400'
+                    }`}
+                  >
+                    {t(KIND_LABEL[row.kind] ?? '')}
+                  </span>
+                  <span
+                    className="shrink-0 whitespace-nowrap font-mono text-micro tnum text-ink-400"
+                    title={fmtDate(row.calculated_date)}
+                  >
+                    {fmtDateShort(row.calculated_date)}
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-2 font-mono tnum">
+                  {/* 水準（符号なし）と変化（符号あり）を分けて出す。 */}
+                  <span className="shrink-0 text-ink-900">
+                    {row.ratio != null ? `${(row.ratio * 100).toFixed(2)}%` : '—'}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-micro text-ink-400">
+                    {row.shares != null ? `${fmtShares(row.shares)}${t('株')}` : ''}
+                  </span>
+                  <span
+                    className={`shrink-0 whitespace-nowrap text-micro ${
+                      row.delta == null
+                        ? 'text-ink-400'
+                        : row.delta > 0
+                          ? 'text-up-600'
+                          : row.delta < 0
+                            ? 'text-down-600'
+                            : 'text-ink-400'
+                    }`}
+                  >
+                    {row.delta != null
+                      ? `${row.delta > 0 ? '+' : row.delta < 0 ? '−' : '±'}${Math.abs(row.delta * 100).toFixed(2)}%`
+                      : '—'}
+                  </span>
+                </div>
               </li>
             ))}
           </ul>

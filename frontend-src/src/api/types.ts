@@ -292,6 +292,8 @@ export interface ShortInterestChange {
   calculated_date: string;
   disclosed_date: string | null;
   ratio: number | null;
+  shares: number | null;
+  units: number | null;
   previous_ratio: number | null;
   delta: number | null;
   /** new | increased | decreased | below_threshold | closed */
@@ -305,6 +307,8 @@ export interface ShortInterestSummary {
   window_trading_days: number;
   /** 報告義務が続いている保有者だけの合計。閾値割れの最終報告は含まない。 */
   reporting_total: number | null;
+  /** 同じ保有者集合の株数合計。1 件でも欠ければ null（欠損を 0 で埋めない）。 */
+  reporting_shares: number | null;
   reporting_holders: number;
   below_threshold_holders: number;
   closed_holders: number;

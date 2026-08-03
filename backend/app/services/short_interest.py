@@ -90,6 +90,7 @@ class ShortInterestSummary:
     baseline_date: str | None = None
     window_trading_days: int = DEFAULT_WINDOW_TRADING_DAYS
     reporting_total: float | None = None
+    reporting_shares: float | None = None
     reporting_holders: int = 0
     below_threshold_holders: int = 0
     closed_holders: int = 0
@@ -106,6 +107,7 @@ class ShortInterestSummary:
             # 合計は「報告義務が続いている保有者」だけ。閾値割れの最終報告は
             # 実際の建玉が不明なので足さない。
             "reporting_total": self.reporting_total,
+            "reporting_shares": self.reporting_shares,
             "reporting_holders": self.reporting_holders,
             "below_threshold_holders": self.below_threshold_holders,
             "closed_holders": self.closed_holders,
@@ -117,17 +119,17 @@ class ShortInterestSummary:
         }
 
 
-def positions_as_of(
+def _latest_rows_as_of(
     rows: Sequence[Mapping[str, Any]], as_of: str | None = None
-) -> dict[str, float | None]:
-    """{保有者: その日以前の最後の報告値}。
+) -> dict[str, Mapping[str, Any]]:
+    """{保有者: その日以前の最後の報告そのもの}。
 
     報告はイベント駆動なので「その日の断面」は存在しない。各保有者について
     `as_of` 以前で最も新しい報告を採る。訂正は同じ計算日に新しい開示日で
     入るので、計算日 → 開示日 の順に見る。
     """
 
-    latest: dict[str, tuple[str, str, float | None]] = {}
+    latest: dict[str, tuple[str, str, Mapping[str, Any]]] = {}
     for row in rows:
         holder = str(row.get("holder_name") or "").strip()
         if not holder:
@@ -139,8 +141,19 @@ def positions_as_of(
         key = (calculated, disclosed)
         current = latest.get(holder)
         if current is None or key > (current[0], current[1]):
-            latest[holder] = (calculated, disclosed, _finite(row.get("short_position_ratio")))
-    return {holder: value for holder, (_c, _d, value) in latest.items()}
+            latest[holder] = (calculated, disclosed, row)
+    return {holder: row for holder, (_c, _d, row) in latest.items()}
+
+
+def positions_as_of(
+    rows: Sequence[Mapping[str, Any]], as_of: str | None = None
+) -> dict[str, float | None]:
+    """{保有者: その日以前の最後の報告値（比率）}。"""
+
+    return {
+        holder: _finite(row.get("short_position_ratio"))
+        for holder, row in _latest_rows_as_of(rows, as_of).items()
+    }
 
 
 def _total(positions: Mapping[str, float | None]) -> tuple[float | None, int]:
@@ -151,6 +164,27 @@ def _total(positions: Mapping[str, float | None]) -> tuple[float | None, int]:
         if value is not None and value >= REPORTING_THRESHOLD
     ]
     return (round(sum(active), 6) if active else 0.0), len(active)
+
+
+def _total_shares(latest: Mapping[str, Mapping[str, Any]]) -> float | None:
+    """報告義務中の保有者だけの株数合計。
+
+    比率の合計と **同じ保有者集合** で数える。閾値割れの保有者の株数は
+    「その値以下のどこか」でしかないので、比率と同様に足さない。
+    株数が 1 件でも欠けていれば合計は出さない（欠損を 0 として足すと
+    合計が黙って小さく出る）。
+    """
+
+    shares: list[float] = []
+    for row in latest.values():
+        ratio = _finite(row.get("short_position_ratio"))
+        if ratio is None or ratio < REPORTING_THRESHOLD:
+            continue
+        value = _finite(row.get("short_position_shares"))
+        if value is None:
+            return None
+        shares.append(value)
+    return sum(shares) if shares else 0.0
 
 
 def _classify_move(previous: float | None, current: float | None) -> str | None:
@@ -191,8 +225,12 @@ def summarise(
     dates = [str(row.get("calculated_date") or "") for row in rows if row.get("calculated_date")]
     summary.as_of = as_of or (max(dates) if dates else None)
 
-    current = positions_as_of(rows, summary.as_of)
+    latest = _latest_rows_as_of(rows, summary.as_of)
+    current = {
+        holder: _finite(row.get("short_position_ratio")) for holder, row in latest.items()
+    }
     summary.reporting_total, summary.reporting_holders = _total(current)
+    summary.reporting_shares = _total_shares(latest)
     summary.below_threshold_holders = sum(
         1 for value in current.values() if _state(value) == STATE_BELOW_THRESHOLD
     )
@@ -248,6 +286,8 @@ def changes_within(
                 "calculated_date": calculated,
                 "disclosed_date": row.get("disclosed_date"),
                 "ratio": ratio,
+                "shares": _finite(row.get("short_position_shares")),
+                "units": _finite(row.get("short_position_units")),
                 "previous_ratio": previous,
                 "delta": (ratio - previous) if (ratio is not None and previous is not None) else None,
                 "kind": _classify_move(previous, ratio) or MOVE_INCREASED,
