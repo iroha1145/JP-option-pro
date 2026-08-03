@@ -140,6 +140,13 @@ def compare_states(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         stats = by_state.get(state)
         return int(stats.get("samples") or 0) if stats else 0
 
+    # 比較の相手に `no_signal` は使えない —— 状態が変わった銘柄だけを信号に
+    # しているので、`no_signal` は一件も出てこない（最初そう書いていて、
+    # 4 つの問いのうち 2 つが永久に `insufficient_data` になっていた）。
+    # 母集団全体を基準にする。「この状態は、機関空売りが動いた銘柄全体より
+    # 良いか」が答えたい問いなので、そのほうが素直でもある。
+    by_state["(all signals)"] = summarise_group("(all signals)", records).as_dict()
+
     def compare(left: str, right: str) -> dict[str, Any]:
         a, b = excess(left), excess(right)
         enough = samples(left) >= MIN_SAMPLES and samples(right) >= MIN_SAMPLES
@@ -162,12 +169,12 @@ def compare_states(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "questions": {
             # 卖压吸收候选 は 普通の低位株 より良いか
             "absorption_vs_low_conflict": compare("absorption", "low_conflict"),
-            # 回补启动 は 単なる空頭減少 より良いか
-            "covering_start_vs_no_signal": compare("covering_start", "no_signal"),
-            # 挤空确认 は 普通の技術突破 より良いか（後者は雷達側の母集団）
+            # 回补启动 は 機関空売りが動いた銘柄全体より良いか
+            "covering_start_vs_all": compare("covering_start", "(all signals)"),
+            # 挤空确认 は 回补启动 より良いか（突破確認を足した意味があるか）
             "squeeze_vs_covering_start": compare("squeeze_confirmed", "covering_start"),
             # 背离失效 が実際に悪いか
-            "divergence_failed_vs_no_signal": compare("divergence_failed", "no_signal"),
+            "divergence_failed_vs_all": compare("divergence_failed", "(all signals)"),
         },
     }
 

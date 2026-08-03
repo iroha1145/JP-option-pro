@@ -201,3 +201,35 @@ def test_replay_keeps_enough_forward_bars_to_measure_outcomes(tmp_path, monkeypa
     records = replay(core, start="2026-05-01", end="2026-06-30", every=5)
     measurable = [r for r in records if r.get("return_20d") is not None]
     assert measurable, "区間の切り方で先の値動きが測れなくなっている"
+
+
+def test_the_baseline_is_a_group_that_actually_exists():
+    """比較の相手に `no_signal` は使えない。
+
+    状態が変わった銘柄だけを信号にしているので `no_signal` は一件も出ない。
+    最初そう書いていて、4 つの問いのうち 2 つが永久に `insufficient_data`
+    だった。母集団全体を基準にする。
+    """
+
+    records = (
+        [{"primary_state": states.STATE_COVERING_START, "return_20d": 0.03,
+          "excess_topix_20d": 0.03, "flags": []} for _ in range(40)]
+        + [{"primary_state": states.STATE_NORMAL_SHORTING, "return_20d": -0.02,
+            "excess_topix_20d": -0.02, "flags": []} for _ in range(40)]
+    )
+    result = sb.compare_states(records)
+    assert "(all signals)" in result["by_state"]
+    assert result["by_state"]["(all signals)"]["samples"] == 80
+
+    verdict = result["questions"]["covering_start_vs_all"]
+    assert verdict["verdict"] == "left_better"
+
+
+def test_a_state_that_never_fires_is_reported_as_insufficient_not_as_equal():
+    records = [
+        {"primary_state": states.STATE_COVERING_START, "return_20d": 0.01,
+         "excess_topix_20d": 0.01, "flags": []} for _ in range(40)
+    ]
+    verdict = sb.compare_states(records)["questions"]["squeeze_vs_covering_start"]
+    assert verdict["left_samples"] == 0
+    assert verdict["verdict"] == "insufficient_data"
