@@ -301,3 +301,49 @@ def test_a_newly_added_task_is_in_the_inventory_before_it_first_runs(tmp_path):
     state.reconcile_task_inventory(("post_close_batch",))
     remaining = {item["task_name"] for item in state.task_statuses()}
     assert remaining == {"post_close_batch"}
+
+
+def test_a_restart_interrupted_task_does_not_make_the_worker_unhealthy(tmp_path):
+    """再起動で中断された行は「壊れている」ではなく「まだ走り直していない」。
+
+    各タスクは自分の初回遅延で必ず走り直すので、これを degraded に数えると
+    再起動のたびに、いちばん遅延の長いタスクの時間だけコンテナが unhealthy に
+    なる（maintenance は 300 秒、`deploy.sh --wait` は 180 秒 → 毎回失敗）。
+    """
+
+    from app.worker.state import WorkerStateRepository
+
+    state = WorkerStateRepository(tmp_path / "worker.db")
+    state.initialize()
+    names = ("maintenance", "post_close_batch")
+    state.reconcile_task_inventory(names)
+
+    token = state.acquire_lease("worker-test")
+    with state.write() as connection:
+        connection.execute(
+            "UPDATE worker_task_status SET status='running' WHERE task_name='maintenance'"
+        )
+    state.recover_interrupted("worker-test", token)
+
+    health = state.health(names)
+    assert health["degraded_tasks"] == [], "再起動による中断で unhealthy にしている"
+    assert health["healthy"] is True
+    # 中断された事実自体は残す
+    assert health["tasks"]["maintenance"]["status"] == "interrupted"
+    assert health["tasks"]["maintenance"]["error_code"] == "worker_restarted"
+
+
+def test_a_genuinely_failed_task_still_makes_the_worker_unhealthy(tmp_path):
+    from app.worker.state import WorkerStateRepository
+
+    state = WorkerStateRepository(tmp_path / "worker.db")
+    state.initialize()
+    names = ("maintenance",)
+    state.reconcile_task_inventory(names)
+    with state.write() as connection:
+        connection.execute(
+            "UPDATE worker_task_status SET status='failed', error_code='boom' "
+            "WHERE task_name='maintenance'"
+        )
+    state.acquire_lease("worker-test")
+    assert state.health(names)["degraded_tasks"] == ["maintenance"]

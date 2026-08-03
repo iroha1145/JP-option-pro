@@ -318,10 +318,19 @@ class WorkerStateRepository(SQLiteRepository):
 
     def health(self, expected_tasks: tuple[str, ...]) -> dict[str, Any]:
         statuses = {item["task_name"]: item for item in self.task_statuses()}
+        # 再起動で中断された行は「壊れている」ではなく「まだ走り直していない」。
+        # 各タスクは自分の初回遅延で必ず走り直すので、これを degraded に数えると
+        # **再起動のたびに、いちばん遅延の長いタスクの時間だけコンテナが
+        # unhealthy** になる（maintenance は 300 秒。`deploy.sh --wait` は 180 秒）。
+        # 中断された事実は status と error_code に残す。
         degraded = [
             name
             for name, item in statuses.items()
-            if item.get("status") in {"failed", "interrupted", "degraded"}
+            if item.get("status") in {"failed", "degraded"}
+            or (
+                item.get("status") == "interrupted"
+                and item.get("error_code") != "worker_restarted"
+            )
         ]
         missing = [name for name in expected_tasks if name not in statuses]
         with self.read() as connection:
