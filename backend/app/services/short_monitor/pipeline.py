@@ -70,6 +70,12 @@ def rebuild_events(
 
     resolver = InstitutionResolver(curated=repository.institution_alias_map())
     latest_published = repository.latest_short_position_date() or calendar_set[-1]
+    # 「最後の報告から何営業日経ったか」は **今日まで** で数える。
+    # 取引カレンダーは 1 年先まで入っているので、そのまま末尾を使うと
+    # 昨日出たばかりの報告が 247 営業日前ということになり、全銘柄の
+    # データ信頼度が一律に落ちる（実データでそうなっていた）。
+    past = [day for day in calendar_set if day <= latest_published]
+    age_calendar = past or calendar_set
 
     result = RebuildResult()
     entities: dict[str, dict[str, Any]] = {}
@@ -91,7 +97,7 @@ def rebuild_events(
             known_batch.append({
                 "canonical_code": code,
                 "state_age_trading_days": _age_in_trading_days(
-                    calendar_set, state.get("last_published_date")
+                    age_calendar, state.get("last_published_date")
                 ),
                 **state,
             })

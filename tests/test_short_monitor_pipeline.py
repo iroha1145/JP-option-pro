@@ -127,6 +127,32 @@ def test_last_known_keeps_below_threshold_visible(tmp_path):
     assert known[0]["last_reported_ratio"] == pytest.approx(0.004)
 
 
+def test_report_age_is_counted_up_to_today_not_the_end_of_the_calendar(tmp_path):
+    """取引カレンダーは 1 年先まで入っている。
+
+    そのまま末尾から数えると、昨日出たばかりの報告が「247 営業日前」になり、
+    全銘柄のデータ信頼度が一律に落ちる（本番の実データでそうなっていた）。
+    """
+
+    core = _core(tmp_path)
+    # カレンダーを 1 年先まで伸ばす（本番と同じ状況）
+    core.upsert_trading_days(
+        [{"calendar_date": f"2027-0{m}-{d:02d}", "holiday_division": "1"}
+         for m in (1, 2, 3) for d in range(1, 29)]
+    )
+    _seed_prices(core, CODES)
+    _seed_reports(core, [
+        _report("10000", "Alpha", "2026-07-29", 0.012, shares=500_000, disc="2026-07-31"),
+    ])
+    pipeline.rebuild_events(core)
+
+    known = core.short_position_last_known_for_code("10000")
+    assert known and known[0]["state_age_trading_days"] is not None
+    assert known[0]["state_age_trading_days"] <= 3, (
+        "未来のカレンダーぶんを経過日数に数えている"
+    )
+
+
 def test_refresh_writes_snapshots_and_signals(tmp_path):
     core = _core(tmp_path)
     _seed_prices(core, CODES, drift=-0.004)
