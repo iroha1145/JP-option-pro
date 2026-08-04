@@ -368,3 +368,79 @@ def test_snapshot_publication_is_atomic_and_changes_the_run_token(tmp_path):
     assert run_2["run_id"] != run_1["run_id"], (
         "同じ日の再計算で run が変わらない —— ETag が古い断面を 304 で返し続ける"
     )
+
+
+# -- スキーマ移行 --------------------------------------------------------------
+
+def test_v7_database_migrates_to_v8_without_losing_rows(tmp_path, monkeypatch):
+    """v7 → v8 は生表を作り直す。**行を落とさない**こと。
+
+    本番ではこの移行が `database or disk is full` で落ちた —— ディスクでは
+    なく、コンテナの `/tmp`（128MB tmpfs）に SQLite のソート一時ファイルが
+    溢れたため。移行そのものは 1 トランザクションなので巻き戻ったが、
+    移行経路はテストが 1 本も無かった。ここで塞ぐ。
+    """
+
+    from app.repositories import core_schema
+    from app.repositories.core import CoreRepository
+
+    db = tmp_path / "legacy.db"
+    # v7 相当（生表の主キーにファンド/住所が入っていない）で作る
+    monkeypatch.setattr(CoreRepository, "SCHEMA_VERSION", "jp-core-v7")
+    legacy_ddl = tuple(
+        stmt.replace(
+            "holder_address TEXT NOT NULL DEFAULT '',", "holder_address TEXT,"
+        ).replace(
+            "investment_fund_name TEXT NOT NULL DEFAULT '',", "investment_fund_name TEXT,"
+        ).replace(
+            "PRIMARY KEY (\n            canonical_code, disclosed_date, calculated_date,\n"
+            "            holder_name, investment_fund_name, holder_address\n        )",
+            "PRIMARY KEY (canonical_code, disclosed_date, calculated_date, holder_name)",
+        )
+        for stmt in core_schema.CORE_DDL
+    )
+    monkeypatch.setattr(CoreRepository, "DDL", legacy_ddl)
+    old = CoreRepository(db)
+    old.initialize()
+    # 旧主キーの表なので、新しい upsert（衝突先が違う）は使えない。素で入れる。
+    with old.write() as connection:
+        connection.executemany(
+            "INSERT INTO short_positions (canonical_code, disclosed_date, calculated_date, "
+            "holder_name, short_position_ratio, short_position_shares, ingested_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [
+                ("10000", DAYS[-5], DAYS[-5], f"Holder {i}", 0.0060 + i / 10_000,
+                 600_000 + i, "2026-08-04T00:00:00Z")
+                for i in range(50)
+            ],
+        )
+    with old.read() as connection:
+        before = connection.execute("SELECT COUNT(*) FROM short_positions").fetchone()[0]
+    assert before == 50
+
+    monkeypatch.undo()
+    fresh = CoreRepository(db)
+    fresh.initialize()   # ここで v7 → v8
+    with fresh.read() as connection:
+        after = connection.execute("SELECT COUNT(*) FROM short_positions").fetchone()[0]
+        keys = connection.execute("PRAGMA table_info(short_positions)").fetchall()
+        runs = connection.execute(
+            "SELECT name FROM sqlite_master WHERE name = 'short_monitor_runs'"
+        ).fetchone()
+    assert after == before, "移行で行が消えている"
+    assert runs is not None
+    pk_columns = {row["name"] for row in keys if row["pk"]}
+    assert {"investment_fund_name", "holder_address"} <= pk_columns
+
+
+def test_sqlite_temp_files_go_next_to_the_database(tmp_path):
+    """一時ファイルは 128MB tmpfs ではなくデータボリューム側に置く。"""
+
+    import os
+
+    from app.repositories.core import CoreRepository
+
+    core = CoreRepository(tmp_path / "core.db")
+    core.initialize()
+    assert os.environ.get("SQLITE_TMPDIR") == str(tmp_path / "sqlite-tmp")
+    assert (tmp_path / "sqlite-tmp").is_dir()

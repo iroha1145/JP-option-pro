@@ -14,6 +14,7 @@ Inherited from the proven old-project rules:
 from __future__ import annotations
 
 import hashlib
+import os
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -60,6 +61,28 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _sqlite_tmpdir(db_path: Path) -> None:
+    """SQLite の一時ファイルを **データボリュームの上** に置く。
+
+    コンテナは `read_only: true` で、書けるのは `/data`（ボリューム）と
+    `/tmp`（**128MB の tmpfs**）だけ。SQLite は大きな `INSERT ... SELECT` や
+    索引構築のソート結果を既定で `/tmp` に吐くので、140 万行の表を
+    WITHOUT ROWID へ移すマイグレーションが 128MB を食い潰して
+    `database or disk is full` で落ちた（本番実測）。ホストの空きは 437GB
+    あったので、これはディスク不足ではなく **置き場所の間違い**。
+
+    DB と同じディレクトリに置けば、容量はデータボリュームと同じになる。
+    """
+
+    try:
+        tmp = db_path.parent / "sqlite-tmp"
+        tmp.mkdir(parents=True, exist_ok=True)
+        os.environ["SQLITE_TMPDIR"] = str(tmp)
+    except OSError:
+        # 読み取り専用の場所なら既定のまま（読み取りは一時ファイルを要らない）
+        pass
+
+
 class SQLiteRepository:
     SCHEMA_NAME = "base"
     SCHEMA_VERSION = "v0"
@@ -87,6 +110,9 @@ class SQLiteRepository:
         if self._read_only:
             raise RuntimeError("read-only repository cannot initialize a schema")
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        # マイグレーションは大きな表を作り直すことがある。ソートの一時ファイルを
+        # 128MB の tmpfs に置いたまま走らせない。
+        _sqlite_tmpdir(self._db_path)
         with self._connect_rw() as connection:
             journal_mode = connection.execute("PRAGMA journal_mode=WAL").fetchone()[0]
             if str(journal_mode).lower() != "wal":
@@ -185,6 +211,7 @@ class SQLiteRepository:
     def write(self) -> Iterator[sqlite3.Connection]:
         if self._read_only:
             raise RuntimeError("repository opened read-only")
+        _sqlite_tmpdir(self._db_path)
         connection = self._connect_rw()
         try:
             self.verify_schema(connection)

@@ -609,6 +609,11 @@ _SHORT_IDENTITY_DDL: tuple[str, ...] = (
         )
     ) WITHOUT ROWID
     """,
+    # ORDER BY を **新主キーの順で** 付ける。付けないと 140 万行ぶんのソートを
+    # 一時ファイルに吐く。旧主キーは新主キーの先頭 4 列と同じなので、既存の
+    # 索引順に読めばソートはグループ内の数件だけで済む（本番で /tmp の
+    # 128MB tmpfs を食い潰して落ちた実績あり。一時ディレクトリ自体も
+    # base.py で /data 側へ移した）。
     "INSERT OR IGNORE INTO short_positions_v8 ("
     "canonical_code, disclosed_date, calculated_date, holder_name, holder_address, "
     "manager_name, manager_address, investment_fund_name, short_position_ratio, "
@@ -618,7 +623,9 @@ _SHORT_IDENTITY_DDL: tuple[str, ...] = (
     "COALESCE(holder_address, ''), manager_name, manager_address, "
     "COALESCE(investment_fund_name, ''), short_position_ratio, short_position_shares, "
     "short_position_units, previous_report_date, previous_ratio, notes, ingested_at "
-    "FROM short_positions",
+    "FROM short_positions "
+    "ORDER BY canonical_code, disclosed_date, calculated_date, holder_name, "
+    "COALESCE(investment_fund_name, ''), COALESCE(holder_address, '')",
     "DROP TABLE short_positions",
     "ALTER TABLE short_positions_v8 RENAME TO short_positions",
     "CREATE INDEX IF NOT EXISTS idx_short_positions_code ON short_positions(canonical_code, calculated_date)",
