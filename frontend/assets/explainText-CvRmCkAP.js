@@ -1,0 +1,1 @@
+import{v as r,t as n}from"./index-CpfNUe9I.js";function f(a){var o;const s={};for(const[t,e]of Object.entries(a.params??{}))s[t]=typeof e=="string"&&r(e)?n(e):e;return(o=a.parts)!=null&&o.length&&(s.moves=a.parts.map(t=>n(t.template,t.params)).join(n("、"))),n(a.template,s)}export{f as e};

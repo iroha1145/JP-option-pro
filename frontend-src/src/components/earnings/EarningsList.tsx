@@ -14,8 +14,10 @@ import type { EarningsUpcomingItem } from '@/api/types';
 import { daysUntil, fmtMDCN, relativeDayCN, statusMeta, weekdayCN } from './types';
 import { t } from '@/i18n/core';
 
-/* ---------------- 迷你柱（前期実績=斜纹 / 会社予想=实心蓝 / 実績=实心墨；负值淡显） ----------------
-   已公布的行多一根「実績」柱，三根同尺度，一眼看出实绩落在预想的哪一侧。 */
+/* ---------------- 迷你柱（前期実績=斜纹 / 会社予想=淡蓝 / 実績=实心蓝；负值淡显） ----------------
+   予想は「まだ確定していない値」なので淡いブルー、実績が出たら同じ色系の
+   実心ブルーで隣に立つ —— 色が濃くなる＝確定した、と読める。
+   已公布の行だけ 3 本になり、同一スケールで並ぶ。 */
 function ForecastBars({
   prior,
   forecast,
@@ -43,13 +45,13 @@ function ForecastBars({
       )}
       {forecast != null && (
         <span
-          className={cn('w-2.5 rounded-t-[2px] bg-brand-600', forecast < 0 && 'opacity-50')}
+          className={cn('w-2.5 rounded-t-[2px] bg-brand-300', forecast < 0 && 'opacity-50')}
           style={{ height: height(forecast) }}
         />
       )}
       {actual != null && (
         <span
-          className={cn('w-2.5 rounded-t-[2px] bg-ink-800', actual < 0 && 'opacity-50')}
+          className={cn('w-2.5 rounded-t-[2px] bg-brand-600', actual < 0 && 'opacity-50')}
           style={{ height: height(actual) }}
         />
       )}

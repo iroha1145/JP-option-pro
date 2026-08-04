@@ -38,6 +38,7 @@ import type {
   StockBar,
 } from '@/api/types';
 import { fmtDate, fmtDateShort, fmtPct, fmtPctLevel, fmtPrice, fmtScore, fmtShares } from '@/lib/format';
+import { explanationLine } from '@/lib/explainText';
 import { t } from '@/i18n/core';
 import { cn } from '@/lib/utils';
 
@@ -164,7 +165,7 @@ export default function ShortMonitor() {
               {t('未通过')}
             </span>
           </p>
-          <p className="mt-2 text-body-s text-ink-700">{validation.summary}</p>
+          <p className="mt-2 text-body-s text-ink-700">{t(validation.summary)}</p>
           {validation.run && (
             <p className="mt-1 font-mono text-micro tnum text-ink-400">
               {validation.run} · {validation.signals ?? 0} {t('个信号')} · {validation.windows ?? 0}{' '}
@@ -511,13 +512,19 @@ function Explanation({ detail }: { detail: ShortMonitorDetail }) {
         <ShortStateChip state={detail.explanation.state} label={detail.explanation.state_label} />
       </p>
       <ul className="space-y-1 text-caption leading-relaxed text-ink-600">
-        {detail.explanation.lines.map((line, index) => (
-          <li key={index}>{line}</li>
-        ))}
+        {/* 後端はテンプレート + パラメータで返す（相手の言語を知らないので）。
+            置換はここで t() に通す —— 辞書は中文原文を msgid にする方式なので、
+            テンプレートがそのまま msgid になる。line_items が無い古い応答は
+            置換済みの中文にそのまま落ちる。 */}
+        {(detail.explanation.line_items ?? []).length > 0
+          ? detail.explanation.line_items!.map((item, index) => (
+              <li key={index}>{explanationLine(item)}</li>
+            ))
+          : detail.explanation.lines.map((line, index) => <li key={index}>{line}</li>)}
       </ul>
       {detail.explanation.caveat && (
         <p className="mt-1.5 border-l-2 border-warn-200 pl-2 text-micro text-ink-500">
-          {detail.explanation.caveat}
+          {t(detail.explanation.caveat)}
         </p>
       )}
     </div>

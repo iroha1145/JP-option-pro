@@ -1048,6 +1048,10 @@ export const DICT: Record<string, [string, string]> = {
   '低位冲突': ['Low conflict', '低位での衝突'],
   '回补启动': ['Covering start', '回補の開始'],
   '无动向': ['No move', '動きなし'],
+  // 後端の explain.py は no_signal をこの長い表記で返す（画面の短縮形とは別串）
+  '无公开空头动向': ['No disclosed short activity', '公開空売りの動きなし'],
+  // 列挙の区切り。英語だけカンマ + 半角空白。
+  '、': [', ', '、'],
   '新规进入': ['New entry', '新規参入'],
   '重新进入': ['Re-entry', '再参入'],
   '空头集中': ['Concentrated', '空売りの集中'],
@@ -1125,6 +1129,93 @@ export const DICT: Record<string, [string, string]> = {
   ],
   '公开空头增加（卖压增强）': ['Public short up (more selling pressure)', '公開空売りの増加（売り圧の強まり）'],
   '在册合计': ['In-scope total', '在册合計'],
+  // -- 空卖监控: 後端が返す説明文（テンプレート + パラメータ）と但し書き ------
+  //    サーバは相手の言語を知らないので、中文テンプレートを msgid にして
+  //    置換だけフロントで行う。ここが欠けると ja/en で中文のまま出る。
+  '近期有更新的报告义务中机构 {n} 家，公开可见空头比例合计 {ratio}。': [
+    '{n} institution(s) still reporting with a recent update; visible short totals {ratio}.',
+    '直近に更新のある報告義務中の機関は {n} 社、公開可視の空売り比率は合計 {ratio}。',
+  ],
+  '当前没有近期更新的报告义务中机构，公开可见空头比例为 0。': [
+    'No institution has a recent update while still reporting; the visible short total is 0.',
+    '直近に更新のある報告義務中の機関は無く、公開可視の空売り比率は 0。',
+  ],
+  '另有 {n} 家按官方口径仍在报告义务中，但最后一次报告已是 {days} 个交易日之前。官方规则没有失效期限——变动不足 0.1% 就无需再报，所以旧值可能仍然成立，也可能早已不同；含这些机构的在册合计为 {ratio}，上面的「公开可见」口径未计入它们。': [
+    'Another {n} are still within the reporting duty under the official rule, but their last report was {days} trading days ago. The rule sets no expiry — no new report is due until the position moves 0.1pt, so the old value may still hold or may be long out of date. Including them, the in-scope total is {ratio}; the “visible” figure above excludes them.',
+    '他に {n} 社が公式ルール上はまだ報告義務中だが、最後の報告は {days} 営業日前。ルールに失効期限は無く、0.1% 動かない限り再報告義務は生じないため、古い値がまだ有効かもしれないし、とうに違うかもしれない。これらを含む在册合計は {ratio}。上の「公開可視」には入れていない。',
+  ],
+  '另有 {n} 家按官方口径仍在报告义务中，但最后一次报告已是 {days} 个交易日之前。官方规则没有失效期限——变动不足 0.1% 就无需再报，所以旧值可能仍然成立，也可能早已不同；上面的「公开可见」口径未计入它们。': [
+    'Another {n} are still within the reporting duty under the official rule, but their last report was {days} trading days ago. The rule sets no expiry — no new report is due until the position moves 0.1pt, so the old value may still hold or may be long out of date. The “visible” figure above excludes them.',
+    '他に {n} 社が公式ルール上はまだ報告義務中だが、最後の報告は {days} 営業日前。ルールに失効期限は無く、0.1% 動かない限り再報告義務は生じないため、古い値がまだ有効かもしれないし、とうに違うかもしれない。上の「公開可視」には入れていない。',
+  ],
+  '另有 {n} 家已跌破公开披露门槛——该机构已降至门槛以下，实际剩余仓位未知，未计入合计。': [
+    'Another {n} fell below the public disclosure threshold — the remaining position is unknown and is not included in the total.',
+    '他に {n} 社が公開開示の閾値を割った —— 残りの建玉は不明で、合計には入れていない。',
+  ],
+  '另有 {n} 家的最新报告缺少可读的比例数值，状态未知，未计入任何合计。': [
+    'Another {n} have no readable ratio on their latest report; their state is unknown and they are in no total.',
+    '他に {n} 社は最新の報告に読める比率が無く、状態は不明。どの合計にも入れていない。',
+  ],
+  '过去 20 个交易日公开空头增加，规模相当于约 {size} 个20 日平均成交量。': [
+    'Over the last 20 trading days the disclosed short rose by about {size}× the 20-day average volume.',
+    '直近 20 営業日で公開空売りが増加。規模は 20 日平均出来高の約 {size} 日分。',
+  ],
+  '过去 20 个交易日公开空头减少，规模相当于约 {size} 个20 日平均成交量。': [
+    'Over the last 20 trading days the disclosed short fell by about {size}× the 20-day average volume.',
+    '直近 20 営業日で公開空売りが減少。規模は 20 日平均出来高の約 {size} 日分。',
+  ],
+  '同期相对 TOPIX {topix}，相对东证33行业 {sector}。': [
+    'Over the same window: {topix} vs TOPIX, {sector} vs the TSE-33 sector.',
+    '同期間の相対リターンは対 TOPIX {topix}、対東証33業種 {sector}。',
+  ],
+  '公开可见回补天数约 {days} 天（仅按可见部分计算，不是市场总空头回补天数）。': [
+    'Visible days to cover is about {days} (computed from the visible portion only — not the whole-market days to cover).',
+    '公開可視の回補日数は約 {days} 日（可視部分だけの計算で、市場全体の回補日数ではない）。',
+  ],
+  '过去 20 个交易日：{moves}。': [
+    'Over the last 20 trading days: {moves}.',
+    '直近 20 営業日: {moves}。',
+  ],
+  '{n}家新规进入': [
+    '{n} new',
+    '{n}社が新規参入',
+  ],
+  '{n}家重新进入': [
+    '{n} re-entered',
+    '{n}社が再参入',
+  ],
+  '{n}家减仓': [
+    '{n} reduced',
+    '{n}社が減少',
+  ],
+  '{n}家跌破门槛': [
+    '{n} fell below the threshold',
+    '{n}社が閾値割れ',
+  ],
+  '当前被分类为「{label}」，数据置信度 {confidence}。该结果是模型分类，不代表机构意图。': [
+    'Currently classified as “{label}” with data confidence {confidence}. This is a model classification and does not represent institutional intent.',
+    '現在の分類は「{label}」、データ信頼度 {confidence}。これはモデルによる分類で、機関の意図を表すものではない。',
+  ],
+  '「挤空确认」是基于公开空头变化和价格行为的模型分类，不表示掌握全部市场空头仓位。': [
+    '“Squeeze confirmed” is a model classification from disclosed short changes and price action. It does not mean the whole market short position is known.',
+    '「踏み上げ確認」は公開空売りの変化と価格行動によるモデル分類であり、市場全体の空売り建玉を把握していることを意味しない。',
+  ],
+  '承接迹象来自价格对公开空头压力的反应，不代表机构正在吸筹。': [
+    'Signs of absorption come from how the price responded to disclosed short pressure. They do not mean institutions are accumulating.',
+    '承接の兆候は公開空売り圧力に対する価格の反応から来るもので、機関が仕込んでいることを意味しない。',
+  ],
+  '深度低位只表示处于较低价格区域，不表示一定见底。': [
+    'A deep low only means the price sits in a low zone. It does not mean a bottom is in.',
+    '深い低位は価格が低い水準にあることだけを示し、底を打ったことを意味しない。',
+  ],
+  '公开空头减少只说明报告义务范围内的仓位下降，剩余仓位未知。': [
+    'A falling disclosed short only says the position inside the reporting duty went down. The remainder is unknown.',
+    '公開空売りの減少は報告義務の範囲内の建玉が減ったことだけを示し、残りは不明。',
+  ],
+  '首次走步验证结论为否定：所有状态在所有持有期都跑输 TOPIX；权重最高的「卖压吸收」表现最差（−2.55%），而看空的「背离失效」反而略好于基准 —— 看多与看空两个状态的排序是反的。分数目前只能作为描述性分类，不能作为预期超额收益的排序。': [
+    'The first walk-forward validation came back negative: every state underperformed TOPIX at every horizon; “absorption”, which carries the largest weight, was the worst (−2.55%), while the bearish “divergence failed” edged out the baseline — the bullish and bearish states are ranked backwards. For now the score is a descriptive classification only, not a ranking of expected excess return.',
+    '初回のウォークフォワード検証は否定的だった: すべての状態がすべての保有期間で TOPIX を下回り、最も重みの大きい「売り圧の吸収」が最悪（−2.55%）、弱気の「乖離の失効」がむしろ基準をわずかに上回った —— 強気と弱気の順位が逆。現時点でスコアは記述的な分類にすぎず、期待超過リターンの並べ替えには使えない。',
+  ],
   // -- 卡片化（一覧表を廃止し、全項目をカードに出す） --------------------------
   '公开空头规模': ['Disclosed short size', '公開空売りの規模'],
   '变化与压力': ['Change & pressure', '変化と圧力'],

@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { shortMonitorApi } from '@/api/modules';
 import type { ShortMonitorDetail, ShortMonitorEvent, ShortMonitorHolder } from '@/api/types';
 import { fmtDate, fmtDateShort, fmtPct, fmtPctLevel, fmtShares } from '@/lib/format';
+import { explanationLine } from '@/lib/explainText';
 import { t } from '@/i18n/core';
 
 const EVENT_LABELS: Record<string, string> = {
@@ -141,12 +142,14 @@ export default function ShortBehaviorPanel({ code }: { code: string }) {
           {t('当前判定')}：{t(detail.explanation.state_label)}
         </p>
         <ul className="space-y-0.5 text-body-s text-ink-700">
-          {detail.explanation.lines.map((line, index) => (
-            <li key={index}>{line}</li>
-          ))}
+          {(detail.explanation.line_items ?? []).length > 0
+            ? detail.explanation.line_items!.map((item, index) => (
+                <li key={index}>{explanationLine(item)}</li>
+              ))
+            : detail.explanation.lines.map((line, index) => <li key={index}>{line}</li>)}
         </ul>
         {detail.explanation.caveat && (
-          <p className="mt-1.5 text-micro text-ink-500">{detail.explanation.caveat}</p>
+          <p className="mt-1.5 text-micro text-ink-500">{t(detail.explanation.caveat)}</p>
         )}
       </div>
     </div>

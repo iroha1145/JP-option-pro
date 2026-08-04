@@ -1083,7 +1083,15 @@ export interface ShortMonitorHistoryPoint {
 export interface ShortMonitorExplanation {
   state: string;
   state_label: string;
+  /** 中文で置換済みの文（API 単体で読める）。UI は line_items を優先する。 */
   lines: string[];
+  /** テンプレート + パラメータ。lib/explainText の explanationLine で描画する。 */
+  line_items?: {
+    template: string;
+    params: Record<string, string | number>;
+    /** 列挙（「3家减仓、1家跌破门槛」）の結合前の項目。区切りは言語で違う。 */
+    parts?: { template: string; params: Record<string, string | number> }[];
+  }[];
   caveat: string | null;
 }
 

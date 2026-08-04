@@ -2,6 +2,12 @@
 
 出せるのは、数えたもの・比べたもの・見えないものだけ。「機関が仕込んでいる」
 「意図的に売り崩している」といった内心の推定は出さない。
+
+**多言語**: 文はここで組み立てるが、サーバは相手の言語を知らない（応答は
+ETag で共有される）。そこで **中文のテンプレート文字列 + パラメータ** を
+返し、置換はフロントの `t()` に任せる —— この辞書は「簡体中文の原文を
+msgid にする」gettext 方式なので、テンプレートをそのまま msgid にできる。
+`lines` には中文で置換済みのものも従来どおり載せる（API 単体で読める）。
 """
 
 from __future__ import annotations
@@ -65,7 +71,10 @@ def describe(
 ) -> dict[str, Any]:
     """スナップショット 1 件 → 事実の列挙 + 但し書き。"""
 
-    lines: list[str] = []
+    items: list[dict[str, Any]] = []
+
+    def say(template: str, **params: Any) -> None:
+        items.append({"template": template, "params": params})
 
     # 「報告義務中」でも報告が止まっているものは合計に入っていない。
     # 件数だけ数えて比率を合計から取ると、行数と合計が食い違う。
@@ -78,71 +87,85 @@ def describe(
     unknown = [h for h in holders if h.get("visibility_status") == "unknown"]
     ratio = _pct(snapshot.get("visible_short_ratio"))
     if ratio and reporting:
-        lines.append(f"近期有更新的报告义务中机构 {len(reporting)} 家，公开可见空头比例合计 {ratio}。")
+        say("近期有更新的报告义务中机构 {n} 家，公开可见空头比例合计 {ratio}。",
+            n=len(reporting), ratio=ratio)
     elif not reporting:
-        lines.append("当前没有近期更新的报告义务中机构，公开可见空头比例为 0。")
+        say("当前没有近期更新的报告义务中机构，公开可见空头比例为 0。")
     if stale:
         oldest = max((h.get("state_age_trading_days") or 0) for h in stale)
         in_scope = _pct(snapshot.get("reported_in_scope_ratio"))
-        lines.append(
-            f"另有 {len(stale)} 家按官方口径仍在报告义务中，但最后一次报告已是 "
-            f"{oldest} 个交易日之前。官方规则没有失效期限——变动不足 0.1% 就无需再报，"
-            "所以旧值可能仍然成立，也可能早已不同；"
-            + (f"含这些机构的在册合计为 {in_scope}，" if in_scope else "")
-            + "上面的「公开可见」口径未计入它们。"
-        )
+        if in_scope:
+            say(
+                "另有 {n} 家按官方口径仍在报告义务中，但最后一次报告已是 {days} 个交易日之前。"
+                "官方规则没有失效期限——变动不足 0.1% 就无需再报，所以旧值可能仍然成立，"
+                "也可能早已不同；含这些机构的在册合计为 {ratio}，上面的「公开可见」口径未计入它们。",
+                n=len(stale), days=oldest, ratio=in_scope,
+            )
+        else:
+            say(
+                "另有 {n} 家按官方口径仍在报告义务中，但最后一次报告已是 {days} 个交易日之前。"
+                "官方规则没有失效期限——变动不足 0.1% 就无需再报，所以旧值可能仍然成立，"
+                "也可能早已不同；上面的「公开可见」口径未计入它们。",
+                n=len(stale), days=oldest,
+            )
     if below:
-        lines.append(
-            f"另有 {len(below)} 家已跌破公开披露门槛——该机构已降至门槛以下，"
-            "实际剩余仓位未知，未计入合计。"
-        )
+        say("另有 {n} 家已跌破公开披露门槛——该机构已降至门槛以下，实际剩余仓位未知，未计入合计。",
+            n=len(below))
     if unknown:
-        lines.append(
-            f"另有 {len(unknown)} 家的最新报告缺少可读的比例数值，状态未知，未计入任何合计。"
-        )
+        say("另有 {n} 家的最新报告缺少可读的比例数值，状态未知，未计入任何合计。", n=len(unknown))
 
     pressure = snapshot.get("pressure_adv20_20d")
     pressure_text = _num(pressure)
     if pressure_text is not None and abs(float(pressure)) >= 0.01:
-        direction = "增加" if float(pressure) > 0 else "减少"
-        lines.append(
-            f"过去 20 个交易日公开空头{direction}，规模相当于约 {abs(float(pressure)):.2f} 个"
-            "20 日平均成交量。"
-        )
+        size = f"{abs(float(pressure)):.2f}"
+        if float(pressure) > 0:
+            say("过去 20 个交易日公开空头增加，规模相当于约 {size} 个20 日平均成交量。", size=size)
+        else:
+            say("过去 20 个交易日公开空头减少，规模相当于约 {size} 个20 日平均成交量。", size=size)
 
     rel_topix = _pct(snapshot.get("rel_topix_20d"))
     rel_sector = _pct(snapshot.get("rel_sector_20d"))
     if rel_topix and rel_sector:
-        lines.append(f"同期相对 TOPIX {rel_topix}，相对东证33行业 {rel_sector}。")
+        say("同期相对 TOPIX {topix}，相对东证33行业 {sector}。", topix=rel_topix, sector=rel_sector)
 
-    days = snapshot.get("visible_days_to_cover")
-    if days is not None:
-        lines.append(
-            f"公开可见回补天数约 {_num(days)} 天（仅按可见部分计算，不是市场总空头回补天数）。"
-        )
+    days_to_cover = snapshot.get("visible_days_to_cover")
+    if days_to_cover is not None:
+        say("公开可见回补天数约 {days} 天（仅按可见部分计算，不是市场总空头回补天数）。",
+            days=_num(days_to_cover))
 
-    counts = [
-        (snapshot.get("entry_count_20d"), "家新规进入"),
-        (snapshot.get("reentry_count_20d"), "家重新进入"),
-        (snapshot.get("reduction_count_20d"), "家减仓"),
-        (snapshot.get("threshold_exit_count_20d"), "家跌破门槛"),
-    ]
-    moves = [f"{int(value)}{label}" for value, label in counts if value]
+    # 件数の並びは言語ごとに語順が違う。1 項目 = 1 テンプレートにして、
+    # つなぎ（、）もフロント側の区切りに任せる。
+    moves: list[dict[str, Any]] = []
+    for value, template in (
+        (snapshot.get("entry_count_20d"), "{n}家新规进入"),
+        (snapshot.get("reentry_count_20d"), "{n}家重新进入"),
+        (snapshot.get("reduction_count_20d"), "{n}家减仓"),
+        (snapshot.get("threshold_exit_count_20d"), "{n}家跌破门槛"),
+    ):
+        if value:
+            moves.append({"template": template, "params": {"n": int(value)}})
     if moves:
-        lines.append("过去 20 个交易日：" + "、".join(moves) + "。")
+        items.append({
+            "template": "过去 20 个交易日：{moves}。",
+            "params": {"moves": "、".join(
+                item["template"].format(**item["params"]) for item in moves
+            )},
+            "parts": moves,
+        })
 
     state = str(snapshot.get("primary_state") or STATE_NO_SIGNAL)
     label = STATE_LABELS.get(state, state)
     confidence = snapshot.get("data_confidence")
-    lines.append(
-        f"当前被分类为「{label}」，数据置信度 {_num(confidence, 2) or '—'}。"
-        "该结果是模型分类，不代表机构意图。"
-    )
+    say("当前被分类为「{label}」，数据置信度 {confidence}。该结果是模型分类，不代表机构意图。",
+        label=label, confidence=_num(confidence, 2) or "—")
 
     return {
         "state": state,
         "state_label": label,
-        "lines": lines,
+        # 中文で置換済み（API 単体で読める・既存の利用者を壊さない）
+        "lines": [item["template"].format(**item["params"]) for item in items],
+        # テンプレート + パラメータ。UI はこちらを t() に通して翻訳する。
+        "line_items": items,
         "caveat": STATE_CAVEATS.get(state),
     }
 
