@@ -77,7 +77,7 @@ export default function Research() {
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-16 pt-4 md:px-6">
       <PageHeader
-        section="09"
+        section="10"
         eyebrow="WALK-FORWARD VALIDATION"
         title={t('历史验证')}
         description={t('走步验证：分数是否真的具有排序能力')}

@@ -1091,6 +1091,37 @@ export const DICT: Record<string, [string, string]> = {
   '减仓': ['Reduced', '減少'],
   '解消': ['Closed', '解消'],
 
+  // -- 空卖监控页（雷达版式）新增 -------------------------------------------
+  '历史验证结果': ['Validation result', '歴史検証の結果'],
+  '未通过': ['Failed', '不合格'],
+  '个信号': ['signals', '件の信号'],
+  '个走步窗口': ['walk-forward windows', 'ウォークフォワード窓'],
+  '状态分布': ['State mix', '状態の分布'],
+  '占覆盖 {p}': ['{p} of covered', '対象の {p}'],
+  '占覆盖 {p} · 报告陈旧、可见机构少或流动性薄': [
+    '{p} of covered · stale reports, few visible institutions, or thin liquidity',
+    '対象の {p} · 報告が古い、可視機関が少ない、流動性が薄い',
+  ],
+  '可以把最低数据置信度放宽到「不限」再看一次': [
+    'Try setting the minimum data confidence back to “No limit”',
+    '最低データ信頼度を「制限なし」に戻して見直せます',
+  ],
+  '低位': ['Low position', '低位'],
+  '空头压力': ['Short pressure', '空売り圧力'],
+  '催化': ['Catalyst', '材料'],
+  '公开空头增加': ['Public short up', '公開空売りの増加'],
+  '公开空头减少或跌破门槛': ['Public short down or below threshold', '公開空売りの減少・閾値割れ'],
+  '标在公开日之后的首个交易日 —— 市场最早能知道的那天': [
+    'Marked on the first trading day after publication — the earliest the market could know',
+    '公開日の翌営業日に印を打つ —— 市場が最初に知りうる日',
+  ],
+  '公开空头增加（卖压增强）': ['Public short up (more selling pressure)', '公開空売りの増加（売り圧の強まり）'],
+  '公开空头减少（买方回补）': ['Public short down (covering)', '公開空売りの減少（買い戻し）'],
+  '空头变化按对股价的方向着色；相对收益仍是红涨绿跌': [
+    'Short changes are coloured by what they mean for the price; relative returns keep the red-up / green-down convention',
+    '空売りの変化は株価にとっての向きで着色。相対リターンは赤＝上昇・緑＝下落のまま',
+  ],
+
   '公开空头变化 · 价格反应': ['Public short changes · price response', '公開空売りの変化 · 価格の反応'],
   '株': [' sh', '株'],
   '新規': ['New', '新規'],
