@@ -486,6 +486,14 @@ export const DICT: Record<string, [string, string]> = {
   '種別 · 状態': ['Type · status', '種別 · 状態'],
   '种别 · 状态': ['Type · status', '種別 · 状態'],
   '前期実績 vs 会社予想': ['Prior FY vs company forecast', '前期実績 vs 会社予想'],
+  '前期実績 → 会社予想 → 実績': [
+    'Prior FY → forecast → actual',
+    '前期実績 → 会社予想 → 実績',
+  ],
+  // 通期の「達成率」と四半期の「進捗率」は別物。訳語も混ぜない。
+  '対予想': ['vs forecast', '対予想'],
+  '進捗': ['Progress', '進捗'],
+  '前年同期': ['YoY', '前年同期'],
   '前年同期开示日推导的目安，以公司正式公告为准': [
     'Estimated from last year\'s disclosure date; the official notice prevails.',
     '前年同期の開示日から導出した目安。正式な会社公表が優先します。',

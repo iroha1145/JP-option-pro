@@ -202,6 +202,100 @@ def _forecast_pack(history: list[dict[str, Any]]) -> dict[str, Any] | None:
     }
 
 
+def _released_pack(
+    row: dict[str, Any], history: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """開示済みの実績を、**その場で意味の通る比較**と一緒に返す。
+
+    ここを間違えると読み手を確実に誤らせる:
+
+    * 1Q/2Q/3Q の `operating_profit` は **累計**、`forecast_operating_profit`
+      は **通期**。並べて「予想を下回った」と書くと、1Q は全社が未達に見える。
+      四半期は **進捗率**（累計 ÷ 通期予想）で、達成率とは別の名前で出す。
+    * FY の達成率は「発表前に市場が見ていた予想」と比べる —— 同じ行の
+      予想欄ではなく、**同じ会計年度の 1 つ前の開示** に載っていた通期予想。
+      FY 行の F* が終わった期のものか翌期のものかは資料により読み方が
+      割れるので、曖昧さの無いほうを使う。
+    * 前年同期比は同じ `period_type` の 1 年前の開示と比べる。累計どうしなので
+      これは四半期でも通期でも素直に読める。
+    """
+
+    metric = "operating_profit"
+    actual = row.get("operating_profit")
+    if actual is None:
+        metric = "net_profit"
+        actual = row.get("net_profit")
+    if actual is None:
+        # 予想修正だけの開示など、実績値を持たない行。数字を作らない。
+        return None
+
+    period = str(row.get("period_type") or "")
+    fiscal_year_end = row.get("fiscal_year_end")
+    disclosed = str(row.get("disclosed_date") or "")
+
+    # 発表前に出ていた通期予想（同じ会計年度・より前の開示）
+    prior_forecast = None
+    for candidate in history:
+        if str(candidate.get("disclosed_date") or "") >= disclosed:
+            continue
+        if candidate.get("fiscal_year_end") != fiscal_year_end:
+            continue
+        value = candidate.get(f"forecast_{metric}")
+        if value is not None:
+            prior_forecast = value
+            break
+
+    # 前年同期（同じ period_type で 1 つ前の開示 = 1 年前）
+    yoy_value = None
+    for candidate in history:
+        if str(candidate.get("disclosed_date") or "") >= disclosed:
+            continue
+        if str(candidate.get("period_type") or "") != period:
+            continue
+        value = candidate.get(metric)
+        if value is not None:
+            yoy_value = value
+            break
+
+    def _ratio(numerator: Any, denominator: Any) -> float | None:
+        try:
+            top, bottom = float(numerator), float(denominator)
+        except (TypeError, ValueError):
+            return None
+        # 分母が負や 0 のときの「達成率」は意味を成さない（赤字予想に対する
+        # 実績を % で語ると符号が反転して読める）。出さない。
+        if bottom <= 0.0 or top != top or bottom != bottom:
+            return None
+        return round(top / bottom, 6)
+
+    def _change(current: Any, before: Any) -> float | None:
+        try:
+            now, then = float(current), float(before)
+        except (TypeError, ValueError):
+            return None
+        if then == 0.0 or now != now or then != then:
+            return None
+        if then < 0.0:
+            # 赤字からの変化率は百分率にすると符号が逆に読める。出さない。
+            return None
+        return round(now / then - 1.0, 6)
+
+    is_full_year = period == "FY"
+    full_year_forecast = row.get(f"forecast_{metric}")
+    return {
+        "metric": metric,
+        "actual_value": actual,
+        # FY: 発表前の通期予想 / 四半期: 同じ行の通期予想（進捗率の分母）
+        "compared_forecast": prior_forecast if is_full_year else full_year_forecast,
+        "basis": "full_year" if is_full_year else "progress",
+        # 達成率は通期だけ。四半期は進捗率 —— 名前を分けて取り違えを防ぐ。
+        "achievement": _ratio(actual, prior_forecast) if is_full_year else None,
+        "progress": None if is_full_year else _ratio(actual, full_year_forecast),
+        "yoy_value": yoy_value,
+        "yoy_change": _change(actual, yoy_value),
+    }
+
+
 def upcoming_view(
     repository: CoreRepository,
     *,
@@ -285,6 +379,9 @@ def upcoming_view(
                 "net_profit": row.get("net_profit"),
                 "disclosed_time": row.get("disclosed_time"),
                 "is_revision": ("修正" in document) if document else False,
+                # 実績を「何と比べたのか」まで込みで返す。UI 側で通期予想と
+                # 四半期累計を並べて beat/miss と書かせない。
+                **( _released_pack(row, history_by_code.get(code) or []) or {} ),
             },
         )
         items.append(item)

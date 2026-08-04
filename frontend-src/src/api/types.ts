@@ -648,6 +648,16 @@ export interface EarningsUpcomingItem {
     net_profit: number | null;
     disclosed_time: string | null;
     is_revision: boolean;
+    /* 实绩与「和什么比」。缺这组字段 = 该开示没有实绩值（如仅预想修正）。
+       达成率只有通期才有；季度是**进度率**（累计÷通期预想），两者不能混用。 */
+    metric?: 'operating_profit' | 'net_profit';
+    actual_value?: number | null;
+    compared_forecast?: number | null;
+    basis?: 'full_year' | 'progress';
+    achievement?: number | null;
+    progress?: number | null;
+    yoy_value?: number | null;
+    yoy_change?: number | null;
   };
 }
 
