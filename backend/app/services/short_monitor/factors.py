@@ -363,6 +363,7 @@ def data_confidence(
     below_threshold_count: int = 0,
     has_correction: bool = False,
     adv20_value: float | None = None,
+    unknown_records: int = 0,
 ) -> dict[str, Any]:
     """この銘柄の判定をどれだけ信じてよいか（0〜1）。
 
@@ -409,6 +410,12 @@ def data_confidence(
     if has_correction:
         confidence *= 0.9
         reasons.append("correction_in_window")
+
+    if unknown_records > 0:
+        # 比率の読めない報告行がある。欠損は「解消」ではないが、判定の素材と
+        # しても使えない —— その分だけ信頼を下げる。
+        confidence *= 0.85
+        reasons.append("unreadable_report_rows")
 
     value = _finite(adv20_value)
     if value is not None and value < 50_000_000.0:

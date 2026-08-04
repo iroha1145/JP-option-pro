@@ -75,22 +75,30 @@ def describe(
     ]
     stale = [h for h in holders if h.get("stale_reporting")]
     below = [h for h in holders if h.get("visibility_status") == "below_public_threshold"]
+    unknown = [h for h in holders if h.get("visibility_status") == "unknown"]
     ratio = _pct(snapshot.get("visible_short_ratio"))
     if ratio and reporting:
-        lines.append(f"当前处于报告义务中的机构 {len(reporting)} 家，公开可见空头比例合计 {ratio}。")
+        lines.append(f"近期有更新的报告义务中机构 {len(reporting)} 家，公开可见空头比例合计 {ratio}。")
     elif not reporting:
-        lines.append("当前没有处于报告义务中的机构，公开可见空头比例为 0。")
+        lines.append("当前没有近期更新的报告义务中机构，公开可见空头比例为 0。")
     if stale:
         oldest = max((h.get("state_age_trading_days") or 0) for h in stale)
+        in_scope = _pct(snapshot.get("reported_in_scope_ratio"))
         lines.append(
-            f"另有 {len(stale)} 家仍标记为报告义务中，但最后一次报告已是 "
-            f"{oldest} 个交易日之前——报告义务下每变动 0.1% 就应报告，"
-            "因此该数值不能作为当前仓位的证据，未计入合计。"
+            f"另有 {len(stale)} 家按官方口径仍在报告义务中，但最后一次报告已是 "
+            f"{oldest} 个交易日之前。官方规则没有失效期限——变动不足 0.1% 就无需再报，"
+            "所以旧值可能仍然成立，也可能早已不同；"
+            + (f"含这些机构的在册合计为 {in_scope}，" if in_scope else "")
+            + "上面的「公开可见」口径未计入它们。"
         )
     if below:
         lines.append(
             f"另有 {len(below)} 家已跌破公开披露门槛——该机构已降至门槛以下，"
             "实际剩余仓位未知，未计入合计。"
+        )
+    if unknown:
+        lines.append(
+            f"另有 {len(unknown)} 家的最新报告缺少可读的比例数值，状态未知，未计入任何合计。"
         )
 
     pressure = snapshot.get("pressure_adv20_20d")

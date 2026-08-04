@@ -7,7 +7,7 @@ upserts that keep ``ingested_at`` as the revision stamp.
 
 from __future__ import annotations
 
-CORE_SCHEMA_VERSION = "jp-core-v7"
+CORE_SCHEMA_VERSION = "jp-core-v8"
 
 # -- 機関空売り行動モニター（v6 追加）--------------------------------------
 #
@@ -29,6 +29,7 @@ _SHORT_MONITOR_DDL: tuple[str, ...] = (
         first_seen_date TEXT,
         last_seen_date TEXT,
         report_count INTEGER NOT NULL DEFAULT 0,
+        build_version TEXT,
         updated_at TEXT NOT NULL
     ) WITHOUT ROWID
     """,
@@ -44,6 +45,7 @@ _SHORT_MONITOR_DDL: tuple[str, ...] = (
         confidence REAL NOT NULL,
         raw_address TEXT,
         manager_name TEXT,
+        build_version TEXT,
         updated_at TEXT NOT NULL
     ) WITHOUT ROWID
     """,
@@ -70,6 +72,11 @@ _SHORT_MONITOR_DDL: tuple[str, ...] = (
         correction_status TEXT NOT NULL DEFAULT 'original',
         is_hedge_disclosed INTEGER NOT NULL DEFAULT 0,
         mapping_confidence REAL,
+        -- 報告の身元（連鎖 = legal_id × ファンド の再構成に要る）
+        investment_fund_name TEXT,
+        holder_address TEXT,
+        manager_name TEXT,
+        build_version TEXT,
         algorithm_version TEXT NOT NULL,
         ingested_at TEXT NOT NULL
     ) WITHOUT ROWID
@@ -94,6 +101,12 @@ _SHORT_MONITOR_DDL: tuple[str, ...] = (
         state_age_trading_days INTEGER,
         is_hedge_disclosed INTEGER NOT NULL DEFAULT 0,
         mapping_confidence REAL,
+        -- 公式ルール口径（最終報告がまだ公開範囲内）の合計と連鎖の内訳
+        in_scope_ratio REAL,
+        in_scope_shares REAL,
+        chain_count INTEGER NOT NULL DEFAULT 1,
+        unknown_chain_count INTEGER NOT NULL DEFAULT 0,
+        build_version TEXT,
         updated_at TEXT NOT NULL,
         PRIMARY KEY (canonical_code, legal_id)
     ) WITHOUT ROWID
@@ -113,6 +126,10 @@ _SHORT_MONITOR_DDL: tuple[str, ...] = (
         rel_sector_20d REAL,
         visible_short_shares REAL,
         visible_short_ratio REAL,
+        -- 公式ルール口径: 最終報告がまだ公開範囲内の全機関の和（新鮮さ条件なし）
+        reported_in_scope_ratio REAL,
+        reported_in_scope_shares REAL,
+        unknown_institution_count INTEGER NOT NULL DEFAULT 0,
         visible_institution_count INTEGER NOT NULL DEFAULT 0,
         below_threshold_count INTEGER NOT NULL DEFAULT 0,
         -- 閾値を割ったのではなく、割らないまま報告が止まったもの。
@@ -171,6 +188,21 @@ _SHORT_MONITOR_DDL: tuple[str, ...] = (
     """,
     "CREATE INDEX IF NOT EXISTS idx_sbsig_date ON short_behavior_signals(signal_date, primary_state)",
     "CREATE INDEX IF NOT EXISTS idx_sbsig_code ON short_behavior_signals(canonical_code, signal_date)",
+    # 日次スナップショットの公開マーカー。書き込みは 1 トランザクションで行い、
+    # この行が入った時点で「その日の断面が揃っている」ことを保証する。
+    # ETag もこの run_id を含める —— 同じ日を訂正で作り直しても 304 に化けない。
+    """
+    CREATE TABLE IF NOT EXISTS short_monitor_runs (
+        run_id TEXT PRIMARY KEY,
+        as_of_date TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'ready',
+        row_count INTEGER NOT NULL DEFAULT 0,
+        signal_count INTEGER NOT NULL DEFAULT 0,
+        algorithm_version TEXT,
+        created_at TEXT NOT NULL
+    ) WITHOUT ROWID
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_smr_ready ON short_monitor_runs(as_of_date, created_at)",
 )
 
 #: 既存 `short_positions` に落としていた列を足す。住所と DIC（投資一任契約の
@@ -406,10 +438,13 @@ CORE_DDL: tuple[str, ...] = (
         -- 住所は同名別法人の切り分けに、DIC（投資一任契約の相手方）は
         -- 「報告主体」と「実際の運用者」の切り分けに使う。落とすと機関実体の
         -- 正規化が名前の文字列一致だけになる。
-        holder_address TEXT,
+        -- ファンド名と住所は **主キーの一部**: 同一機関が同じ日に複数の
+        -- ファンド名義で報告した行を畳むと、片方が静かに消える（v7 まで
+        -- 実際にそうだった）。
+        holder_address TEXT NOT NULL DEFAULT '',
         manager_name TEXT,
         manager_address TEXT,
-        investment_fund_name TEXT,
+        investment_fund_name TEXT NOT NULL DEFAULT '',
         short_position_ratio REAL,
         short_position_shares REAL,
         short_position_units REAL,
@@ -417,7 +452,10 @@ CORE_DDL: tuple[str, ...] = (
         previous_ratio REAL,
         notes TEXT,
         ingested_at TEXT NOT NULL,
-        PRIMARY KEY (canonical_code, disclosed_date, calculated_date, holder_name)
+        PRIMARY KEY (
+            canonical_code, disclosed_date, calculated_date,
+            holder_name, investment_fund_name, holder_address
+        )
     ) WITHOUT ROWID
     """,
     "CREATE INDEX IF NOT EXISTS idx_short_positions_code ON short_positions(canonical_code, calculated_date)",
@@ -535,13 +573,93 @@ _STALE_REPORTING_DDL: tuple[str, ...] = (
     "ALTER TABLE short_position_last_known ADD COLUMN stale_reporting INTEGER NOT NULL DEFAULT 0",
 )
 
+#: v8: 報告の身元と 2 口径の合計（第十三轮審査対応）。
+#:
+#: (1) `short_positions` の主キーに ファンド名・保有者住所 を足す。同一
+#:     機関が同じ日に複数のファンド名義で報告した行（実データ 2,094 行に
+#:     ファンド名あり）が旧 PK では **静かに上書き** されていた。既存行は
+#:     旧 PK で既に潰れているので、正しい行を取り戻すには一括配信の
+#:     再取り込みが要る（マイグレーション自体は形だけ直す）。
+#: (2) 導出表に build_version を持たせ、全量再構築後に「今回導出されなかった
+#:     行」を掃除できるようにする（UPSERT だけだと幽霊行が残る）。
+#: (3) スナップショットに reported_in_scope_*（公式ルール口径の合計）と
+#:     unknown 件数を足す。
+#: (4) 日次スナップショットの原子的公開に使う run 表。
+_SHORT_IDENTITY_DDL: tuple[str, ...] = (
+    """
+    CREATE TABLE IF NOT EXISTS short_positions_v8 (
+        canonical_code TEXT NOT NULL,
+        disclosed_date TEXT NOT NULL,
+        calculated_date TEXT NOT NULL,
+        holder_name TEXT NOT NULL DEFAULT '',
+        holder_address TEXT NOT NULL DEFAULT '',
+        manager_name TEXT,
+        manager_address TEXT,
+        investment_fund_name TEXT NOT NULL DEFAULT '',
+        short_position_ratio REAL,
+        short_position_shares REAL,
+        short_position_units REAL,
+        previous_report_date TEXT,
+        previous_ratio REAL,
+        notes TEXT,
+        ingested_at TEXT NOT NULL,
+        PRIMARY KEY (
+            canonical_code, disclosed_date, calculated_date,
+            holder_name, investment_fund_name, holder_address
+        )
+    ) WITHOUT ROWID
+    """,
+    "INSERT OR IGNORE INTO short_positions_v8 ("
+    "canonical_code, disclosed_date, calculated_date, holder_name, holder_address, "
+    "manager_name, manager_address, investment_fund_name, short_position_ratio, "
+    "short_position_shares, short_position_units, previous_report_date, previous_ratio, "
+    "notes, ingested_at) "
+    "SELECT canonical_code, disclosed_date, calculated_date, holder_name, "
+    "COALESCE(holder_address, ''), manager_name, manager_address, "
+    "COALESCE(investment_fund_name, ''), short_position_ratio, short_position_shares, "
+    "short_position_units, previous_report_date, previous_ratio, notes, ingested_at "
+    "FROM short_positions",
+    "DROP TABLE short_positions",
+    "ALTER TABLE short_positions_v8 RENAME TO short_positions",
+    "CREATE INDEX IF NOT EXISTS idx_short_positions_code ON short_positions(canonical_code, calculated_date)",
+    # 報告の身元（表示と連鎖の再構成に使う）
+    "ALTER TABLE short_position_events ADD COLUMN investment_fund_name TEXT",
+    "ALTER TABLE short_position_events ADD COLUMN holder_address TEXT",
+    "ALTER TABLE short_position_events ADD COLUMN manager_name TEXT",
+    "ALTER TABLE short_position_events ADD COLUMN build_version TEXT",
+    # 機関別状態: 公式口径の合計と連鎖の内訳
+    "ALTER TABLE short_position_last_known ADD COLUMN in_scope_ratio REAL",
+    "ALTER TABLE short_position_last_known ADD COLUMN in_scope_shares REAL",
+    "ALTER TABLE short_position_last_known ADD COLUMN chain_count INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE short_position_last_known ADD COLUMN unknown_chain_count INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE short_position_last_known ADD COLUMN build_version TEXT",
+    "ALTER TABLE institution_entities ADD COLUMN build_version TEXT",
+    "ALTER TABLE institution_aliases ADD COLUMN build_version TEXT",
+    "ALTER TABLE short_behavior_snapshots ADD COLUMN reported_in_scope_ratio REAL",
+    "ALTER TABLE short_behavior_snapshots ADD COLUMN reported_in_scope_shares REAL",
+    "ALTER TABLE short_behavior_snapshots ADD COLUMN unknown_institution_count INTEGER NOT NULL DEFAULT 0",
+    """
+    CREATE TABLE IF NOT EXISTS short_monitor_runs (
+        run_id TEXT PRIMARY KEY,
+        as_of_date TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'ready',
+        row_count INTEGER NOT NULL DEFAULT 0,
+        signal_count INTEGER NOT NULL DEFAULT 0,
+        algorithm_version TEXT,
+        created_at TEXT NOT NULL
+    ) WITHOUT ROWID
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_smr_ready ON short_monitor_runs(as_of_date, created_at)",
+)
+
 CORE_MIGRATIONS: dict[str, tuple[tuple[str, ...], str]] = {
     "jp-core-v1": (_STRENGTH_DDL, "jp-core-v2"),
     "jp-core-v2": (_QUOTE_INDEX_DDL, "jp-core-v3"),
     "jp-core-v3": (_RS_SECTOR_SPLIT_DDL, "jp-core-v4"),
     "jp-core-v4": (_STRENGTH_REGULATION_DDL, "jp-core-v5"),
     "jp-core-v5": (_SHORT_MONITOR_MIGRATION, "jp-core-v6"),
-    "jp-core-v6": (_STALE_REPORTING_DDL, CORE_SCHEMA_VERSION),
+    "jp-core-v6": (_STALE_REPORTING_DDL, "jp-core-v7"),
+    "jp-core-v7": (_SHORT_IDENTITY_DDL, CORE_SCHEMA_VERSION),
 }
 
 __all__ = ["CORE_DDL", "CORE_MIGRATIONS", "CORE_SCHEMA_VERSION"]

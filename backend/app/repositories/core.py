@@ -749,13 +749,20 @@ class CoreRepository(SQLiteRepository):
             values = {column: row.get(column) for column in self._SHORT_POSITION_COLUMNS}
             values["holder_name"] = values.get("holder_name") or ""
             values["calculated_date"] = values.get("calculated_date") or ""
+            # 主キー列は NULL 不可。空値は '' に揃える（NULL だと WITHOUT ROWID
+            # の PK 制約に落ちる上、'' と NULL の 2 つの「空」が併存する）。
+            values["holder_address"] = values.get("holder_address") or ""
+            values["investment_fund_name"] = values.get("investment_fund_name") or ""
             values["ingested_at"] = now
             prepared.append(tuple(values[column] for column in self._SHORT_POSITION_COLUMNS))
         if not prepared:
             return 0
         sql = _upsert_sql(
             "short_positions", self._SHORT_POSITION_COLUMNS,
-            ("canonical_code", "disclosed_date", "calculated_date", "holder_name"),
+            (
+                "canonical_code", "disclosed_date", "calculated_date",
+                "holder_name", "investment_fund_name", "holder_address",
+            ),
         )
         with self.write() as connection:
             connection.executemany(sql, prepared)
@@ -806,30 +813,35 @@ class CoreRepository(SQLiteRepository):
 
     _INSTITUTION_COLUMNS = (
         "legal_id", "display_name", "normalized_name", "group_id", "group_name",
-        "country_hint", "first_seen_date", "last_seen_date", "report_count", "updated_at",
+        "country_hint", "first_seen_date", "last_seen_date", "report_count",
+        "build_version", "updated_at",
     )
     _ALIAS_COLUMNS = (
         "raw_name", "legal_id", "match_kind", "confidence", "raw_address",
-        "manager_name", "updated_at",
+        "manager_name", "build_version", "updated_at",
     )
     _EVENT_COLUMNS = (
         "event_id", "canonical_code", "legal_id", "group_id", "raw_holder_name",
+        "investment_fund_name", "holder_address", "manager_name",
         "position_date", "published_date", "effective_trade_date", "short_ratio",
         "short_shares", "previous_ratio", "previous_report_date", "ratio_delta",
         "shares_delta", "event_type", "visibility_status", "correction_status",
-        "is_hedge_disclosed", "mapping_confidence", "algorithm_version", "ingested_at",
+        "is_hedge_disclosed", "mapping_confidence", "build_version",
+        "algorithm_version", "ingested_at",
     )
     _LAST_KNOWN_COLUMNS = (
         "canonical_code", "legal_id", "group_id", "last_reported_ratio",
         "last_reported_shares", "last_position_date", "last_published_date",
         "visibility_status", "exact_position_known", "stale_reporting", "state_age_trading_days",
-        "is_hedge_disclosed", "mapping_confidence", "updated_at",
+        "in_scope_ratio", "in_scope_shares", "chain_count", "unknown_chain_count",
+        "is_hedge_disclosed", "mapping_confidence", "build_version", "updated_at",
     )
     _SNAPSHOT_COLUMNS = (
         "canonical_code", "as_of_date", "close", "adv20_shares", "adv20_value",
         "drawdown_52w", "price_percentile_252", "rel_topix_20d", "rel_sector_20d",
-        "visible_short_shares", "visible_short_ratio", "visible_institution_count",
-        "below_threshold_count", "stale_reporting_count",
+        "visible_short_shares", "visible_short_ratio",
+        "reported_in_scope_ratio", "reported_in_scope_shares", "unknown_institution_count",
+        "visible_institution_count", "below_threshold_count", "stale_reporting_count",
         "largest_institution_ratio", "concentration",
         "ratio_change_1d", "ratio_change_5d", "ratio_change_20d",
         "shares_change_5d", "shares_change_20d", "pressure_adv20_5d", "pressure_adv20_20d",
@@ -898,6 +910,99 @@ class CoreRepository(SQLiteRepository):
             "short_behavior_signals", self._SIGNAL_COLUMNS, ("signal_id",),
             rows, stamp="created_at",
         )
+
+    def publish_short_behavior_day(
+        self,
+        snapshots: Sequence[Mapping[str, Any]],
+        signals: Sequence[Mapping[str, Any]],
+        *,
+        as_of_date: str,
+        run_id: str,
+        algorithm_version: str,
+    ) -> dict[str, int]:
+        """1 営業日分のスナップショットを **1 トランザクションで** 公開する。
+
+        バッチを分けて書くと、途中で落ちたときに「新しい日付なのに半分しか
+        無い断面」が MAX(as_of_date) 越しに最新として見えてしまう。全行 +
+        信号 + run マーカーを 1 つの BEGIN IMMEDIATE に入れる —— run 行が
+        見える時点でその日の断面は揃っている。
+        """
+
+        now = utc_now_iso()
+        snapshot_sql = _upsert_sql(
+            "short_behavior_snapshots", self._SNAPSHOT_COLUMNS,
+            ("canonical_code", "as_of_date"),
+        )
+        signal_sql = _upsert_sql(
+            "short_behavior_signals", self._SIGNAL_COLUMNS, ("signal_id",),
+        )
+
+        def prep(rows: Sequence[Mapping[str, Any]], columns: Sequence[str], stamp: str):
+            out = []
+            for row in rows:
+                values = {column: row.get(column) for column in columns}
+                values[stamp] = now
+                out.append(tuple(values[column] for column in columns))
+            return out
+
+        snapshot_rows = prep(snapshots, self._SNAPSHOT_COLUMNS, "generated_at")
+        signal_rows = prep(signals, self._SIGNAL_COLUMNS, "created_at")
+        with self.write() as connection:
+            if snapshot_rows:
+                connection.executemany(snapshot_sql, snapshot_rows)
+            if signal_rows:
+                connection.executemany(signal_sql, signal_rows)
+            # 1 日 1 行。旧 run を残すと created_at が秒精度で並べられず、
+            # 「最新の run」が選べない —— 置き換えで一意にする。
+            connection.execute(
+                "DELETE FROM short_monitor_runs WHERE as_of_date = ?", (as_of_date,)
+            )
+            connection.execute(
+                "INSERT INTO short_monitor_runs (run_id, as_of_date, status, row_count, "
+                "signal_count, algorithm_version, created_at) VALUES (?, ?, 'ready', ?, ?, ?, ?)",
+                (run_id, as_of_date, len(snapshot_rows), len(signal_rows), algorithm_version, now),
+            )
+        return {"snapshots": len(snapshot_rows), "signals": len(signal_rows)}
+
+    def latest_short_monitor_run(self, as_of_date: str | None = None) -> dict[str, Any] | None:
+        """ETag の素材。同じ日を作り直しても run_id が変わるので 304 に化けない。"""
+
+        with self.read() as connection:
+            if as_of_date:
+                row = connection.execute(
+                    "SELECT * FROM short_monitor_runs WHERE as_of_date = ? AND status = 'ready' "
+                    "ORDER BY created_at DESC LIMIT 1",
+                    (as_of_date,),
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    "SELECT * FROM short_monitor_runs WHERE status = 'ready' "
+                    "ORDER BY created_at DESC LIMIT 1",
+                ).fetchone()
+        return dict(row) if row else None
+
+    def sweep_short_monitor_build(self, build_version: str) -> dict[str, int]:
+        """全量再構築の後片付け: 今回のビルドで導出されなかった行を消す。
+
+        UPSERT だけだと、対応づけ規則の変更・原始データの訂正・ID 規則の
+        変更のたびに旧い導出行が幽霊として残る。人手の別名（curated）は
+        導出物ではないので消さない。
+        """
+
+        removed: dict[str, int] = {}
+        with self.write() as connection:
+            for table, extra in (
+                ("short_position_events", ""),
+                ("short_position_last_known", ""),
+                ("institution_entities", ""),
+                ("institution_aliases", " AND match_kind != 'curated'"),
+            ):
+                cursor = connection.execute(
+                    f"DELETE FROM {table} WHERE (build_version IS NULL OR build_version != ?){extra}",
+                    (build_version,),
+                )
+                removed[table] = cursor.rowcount if cursor.rowcount is not None else 0
+        return removed
 
     def institution_alias_map(self) -> dict[str, str]:
         with self.read() as connection:

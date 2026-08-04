@@ -35,26 +35,34 @@ import unicodedata
 from dataclasses import dataclass
 
 #: 実体解決の版。別名表や正規化規則を変えたらここを上げる（イベントに載る）。
-INSTITUTION_VERSION = "inst-v1"
+#: v2: 正規化で剥がすのを **法人形式語だけ** に絞る。`International` /
+#:     `Securities` / `Capital` / `Markets` / `証券` などは営業実態を表す語で、
+#:     別法人を区別する本体の一部 —— v1 はこれも剥がしていたため
+#:     `Barclays Capital Securities Ltd` が `barclays` まで潰れ、
+#:     `Morgan Stanley & Co. International plc`（英国）と
+#:     `Morgan Stanley & Co. LLC`（米国）が同一実体に化けた。
+#:     加えて、同じ正規化名に複数の住所が観測された場合は住所で実体を分ける。
+INSTITUTION_VERSION = "inst-v2"
 
 MATCH_EXACT = "exact"          # この実体に属する生表記が 1 つだけ（統合していない）
 MATCH_NORMALIZED = "normalized"  # 正規化で別の生表記と一致した
 MATCH_CURATED = "curated"      # 人手の別名表
 MATCH_AGGREGATE = "aggregate"  # 法人ではなく集合（個人 など）
 
-#: 法人格・営業形態を表す語。実体の同一性には効かないので正規化で落とす。
+#: **法人形式語だけ** を正規化で落とす。`International` / `Securities` /
+#: `Capital` / `Markets` / `Holdings` / `Group` / `証券` / `銀行` / `信託` は
+#: 落とさない —— これらは営業実態の記述で、別の法的主体を区別する本体の
+#: 一部（`Morgan Stanley & Co. International plc` ≠ `Morgan Stanley & Co. LLC`）。
 #: ASCII の語は語境界を要求する（"limited" が "unlimited" の一部を食わない
 #: ように）。日本語には語境界が無いので、そのまま末尾一致で剥がす。
 _LEGAL_SUFFIXES_ASCII = (
     "limited liability partnership", "limited partnership",
-    "incorporated", "corporation", "international", "securities",
-    "company", "limited", "holdings", "capital", "markets", "group",
+    "incorporated", "corporation", "company", "limited",
     "co ltd", "pte ltd", "pte", "llp", "llc", "lp", "ltd", "plc", "inc",
     "sa", "nv", "ag", "snc", "gmbh", "spa", "bv", "kk",
 )
 _LEGAL_SUFFIXES_CJK = (
-    "投資事業有限責任組合", "証券株式会社", "株式会社", "有限会社", "合同会社",
-    "証券", "銀行", "信託",
+    "投資事業有限責任組合", "株式会社", "有限会社", "合同会社",
 )
 
 #: 実体ではなく集合を指す表記。
@@ -184,25 +192,64 @@ class InstitutionMapping:
         }
 
 
+def normalize_address(raw: str | None) -> str:
+    """住所の表記揺れだけを落とす（NFKC・大小文字・記号・空白）。"""
+
+    if not raw:
+        return ""
+    text = unicodedata.normalize("NFKC", str(raw)).strip().casefold()
+    text = _PUNCT.sub(" ", text)
+    return _SPACES.sub(" ", text).strip()
+
+
 class InstitutionResolver:
     """生の表記 → 法的実体。**似ているだけでは統合しない。**
 
     同じ正規化名に複数の生表記が集まったときだけ「統合した」ことになるので、
     そのときに限って信頼度を下げる（統合が誤りうるのはその場合だけ）。
+
+    住所は **同名別法人の切り分け** に使う: 事前に `observe()` で全行を
+    流すと、同じ正規化名に複数の異なる住所が観測された名前が分かる。その
+    名前に限って `legal_id` に住所の指紋を足す —— 分けるのは安全側の誤り
+    （§五: 名前が似ているだけで統合しない）で、住所が 1 つしか無い名前は
+    何も変わらない。観測順に依存しないので、再構築のたびに ID が揺れない。
     """
 
     #: 正規化で統合が起きたときの信頼度。統合していなければ 1.0。
     MERGED_CONFIDENCE = 0.75
     #: 法人ではなく集合（個人 など）。1 つの実体として数えてはいけない。
     AGGREGATE_CONFIDENCE = 0.35
+    #: 同名複数住所の名前で、住所が空の行。どの実体か決められない。
+    HOMONYM_NO_ADDRESS_CONFIDENCE = 0.5
 
     def __init__(self, curated: dict[str, str] | None = None) -> None:
         # raw_name → legal_id の人手マッピング（DB の institution_aliases 由来）
         self._curated = dict(curated or {})
         self._raw_by_legal: dict[str, set[str]] = {}
         self._display_by_legal: dict[str, str] = {}
+        # normalized_name → 観測された正規化済み住所の集合（observe で埋める）
+        self._addresses_by_name: dict[str, set[str]] = {}
+        self._homonyms: frozenset[str] = frozenset()
 
-    def resolve(self, raw_name: str | None) -> InstitutionMapping:
+    def observe(self, raw_name: str | None, address: str | None = None) -> None:
+        """事前パス: 名前ごとの住所の観測。resolve の前に全行を流す。"""
+
+        normalized = normalize_name((raw_name or "").strip())
+        if not normalized or normalized in _AGGREGATE_NAMES:
+            return
+        cleaned = normalize_address(address)
+        if cleaned:
+            self._addresses_by_name.setdefault(normalized, set()).add(cleaned)
+
+    def finalize_observations(self) -> frozenset[str]:
+        """複数住所が観測された名前を確定する。以後の resolve に効く。"""
+
+        self._homonyms = frozenset(
+            name for name, addresses in self._addresses_by_name.items() if len(addresses) > 1
+        )
+        return self._homonyms
+
+    def resolve(self, raw_name: str | None, address: str | None = None) -> InstitutionMapping:
         raw = (raw_name or "").strip()
         normalized = normalize_name(raw)
         if not normalized:
@@ -222,13 +269,26 @@ class InstitutionResolver:
             )
 
         curated_id = self._curated.get(raw)
+        homonym_penalty = False
         legal_id = curated_id or _slug(normalized)
+        if not curated_id and normalized in self._homonyms:
+            cleaned = normalize_address(address)
+            if cleaned:
+                import hashlib
+
+                legal_id = f"{legal_id}-a{hashlib.sha1(cleaned.encode('utf-8')).hexdigest()[:8]}"
+            else:
+                # 同名複数住所の名前なのに住所が無い行。どの法人か決められない。
+                legal_id = f"{legal_id}-noaddr"
+                homonym_penalty = True
         group_id, group_name = _group_for(normalized)
         self._remember(legal_id, raw)
 
         merged = len(self._raw_by_legal.get(legal_id, ())) > 1
         if curated_id:
             kind, confidence = MATCH_CURATED, 1.0
+        elif homonym_penalty:
+            kind, confidence = MATCH_NORMALIZED, self.HOMONYM_NO_ADDRESS_CONFIDENCE
         elif merged:
             kind, confidence = MATCH_NORMALIZED, self.MERGED_CONFIDENCE
         else:
@@ -260,5 +320,6 @@ __all__ = [
     "MATCH_CURATED",
     "MATCH_EXACT",
     "MATCH_NORMALIZED",
+    "normalize_address",
     "normalize_name",
 ]

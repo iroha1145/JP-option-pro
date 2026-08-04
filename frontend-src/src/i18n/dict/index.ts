@@ -1116,6 +1116,25 @@ export const DICT: Record<string, [string, string]> = {
     '公開日の翌営業日に印を打つ —— 市場が最初に知りうる日',
   ],
   '公开空头增加（卖压增强）': ['Public short up (more selling pressure)', '公開空売りの増加（売り圧の強まり）'],
+  '在册合计': ['In-scope total', '在册合計'],
+  '在册合计（官方口径）': ['In-scope total (official rule)', '在册合計（公式ルール口径）'],
+  '状态未知': ['Unknown', '状態不明'],
+  '近125个交易日有更新的报告义务中机构之和': [
+    'Sum of reporting institutions with an update in the last 125 trading days',
+    '直近125営業日に更新のある報告義務中機関の和',
+  ],
+  '最后报告仍在公开范围内的全部机构之和，含报告已长期停更者。官方规则没有失效期限': [
+    'Every institution whose last report is still above the disclosure threshold, including long-silent ones. The official rule has no expiry',
+    '最終報告がまだ公開範囲内の全機関の和（長期停止を含む）。公式ルールに失効期限はない',
+  ],
+  '最后报告仍在公开范围内的全部机构之和，含报告已长期停更者。官方规则没有失效期限，变动不足 0.1% 就无需再报': [
+    'Every institution whose last report is still above the threshold, including long-silent ones — no re-report is due until the position moves 0.1pt',
+    '最終報告がまだ公開範囲内の全機関の和（長期停止を含む）。0.1%動かない限り再報告義務は生じない',
+  ],
+  '雷达优先级联动已停用：验证未通过前，本模块不改变突破雷达的排序，只做展示、筛选与影子分。': [
+    'Radar priority linkage is disabled: until validation passes, this module never re-orders the breakout radar — display, filters and shadow score only.',
+    'レーダー優先度連動は停止中：検証を通るまで本モジュールはレーダーの並び順を一切変えません（表示・絞り込み・影子分のみ）。',
+  ],
   '公开空头减少（买方回补）': ['Public short down (covering)', '公開空売りの減少（買い戻し）'],
   '空头变化按对股价的方向着色；相对收益仍是红涨绿跌': [
     'Short changes are coloured by what they mean for the price; relative returns keep the red-up / green-down convention',

@@ -155,9 +155,12 @@ def test_stock_detail_keeps_below_threshold_holders_visible(client):
     holders = {h["name"]: h for h in payload["holders"]}
     below = holders["Beta Securities Ltd"]
     assert below["visibility_status"] == "below_public_threshold"
-    assert below["exact_position_known"] is False
+    # 正確なのは仓位日時点の値。「今も正確」と読める旧名は使わない。
+    assert below["exact_at_position_date"] is False
     assert below["last_reported_ratio"] == pytest.approx(0.004)
     assert payload["visible_short_ratio"] == pytest.approx(0.040), "閾値割れを合計に混ぜている"
+    # 公式ルール口径（在册合計）も常に一緒に出す
+    assert payload["reported_in_scope_ratio"] == pytest.approx(0.040)
 
 
 def test_stock_detail_explanation_is_deterministic_and_caveated(client):
@@ -224,7 +227,8 @@ def test_explanation_row_count_matches_the_summed_ratio():
     """
 
     described = explain.describe(
-        {"visible_short_ratio": 0.0123, "primary_state": states.STATE_NORMAL_SHORTING},
+        {"visible_short_ratio": 0.0123, "reported_in_scope_ratio": 0.0523,
+         "primary_state": states.STATE_NORMAL_SHORTING},
         [
             {"visibility_status": "reporting", "stale_reporting": False},
             {"visibility_status": "reporting", "stale_reporting": True,
@@ -233,9 +237,11 @@ def test_explanation_row_count_matches_the_summed_ratio():
         ],
     )
     joined = " ".join(described["lines"])
-    assert "报告义务中的机构 1 家" in joined
+    assert "报告义务中机构 1 家" in joined
     assert "1423 个交易日之前" in joined
-    assert "未计入合计" in joined
+    # 2 口径: 新鮮な「公开可见」と公式ルールの「在册」を両方言う
+    assert "在册合计为 5.23%" in joined
+    assert "未计入" in joined
 
 
 def test_the_api_says_the_validation_failed_not_that_it_never_ran(client):

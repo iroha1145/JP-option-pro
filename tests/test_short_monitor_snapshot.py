@@ -44,13 +44,14 @@ def _report(code, holder, calc, ratio, prev=None, shares=None, disc=None):
 
 
 def _events(rows):
-    def next_day(day):
+    def first_tradable(day):
+        # 厳密に後（公表は当日引け後）
         for candidate in DAYS:
-            if candidate >= day:
+            if candidate > day:
                 return candidate
         return None
 
-    return ev.build_events(rows, resolver=InstitutionResolver(), next_trading_day=next_day)
+    return ev.build_events(rows, resolver=InstitutionResolver(), first_tradable_day=first_tradable)
 
 
 def _market(**kwargs):

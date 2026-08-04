@@ -171,6 +171,11 @@ export default function ShortMonitor() {
               {t('个走步窗口')}
             </p>
           )}
+          {overview?.radar_link && !overview.radar_link.enabled && (
+            <p className="mt-1.5 text-caption text-ink-600">
+              {t('雷达优先级联动已停用：验证未通过前，本模块不改变突破雷达的排序，只做展示、筛选与影子分。')}
+            </p>
+          )}
         </section>
       ) : unvalidated ? (
         <p className="rounded-md border border-warn-200 bg-warn-50 px-3 py-2 text-caption text-warn-700">
@@ -420,6 +425,15 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
               {t('公开可见空头')}{' '}
               <span className="font-mono tnum text-ink-800">{fmtPctLevel(row.visible_short_ratio)}</span>
             </span>
+            {row.reported_in_scope_ratio != null &&
+              row.reported_in_scope_ratio - (row.visible_short_ratio ?? 0) > 0.0005 && (
+                <span title={t('最后报告仍在公开范围内的全部机构之和，含报告已长期停更者。官方规则没有失效期限')}>
+                  {t('在册合计')}{' '}
+                  <span className="font-mono tnum text-ink-800">
+                    {fmtPctLevel(row.reported_in_scope_ratio)}
+                  </span>
+                </span>
+              )}
             <span>
               {t('机构数')}{' '}
               <span className="font-mono tnum text-ink-800">

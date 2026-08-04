@@ -42,6 +42,9 @@ class Outcome:
 
     canonical_code: str
     signal_date: str
+    entry_basis: str = "signal_close"
+    entry_price: float | None = None
+    entry_date: str | None = None
     entry_reference_close: float | None = None
     next_open: float | None = None
     next_close: float | None = None
@@ -59,6 +62,9 @@ class Outcome:
         return {
             "canonical_code": self.canonical_code,
             "signal_date": self.signal_date,
+            "entry_basis": self.entry_basis,
+            "entry_price": self.entry_price,
+            "entry_date": self.entry_date,
             "entry_reference_close": self.entry_reference_close,
             "next_open": self.next_open,
             "next_close": self.next_close,
@@ -137,45 +143,73 @@ def compute_outcome(
     stop_price: float | None = None,
     topix_bars: Sequence[Mapping[str, Any]] | None = None,
     sector_bars: Sequence[Mapping[str, Any]] | None = None,
+    entry_basis: str = "signal_close",
 ) -> Outcome:
     """1 シグナルの結果一式。
 
-    `signal_close` はシグナル日の終値（基準価格）。渡されなければ `bars` から
-    その日を探す。`stop_price` があれば 1R をそこから測り、無ければ ATR×倍率。
+    `entry_basis`:
+        * ``signal_close`` — シグナル日の終値を基準にする（従来）。
+          **公開が引け後の情報には使ってはいけない** —— その終値では入れない。
+        * ``next_open`` — 翌営業日の始値。実際に注文が通る最初の値段。
+        * ``next_close`` — 翌営業日の終値。
+    ベンチマーク超過（topix/sector）は signal_close 基準のときだけこの関数が
+    計算する。next 基準では呼び出し側が日付整合の取れる形で別に計算すること。
     """
 
     horizon_max = max(HORIZONS)
-    ahead = forward_bars(bars, signal_date, horizon_max)
-    outcome = Outcome(canonical_code=canonical_code, signal_date=signal_date)
+    need = horizon_max + (1 if entry_basis == "next_close" else 0)
+    ahead = forward_bars(bars, signal_date, need)
+    outcome = Outcome(
+        canonical_code=canonical_code, signal_date=signal_date, entry_basis=entry_basis,
+    )
     outcome.forward_bars = len(ahead)
-    outcome.truncated = len(ahead) < horizon_max
+    outcome.truncated = len(ahead) < need
 
     # 基準価格も前向きバーと **同じ調整基準**で取る。片方だけ調整すると、
     # 分割を挟んだシグナルのリターンが丸ごと係数分ずれる。
-    base = _finite(signal_close)
-    if base is None:
+    reference = _finite(signal_close)
+    if reference is None:
         factors_all = cumulative_factors(bars)
         for row, factor in zip(bars, factors_all):
             if str(row.get("trade_date") or "") == signal_date:
                 stored = _finite(row.get("adj_close"))
-                base = stored if (stored and stored > 0) else (
+                reference = stored if (stored and stored > 0) else (
                     (_finite(row.get("close")) or 0.0) * factor or None
                 )
                 break
-    outcome.entry_reference_close = base
-    if base is None or base <= 0 or not ahead:
+    outcome.entry_reference_close = reference
+    if not ahead:
         return outcome
 
     outcome.next_open = ahead[0].open
     outcome.next_close = ahead[0].close
+
+    if entry_basis == "next_open":
+        base = _finite(ahead[0].open)
+        outcome.entry_date = ahead[0].trade_date
+        eval_bars: Sequence[Bar] = ahead
+    elif entry_basis == "next_close":
+        base = _finite(ahead[0].close)
+        outcome.entry_date = ahead[0].trade_date
+        eval_bars = ahead[1:]
+    else:
+        base = reference
+        outcome.entry_date = signal_date
+        eval_bars = ahead
+    outcome.entry_price = base
+    if base is None or base <= 0:
+        return outcome
+
     for horizon in HORIZONS:
-        outcome.returns[horizon] = _series_return(ahead, base, horizon)
+        outcome.returns[horizon] = _series_return(eval_bars, base, horizon)
 
     # ベンチマーク超過。指数側も同じ「シグナル日より後」の窓で測る。
-    for label, benchmark, target in (
+    # next 基準では日付の対応が 1 日ずれるので、ここでは計算しない
+    # （呼び出し側が entry_date に揃えた終値マップで計算する）。
+    for label, benchmark, target in (() if entry_basis != "signal_close" else (
         ("topix", topix_bars, outcome.excess_topix),
         ("sector", sector_bars, outcome.excess_sector),
-    ):
+    )):
         if not benchmark:
             continue
         bench_ahead = forward_bars(benchmark, signal_date, horizon_max)
@@ -194,8 +228,8 @@ def compute_outcome(
 
     # MFE/MAE は「入った後にどこまで含み益/含み損になったか」。終値ではなく
     # 高値・安値で測る（終値だけだと途中の踏み上げ/踏み落としが見えない）。
-    highs = [bar.high for bar in ahead if bar.high is not None]
-    lows = [bar.low for bar in ahead if bar.low is not None]
+    highs = [bar.high for bar in eval_bars if bar.high is not None]
+    lows = [bar.low for bar in eval_bars if bar.low is not None]
     if highs:
         outcome.mfe_pct = (max(highs) / base - 1.0) * 100.0
     if lows:
@@ -204,7 +238,7 @@ def compute_outcome(
     # 最大ドローダウン: 到達したピークからの落ち込み（順序を保って走査する）。
     peak = base
     worst = 0.0
-    for bar in ahead:
+    for bar in eval_bars:
         if bar.high is not None:
             peak = max(peak, bar.high)
         if bar.low is not None and peak > 0:
@@ -221,7 +255,7 @@ def compute_outcome(
     if risk and risk > 0:
         target_price = base + risk
         stop_level = base - risk
-        for bar in ahead:
+        for bar in eval_bars:
             touched_stop = bar.low is not None and bar.low <= stop_level
             touched_target = bar.high is not None and bar.high >= target_price
             if touched_stop:

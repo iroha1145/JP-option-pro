@@ -61,14 +61,33 @@ def rebuild_events(
         return RebuildResult()
     calendar_set = sorted(calendar)
 
-    def next_trading_day(day: str) -> str | None:
-        # 二分探索。全銘柄 × 全報告で呼ばれるので線形探索にはしない。
+    def first_tradable_day(day: str) -> str | None:
+        # **厳密に後**（bisect_right）。JPX の公表は当日 16:00 締めの受付分
+        # —— その日の取引が終わってから出る。公開日当日を効力日にすると、
+        # 検証がその日の終値を「この情報で取れた値段」として使ってしまう。
         import bisect
 
-        index = bisect.bisect_left(calendar_set, day)
+        index = bisect.bisect_right(calendar_set, day)
         return calendar_set[index] if index < len(calendar_set) else None
 
     resolver = InstitutionResolver(curated=repository.institution_alias_map())
+    # 事前パス: 同じ正規化名に複数の住所が観測される名前を確定する。
+    # ここで確定してから resolve するので、実体 ID が走査順に依存しない。
+    for _code, rows in repository.iter_short_positions_by_code():
+        for row in rows:
+            resolver.observe(row.get("holder_name"), row.get("holder_address"))
+    homonyms = resolver.finalize_observations()
+    if progress and homonyms:
+        progress(f"{len(homonyms)} homonym names split by address")
+
+    #: 今回のビルド識別子。全行に押して、最後に旧ビルドの行を掃除する。
+    #: utc_now_iso() は秒精度なので、同じ秒に 2 回走ると同じ値になり
+    #: 掃除が空振りする —— 乱数の尾を付けて一意にする。
+    from uuid import uuid4
+
+    from app.repositories.base import utc_now_iso
+
+    build_version = f"{utc_now_iso()}-{uuid4().hex[:8]}"
     latest_published = repository.latest_short_position_date() or calendar_set[-1]
     # 「最後の報告から何営業日経ったか」は **今日まで** で数える。
     # 取引カレンダーは 1 年先まで入っているので、そのまま末尾を使うと
@@ -85,8 +104,10 @@ def rebuild_events(
 
     for code, rows in repository.iter_short_positions_by_code():
         events = ev.build_events(
-            rows, resolver=resolver, next_trading_day=next_trading_day,
+            rows, resolver=resolver, first_tradable_day=first_tradable_day,
         )
+        for event in events:
+            event["build_version"] = build_version
         if not events:
             continue
         result.codes += 1
@@ -96,11 +117,15 @@ def rebuild_events(
             events, published_cutoff=latest_published, trading_days=age_calendar,
         )
         for legal_id, state in known.items():
-            known_batch.append({"canonical_code": code, **state})
+            row = {"canonical_code": code, **state}
+            # DB 列は旧名のまま（意味は「その仓位日時点で正確」）。
+            row["exact_position_known"] = 1 if state.get("exact_at_position_date") else 0
+            row["build_version"] = build_version
+            known_batch.append(row)
 
         for event in events:
             raw = str(event["raw_holder_name"])
-            mapping = resolver.resolve(raw)
+            mapping = resolver.resolve(raw, address=event.get("holder_address"))
             entity = entities.setdefault(mapping.legal_id, {
                 "legal_id": mapping.legal_id,
                 "display_name": mapping.display_name,
@@ -122,6 +147,7 @@ def rebuild_events(
                     "match_kind": mapping.match_kind, "confidence": mapping.confidence,
                     "raw_address": source.get("holder_address"),
                     "manager_name": source.get("manager_name"),
+                    "build_version": build_version,
                 }
 
         if len(event_batch) >= BATCH_SIZE:
@@ -138,8 +164,15 @@ def rebuild_events(
     if known_batch:
         result.last_known += repository.upsert_short_position_last_known(known_batch)
 
+    for entity in entities.values():
+        entity["build_version"] = build_version
     result.institutions = repository.upsert_institution_entities(entities.values())
     result.aliases = repository.upsert_institution_aliases(aliases.values())
+    # UPSERT だけだと、規則変更やデータ訂正で導出されなくなった行が幽霊として
+    # 残る。今回のビルドに含まれない行をここで掃除する（curated は残す）。
+    swept = repository.sweep_short_monitor_build(build_version)
+    if progress and any(swept.values()):
+        progress(f"swept stale derived rows: {swept}")
     return result
 
 
@@ -240,12 +273,20 @@ def refresh_snapshots(
     previous_states = repository.short_behavior_state_map(previous_date) if previous_date else {}
     signals = snap.build_signals(rows, previous_states, source_cutoff=target)
 
-    written = 0
-    for index in range(0, len(rows), BATCH_SIZE):
-        written += repository.upsert_short_behavior_snapshots(rows[index:index + BATCH_SIZE])
-    signal_count = repository.upsert_short_behavior_signals(signals) if signals else 0
+    # 全行 + 信号 + run マーカーを 1 トランザクションで公開する。バッチを
+    # 分けると、途中で落ちた半端な断面が MAX(as_of_date) 越しに「最新」に
+    # 見える（audit P0-6）。
+    from uuid import uuid4
 
-    return RefreshResult(as_of_date=target, snapshots=written, signals=signal_count)
+    run_id = uuid4().hex[:16]
+    written = repository.publish_short_behavior_day(
+        rows, signals, as_of_date=target, run_id=run_id,
+        algorithm_version=snap.SNAPSHOT_VERSION,
+    )
+
+    return RefreshResult(
+        as_of_date=target, snapshots=written["snapshots"], signals=written["signals"],
+    )
 
 
 def _previous_snapshot_date(repository: CoreRepository, target: str) -> str | None:
@@ -268,7 +309,8 @@ def _events_by_code(
     out: dict[str, list[dict[str, Any]]] = {}
     with repository.read() as connection:
         rows = connection.execute(
-            "SELECT canonical_code, legal_id, group_id, raw_holder_name, position_date, "
+            "SELECT canonical_code, legal_id, group_id, raw_holder_name, "
+            "investment_fund_name, position_date, "
             "published_date, effective_trade_date, short_ratio, short_shares, previous_ratio, "
             "ratio_delta, event_type, visibility_status, correction_status, "
             "is_hedge_disclosed, mapping_confidence "

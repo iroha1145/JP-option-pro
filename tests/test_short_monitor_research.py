@@ -71,7 +71,7 @@ def test_replay_never_uses_information_before_it_was_published(tmp_path):
     """
 
     core = _core(tmp_path)
-    records = replay(core, start="2026-05-20", end="2026-07-31", every=1)
+    records, _cohorts = replay(core, start="2026-05-20", end="2026-07-31", every=1)
     mine = [r for r in records if r["canonical_code"] == "10000"]
     assert mine, "この銘柄の信号が一件も出ていない（前提が壊れている）"
 
@@ -87,7 +87,7 @@ def test_replay_never_uses_information_before_it_was_published(tmp_path):
 
 def test_replay_records_the_information_cutoff_on_every_signal(tmp_path):
     core = _core(tmp_path)
-    records = replay(core, start="2026-06-01", end="2026-07-31", every=5)
+    records, _cohorts = replay(core, start="2026-06-01", end="2026-07-31", every=5)
     assert records
     for record in records:
         assert record["source_cutoff"] == record["signal_date"]
@@ -95,7 +95,7 @@ def test_replay_records_the_information_cutoff_on_every_signal(tmp_path):
 
 def test_replay_returns_forward_outcomes(tmp_path):
     core = _core(tmp_path)
-    records = replay(core, start="2026-05-01", end="2026-07-31", every=5)
+    records, _cohorts = replay(core, start="2026-05-01", end="2026-07-31", every=5)
     with_outcome = [r for r in records if r.get("return_20d") is not None]
     assert with_outcome, "先の値動きが一件も測れていない"
     for record in with_outcome:
@@ -159,7 +159,7 @@ def test_quantile_edges_come_from_the_population_not_a_constant():
 
 def test_evaluate_produces_walk_forward_windows_not_shuffled_dates(tmp_path):
     core = _core(tmp_path)
-    records = replay(core, start="2026-05-01", end="2026-07-31", every=1)
+    records, _cohorts = replay(core, start="2026-05-01", end="2026-07-31", every=1)
     report = sb.evaluate_signals(records, calendar=DAYS, train_days=30, test_days=15).as_dict()
     windows = report["windows"]
     if windows:
@@ -180,9 +180,9 @@ def test_replay_gives_the_same_answer_chunked_or_not(tmp_path, monkeypatch):
 
     core = _core(tmp_path)
     monkeypatch.setattr(runner, "CHUNK_EVALUATION_DAYS", 1000)
-    whole = replay(core, start="2026-05-01", end="2026-07-31", every=5)
+    whole, _cohorts = replay(core, start="2026-05-01", end="2026-07-31", every=5)
     monkeypatch.setattr(runner, "CHUNK_EVALUATION_DAYS", 2)
-    chunked = replay(core, start="2026-05-01", end="2026-07-31", every=5)
+    chunked, _cohorts = replay(core, start="2026-05-01", end="2026-07-31", every=5)
 
     keys = ("canonical_code", "signal_date", "primary_state", "return_20d",
             "excess_topix_20d", "visible_short_ratio")
@@ -198,7 +198,7 @@ def test_replay_keeps_enough_forward_bars_to_measure_outcomes(tmp_path, monkeypa
 
     core = _core(tmp_path)
     monkeypatch.setattr(runner, "CHUNK_EVALUATION_DAYS", 2)
-    records = replay(core, start="2026-05-01", end="2026-06-30", every=5)
+    records, _cohorts = replay(core, start="2026-05-01", end="2026-06-30", every=5)
     measurable = [r for r in records if r.get("return_20d") is not None]
     assert measurable, "区間の切り方で先の値動きが測れなくなっている"
 

@@ -73,6 +73,12 @@ class MarketInputs:
     trading_days: list[str]              # 昇順、as_of を含む
     topix_closes: Mapping[str, float]    # trade_date → 終値
     has_news_feed: bool = True
+    # 業種中位リターンの外部注入（再生用）。本番は渡さない —— 全市場を渡して
+    # いるので構成銘柄から計算した値と同じ。再生は評価対象を「直近に公開
+    # イベントがある銘柄」に絞るため、その部分集合から中位を取ると本番と
+    # 別の業種基準になる（audit 指摘）。全市場から事前計算した値を渡す。
+    sector_median_5d: Mapping[str, float] | None = None
+    sector_median_20d: Mapping[str, float] | None = None
 
 
 def _window_date(trading_days: Sequence[str], back: int) -> str | None:
@@ -85,26 +91,35 @@ def _window_date(trading_days: Sequence[str], back: int) -> str | None:
 
 def _visible_at(
     events: Sequence[Mapping[str, Any]], cutoff: str, trading_days: Sequence[str]
-) -> dict[str, Any]:
-    """その締切時点の可視合計。営業日列を渡して「古すぎる報告」を弾く。"""
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+    """その締切時点の（機関別状態, 可視合計）。営業日列で「古すぎる報告」を弾く。"""
 
     past = [day for day in trading_days if day <= cutoff]
-    return ev.visible_totals(
-        ev.last_known_as_of(events, published_cutoff=cutoff, trading_days=past)
-    )
+    known = ev.last_known_as_of(events, published_cutoff=cutoff, trading_days=past)
+    return known, ev.visible_totals(known)
 
 
 def _count_events(
     events: Iterable[Mapping[str, Any]], *, since: str
 ) -> dict[str, int]:
+    """行動イベントの窓内件数。
+
+    訂正はデータの改訂であって新しい行動ではない —— `correction` として
+    数えるだけで、增仓/减仓/再参入には入れない（入れると同じ行動が 2 回
+    起きたことになる）。比率の読めない行（unknown）も行動としては数えない。
+    """
+
     counts = {
         "entry": 0, "reentry": 0, "reduction": 0, "threshold_exit": 0,
-        "increase": 0, "closed": 0, "correction": 0,
+        "increase": 0, "closed": 0, "correction": 0, "unknown": 0,
     }
     for event in events:
-        # 効力日（公開後の最初の営業日）で数える。仓位日で数えると未来の情報を
+        # 効力日（公開の翌営業日）で数える。仓位日で数えると未来の情報を
         # 過去の窓に入れてしまう。
         if str(event.get("effective_trade_date") or "") < since:
+            continue
+        if event.get("correction_status") == ev.CORRECTION_REVISED:
+            counts["correction"] += 1
             continue
         kind = event.get("event_type")
         if kind == ev.EVENT_NEW:
@@ -119,8 +134,8 @@ def _count_events(
             counts["increase"] += 1
         elif kind == ev.EVENT_CLOSED:
             counts["closed"] += 1
-        if event.get("correction_status") == ev.CORRECTION_REVISED:
-            counts["correction"] += 1
+        elif kind == ev.EVENT_UNKNOWN:
+            counts["unknown"] += 1
     return counts
 
 
@@ -189,6 +204,7 @@ def build_raw_rows(
     cutoff_5 = _window_date(market.trading_days, SHORT_WINDOW)
     cutoff_20 = _window_date(market.trading_days, LONG_WINDOW)
     since_20 = cutoff_20 or market.trading_days[0]
+    since_5 = cutoff_5 or market.trading_days[0]
 
     rows: list[dict[str, Any]] = []
     for stock in stocks:
@@ -196,32 +212,34 @@ def build_raw_rows(
         if not price.get("known"):
             continue
 
-        now = _visible_at(stock.events, market.as_of_date, market.trading_days)
-        prev_5 = _visible_at(stock.events, cutoff_5, market.trading_days) if cutoff_5 else None
-        prev_20 = _visible_at(stock.events, cutoff_20, market.trading_days) if cutoff_20 else None
-        counts = _count_events(stock.events, since=since_20)
+        known_now, now = _visible_at(stock.events, market.as_of_date, market.trading_days)
+        # 窓内の変化は **可視合計の差ではなく** 同一連鎖の報告差の積み上げ。
+        # 合計の差だと閾値割れ 1 件が「全株数の減少」に化ける（audit P0-4）。
+        changes_5 = (
+            ev.window_changes(stock.events, from_cutoff=cutoff_5, to_cutoff=market.as_of_date)
+            if cutoff_5 else None
+        )
+        changes_20 = (
+            ev.window_changes(stock.events, from_cutoff=cutoff_20, to_cutoff=market.as_of_date)
+            if cutoff_20 else None
+        )
+        counts_20 = _count_events(stock.events, since=since_20)
+        counts_5 = _count_events(stock.events, since=since_5)
 
         rows.append({
             "canonical_code": stock.canonical_code,
             "sector33_code": stock.sector33_code,
             "price": price,
+            "known_now": known_now,
             "now": now,
-            "prev_5": prev_5,
-            "prev_20": prev_20,
-            "counts": counts,
+            "changes_5": changes_5,
+            "changes_20": changes_20,
+            "counts": counts_20,
+            "counts_5": counts_5,
             "stock": stock,
             "benchmarks": benchmarks,
         })
     return rows
-
-
-def _delta(now: Mapping[str, Any] | None, before: Mapping[str, Any] | None, key: str) -> float | None:
-    if not now or not before:
-        return None
-    a, b = _num(now.get(key)), _num(before.get(key))
-    if a is None or b is None:
-        return None
-    return a - b
 
 
 def _sector_medians(rows: Sequence[Mapping[str, Any]], key: str) -> dict[str, float]:
@@ -255,8 +273,8 @@ def build_snapshots(
     if not raw:
         return []
 
-    median_20 = _sector_medians(raw, "return_20d")
-    median_5 = _sector_medians(raw, "return_5d")
+    median_20 = market.sector_median_20d or _sector_medians(raw, "return_20d")
+    median_5 = market.sector_median_5d or _sector_medians(raw, "return_5d")
 
     # -- 第 1 段: 生の比まで ------------------------------------------------
     prepared: list[dict[str, Any]] = []
@@ -270,14 +288,18 @@ def build_snapshots(
         rel_sector_20 = _rel(price.get("return_20d"), median_20.get(row.get("sector33_code") or ""))
         rel_sector_5 = _rel(price.get("return_5d"), median_5.get(row.get("sector33_code") or ""))
 
-        shares_delta_5 = _delta(row["now"], row["prev_5"], "visible_short_shares")
-        shares_delta_20 = _delta(row["now"], row["prev_20"], "visible_short_shares")
-        ratio_delta_5 = _delta(row["now"], row["prev_5"], "visible_short_ratio")
-        ratio_delta_20 = _delta(row["now"], row["prev_20"], "visible_short_ratio")
+        changes_5 = row["changes_5"] or {}
+        changes_20 = row["changes_20"] or {}
+        shares_delta_5 = changes_5.get("shares_change")
+        shares_delta_20 = changes_20.get("shares_change")
+        ratio_delta_5 = changes_5.get("ratio_change")
+        ratio_delta_20 = changes_20.get("ratio_change")
 
         pressure_5 = fac.short_pressure(
             shares_change=shares_delta_5, adv20_shares=adv_shares,
-            entries=row["counts"]["entry"], reentries=row["counts"]["reentry"],
+            # 5 日圧力に 20 日の参入件数を混ぜない（15 日前の再参入が 5 日分に
+            # 化けていた —— audit 指摘）。
+            entries=row["counts_5"]["entry"], reentries=row["counts_5"]["reentry"],
         )
         pressure_20 = fac.short_pressure(
             shares_change=shares_delta_20, adv20_shares=adv_shares,
@@ -370,13 +392,19 @@ def _finalize(
 
     last_report = _last_report_age(stock.events, market.trading_days)
     confidence = fac.data_confidence(
-        mapping_confidence=_min_mapping_confidence(stock.events),
+        # 全歴史の最小値ではなく「今の判定に効く範囲」の最小値。5 年前に 1 度
+        # 曖昧な表記があっただけで、以後の全スナップショットの信頼度が永久に
+        # 下がっていた（audit 指摘）。
+        mapping_confidence=_current_mapping_confidence(
+            row.get("known_now") or {}, stock.events, since=_window_date(market.trading_days, LONG_WINDOW) or market.trading_days[0],
+        ),
         visible_institution_count=int(now.get("visible_institution_count") or 0),
         days_since_last_report=last_report,
         bars_available=int(price.get("bars_available") or 0),
         below_threshold_count=int(now.get("below_threshold_count") or 0),
         has_correction=counts["correction"] > 0,
         adv20_value=price.get("adv20_value"),
+        unknown_records=int(now.get("unknown_count") or 0) + int(counts.get("unknown") or 0),
     )
 
     evidence = {
@@ -428,6 +456,9 @@ def _finalize(
         "absorption": absorption, "covering": cover, "rotation": rot,
         "margin": margin, "catalyst": cat, "confidence": confidence, "score": score,
         "damage_percentile_20d": percentile, "windows_consistent": consistent,
+        # 逐連鎖の報告差の内訳（純増減のほかに粗い増分・減分も残す）
+        "window_changes_5d": row.get("changes_5"),
+        "window_changes_20d": row.get("changes_20"),
     }
 
     return {
@@ -442,6 +473,11 @@ def _finalize(
         "rel_sector_20d": row["rel_sector_20d"],
         "visible_short_shares": now.get("visible_short_shares"),
         "visible_short_ratio": now.get("visible_short_ratio"),
+        # 公式ルール上「まだ報告義務中」の全機関の和（125 日の新鮮さ条件なし）。
+        # 新鮮な部分集合（visible_*）とは別口径で、両方とも常に出す。
+        "reported_in_scope_ratio": now.get("reported_in_scope_ratio"),
+        "reported_in_scope_shares": now.get("reported_in_scope_shares"),
+        "unknown_institution_count": int(now.get("unknown_count") or 0),
         "visible_institution_count": int(now.get("visible_institution_count") or 0),
         "below_threshold_count": int(now.get("below_threshold_count") or 0),
         # 報告義務中の表示のまま古くなったもの。合計には入れないが、
@@ -479,10 +515,30 @@ def _finalize(
     }
 
 
-def _min_mapping_confidence(events: Sequence[Mapping[str, Any]]) -> float | None:
-    values = [_num(e.get("mapping_confidence")) for e in events]
-    usable = [v for v in values if v is not None]
-    return min(usable) if usable else None
+def _current_mapping_confidence(
+    known: Mapping[str, Mapping[str, Any]],
+    events: Sequence[Mapping[str, Any]],
+    *,
+    since: str,
+) -> float | None:
+    """今の判定に効く範囲の対応づけ信頼度。
+
+    現在の機関別状態と、窓内（効力日 >= since）の行動イベントだけを見る。
+    全歴史の最小値を取ると、大昔の 1 件の曖昧表記が現在を永久に汚す。
+    """
+
+    values: list[float] = []
+    for state in known.values():
+        value = _num(state.get("mapping_confidence"))
+        if value is not None:
+            values.append(value)
+    for event in events:
+        if str(event.get("effective_trade_date") or "") < since:
+            continue
+        value = _num(event.get("mapping_confidence"))
+        if value is not None:
+            values.append(value)
+    return min(values) if values else None
 
 
 def _last_report_age(events: Sequence[Mapping[str, Any]], trading_days: Sequence[str]) -> int | None:

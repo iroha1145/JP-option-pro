@@ -13,7 +13,11 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 #: 状態機の版。閾値や条件を変えたら上げる。
-STATE_VERSION = "sbs-v1"
+#: v2: 挤空確認は 5 日と 20 日の **両方** の減少を要求（交付文書は最初から
+#:     そう書いてあったが、コードは片側で通していた）。さらに強い主張には
+#:     対 TOPIX と対業種の **両方のデータが存在** することを要求する ——
+#:     片方欠けたまま「市場と業種の双方で転強」とは言えない。
+STATE_VERSION = "sbs-v2"
 
 #: **この閾値群は歴史検証を経ていない初期パラメータ**。
 #: 「日本株の最適値」ではない。検証結果が出るまでこの表記を外さないこと。
@@ -107,13 +111,23 @@ def classify(evidence: Mapping[str, Any], gates: Mapping[str, float] | None = No
     days_to_cover = _num(evidence.get("visible_days_to_cover"))
 
     increasing = max(pressure_20, pressure_5) >= g["pressure_floor"]
+    # either: どちらかの窓で減少（回補開始に使う）。
+    # both: 両方の窓で減少（挤空確認に使う。片側だけなら 1 本の窓のノイズかも
+    # しれない —— 文書は最初から両方と書いてある）。
     decreasing = min(pressure_20, pressure_5) <= -g["pressure_floor"]
+    decreasing_both = max(pressure_20, pressure_5) <= -g["pressure_floor"]
     relative = _weakest(rel_topix, rel_sector)
     strengthening = relative is not None and relative > g["relative_strength_floor"]
+    # 「市場対比・業種対比の双方で転強」は両方の値があるときにしか言えない。
+    strengthening_both = (
+        rel_topix is not None and rel_sector is not None
+        and min(rel_topix, rel_sector) > g["relative_strength_floor"]
+    )
 
     flags = _flags(evidence, g)
     state = _pick_state(
         evidence=evidence, gates=g, increasing=increasing, decreasing=decreasing,
+        decreasing_both=decreasing_both, strengthening_both=strengthening_both,
         absorption=absorption, covering_score=covering_score, low_position=low_position,
         relative=relative, strengthening=strengthening, days_to_cover=days_to_cover,
     )
@@ -134,8 +148,8 @@ def _weakest(*values: float | None) -> float | None:
 
 
 def _pick_state(
-    *, evidence, gates, increasing, decreasing, absorption, covering_score,
-    low_position, relative, strengthening, days_to_cover,
+    *, evidence, gates, increasing, decreasing, decreasing_both, strengthening_both,
+    absorption, covering_score, low_position, relative, strengthening, days_to_cover,
 ) -> str:
     broke_support = bool(evidence.get("broke_long_support"))
     made_new_low = bool(evidence.get("made_new_low"))
@@ -143,11 +157,13 @@ def _pick_state(
     turnover_ok = bool(evidence.get("turnover_confirmed"))
 
     # 1. 挤空確認 —— いちばん強い主張なので条件を全部揃える。
+    # 減少は 5 日と 20 日の両方、転強は対 TOPIX と対業種の両方（データが
+    # 揃っていることも条件のうち）。
     if (
-        decreasing
+        decreasing_both
         and covering_score is not None and covering_score >= gates["covering_floor"]
         and days_to_cover is not None and days_to_cover >= gates["squeeze_days_to_cover"]
-        and breakout and turnover_ok and strengthening
+        and breakout and turnover_ok and strengthening_both
     ):
         return STATE_SQUEEZE_CONFIRMED
 

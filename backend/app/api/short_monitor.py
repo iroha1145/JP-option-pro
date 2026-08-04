@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from app.api.deps import core_repository
 from app.domain.symbols import display_code, normalize_input_code
 from app.services.short_monitor import explain
+from app.services.short_monitor.radar_link import MAX_PRIORITY_SHIFT, PRIORITY_LINK_ENABLED
 from app.services.short_monitor.scoring import SCORE_VALIDATED, SCORE_VERSION, VALIDATION
 from app.services.short_monitor.snapshot import SNAPSHOT_VERSION
 from app.services.short_monitor.states import (
@@ -34,7 +35,7 @@ from app.services.short_monitor.states import (
 
 router = APIRouter(prefix="/api/short-monitor", tags=["short-monitor"])
 
-SHORT_MONITOR_API_VERSION = "jp-short-monitor-v1"
+SHORT_MONITOR_API_VERSION = "jp-short-monitor-v2"
 
 #: 画面の各ビューが要求する状態・並び順。ここに無い名前は受け付けない。
 VIEWS: dict[str, dict[str, Any]] = {
@@ -85,6 +86,13 @@ def _as_of(repository, requested: str | None) -> str | None:
     return repository.latest_short_behavior_date()
 
 
+def _run_token(repository, as_of: str | None) -> str:
+    """スナップショット世代の識別子。同じ日を訂正で作り直しても ETag が変わる。"""
+
+    run = repository.latest_short_monitor_run(as_of) if as_of else None
+    return str((run or {}).get("run_id") or "")
+
+
 def _etag(*parts: Any) -> str:
     seed = "|".join(str(part) for part in parts)
     return '"' + hashlib.sha1(seed.encode("utf-8")).hexdigest()[:32] + '"'
@@ -125,12 +133,18 @@ def _row_view(row: dict[str, Any]) -> dict[str, Any]:
         "close": row.get("close"),
         "drawdown_52w": row.get("drawdown_52w"),
         "price_percentile_252": row.get("price_percentile_252"),
-        # 名前に visible を必ず残す（総空売り残高ではない）
+        # 名前に visible / reported を必ず残す（総空売り残高ではない）。
+        # visible_* = 新鮮な報告義務中だけの和（125 営業日は運用上の目安）、
+        # reported_in_scope_* = 最終報告がまだ公開範囲内の全機関の和（公式
+        # ルール口径）。どちらか片方だけを出すと、もう片方の意味に化ける。
         "visible_short_ratio": row.get("visible_short_ratio"),
         "visible_short_shares": row.get("visible_short_shares"),
+        "reported_in_scope_ratio": row.get("reported_in_scope_ratio"),
+        "reported_in_scope_shares": row.get("reported_in_scope_shares"),
         "visible_institution_count": row.get("visible_institution_count"),
         "below_threshold_count": row.get("below_threshold_count"),
         "stale_reporting_count": row.get("stale_reporting_count"),
+        "unknown_institution_count": row.get("unknown_institution_count"),
         "largest_institution_ratio": row.get("largest_institution_ratio"),
         "concentration": row.get("concentration"),
         "ratio_change_5d": row.get("ratio_change_5d"),
@@ -176,7 +190,10 @@ def overview(request: Request, response: Response, date: str | None = Query(defa
     state = repository.sync_state("short_behavior") or {}
     coverage = repository.short_behavior_coverage(as_of)
     counts = repository.short_behavior_state_counts(as_of)
-    etag = _etag("overview", as_of, state.get("last_success_at"), SNAPSHOT_VERSION)
+    etag = _etag(
+        "overview", as_of, state.get("last_success_at"),
+        _run_token(repository, as_of), SNAPSHOT_VERSION,
+    )
     if _maybe_304(request, response, etag):
         response.status_code = 304
         return {}
@@ -192,6 +209,9 @@ def overview(request: Request, response: Response, date: str | None = Query(defa
         # 通らなかった」は別のことなので、結果も一緒に返す。
         "validated": {"gates": GATES_VALIDATED, "score": SCORE_VALIDATED},
         "validation": VALIDATION,
+        # 検証を通るまでレーダーの並び順には一切影響しない（表示・絞り込み・
+        # 影子分のみ）。ここが False の間、priority_shift は常に 0。
+        "radar_link": {"enabled": PRIORITY_LINK_ENABLED, "max_shift": MAX_PRIORITY_SHIFT},
         "api_version": SHORT_MONITOR_API_VERSION,
     }
 
@@ -229,7 +249,8 @@ def rankings(
 
     etag = _etag(
         "rankings", as_of, view, states, flags, markets, sectors, codes, institutions,
-        min_confidence, min_turnover, min_score, order, limit, offset, SNAPSHOT_VERSION,
+        min_confidence, min_turnover, min_score, order, limit, offset,
+        _run_token(repository, as_of), SNAPSHOT_VERSION,
     )
     if _maybe_304(request, response, etag):
         response.status_code = 304
@@ -279,7 +300,7 @@ def stock_detail(
     if snapshot is None:
         raise HTTPException(status_code=404, detail={"code": "no_snapshot", "as_of_date": as_of})
 
-    etag = _etag("stock", canonical, as_of, SNAPSHOT_VERSION)
+    etag = _etag("stock", canonical, as_of, _run_token(repository, as_of), SNAPSHOT_VERSION)
     if _maybe_304(request, response, etag):
         response.status_code = 304
         return {}
@@ -324,9 +345,14 @@ def _holder_view(row: dict[str, Any]) -> dict[str, Any]:
         "visibility_status": row.get("visibility_status"),
         # 閾値を割ったのか、割らないまま報告が止まったのか。別の事象。
         "stale_reporting": bool(row.get("stale_reporting")),
-        # 「見えている値 = 今の建玉」ではない。線を 0 に落とさないための旗。
-        "exact_position_known": known,
+        # 正確なのは **その仓位日時点** の値。今日の建玉は（直近報告でも）
+        # 報告以後に動いていれば分からない。旧名 exact_position_known は
+        # 「今も正確」と読めてしまうので改名（値は同じ）。
+        "exact_at_position_date": known,
         "state_age_trading_days": row.get("state_age_trading_days"),
+        # 同一機関の複数ファンド連鎖の内訳
+        "chain_count": row.get("chain_count"),
+        "unknown_chain_count": row.get("unknown_chain_count"),
         "is_hedge_disclosed": bool(row.get("is_hedge_disclosed")),
         "mapping_confidence": row.get("mapping_confidence"),
     }
@@ -358,6 +384,7 @@ def _event_view(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "event_id": row.get("event_id"),
         "institution": row.get("raw_holder_name"),
+        "investment_fund_name": row.get("investment_fund_name"),
         "legal_id": row.get("legal_id"),
         "group_id": row.get("group_id"),
         "position_date": row.get("position_date"),
@@ -410,6 +437,7 @@ def status() -> dict:
         "score_version": SCORE_VERSION,
         "validated": {"gates": GATES_VALIDATED, "score": SCORE_VALIDATED},
         "validation": VALIDATION,
+        "radar_link": {"enabled": PRIORITY_LINK_ENABLED, "max_shift": MAX_PRIORITY_SHIFT},
         "note": DISCLOSURE_NOTE,
     }
 

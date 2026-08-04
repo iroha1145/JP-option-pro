@@ -972,10 +972,16 @@ export interface ShortMonitorRow {
   price_percentile_252: number | null;
   visible_short_ratio: number | null;
   visible_short_shares: number | null;
+  /** 官方口径：最后报告仍在公开范围内（≥0.5%）的全部机构之和，不含新鲜度条件。
+   *  visible_* 是近 125 个交易日有更新的子集——两个口径都出，不互相冒充。 */
+  reported_in_scope_ratio: number | null;
+  reported_in_scope_shares: number | null;
   visible_institution_count: number;
   below_threshold_count: number;
-  /** 未跌破门槛但报告已停止更新。同样不计入合计，但与跌破门槛是两回事。 */
+  /** 未跌破门槛但报告已停止更新。不计入 visible_*，仍在 reported_in_scope_* 中。 */
   stale_reporting_count: number | null;
+  /** 最新报告缺少可读比例的机构数。缺失不是解消。 */
+  unknown_institution_count: number | null;
   largest_institution_ratio: number | null;
   concentration: number | null;
   ratio_change_5d: number | null;
@@ -1017,7 +1023,10 @@ export interface ShortMonitorOverview {
     windows?: number;
     summary: string;
     document?: string;
+    caveats?: string[];
   };
+  /** 雷达优先级联动的实际状态。验证未通过时 enabled=false，调整量恒为 0。 */
+  radar_link?: { enabled: boolean; max_shift: number };
 }
 
 export interface ShortMonitorRankings {
@@ -1042,9 +1051,11 @@ export interface ShortMonitorHolder {
   visibility_status: string;
   /** true = 未跌破门槛，但报告已长期停止更新。 */
   stale_reporting?: boolean;
-  /** false = 实际仓位不可见。绝不把线画到 0。 */
-  exact_position_known: boolean;
+  /** true = 该值在其仓位日时点是精确的（且报告新鲜）。**不代表今天的仓位**。 */
+  exact_at_position_date: boolean;
   state_age_trading_days: number | null;
+  /** 同一机构并行报告的基金链数（99% 为 1）。 */
+  chain_count?: number | null;
   is_hedge_disclosed: boolean;
   mapping_confidence: number | null;
 }
@@ -1077,6 +1088,7 @@ export interface ShortMonitorDetail extends ShortMonitorRow {
 export interface ShortMonitorEvent {
   event_id: string;
   institution: string;
+  investment_fund_name?: string | null;
   legal_id: string;
   group_id: string | null;
   position_date: string;

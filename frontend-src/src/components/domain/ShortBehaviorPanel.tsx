@@ -63,6 +63,7 @@ export default function ShortBehaviorPanel({ code }: { code: string }) {
   const reporting = detail.holders.filter((h) => h.visibility_status === 'reporting');
   const below = detail.holders.filter((h) => h.visibility_status === 'below_public_threshold');
   const stale = detail.holders.filter((h) => h.stale_reporting);
+  const unknown = detail.holders.filter((h) => h.visibility_status === 'unknown');
 
   return (
     <div className="space-y-3">
@@ -74,7 +75,16 @@ export default function ShortBehaviorPanel({ code }: { code: string }) {
       <dl className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
         <Metric label="行为分" value={detail.behavior_score?.toFixed(0) ?? '—'} />
         <Metric label="数据置信度" value={detail.data_confidence?.toFixed(2) ?? '—'} />
-        <Metric label="公开可见空头" value={fmtPctLevel(detail.visible_short_ratio)} />
+        <Metric
+          label="公开可见空头"
+          value={fmtPctLevel(detail.visible_short_ratio)}
+          hint="近125个交易日有更新的报告义务中机构之和"
+        />
+        <Metric
+          label="在册合计（官方口径）"
+          value={fmtPctLevel(detail.reported_in_scope_ratio)}
+          hint="最后报告仍在公开范围内的全部机构之和，含报告已长期停更者。官方规则没有失效期限"
+        />
         <Metric
           label="公开可见回补天数"
           value={detail.visible_days_to_cover?.toFixed(2) ?? '—'}
@@ -90,7 +100,8 @@ export default function ShortBehaviorPanel({ code }: { code: string }) {
       <div>
         <p className="mb-1 text-micro text-ink-400">
           {t('机构公开空头')}（{t('报告义务中')} {reporting.length - stale.length} · {t('跌破门槛')} {below.length}
-          {stale.length > 0 ? ` · ${t('报告已停止')} ${stale.length}` : ''}）
+          {stale.length > 0 ? ` · ${t('报告已停止')} ${stale.length}` : ''}
+          {unknown.length > 0 ? ` · ${t('状态未知')} ${unknown.length}` : ''}）
         </p>
         {detail.holders.length === 0 ? (
           <p className="text-body-s text-ink-400">{t('当前没有公开披露的机构空头')}</p>
@@ -152,7 +163,8 @@ function Metric({ label, value, hint }: { label: string; value: string; hint?: s
 }
 
 function HolderRow({ holder }: { holder: ShortMonitorHolder }) {
-  const known = holder.exact_position_known;
+  // その仓位日時点で正確、の意味。今日の建玉が分かるという意味ではない。
+  const known = holder.exact_at_position_date;
   return (
     <li className="py-1.5 text-body-s">
       <div className="flex items-baseline gap-2">
@@ -163,7 +175,13 @@ function HolderRow({ holder }: { holder: ShortMonitorHolder }) {
         <span
           className={`shrink-0 whitespace-nowrap text-micro ${known ? 'text-ink-400' : 'text-up-600'}`}
         >
-          {known ? t('报告义务中') : holder.stale_reporting ? t('报告已停止') : t('跌破门槛')}
+          {known
+            ? t('报告义务中')
+            : holder.stale_reporting
+              ? t('报告已停止')
+              : holder.visibility_status === 'unknown'
+                ? t('状态未知')
+                : t('跌破门槛')}
         </span>
         <span className="shrink-0 whitespace-nowrap font-mono text-micro tnum text-ink-400">
           {fmtDateShort(holder.last_position_date)}

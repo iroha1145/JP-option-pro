@@ -33,6 +33,15 @@ VALIDATION: dict[str, Any] = {
         "反而略好于基准 —— 看多与看空两个状态的排序是反的。"
         "分数目前只能作为描述性分类，不能作为预期超额收益的排序。"
     ),
+    # 首轮验证自身的已知缺陷（第十三轮审阅确认，已在 evt-v3 修正数据语义）：
+    # 入场用了公开日当日收盘（JPX 当日 16:00 截止公布，当日收盘不可得）、
+    # 变化量来自可视合计差（跌破门槛被放大成清仓）、行业中位取自回放子集。
+    # 修正后的重跑未完成前，上面的数字只能读作「未通过」，不能读作精确幅度。
+    "caveats": [
+        "entry_used_same_day_close",
+        "deltas_from_visible_total_diff",
+        "sector_median_from_replay_subset",
+    ],
     "document": "docs/round-12-delivery.md#12",
 }
 

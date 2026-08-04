@@ -7,19 +7,32 @@
 物理的に 1 か所に限る。
 
 優先度の調整も **有界**。最大でも ±`MAX_PRIORITY_SHIFT` 点しか動かない。
+
+そして **検証を通るまで調整は 0**。走步検証の初回結論は否定 —— 全状態が
+全保有期間で TOPIX を下回り、しかも設計上の強気（absorption）と弱気
+（divergence_failed）の実測順位が逆だった。方向が逆だと自分のデータで
+分かっているモデルに本番の並び順を動かさせるわけにはいかない。仮の
+調整量は `hypothetical_priority_shift` として表示だけする。
 """
 
 from __future__ import annotations
 
 from typing import Any, Iterable, Mapping, Sequence
 
+from .scoring import SCORE_VALIDATED
 from .states import (
     FLAG_CROWDED_MARGIN,
+    GATES_VALIDATED,
     STATE_ABSORPTION,
     STATE_COVERING_START,
     STATE_DIVERGENCE_FAILED,
     STATE_SQUEEZE_CONFIRMED,
 )
+
+#: 優先度連動の総合スイッチ。**両方の検証を通るまで False。**
+#: これが False の間、`priority_shift()` は常に 0 を返し、レーダーの並び順は
+#: 技術系スコアのまま —— 空売り行動は表示・絞り込み・影子分に限られる。
+PRIORITY_LINK_ENABLED = bool(SCORE_VALIDATED and GATES_VALIDATED)
 
 #: 優先度をずらせる最大幅（100 点満点に対して）。
 MAX_PRIORITY_SHIFT = 8.0
@@ -45,8 +58,8 @@ def _num(value: Any) -> float | None:
     return number if number == number else None
 
 
-def priority_shift(snapshot: Mapping[str, Any] | None) -> float:
-    """空売り行動から来る優先度の調整量（有界）。"""
+def hypothetical_priority_shift(snapshot: Mapping[str, Any] | None) -> float:
+    """もし連動が有効だったら適用される調整量（有界・表示専用）。"""
 
     if not snapshot:
         return 0.0
@@ -57,6 +70,14 @@ def priority_shift(snapshot: Mapping[str, Any] | None) -> float:
     if FLAG_CROWDED_MARGIN in flags:
         shift += CROWDED_MARGIN_SHIFT * confidence
     return max(-MAX_PRIORITY_SHIFT, min(MAX_PRIORITY_SHIFT, round(shift, 2)))
+
+
+def priority_shift(snapshot: Mapping[str, Any] | None) -> float:
+    """実際に適用する調整量。**検証を通るまで常に 0。**"""
+
+    if not PRIORITY_LINK_ENABLED:
+        return 0.0
+    return hypothetical_priority_shift(snapshot)
 
 
 def overlay(
@@ -83,6 +104,10 @@ def overlay(
                 "state": snapshot.get("primary_state"),
                 # 影子分。正式な技術品質には一切入っていない。
                 "shadow_score": snapshot.get("behavior_score"),
+                # 連動が有効なら適用されたはずの量（表示専用）と、実際に
+                # 適用された量。検証を通るまで後者は 0。
+                "hypothetical_priority_shift": hypothetical_priority_shift(snapshot),
+                "priority_link_enabled": PRIORITY_LINK_ENABLED,
                 "flags": snapshot.get("flags") or [],
                 "data_confidence": snapshot.get("data_confidence"),
                 "visible_short_ratio": snapshot.get("visible_short_ratio"),
@@ -134,7 +159,9 @@ def matches(
 __all__ = [
     "CROWDED_MARGIN_SHIFT",
     "MAX_PRIORITY_SHIFT",
+    "PRIORITY_LINK_ENABLED",
     "STATE_SHIFT",
+    "hypothetical_priority_shift",
     "matches",
     "overlay",
     "priority_shift",

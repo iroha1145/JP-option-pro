@@ -272,3 +272,99 @@ def test_state_counts_and_coverage(tmp_path):
     coverage = core.short_behavior_coverage(AS_OF)
     assert sum(counts.values()) == coverage["covered"] == len(CODES)
     assert coverage["with_visible_short"] == 0
+
+
+# -- 第十三轮監査対応の追加テスト ------------------------------------------------
+
+def test_raw_rows_with_different_funds_do_not_overwrite(tmp_path):
+    """同一機関が同じ日に複数のファンド名義で報告 —— 旧 PK では静かに片方が
+    消えていた（監査 高-2）。"""
+
+    core = _core(tmp_path)
+    _seed_prices(core, ["10000"])
+    row_a = _report("10000", "MegaFund", DAYS[-5], 0.0060, shares=600_000)
+    row_a["investment_fund_name"] = "Fund Alpha"
+    row_b = _report("10000", "MegaFund", DAYS[-5], 0.0070, shares=700_000)
+    row_b["investment_fund_name"] = "Fund Beta"
+    _seed_reports(core, [row_a, row_b])
+
+    with core.read() as connection:
+        count = connection.execute("SELECT COUNT(*) FROM short_positions").fetchone()[0]
+    assert count == 2, "ファンド違いの並行報告が主キーで潰れている"
+
+    pipeline.rebuild_events(core)
+    with core.read() as connection:
+        events = connection.execute(
+            "SELECT COUNT(*) FROM short_position_events"
+        ).fetchone()[0]
+        state = connection.execute(
+            "SELECT last_reported_ratio, chain_count FROM short_position_last_known"
+        ).fetchone()
+    assert events == 2
+    assert state["chain_count"] == 2
+    assert state["last_reported_ratio"] == pytest.approx(0.0130)
+
+
+def test_rebuild_sweeps_rows_that_are_no_longer_derived(tmp_path):
+    """全量再構築は UPSERT + **掃除**。原始行が消えたのに導出行が残ると、
+    存在しない報告が画面に出続ける（監査 高-3）。"""
+
+    core = _core(tmp_path)
+    _seed_prices(core, ["10000"])
+    _seed_reports(core, [_report("10000", "Ghost Fund", DAYS[-5], 0.0080, shares=800_000)])
+    pipeline.rebuild_events(core)
+    with core.read() as connection:
+        before = connection.execute("SELECT COUNT(*) FROM short_position_events").fetchone()[0]
+    assert before == 1
+
+    # 原始行を削除（訂正で置き換えられた・取り込みミスの巻き戻し等を模す）
+    with core.write() as connection:
+        connection.execute("DELETE FROM short_positions")
+    pipeline.rebuild_events(core)
+    with core.read() as connection:
+        events = connection.execute("SELECT COUNT(*) FROM short_position_events").fetchone()[0]
+        known = connection.execute("SELECT COUNT(*) FROM short_position_last_known").fetchone()[0]
+    assert events == 0, "導出元が消えたのにイベントが幽霊として残っている"
+    assert known == 0
+
+
+def test_curated_aliases_survive_the_sweep(tmp_path):
+    core = _core(tmp_path)
+    _seed_prices(core, ["10000"])
+    with core.write() as connection:
+        connection.execute(
+            "INSERT INTO institution_aliases (raw_name, legal_id, match_kind, confidence, updated_at) "
+            "VALUES ('手動エイリアス', 'manual-entity', 'curated', 1.0, '2026-01-01T00:00:00Z')"
+        )
+    _seed_reports(core, [_report("10000", "SomeFund", DAYS[-5], 0.0080, shares=800_000)])
+    pipeline.rebuild_events(core)
+    with core.read() as connection:
+        curated = connection.execute(
+            "SELECT COUNT(*) FROM institution_aliases WHERE match_kind = 'curated'"
+        ).fetchone()[0]
+    assert curated == 1, "人手の別名表を掃除で消している"
+
+
+def test_snapshot_publication_is_atomic_and_changes_the_run_token(tmp_path):
+    """同じ日を作り直したら run が変わる（ETag が 304 に化けない）。
+    run 行と断面行は 1 トランザクションなので、半端な断面が「最新」に
+    見えることはない（監査 P0-6）。"""
+
+    core = _core(tmp_path)
+    _seed_prices(core, CODES)
+    _seed_reports(core, [
+        _report("10000", "Alpha", DAYS[-10], 0.0123, shares=500_000),
+    ])
+    pipeline.rebuild_events(core)
+    first = pipeline.refresh_snapshots(core, as_of_date=AS_OF)
+    assert first.snapshots > 0
+    run_1 = core.latest_short_monitor_run(AS_OF)
+    assert run_1 and run_1["status"] == "ready"
+    assert run_1["row_count"] == first.snapshots
+
+    second = pipeline.refresh_snapshots(core, as_of_date=AS_OF)
+    run_2 = core.latest_short_monitor_run(AS_OF)
+    assert second.snapshots == first.snapshots
+    assert run_2["run_id"] != run_1["run_id"], (
+        "同じ日の再計算で run が変わらない —— ETag が古い断面を 304 で返し続ける"
+    )

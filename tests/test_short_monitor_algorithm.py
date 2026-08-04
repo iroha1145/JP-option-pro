@@ -246,6 +246,34 @@ def test_squeeze_requires_every_condition_at_once():
     assert states.classify(_evidence(**thin))["primary_state"] != states.STATE_SQUEEZE_CONFIRMED
 
 
+def test_squeeze_needs_both_windows_decreasing_not_either():
+    """交付文書は最初から「5 日と 20 日の両方」。コードが min() で片側を
+    通していた（監査指摘）。片側だけの減少は 1 本の窓のノイズかもしれない。"""
+
+    one_sided = dict(
+        pressure_adv20_20d=-0.40, pressure_adv20_5d=+0.05, covering_score=80.0,
+        visible_days_to_cover=2.5, breakout_confirmed=True, turnover_confirmed=True,
+        rel_topix_20d=0.06, rel_sector_20d=0.05,
+    )
+    result = states.classify(_evidence(**one_sided))
+    assert result["primary_state"] != states.STATE_SQUEEZE_CONFIRMED
+    # 片側減少でも回補開始には落ちてよい（そちらは either で設計どおり）
+    assert result["primary_state"] == states.STATE_COVERING_START
+
+
+def test_squeeze_needs_both_relative_series_present():
+    """「市場対比・業種対比の双方で転強」は、片方のデータが無いままでは言えない。"""
+
+    missing_sector = dict(
+        pressure_adv20_20d=-0.40, pressure_adv20_5d=-0.30, covering_score=80.0,
+        visible_days_to_cover=2.5, breakout_confirmed=True, turnover_confirmed=True,
+        rel_topix_20d=0.06, rel_sector_20d=None,
+    )
+    assert states.classify(_evidence(**missing_sector))["primary_state"] != (
+        states.STATE_SQUEEZE_CONFIRMED
+    )
+
+
 def test_shorting_into_a_breakdown_is_divergence_failed():
     result = states.classify(_evidence(
         pressure_adv20_20d=0.30, pressure_adv20_5d=0.25,
