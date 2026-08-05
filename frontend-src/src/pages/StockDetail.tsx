@@ -887,7 +887,7 @@ function MarginPanel({ rows }: { rows: MarginInterestRow[] }) {
         <MiniStat label={t('信用倍率')} value={ratio !== null ? `${ratio.toFixed(2)}x` : '—'} />
       </dl>
       <p className="text-right text-micro text-ink-400">
-        {t('数据截至')} {fmtDate(latest.application_date)}（週次）
+        {t('数据截至')} {fmtDate(latest.application_date)}（{t('週次')}）
       </p>
     </div>
   );

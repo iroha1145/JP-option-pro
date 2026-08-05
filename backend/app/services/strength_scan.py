@@ -21,10 +21,18 @@ import math
 from bisect import bisect_left, bisect_right
 from typing import Any, Mapping
 
+from .display_text import line as _line, rendered as _rendered
+
 STRENGTH_SCORE_VERSION = "jp-strength-v1"
 
 TIMEFRAMES = ("short", "mid", "long", "all")
 PROFILES = ("conservative", "balanced", "aggressive")
+
+#: 市場レジームのラベル（順風 / 中立 / 逆風）。**画面に出る文字列**なので、
+#: 関数の中に埋めずここに置く —— `tests/test_backend_text_is_translatable.py`
+#: がこれを読んで、辞書に ja/en があるかを確かめる。
+REGIME_LABELS = ("順風", "中立", "逆風")
+REGIME_SPREAD_LABEL = "グロース対プライム 20日中央値差"
 
 #: 分類ラベル（米国版 _classify と同じ閾値、RS だけ TOPIX 比）。
 PROFILE_TILT = {
@@ -395,7 +403,7 @@ def compute_market_regime_jp(
     if len(growth) >= 30 and len(prime) >= 30:
         spread = growth[len(growth) // 2] - prime[len(prime) // 2]
         risk_on_spread = round(max(0.0, min(100.0, 50.0 + spread * 600.0)), 1)
-        spread_label = "グロース対プライム 20日中央値差"
+        spread_label = REGIME_SPREAD_LABEL
 
     dims = {
         "index_trend": index_trend,
@@ -416,7 +424,8 @@ def compute_market_regime_jp(
         warnings.append("200日線超の銘柄が3割未満（ブレッドス弱い）")
     label = None
     if score is not None:
-        label = "順風" if score >= 64 else ("中立" if score >= 45 else "逆風")
+        tail, neutral, head = REGIME_LABELS
+        label = tail if score >= 64 else (neutral if score >= 45 else head)
     return {
         "score": round(score, 1) if score is not None else None,
         "label": label,
@@ -560,11 +569,13 @@ def score_ranking(
     )
 
 
-def risk_penalty(row: Mapping[str, Any], profile: str) -> tuple[float, list[str], list[str]]:
+def risk_penalty(row: Mapping[str, Any], profile: str) -> tuple[float, list[str], list[dict[str, Any]]]:
+    """減点・フラグ・警告。警告は `_line()` 形式（テンプレート + パラメータ）。"""
+
     tilt = PROFILE_TILT.get(profile, PROFILE_TILT["balanced"])
     penalty = 0.0
     flags: list[str] = []
-    warnings: list[str] = []
+    warnings: list[dict[str, Any]] = []
     # ボラティリティと押しの深さは **好みの軸** なので profile_fit 側だけで
     # 扱う（进取は高ボラを加点、稳健は減点）。ここで再度減点すると、同じ ATR を
     # 一方で褒めて他方で罰することになり、3 モードの差が打ち消し合う。
@@ -572,7 +583,7 @@ def risk_penalty(row: Mapping[str, Any], profile: str) -> tuple[float, list[str]
     atr_pct = _finite(row.get("atr_pct"))
     if atr_pct is not None and atr_pct > 7:
         flags.append("高波动")
-        warnings.append(f"ATR约{atr_pct:.1f}%，波动风险高")
+        warnings.append(_line("ATR约{atr}%，波动风险高", atr=f"{atr_pct:.1f}"))
     elif atr_pct is not None and atr_pct > 5:
         flags.append("波动偏高")
     details = row.get("details") or {}
@@ -580,7 +591,7 @@ def risk_penalty(row: Mapping[str, Any], profile: str) -> tuple[float, list[str]
     if gap200 is not None and float(gap200) <= 0:
         penalty += 8
         flags.append("低于200日线")
-        warnings.append("长期趋势仍未修复")
+        warnings.append(_line("长期趋势仍未修复"))
     avg_turnover = _finite(row.get("avg_turnover_20d"))
     if avg_turnover is not None and avg_turnover < _LIQUIDITY_BASE_JPY * 1.4:
         penalty += 4
@@ -591,7 +602,7 @@ def risk_penalty(row: Mapping[str, Any], profile: str) -> tuple[float, list[str]
     if drawdown is not None and drawdown < -40:
         penalty += 10
         flags.append("深度回撤")
-        warnings.append(f"63日最大回撤约{drawdown:.0f}%，趋势结构已受损")
+        warnings.append(_line("63日最大回撤约{dd}%，趋势结构已受损", dd=f"{drawdown:.0f}"))
     elif drawdown is not None and drawdown < -22:
         flags.append("回撤较深")
     # 信用規制は独立したリスク次元（doc §三-3）。無条件否定はしないが、
@@ -603,15 +614,17 @@ def risk_penalty(row: Mapping[str, Any], profile: str) -> tuple[float, list[str]
         flags.append("信用规制")
         level = str(row.get("regulation_level") or "")
         warnings.append(
-            {
-                "precaution": "日证金注意喚起銘柄",
-                "daily_publication": "东证日々公表銘柄",
-                "restricted": "信用取引规制中（增担保/申込停止）",
-                "severe": "监理・整理・不明确信息",
-            }.get(level, "信用规制あり")
+            _line(
+                {
+                    "precaution": "日证金注意喚起銘柄",
+                    "daily_publication": "东证日々公表銘柄",
+                    "restricted": "信用取引规制中（增担保/申込停止）",
+                    "severe": "监理・整理・不明确信息",
+                }.get(level, "信用规制あり")
+            )
         )
     elif severity is not None and severity < 0:
-        warnings.append("信用规制状态未知（数据未更新）")
+        warnings.append(_line("信用规制状态未知（数据未更新）"))
 
     vol_price = details.get("vol_price") or {}
     vol_adjustment = _finite(vol_price.get("risk_penalty_adjustment")) or 0.0
@@ -620,10 +633,10 @@ def risk_penalty(row: Mapping[str, Any], profile: str) -> tuple[float, list[str]
     setup_type = str(vol_price.get("setup_type") or "")
     if setup_type == "vacuum":
         flags.append("真空型")
-        warnings.append("真空型收缩，假突破风险偏高")
+        warnings.append(_line("真空型收缩，假突破风险偏高"))
     elif setup_type == "absorption_bearish":
         flags.append("空头吸收")
-        warnings.append("空头吸收结构，向上突破需要更强确认")
+        warnings.append(_line("空头吸收结构，向上突破需要更强确认"))
     elif setup_type == "absorption_bullish":
         flags.append("多头吸收")
     return round(penalty * tilt["risk"], 1), flags, warnings
@@ -889,9 +902,14 @@ def build_view_rows(
             # 分層・分類も最終スコア基準に統一（同じ数字で語る）。
             classification=classify(row, final_ranking_score, penalty),
         )
-        merged["tags"], merged["reasons"], merged["warnings"] = _annotate(
-            merged, flags, warnings, market_fit
-        )
+        tags, reason_items, warning_items = _annotate(merged, flags, warnings, market_fit)
+        merged["tags"] = tags
+        # 既存の形（中文で置換済み）と、翻訳用のテンプレート形を両方出す。
+        # 片方だけにすると、フロントとバックのどちらかが古い間だけ画面が空になる。
+        merged["reasons"] = _rendered(reason_items)
+        merged["reason_items"] = reason_items
+        merged["warnings"] = _rendered(warning_items)
+        merged["warning_items"] = warning_items
         view.append(merged)
     return view
 
@@ -899,59 +917,67 @@ def build_view_rows(
 def _annotate(
     row: Mapping[str, Any],
     risk_flags: list[str],
-    warnings_in: list[str],
+    warnings_in: list[dict[str, Any]],
     market_fit: Mapping[str, Any],
-) -> tuple[list[str], list[str], list[str]]:
+) -> tuple[list[str], list[dict[str, Any]], list[dict[str, Any]]]:
+    """タグ・根拠・警告。根拠と警告は `_line()` 形式で返す。"""
+
     tags: list[str] = []
-    reasons: list[str] = []
+    reasons: list[dict[str, Any]] = []
     warnings = list(warnings_in)
     details = row.get("details") or {}
     rs = _finite(row.get("rs_topix_63d"))
     if rs is not None and rs > 0:
         tags.append("相对TOPIX强")
-        reasons.append("近3个月跑赢TOPIX")
+        reasons.append(_line("近3个月跑赢TOPIX"))
     ath = _finite(row.get("ath_proximity"))
     if ath is not None and ath >= 90:
         tags.append("接近52周高位")
-        reasons.append("价格接近一年高点区域")
+        reasons.append(_line("价格接近一年高点区域"))
     ratio = _finite(row.get("turnover_ratio"))
     if ratio is not None and ratio >= 1.5:
         tags.append("放量")
-        reasons.append(f"成交额约为20日均额{ratio:.1f}倍")
+        reasons.append(_line("成交额约为20日均额{ratio}倍", ratio=f"{ratio:.1f}"))
     vol_price = details.get("vol_price") or {}
     for tag in (vol_price.get("tags") or [])[:2]:
         tags.append(str(tag))
     price_action = details.get("price_action") or {}
     if price_action.get("structure") == "uptrend":
-        reasons.append("HH/HL 上升结构完好")
+        reasons.append(_line("HH/HL 上升结构完好"))
     elif price_action.get("spring"):
-        reasons.append("Spring 假跌破后回收，结构偏多")
+        reasons.append(_line("Spring 假跌破后回收，结构偏多"))
     elif price_action.get("structure") == "downtrend":
-        warnings.append("LH/LL 下降结构未破坏")
+        warnings.append(_line("LH/LL 下降结构未破坏"))
     if price_action.get("upthrust"):
-        warnings.append("前高假突破（Upthrust），追高需谨慎")
+        warnings.append(_line("前高假突破（Upthrust），追高需谨慎"))
     ma_alignment = _finite(row.get("ma_alignment_pct"))
     if ma_alignment is not None and ma_alignment >= 66:
         tags.append("均线多头")
-        reasons.append("价格位于关键均线上方")
+        reasons.append(_line("价格位于关键均线上方"))
     market_score = _finite(market_fit.get("score"))
     if market_score is not None and market_score >= 64:
         tags.append("市场顺风")
     elif market_score is not None and market_score < 40:
         tags.append("弱市降权")
     elif market_score is None:
-        warnings.append("市场行情不足，市场维度暂不计入评分")
+        warnings.append(_line("市场行情不足，市场维度暂不计入评分"))
     tags.extend(risk_flags[:2])
     if not reasons:
         reasons.append(
-            "可用价格证据已完成评分"
-            if row.get("intrinsic_score") is not None
-            else "价格证据不足，暂不生成强势结论"
+            _line(
+                "可用价格证据已完成评分"
+                if row.get("intrinsic_score") is not None
+                else "价格证据不足，暂不生成强势结论"
+            )
         )
     seen: dict[str, None] = {}
     for tag in tags:
         seen.setdefault(tag, None)
-    return list(seen)[:6], reasons[:4], list(dict.fromkeys(warnings))[:5]
+    # dict は unhashable なので、重複除去は「置換後の文」を鍵にする。
+    unique_warnings: dict[str, dict[str, Any]] = {}
+    for warning, text in zip(warnings, _rendered(warnings)):
+        unique_warnings.setdefault(text, warning)
+    return list(seen)[:6], reasons[:4], list(unique_warnings.values())[:5]
 
 
 def sort_view_rows(rows: list[dict[str, Any]], timeframe: str) -> None:

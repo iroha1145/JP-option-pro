@@ -303,7 +303,7 @@ export default function Earnings() {
           {q.data?.coverage_note && (
             <div className="card-surface p-5">
               <p className="eyebrow">{t('覆盖口径')}</p>
-              <p className="mt-2.5 text-caption leading-[19px] text-ink-500">{q.data.coverage_note}</p>
+              <p className="mt-2.5 text-caption leading-[19px] text-ink-500">{t(q.data.coverage_note)}</p>
               <SourceNote className="mt-3" text={t('目安以公司正式公告为准，可能前后变动')} />
             </div>
           )}

@@ -1,5 +1,22 @@
 /** 后端契约类型（与 FastAPI 路由一一对应；缺失字段一律 null，UI 渲染 '—'）。 */
 
+/**
+ * 後端が組み立てた表示文の 1 行。**テンプレート + パラメータ**。
+ *
+ * サーバは相手の言語を知らない（応答は ETag で共有される）ので、完成した文
+ * ではなくテンプレートを返す。描画は `lib/explainText` の `explanationLine`。
+ * 後端側の約束は `backend/app/services/display_text.py`。
+ */
+export interface ExplanationItem {
+  template: string;
+  params?: Record<string, string | number>;
+  /** 列挙（「3家减仓、1家跌破门槛」）の結合前の項目。区切りは言語で違う。 */
+  parts?: ExplanationItem[];
+  /** parts が埋めるパラメータ名（既定 `moves`）と区切り（既定 `、`）。 */
+  parts_key?: string;
+  parts_sep?: string;
+}
+
 export interface IndexSummary {
   index_code: string;
   name: string;
@@ -733,8 +750,12 @@ export interface StrengthRow {
   risk_penalty: number | null;
   classification: string | null;
   tags: string[];
+  /** 中文で置換済み（後端が古い場合の唯一の情報源） */
   reasons: string[];
   warnings: string[];
+  /** 訳せる形（テンプレート + パラメータ）。あればこちらを使う。 */
+  reason_items?: ExplanationItem[];
+  warning_items?: ExplanationItem[];
   selected_view_rank: number | null;
   families: Record<string, number | null>;
   effective_weights: Record<string, number>;
@@ -813,6 +834,8 @@ export interface NewsItem {
   securities: { canonical_code: string; display_code: string; name_ja: string | null }[];
   importance: number | null;
   importance_reasons?: string[];
+  /** 訳せる形。古い記事（保存済み JSON）には無いので importance_reasons に落ちる。 */
+  importance_reason_items?: ExplanationItem[];
   market_relevance?: string | null;
 }
 
@@ -1086,12 +1109,7 @@ export interface ShortMonitorExplanation {
   /** 中文で置換済みの文（API 単体で読める）。UI は line_items を優先する。 */
   lines: string[];
   /** テンプレート + パラメータ。lib/explainText の explanationLine で描画する。 */
-  line_items?: {
-    template: string;
-    params: Record<string, string | number>;
-    /** 列挙（「3家减仓、1家跌破门槛」）の結合前の項目。区切りは言語で違う。 */
-    parts?: { template: string; params: Record<string, string | number> }[];
-  }[];
+  line_items?: ExplanationItem[];
   caveat: string | null;
 }
 

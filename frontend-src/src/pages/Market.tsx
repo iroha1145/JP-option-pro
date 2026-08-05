@@ -251,7 +251,7 @@ export default function Market() {
           <section className="card-surface rounded-lg p-4">
             <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
-                <p className="eyebrow">SECTOR MATRIX · 33 業種</p>
+                <p className="eyebrow">{t('SECTOR MATRIX · 33 業種')}</p>
                 <h2 className="mt-0.5 text-h3 text-ink-900">{t('板块透视')}</h2>
                 <p className="mt-0.5 text-micro text-ink-400">
                   {tileSource === 'intraday' && liveByCode.size

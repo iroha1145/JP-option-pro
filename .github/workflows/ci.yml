@@ -58,7 +58,13 @@ jobs:
       # 辞書の重複キー。既存エントリはクオート無しで書かれているので
       # grep では見つからず、静かに片方が消える。
       - name: i18n dictionary duplicate gate
-        run: node frontend-src/tests/dict_no_duplicates.mjs
+        run: node --experimental-strip-types frontend-src/tests/dict_no_duplicates.mjs
+
+      # 後端が組み立てた文（テンプレート + パラメータ）を 3 言語で描画できるか。
+      # 辞書に載っていても引き方を間違えれば画面には出ない ——「載っているか」の
+      # 門（pytest 側）とは別に見る。
+      - name: i18n backend-text rendering gate
+        run: node --experimental-strip-types frontend-src/tests/explain_text.mjs
 
       # コミット済み frontend/ はビルド成果物と完全一致していること（バイトゲート）
       - name: Frontend artifact byte gate

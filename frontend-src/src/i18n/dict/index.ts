@@ -895,6 +895,165 @@ export const DICT: Record<string, [string, string]> = {
     '市場データが不足しているため、市場次元はスコアに算入していません',
   ],
 
+  /* ---- i18n 監査 5: 後端が返す表示文で辞書に無かったもの ------------------
+   *
+   * 網羅性の監査（2026-08-04）で見つかった穴。**中文の msgid はこの回では
+   * 直さない** —— 「中文画面に日本語が漏れている」問題（`目安` `確定` `株`
+   * `実績` など）は別件として据え置き、ここでは **ja/en が出ないもの** だけを
+   * 埋める。したがって下には日本語を msgid にした行が混ざる（後端の定数が
+   * 日本語のまま、という現状をそのまま鍵にしている）。中文化するときは
+   * 後端の定数と鍵を **同時に** 変えること。
+   *
+   * 数値が混ざる文はテンプレートのまま登録する（"ATR约{atr}%…"）。完成形を
+   * 鍵にすると数字が変わるたびに引けなくなる。後端側は
+   * `backend/app/services/display_text.py` を参照。
+   */
+
+  /* 後端 strength_scan: 信用規制まわりの警告 */
+  日证金注意喚起銘柄: ['Flagged for caution by JSF', '日証金の注意喚起銘柄'],
+  东证日々公表銘柄: ['TSE daily-publication issue', '東証の日々公表銘柄'],
+  '信用取引规制中（增担保/申込停止）': [
+    'Margin trading restricted (extra collateral / new positions halted)',
+    '信用取引が規制中（増担保・申込停止）',
+  ],
+  '监理・整理・不明确信息': [
+    'Under supervision / to be delisted / unclear disclosure',
+    '監理・整理銘柄、または不明確な情報',
+  ],
+  信用规制あり: ['Margin restrictions in place', '信用規制あり'],
+  '信用规制状态未知（数据未更新）': [
+    'Margin-restriction status unknown (data not refreshed)',
+    '信用規制の状態が不明（データ未更新）',
+  ],
+  深度回撤: ['Deep drawdown', '大幅なドローダウン'],
+
+  /* 後端 strength_scan: 数値を含む警告・根拠（テンプレート） */
+  'ATR约{atr}%，波动风险高': [
+    'ATR around {atr}% — high volatility risk',
+    'ATR は約{atr}%。変動リスクが高いです',
+  ],
+  '63日最大回撤约{dd}%，趋势结构已受损': [
+    '63-day max drawdown around {dd}% — the trend structure is damaged',
+    '63日の最大ドローダウンが約{dd}%。トレンド構造が損なわれています',
+  ],
+  '成交额约为20日均额{ratio}倍': [
+    'Turnover about {ratio}× the 20-day average',
+    '売買代金が20日平均の約{ratio}倍',
+  ],
+
+  /* 後端 strength_scan: 評価根拠（`评分依据`） */
+  '近3个月跑赢TOPIX': ['Outperformed TOPIX over the last 3 months', '直近3ヶ月で TOPIX を上回る'],
+  价格接近一年高点区域: ['Price near the 52-week high zone', '株価が52週高値圏に接近'],
+  'HH/HL 上升结构完好': ['HH/HL uptrend structure intact', 'HH/HL の上昇構造が維持されている'],
+  'Spring 假跌破后回收，结构偏多': [
+    'Recovered after a Spring false breakdown — structurally bullish',
+    'Spring（ダマシの下抜け）後に回復。構造は強気寄り',
+  ],
+  价格位于关键均线上方: ['Price above the key moving averages', '主要な移動平均線の上に位置'],
+  可用价格证据已完成评分: [
+    'Scored on the available price evidence',
+    '利用できる価格の証拠で採点済み',
+  ],
+  '价格证据不足，暂不生成强势结论': [
+    'Not enough price evidence for a strength call',
+    '価格の証拠が不足。強さの結論は出しません',
+  ],
+
+  /* 後端 strength_scan: 市場レジーム（`label` / `spread_label` / 警告）
+     —— 後端の定数が日本語なので、鍵も日本語のまま。 */
+  順風: ['Tailwind', '順風'],
+  中立: ['Neutral', '中立'],
+  逆風: ['Headwind', '逆風'],
+  'グロース対プライム 20日中央値差': [
+    'Growth vs Prime · 20-day median spread',
+    'グロース対プライム 20日中央値差',
+  ],
+  'TOPIX が200日線を下回っている': [
+    'TOPIX is below its 200-day line',
+    'TOPIX が200日線を下回っている',
+  ],
+  '200日線超の銘柄が3割未満（ブレッドス弱い）': [
+    'Fewer than 30% of issues are above the 200-day line (weak breadth)',
+    '200日線超の銘柄が3割未満（ブレッドス弱い）',
+  ],
+
+  /* 後端 vol_price_match: 境界状態（フロントは t() 済み・辞書だけ欠けていた） */
+  量价样本不足: ['Not enough volume/price samples', '量価のサンプルが不足'],
+  量价基准异常: ['Volume/price baseline invalid', '量価のベースラインが異常'],
+  假突破风险高: ['High false-breakout risk', 'ダマシのリスクが高い'],
+
+  /* 後端 news/classify: イベント分類（日本語 taxonomy がそのまま画面に出る）。
+     **鍵は API の絞り込み値そのもの** —— 訳した文字列を送っても何も引けない。 */
+  決算: ['Earnings', '決算'],
+  業績予想修正: ['Guidance revision', '業績予想修正'],
+  'M&A・TOB': ['M&A / Tender offer', 'M&A・TOB'],
+  自社株買い: ['Buyback', '自社株買い'],
+  配当: ['Dividend', '配当'],
+  '増資・資金調達': ['Equity raise / Financing', '増資・資金調達'],
+  大口受注: ['Large order', '大口受注'],
+  株式分割: ['Stock split', '株式分割'],
+  '事故・訴訟': ['Incident / Litigation', '事故・訴訟'],
+  '規制・政策': ['Regulation / Policy', '規制・政策'],
+  '日銀・金利': ['BOJ / Rates', '日銀・金利'],
+  人事: ['Management change', '人事'],
+  '製品・技術': ['Product / Technology', '製品・技術'],
+  供給網: ['Supply chain', '供給網'],
+  ガバナンス: ['Governance', 'ガバナンス'],
+  為替: ['FX', '為替'],
+  業界景況: ['Industry conditions', '業界景況'],
+  '信用・空売り': ['Margin / Short selling', '信用・空売り'],
+  その他: ['Other', 'その他'],
+
+  /* 経済カレンダーの分類（`domain/econ_calendar.py`） */
+  金融政策: ['Monetary policy', '金融政策'],
+  物価: ['Prices', '物価'],
+  景気: ['Business conditions', '景気'],
+  '統計(金融)': ['Financial statistics', '統計(金融)'],
+
+  /* 後端 news/classify: 重要度の根拠 */
+  '事件类别: {categories}': ['Event type: {categories}', 'イベント種別: {categories}'],
+  关联上市公司: ['Linked to listed companies', '関連する上場企業がある'],
+  发布时间较近: ['Published recently', '公開が最近'],
+  发布已有一段时间: ['Published a while ago', '公開から時間が経っている'],
+  自选股相关: ['Relates to a watchlist name', 'ウォッチリスト銘柄に関連'],
+  雷达候选相关: ['Relates to a radar candidate', 'レーダー候補に関連'],
+  '可用证据不足，未补成中性分数': [
+    'Not enough evidence — no neutral score was substituted',
+    '証拠が不足。中立値での穴埋めはしていません',
+  ],
+
+  /* 後端 research/replay.py: 点時化の限界（結果に必ず添える 3 文） */
+  'sector33_code/market_code は現在のマスタ断面のみ。過去に業種・市場区分が変わった銘柄は、当時ではなく現在の分類で集計される。':
+    [
+      'sector33_code / market_code reflect only the current master snapshot. Issues whose sector or market segment changed in the past are aggregated under today’s classification, not the one in force at the time.',
+      'sector33_code/market_code は現在のマスタ断面のみ。過去に業種・市場区分が変わった銘柄は、当時ではなく現在の分類で集計される。',
+    ],
+  '信用規制・空売り比率は履歴を保持しているが、訂正（同一申込日の再公表）は最新版で上書きされるため、当時見えていた初報とは一致しない場合がある。':
+    [
+      'Margin restrictions and short-sale ratios are kept as history, but a correction (a re-publication for the same application date) overwrites the earlier version, so the figures may not match the first report visible at the time.',
+      '信用規制・空売り比率は履歴を保持しているが、訂正（同一申込日の再公表）は最新版で上書きされるため、当時見えていた初報とは一致しない場合がある。',
+    ],
+  '財務データは開示日ベースで持つが、後日の訂正報告は反映済みの値で残る。': [
+    'Financial data is held on a disclosure-date basis, but later corrective filings remain as already-applied values.',
+    '財務データは開示日ベースで持つが、後日の訂正報告は反映済みの値で残る。',
+  ],
+
+  /* 後端 earnings_service: 決算カレンダーの「覆盖口径」 */
+  '確定日はJ-Quants発表予定（翌営業日分のみ・3月期/9月期）。それ以外の日付は前年同期の開示日から導出した目安で、会社都合で前後する。':
+    [
+      'Confirmed dates come from the J-Quants announcement schedule (next business day only, March/September year-ends). Every other date is an estimate derived from the same quarter’s disclosure date a year earlier, and can shift at the company’s discretion.',
+      '確定日はJ-Quants発表予定（翌営業日分のみ・3月期/9月期）。それ以外の日付は前年同期の開示日から導出した目安で、会社都合で前後する。',
+    ],
+
+  /* t() を通っていなかったベタ書き */
+  週次: ['weekly', '週次'],
+  'SECTOR MATRIX · 33 業種': ['SECTOR MATRIX · 33 SECTORS', 'SECTOR MATRIX · 33 業種'],
+  '≥ 1億円': ['≥ ¥100M', '≥ 1億円'],
+  '≥ 5億円': ['≥ ¥500M', '≥ 5億円'],
+  '≥ 10億円': ['≥ ¥1B', '≥ 10億円'],
+  '≥ 50億円': ['≥ ¥5B', '≥ 50億円'],
+  '≥ 100億円': ['≥ ¥10B', '≥ 100億円'],
+
   /* ---- i18n 監査 4: 後端のプロファイル説明文 ---- */
   '波动惩罚更重、流动性权重更高': [
     'Heavier volatility penalty, higher liquidity weight',

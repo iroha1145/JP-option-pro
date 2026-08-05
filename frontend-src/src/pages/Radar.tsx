@@ -229,7 +229,7 @@ function LeadBigCard({ event }: { event: RadarEvent }) {
           {structure && (
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               {structure.structure_label && (
-                <Tag tone="brand">{structure.structure_label}</Tag>
+                <Tag tone="brand">{t(structure.structure_label)}</Tag>
               )}
               {structure.setup_label && <Tag tone="ai">{t(structure.setup_label)}</Tag>}
               {(structure.pattern_labels ?? []).map((label) => (

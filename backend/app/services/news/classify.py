@@ -12,6 +12,8 @@ import unicodedata
 from datetime import datetime, timezone
 from typing import Any, Mapping, Sequence
 
+from .. import display_text
+
 CLASSIFIER_VERSION = "jp-news-rules-v1"
 
 # カテゴリ → (日本語キーワード, 英語キーワード)
@@ -141,40 +143,55 @@ def importance_score(
     in_watchlist: bool,
     has_radar_event: bool,
     now: datetime | None = None,
-) -> tuple[float | None, dict[str, Any], list[str]]:
+) -> tuple[float | None, dict[str, Any], list[dict[str, Any]]]:
+    """重要度と、その根拠。根拠は `display_text.line()` 形式で返す。"""
+
     components: dict[str, float] = {}
-    reasons: list[str] = []
+    reasons: list[dict[str, Any]] = []
 
     category_score = max((CATEGORY_WEIGHTS.get(c, 30.0) for c in categories), default=None)
     if category_score is not None:
         components["category"] = category_score
-        reasons.append(f"事件类别: {'/'.join(categories)}")
+        # 分類名は日本語の taxonomy（決算 / 業績予想修正 …）。結合してしまうと
+        # 辞書に載らないので、1 件ずつ渡して繋ぎ方も言語側に任せる。
+        reasons.append(
+            display_text.enumeration(
+                "事件类别: {categories}",
+                [display_text.line(str(name)) for name in categories],
+                key="categories",
+                separator="/",
+            )
+        )
 
     if securities_count > 0:
         components["entity"] = min(100.0, 55.0 + 15.0 * securities_count)
-        reasons.append("关联上市公司")
+        reasons.append(display_text.line("关联上市公司"))
 
     if published_at:
         try:
             published = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
             age_hours = max(0.0, ((now or datetime.now(timezone.utc)) - published).total_seconds() / 3600.0)
             components["recency"] = max(0.0, 100.0 - age_hours * 1.4)
-            reasons.append("发布时间较近" if age_hours < 24 else "发布已有一段时间")
+            reasons.append(
+                display_text.line(
+                    "发布时间较近" if age_hours < 24 else "发布已有一段时间"
+                )
+            )
         except ValueError:
             pass
 
     bonus = 0.0
     if in_watchlist:
         bonus += 10.0
-        reasons.append("自选股相关")
+        reasons.append(display_text.line("自选股相关"))
     if has_radar_event:
         bonus += 8.0
-        reasons.append("雷达候选相关")
+        reasons.append(display_text.line("雷达候选相关"))
 
     weights = {"category": 0.45, "entity": 0.25, "recency": 0.30}
     active = {key: weights[key] for key in components if key in weights}
     if not active:
-        return None, {}, ["可用证据不足，未补成中性分数"]
+        return None, {}, [display_text.line("可用证据不足，未补成中性分数")]
     total_weight = sum(active.values())
     score = sum(components[key] * weight for key, weight in active.items()) / total_weight
     score = min(100.0, score + bonus)

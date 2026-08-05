@@ -15,6 +15,7 @@ import { fmtYenCompact } from '@/lib/format';
 import Icon from '@/components/icons';
 import InfoHint from '@/components/shared/InfoHint';
 import { STRENGTH_HINTS } from '@/lib/indicatorHints';
+import { explanationLines } from '@/lib/explainText';
 import { FAMILY_META } from './types';
 import { t } from '@/i18n/core';
 
@@ -37,6 +38,10 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
   const technicals = row.structure.technicals;
   const priceAction = row.structure.price_action;
   const volPrice = row.structure.vol_price;
+  // 警告と評価根拠は後端が組み立てる。数値混じりの文（「ATR约7.3%…」）は
+  // 完成形だと辞書に当たらないので、テンプレート形の `*_items` を優先する。
+  const warnings = explanationLines(row.warning_items, row.warnings);
+  const reasons = explanationLines(row.reason_items, row.reasons);
   return (
     <div className="grid grid-cols-1 gap-x-8 gap-y-5 border-t border-line bg-card-warm/60 px-4 py-4 md:grid-cols-3">
       {/* ① 六族分项 */}
@@ -76,12 +81,12 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
             {t('缺失维度')}: {row.missing_families.join(' · ')} {t('（按缺失重新配权，不填中性值）')}
           </p>
         )}
-        {row.warnings.length > 0 && (
+        {warnings.length > 0 && (
           <ul className="mt-2.5 space-y-1">
-            {row.warnings.map((warning, index) => (
+            {warnings.map((warning, index) => (
               <li key={index} className="flex items-start gap-1.5 text-micro leading-[16px] text-warn-600">
                 <span className="mt-px shrink-0" aria-hidden="true">⚠</span>
-                {t(warning)}
+                {warning}
               </li>
             ))}
           </ul>
@@ -92,9 +97,15 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
       <div>
         <p className="eyebrow">{t('结构信号 · STRUCTURE')}</p>
         <div className="mt-3 space-y-2 text-caption">
-          <StructLine label={t('价格结构')} value={priceAction.structure_label ?? '—'} />
+          <StructLine
+            label={t('价格结构')}
+            value={priceAction.structure_label ? t(priceAction.structure_label) : '—'}
+          />
           {(priceAction.pattern_labels?.length ?? 0) > 0 && (
-            <StructLine label={t('K线形态')} value={priceAction.pattern_labels!.join('、')} />
+            <StructLine
+              label={t('K线形态')}
+              value={priceAction.pattern_labels!.map((label) => t(label)).join(t('、'))}
+            />
           )}
           {(priceAction.spring || priceAction.upthrust) && (
             <StructLine
@@ -124,11 +135,11 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
             }
           />
         </div>
-        {row.reasons.length > 0 && (
+        {reasons.length > 0 && (
           <div className="mt-3 border-t border-line pt-2.5">
             <p className="mb-1 text-micro text-ink-400">{t('评分依据')}</p>
             <ul className="space-y-0.5">
-              {row.reasons.map((reason, index) => (
+              {reasons.map((reason, index) => (
                 <li key={index} className="text-micro leading-[16px] text-ink-600">· {reason}</li>
               ))}
             </ul>

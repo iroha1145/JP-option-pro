@@ -192,7 +192,7 @@ export default function Research() {
             <h3 className="mb-1 font-semibold text-ink-800">{t('点时限制')}</h3>
             <ul className="list-disc space-y-1 pl-5">
               {(report.point_in_time_limits ?? []).map((limit) => (
-                <li key={limit}>{limit}</li>
+                <li key={limit}>{t(limit)}</li>
               ))}
             </ul>
             <p className="mt-2 text-micro text-ink-500">
