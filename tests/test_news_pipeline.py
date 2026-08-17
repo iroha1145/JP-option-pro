@@ -233,6 +233,7 @@ def test_claim_next_marks_claiming_and_skips_fresh_claim(tmp_path):
     )
     first = jobs.claim_next()
     assert first is not None
+    assert jobs.slot_blocked()  # claim 中もスロットを塞ぐ
     second = jobs.claim_next()
     assert second is None  # claiming 中は二重に渡さない
 

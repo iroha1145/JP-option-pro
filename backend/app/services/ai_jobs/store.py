@@ -127,7 +127,7 @@ class AIJobStore(SQLiteRepository):
         return int(settled) + int(reserved)
 
     def slot_blocked(self) -> bool:
-        """同時実行 1 の судьба: submitted か有効な unknown が残っていれば塞がる。"""
+        """同時実行 1 の規律: submitted / 進行中の claim / 有効な unknown が残っていれば塞がる。"""
 
         now = datetime.now(timezone.utc)
         with self.read() as connection:
@@ -136,6 +136,17 @@ class AIJobStore(SQLiteRepository):
             ).fetchone()[0]
             if submitted:
                 return True
+            claiming_rows = connection.execute(
+                "SELECT updated_at FROM ai_jobs WHERE status = 'queued' AND error_code = ?",
+                (CLAIMING_MARKER,),
+            ).fetchall()
+            for row in claiming_rows:
+                try:
+                    updated = datetime.fromisoformat(str(row[0]).replace("Z", "+00:00"))
+                except ValueError:
+                    return True
+                if (now - updated).total_seconds() < CLAIMING_STALE_SECONDS:
+                    return True
             unknown_rows = connection.execute(
                 "SELECT openai_response_id, updated_at FROM ai_jobs WHERE status = 'unknown'"
             ).fetchall()
