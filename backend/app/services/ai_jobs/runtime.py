@@ -277,7 +277,7 @@ class OpenAIRuntime:
             return {"status": "completed", "result": parsed, "tokens_used": tokens}
         if status in ("failed", "cancelled", "incomplete", "expired"):
             return {"status": "failed", "error_code": f"model_{status}"}
-        return {"status": "pending"}
+        return {"status": "failed", "error_code": f"model_unknown_status:{status}"}
 
 
 __all__ = [

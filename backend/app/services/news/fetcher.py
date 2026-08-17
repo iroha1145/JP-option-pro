@@ -15,7 +15,8 @@ import httpx
 
 FETCH_TIMEOUT_SECONDS = 20.0
 MAX_FEED_BYTES = 4 * 1024 * 1024
-MAX_ITEMS_PER_FEED = 100
+MAX_ITEMS_PER_FEED = 400
+NEWS_USER_AGENT = "Mozilla/5.0 (compatible; OptixJapan-News/1.0)"
 
 
 @dataclass(frozen=True)
@@ -105,7 +106,7 @@ def fetch_feed(
 ) -> FeedResult:
     if not feed_url.startswith("https://"):
         return FeedResult(feed_url, "error", "feed_url_not_https", None, None, ())
-    headers = {"User-Agent": "optix-japan-news/1.0", "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml"}
+    headers = {"User-Agent": NEWS_USER_AGENT, "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml"}
     if etag:
         headers["If-None-Match"] = etag
     if last_modified:
@@ -121,6 +122,9 @@ def fetch_feed(
         return FeedResult(feed_url, "not_modified", None, etag, last_modified, ())
     if response.status_code != 200:
         return FeedResult(feed_url, "error", f"feed_http_{response.status_code}", etag, last_modified, ())
+    final_url = str(response.url)
+    if not final_url.startswith("https://"):
+        return FeedResult(feed_url, "error", "feed_redirect_not_https", etag, last_modified, ())
     if len(response.content) > MAX_FEED_BYTES:
         return FeedResult(feed_url, "error", "feed_too_large", etag, last_modified, ())
     try:

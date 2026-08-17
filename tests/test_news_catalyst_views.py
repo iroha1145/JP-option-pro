@@ -2,7 +2,13 @@
 
 from app.domain.econ_calendar import ECON_EVENTS, econ_events_between
 from app.repositories.news_store import NewsStore
+from app.services.news.classify import classify, market_relevance
 from app.services.news.entities import EntityMatcher, build_alias_rows
+
+
+def test_market_overview_keywords_do_not_swallow_us_summaries():
+    assert market_relevance(classify("日経平均は続伸", None), []) == "market"
+    assert market_relevance(classify("NY市場サマリー 米国株は続伸", "米国株式市場の概況。"), []) is None
 
 
 def test_econ_calendar_range_and_ordering():

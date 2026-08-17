@@ -16,6 +16,7 @@ from app.services.news.entities import EntityMatcher, build_alias_rows
 from app.services.news.fetcher import fetch_feed
 
 NEWS_SERVICE_VERSION = "jp-news-service-v1"
+SUBMITTED_STALE_SECONDS = 30 * 60
 
 
 def _iso(dt: datetime) -> str:
@@ -77,12 +78,24 @@ def sync_feeds_once(
                 items_seen=0, error_code=result.error_code,
             )
             continue
+        if result.status == "not_modified":
+            store.record_feed_fetch(
+                feed_url, etag=result.etag, last_modified=result.last_modified,
+                items_seen=0, error_code=None,
+            )
+            continue
+        if not result.items:
+            # 空の 200 + 新 ETag を保存すると次回 304 で永久に空になる。
+            feed_errors[feed_url] = "feed_empty_body"
+            store.record_feed_fetch(
+                feed_url, etag=state.get("etag"), last_modified=state.get("last_modified"),
+                items_seen=0, error_code="feed_empty_body",
+            )
+            continue
         store.record_feed_fetch(
             feed_url, etag=result.etag, last_modified=result.last_modified,
             items_seen=len(result.items), error_code=None,
         )
-        if result.status == "not_modified":
-            continue
 
         batch: list[dict[str, Any]] = []
         for item in result.items:
@@ -97,7 +110,10 @@ def sync_feeds_once(
                 continue  # 日本株と接点のない記事はフィードに入れない
             codes = sorted({m.canonical_code for m in matches})
             fingerprint = classify.content_fingerprint(item.title, item.published_at, codes)
-            duplicate_of = store.fingerprint_exists_since(fingerprint, since_iso=dedup_window_start)
+            # 日付のない指紋は日をまたいで衝突するので、指紋照合は日付があるときだけ。
+            duplicate_of = None
+            if item.published_at:
+                duplicate_of = store.fingerprint_exists_since(fingerprint, since_iso=dedup_window_start)
             if duplicate_of == news_id:
                 duplicate_of = None
             bigrams = classify.title_bigrams(item.title)
@@ -233,25 +249,40 @@ def process_ai_jobs_once(*, store: NewsStore, jobs: AIJobStore, runtime: ai.Open
     # 1) 回収
     submitted = jobs.submitted_job()
     if submitted is not None:
-        poll = runtime.poll(str(submitted.get("openai_response_id")))
-        if poll["status"] == "pending":
-            outcome["pending"] = 1
-        elif poll["status"] == "failed":
+        stale = False
+        submitted_at = submitted.get("submitted_at")
+        if submitted_at:
+            try:
+                started = datetime.fromisoformat(str(submitted_at).replace("Z", "+00:00"))
+                stale = (datetime.now(timezone.utc) - started).total_seconds() > SUBMITTED_STALE_SECONDS
+            except ValueError:
+                stale = False
+        if stale:
             jobs.settle(
                 submitted["job_id"], status="failed", result=None,
-                tokens_used=poll.get("tokens_used"), error_code=poll.get("error_code"),
+                tokens_used=None, error_code="model_poll_timeout",
             )
             outcome["settled"] = 1
         else:
-            settled = _apply_result(store, submitted, poll["result"])
-            jobs.settle(
-                submitted["job_id"],
-                status="completed" if settled["accepted"] else "failed",
-                result=poll["result"],
-                tokens_used=poll.get("tokens_used"),
-                error_code=settled.get("error_code"),
-            )
-            outcome["settled"] = 1
+            poll = runtime.poll(str(submitted.get("openai_response_id")))
+            if poll["status"] == "pending":
+                outcome["pending"] = 1
+            elif poll["status"] == "failed":
+                jobs.settle(
+                    submitted["job_id"], status="failed", result=None,
+                    tokens_used=poll.get("tokens_used"), error_code=poll.get("error_code"),
+                )
+                outcome["settled"] = 1
+            else:
+                settled = _apply_result(store, submitted, poll["result"])
+                jobs.settle(
+                    submitted["job_id"],
+                    status="completed" if settled["accepted"] else "failed",
+                    result=poll["result"],
+                    tokens_used=poll.get("tokens_used"),
+                    error_code=settled.get("error_code"),
+                )
+                outcome["settled"] = 1
 
     # 2) 送信（スロットが空いていれば）
     if not jobs.slot_blocked():

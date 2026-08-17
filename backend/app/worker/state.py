@@ -215,31 +215,64 @@ class WorkerStateRepository(SQLiteRepository):
         now = utc_now_iso()
         payload_json = json.dumps(payload or {}, ensure_ascii=False)[:8192]
         with self.write() as connection:
+            same_key = connection.execute(
+                "SELECT action_id, status FROM worker_action_requests "
+                "WHERE action_type = ? AND idempotency_key = ?",
+                (action_type, idempotency_key),
+            ).fetchone()
+            if same_key is not None and same_key[1] in ("queued", "running"):
+                return {
+                    "action_id": same_key[0],
+                    "status": same_key[1],
+                    "duplicate": True,
+                    "accepted": True,
+                }
+            active = connection.execute(
+                "SELECT action_id, status FROM worker_action_requests "
+                "WHERE action_type = ? AND status IN ('queued', 'running') "
+                "ORDER BY action_id DESC LIMIT 1",
+                (action_type,),
+            ).fetchone()
+            if active is not None:
+                return {
+                    "action_id": active[0],
+                    "status": active[1],
+                    "duplicate": True,
+                    "accepted": False,
+                    "reason": "type_busy",
+                }
+            insert_key = idempotency_key if same_key is None else f"{idempotency_key}:{now}"
             try:
                 cursor = connection.execute(
                     "INSERT INTO worker_action_requests (action_type, idempotency_key, payload_json, "
                     "status, requested_at) VALUES (?, ?, ?, 'queued', ?)",
-                    (action_type, idempotency_key, payload_json, now),
+                    (action_type, insert_key, payload_json, now),
                 )
-                return {"action_id": cursor.lastrowid, "status": "queued", "duplicate": False}
+                return {
+                    "action_id": cursor.lastrowid,
+                    "status": "queued",
+                    "duplicate": False,
+                    "accepted": True,
+                }
             except sqlite3.IntegrityError:
                 row = connection.execute(
-                    "SELECT action_id, status FROM worker_action_requests "
+                    "SELECT action_id, status, idempotency_key FROM worker_action_requests "
                     "WHERE action_type = ? AND status IN ('queued', 'running') "
                     "ORDER BY action_id DESC LIMIT 1",
                     (action_type,),
                 ).fetchone()
                 if row is not None:
-                    return {"action_id": row[0], "status": row[1], "duplicate": True}
-                row = connection.execute(
-                    "SELECT action_id, status FROM worker_action_requests "
-                    "WHERE action_type = ? AND idempotency_key = ?",
-                    (action_type, idempotency_key),
-                ).fetchone()
+                    return {
+                        "action_id": row[0],
+                        "status": row[1],
+                        "duplicate": True,
+                        "accepted": row[2] == insert_key or row[2] == idempotency_key,
+                    }
                 return {
-                    "action_id": row[0] if row else None,
-                    "status": row[1] if row else "unknown",
+                    "action_id": None,
+                    "status": "unknown",
                     "duplicate": True,
+                    "accepted": False,
                 }
 
     def claim_next_action(self, owner_id: str, fencing_token: int) -> dict[str, Any] | None:

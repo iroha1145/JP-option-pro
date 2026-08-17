@@ -43,18 +43,35 @@ export default function StockDetail() {
   const [priceMode, setPriceMode] = useState<PriceMode>('adjusted');
   const overview = usePolling(() => stocksApi.overview(code), null, [code]);
   const chart = usePolling(() => stocksApi.chart(code, range), null, [code, range]);
+  const [intradayPollMs, setIntradayPollMs] = useState<number | null>(null);
+  const [tickPollMs, setTickPollMs] = useState<number | null>(null);
+  const wantIntraday = interval !== '1d' && interval !== 'tick';
+  const wantTicks = interval === 'tick';
   const intraday = usePolling(
-    () =>
-      interval === '1d' || interval === 'tick'
-        ? Promise.resolve(null)
-        : stocksApi.intradayChart(code, interval),
-    null,
-    [code, interval],
+    async () => {
+      if (!wantIntraday) {
+        setIntradayPollMs(null);
+        return null;
+      }
+      const data = await stocksApi.intradayChart(code, interval as '1m' | '5m' | '60m');
+      setIntradayPollMs(data?.reason === 'fetching' ? 5_000 : null);
+      return data;
+    },
+    wantIntraday ? intradayPollMs : null,
+    [code, interval, wantIntraday],
   );
   const ticks = usePolling(
-    () => (interval === 'tick' ? stocksApi.tickView(code) : Promise.resolve(null)),
-    null,
-    [code, interval],
+    async () => {
+      if (!wantTicks) {
+        setTickPollMs(null);
+        return null;
+      }
+      const data = await stocksApi.tickView(code);
+      setTickPollMs(data?.reason === 'fetching' ? 8_000 : null);
+      return data;
+    },
+    wantTicks ? tickPollMs : null,
+    [code, interval, wantTicks],
   );
   /* 遅延気配は 1 分ポーリング。J-Quants は場中に何も出さないので、
      「今いくらか」はこの非公式・15分遅延の値でしか埋められない。 */

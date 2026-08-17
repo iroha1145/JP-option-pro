@@ -26,6 +26,23 @@ def _bars(prices, *, start_turnover=5e8, surge_last=None):
     return bars
 
 
+def test_retest_held_does_not_oscillate_when_still_reclaimed():
+    state, _reason = lc.resolve_target(
+        lc.STATE_RETEST_HELD,
+        {"retesting": True, "retest_reclaimed": True, "new_event_high": False},
+    )
+    assert state == lc.STATE_RETEST_HELD
+
+
+def test_retest_held_returns_to_retesting_below_reclaim():
+    state, reason = lc.resolve_target(
+        lc.STATE_RETEST_HELD,
+        {"retesting": True, "retest_reclaimed": False, "new_event_high": False},
+    )
+    assert state == lc.STATE_RETESTING
+    assert reason == lc.REASON_RETESTING
+
+
 def test_prior_high_excludes_breakout_bar():
     """当日バーが自分の抵抗線に参加しない（先読み禁止の核心）。"""
 
