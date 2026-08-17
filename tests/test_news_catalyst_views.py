@@ -1,5 +1,7 @@
 """カタリストデスク・ビュー: 経済カレンダー・境界照合・銘柄別集計。"""
 
+from datetime import datetime, timedelta, timezone
+
 from app.domain.econ_calendar import ECON_EVENTS, econ_events_between
 from app.repositories.news_store import NewsStore
 from app.services.news.classify import classify, market_relevance
@@ -72,20 +74,23 @@ def test_long_aliases_unaffected_by_boundary_rule():
 def test_securities_view_aggregates_and_ai_null_without_analysis(tmp_path, monkeypatch, data_dir):
     store = NewsStore(tmp_path / "news.db")
     store.initialize()
+    now = datetime.now(timezone.utc)
+    older = (now - timedelta(hours=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    newer = (now - timedelta(hours=8)).strftime("%Y-%m-%dT%H:%M:%SZ")
     store.insert_news_items(
         [
             {
                 "news_id": "n1", "source": "test", "original_title": "トヨタ、上方修正",
-                "source_language": "ja", "published_at": "2026-08-02T09:00:00Z",
-                "fetched_at": "2026-08-02T09:00:00Z", "content_fingerprint": "f1",
+                "source_language": "ja", "published_at": older,
+                "fetched_at": older, "content_fingerprint": "f1",
                 "categories": ["業績予想修正"],
                 "securities": [{"canonical_code": "72030", "alias": "トヨタ自動車", "alias_type": "name_ja"}],
                 "importance": 88.0, "market_relevance": "security",
             },
             {
                 "news_id": "n2", "source": "test", "original_title": "トヨタ、新工場",
-                "source_language": "ja", "published_at": "2026-08-02T10:00:00Z",
-                "fetched_at": "2026-08-02T10:00:00Z", "content_fingerprint": "f2",
+                "source_language": "ja", "published_at": newer,
+                "fetched_at": newer, "content_fingerprint": "f2",
                 "categories": ["製品・技術"],
                 "securities": [{"canonical_code": "72030", "alias": "トヨタ自動車", "alias_type": "name_ja"}],
                 "importance": 60.0, "market_relevance": "security",
