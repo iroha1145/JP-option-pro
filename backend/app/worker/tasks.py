@@ -408,7 +408,11 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
                 canonical_code=str(code), days=FETCH_TRADING_DAYS,
             )
             store.prune_older_than(add_days(iso_date(today_jst()), -RETENTION_TRADING_DAYS * 2))
-        status = "completed" if result.get("status") in ("ok", "plan_not_included") else "failed"
+        status = (
+            "completed"
+            if result.get("status") in ("ok", "plan_not_included", "not_published")
+            else "failed"
+        )
         return TaskResult(
             status=status,
             error_code=result.get("error_code"),

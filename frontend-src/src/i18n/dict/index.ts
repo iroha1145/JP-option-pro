@@ -199,6 +199,10 @@ export const DICT: Record<string, [string, string]> = {
     'Minute data for this stock has not been fetched yet',
     'この銘柄の分足はまだ取得されていません',
   ],
+  '已取得，但没有可显示的分钟数据': [
+    'Fetched, but there are no minute bars to show',
+    '取得済みですが、表示できる分足がありません',
+  ],
   取得最近5个交易日的分钟数据: [
     'Fetch last 5 trading days of minute data',
     '直近5営業日の分足を取得',
@@ -554,6 +558,10 @@ export const DICT: Record<string, [string, string]> = {
   '逐笔需要 J-Quants Tick 加购（刚购买时，API 侧生效可能有延迟）': [
     'Ticks require the J-Quants Tick add-on',
     'ティックは J-Quants の Tick アドオン契約が必要です',
+  ],
+  '已取得，但没有可显示的逐笔数据（可能尚未配信）': [
+    'Fetched, but there are no ticks to show (the daily file may not be published yet)',
+    '取得済みですが、表示できるティックがありません（日次ファイルが未配信のことがあります）',
   ],
   该股票的逐笔数据尚未取得: [
     'Ticks for this stock have not been fetched yet',

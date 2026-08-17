@@ -508,6 +508,7 @@ function IntradayPane({
     );
   }
   const planBlocked = data?.reason === 'plan_not_included';
+  const empty = data?.reason === 'empty';
   return (
     <div className="flex h-72 flex-col items-center justify-center gap-3 rounded-md bg-paper-2">
       <p className="max-w-md px-6 text-center text-body-s text-ink-600">
@@ -515,7 +516,9 @@ function IntradayPane({
           ? t('分钟线需要 J-Quants 分足加购（当前订阅未包含）')
           : data?.reason === 'fetching'
             ? t('正在取得分钟数据，请稍候刷新')
-            : t('该股票的分钟数据尚未取得')}
+            : empty
+              ? t('已取得，但没有可显示的分钟数据')
+              : t('该股票的分钟数据尚未取得')}
       </p>
       {data?.note_ja && <p className="max-w-md px-6 text-center text-caption text-ink-400">{data.note_ja}</p>}
       {isOwner && !planBlocked && (
@@ -653,6 +656,7 @@ function TickPane({
   }
   const planBlocked = data?.reason === 'plan_not_included';
   const fetching = data?.reason === 'fetching';
+  const empty = data?.reason === 'empty';
   return (
     <div className="flex h-72 flex-col items-center justify-center gap-3 rounded-md bg-paper-2">
       <p className="max-w-md px-6 text-center text-body-s text-ink-600">
@@ -660,7 +664,9 @@ function TickPane({
           ? t('逐笔需要 J-Quants Tick 加购（刚购买时，API 侧生效可能有延迟）')
           : fetching
             ? t('正在取得逐笔数据（全市场日次文件约 50MB，稍候刷新）')
-            : t('该股票的逐笔数据尚未取得')}
+            : empty
+              ? t('已取得，但没有可显示的逐笔数据（可能尚未配信）')
+              : t('该股票的逐笔数据尚未取得')}
       </p>
       {data?.note_ja && <p className="max-w-md px-6 text-center text-caption text-ink-400">{data.note_ja}</p>}
       {isOwner && !planBlocked && (

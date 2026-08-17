@@ -79,6 +79,17 @@ def test_intraday_chart_honest_states(tmp_path):
     assert view["bars"] == []  # 空配列で「データなし」を偽装しない + 理由を明示
 
 
+def test_intraday_chart_empty_after_zero_bar_fetch(tmp_path):
+    store = IntradayStore(tmp_path / "intraday.db")
+    store.initialize()
+    store.record_availability("available")
+    store.record_fetched_day("72030", "2026-07-31", 0)
+    view = intraday_chart(store, "72030", interval="1m")
+    assert view["available"] is False
+    assert view["reason"] == "empty"
+    assert view["bars"] == []
+
+
 def test_fetch_records_plan_not_included_on_403(tmp_path):
     core = CoreRepository(tmp_path / "core.db")
     core.initialize()

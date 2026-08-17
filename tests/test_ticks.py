@@ -110,6 +110,14 @@ def test_tick_view_honest_states(tmp_path):
         {"tick_time": "09:00:00", "price": 100.0, "volume": 10.0},
         {"tick_time": "09:00:01", "price": 101.0, "volume": 20.0},
     ])
+    empty = tick_view(store, "67580")
+    assert empty["reason"] == "not_fetched"
+
+    store.replace_ticks("67580", "2026-07-31", [])
+    empty = tick_view(store, "67580")
+    assert empty["available"] is False
+    assert empty["reason"] == "empty"
+
     view = tick_view(store, "72030")
     assert view["available"] is True
     assert view["trade_date"] == "2026-07-31"
@@ -224,6 +232,32 @@ def test_fetch_ticks_uses_bulk_csv_and_caches(tmp_path, monkeypatch):
     assert counter["list"] == 1
 
 
+def test_fetch_ticks_records_empty_day_when_code_absent(tmp_path, monkeypatch):
+    core = _core_with_calendar(tmp_path)
+    store = IntradayStore(tmp_path / "intraday.db")
+    store.initialize()
+    counter: dict = {}
+    csv_bytes = _tick_csv([("99840", "09:00:00.000000", "5000", "100")])
+    client = JQuantsClient(
+        "k", transport=httpx.MockTransport(_bulk_transport(csv_bytes, counter)), sleep=lambda s: None
+    )
+    import app.providers.jquants.client as client_module
+
+    class _FakeRaw:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def get(self, url):
+            return httpx.Response(200, content=csv_bytes)
+
+    monkeypatch.setattr(client_module.httpx, "Client", _FakeRaw)
+    result = fetch_latest_ticks(client=client, store=store, core=core, canonical_code="72030")
+    assert result["status"] == "ok"
+    assert result["ticks"] == 0
+    assert store.tick_days_for("72030")["2026-07-31"]["tick_count"] == 0
+    assert tick_view(store, "72030")["reason"] == "empty"
+
+
 def test_fetch_ticks_reports_not_published_when_file_missing(tmp_path):
     """営業日でもファイルが無い（当日引け前）なら not_published。"""
 
@@ -239,6 +273,10 @@ def test_fetch_ticks_reports_not_published_when_file_missing(tmp_path):
     assert result["status"] == "not_published"
     # 「未契約」と混同しない
     assert store.availability(DATASET_TICK)["availability"] != AVAILABILITY_PLAN_NOT_INCLUDED
+    assert store.tick_days_for("72030")["2026-07-31"]["tick_count"] == 0
+    view = tick_view(store, "72030")
+    assert view["reason"] == "empty"
+    assert view["available"] is False
 
 
 # ---------------- v1 → v2 前方移行 ----------------
