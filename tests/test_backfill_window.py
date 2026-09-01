@@ -12,22 +12,27 @@ import json
 import httpx
 import pytest
 
+from app.domain.timeutil import iso_date, today_jst
 from app.providers.jquants.client import JQuantsClient
 from app.repositories.core import CoreRepository
 from app.services import jquants_sync as sync
 from app.worker.tasks import build_default_tasks
 
 
-ARCHIVE = {
-    # 履歴は月次、直近は日次。J-Quants の実際の並びに合わせる。
-    "2016-08-01": [
-        f"markets/short-sale-report/historical/{year}/markets_short-sale-report_{year}{month:02d}.csv.gz"
-        for year in (2016, 2025)
-        for month in (6, 7)
-    ],
-}
-WIDE_KEYS = sorted(ARCHIVE["2016-08-01"])
+ARCHIVE_KEYS = [
+    f"markets/short-sale-report/historical/{year}/markets_short-sale-report_{year}{month:02d}.csv.gz"
+    for year in (2016, 2025)
+    for month in (6, 7)
+]
+WIDE_KEYS = sorted(ARCHIVE_KEYS)
 NARROW_KEYS = sorted(k for k in WIDE_KEYS if "/2025/" in k)
+
+
+def _current_ten_year_start() -> str:
+    """本番 `backfill_window_start` と同じ式。固定日を書くと月初に死ぬ。"""
+
+    today = today_jst()
+    return iso_date(today.replace(year=today.year - 10))[:7] + "-01"
 
 
 def _core(tmp_path):
@@ -51,7 +56,7 @@ def _engine(core, keys_for_window):
 
 
 def _window(start: str):
-    return WIDE_KEYS if start <= "2016-08-01" else NARROW_KEYS
+    return WIDE_KEYS if start <= _current_ten_year_start() else NARROW_KEYS
 
 
 def test_plan_records_the_window_it_was_built_for(tmp_path):
