@@ -6,6 +6,12 @@
       "runtimeExecutable": "/Users/admin/Downloads/Claude/JP-option-pro/scripts/dev-server.sh",
       "runtimeArgs": [],
       "port": 2100
+    },
+    {
+      "name": "optix-japan-frontend",
+      "runtimeExecutable": "/Users/admin/Downloads/Claude/JP-option-pro/scripts/dev-frontend.sh",
+      "runtimeArgs": [],
+      "port": 2101
     }
   ]
 }

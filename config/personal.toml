@@ -37,8 +37,10 @@ market_codes = ["0111", "0112", "0113"]
 min_avg_turnover_jpy = 100000000.0
 min_listed_days = 120
 lookback_days = 320
-expiry_days = 40
-max_events_per_scan = 400
+# 営業日で数える（旧 expiry_days = 40 暦日 ≒ 28 営業日。観測回数を据え置き）
+expiry_trading_days = 28
+# 1 スキャンで新規に作るイベント数の上限（優先度順）。表示件数とは別。
+max_new_events_per_scan = 400
 
 [news]
 sync_seconds = 900

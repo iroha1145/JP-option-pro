@@ -8,6 +8,8 @@ from app.api.deps import core_repository
 from app.domain.symbols import display_code, normalize_input_code
 from app.services.radar.engine import ALL_SIGNAL_TYPES
 from app.services.radar.lifecycle import ALL_STATES
+from app.services.short_monitor import radar_link
+from app.services.short_monitor.states import ORDERED_STATES as SHORT_STATES
 
 router = APIRouter(prefix="/api/radar", tags=["radar"])
 
@@ -18,6 +20,10 @@ def radar_current(
     signals: str | None = Query(default=None),
     min_priority: float | None = Query(default=None, ge=0, le=100),
     limit: int = Query(default=120, ge=1, le=400),
+    short_states: str | None = Query(default=None),
+    short_flags: str | None = Query(default=None),
+    exclude_short_flags: str | None = Query(default=None),
+    min_short_confidence: float | None = Query(default=None, ge=0.0, le=1.0),
 ) -> dict:
     repository = core_repository()
     if not repository.exists():
@@ -39,11 +45,49 @@ def radar_current(
         min_priority=min_priority,
         limit=limit,
     )
+    # 空売り行動は **重ねるだけ**。alert_priority だけを有界に動かし、
+    # base_quality / breakout_confirmation / intrinsic_strength には触れない。
+    snapshots = _short_behavior_map(repository, [e["canonical_code"] for e in events])
+    views = [_event_view(repository, event) for event in events]
+    views = radar_link.overlay(views, snapshots)
+    state_filter_short = _csv_filter(short_states, tuple(SHORT_STATES))
+    flag_filter = [f.strip() for f in (short_flags or "").split(",") if f.strip()] or None
+    banned = [f.strip() for f in (exclude_short_flags or "").split(",") if f.strip()] or None
+    if state_filter_short or flag_filter or banned or min_short_confidence is not None:
+        views = [
+            view for view in views
+            if radar_link.matches(
+                snapshots.get(view["canonical_code"]),
+                states=state_filter_short, flags=flag_filter,
+                exclude_flags=banned, min_confidence=min_short_confidence,
+            )
+        ]
     return {
         "scan_date": scan_date,
         "granularity": "daily",
-        "events": [_event_view(repository, event) for event in events],
+        "events": views,
     }
+
+
+def _short_behavior_map(repository, codes: list[str]) -> dict[str, dict]:
+    """当日の空売り行動スナップショットを 1 クエリで引く（N+1 にしない）。"""
+
+    as_of = repository.latest_short_behavior_date()
+    if not as_of or not codes:
+        return {}
+    import json as _json
+
+    rows, _total = repository.short_behavior_rankings(
+        as_of, codes=sorted(set(codes)), limit=len(set(codes)),
+    )
+    out: dict[str, dict] = {}
+    for row in rows:
+        try:
+            flags = _json.loads(row.get("flags_json") or "[]")
+        except ValueError:
+            flags = []
+        out[row["canonical_code"]] = {**row, "flags": flags}
+    return out
 
 
 @router.get("/events/{event_id}")

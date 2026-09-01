@@ -17,7 +17,8 @@ def screener_options() -> dict:
         "markets": [{"code": code, "name": name} for code, name in MARKET_SEGMENTS.items()],
         "sectors": [{"code": code, "name": name} for code, name in sorted(SECTOR33.items())],
         "sort_keys": [
-            "rs_topix_63d", "rs_sector_63d", "turnover_ratio", "return_20d", "return_63d",
+            "rs_topix_63d", "rs_sector_20d", "rs_sector_63d", "turnover_ratio",
+            "return_20d", "return_63d",
             "pct_from_high_252", "avg_turnover_20d", "volatility_contraction", "close",
         ],
     }

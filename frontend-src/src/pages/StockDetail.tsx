@@ -17,16 +17,19 @@ import { SkeletonCard } from '@/components/shared/Skeleton';
 import ReactECharts from '@/components/charts/ReactECharts';
 import InfoHint from '@/components/shared/InfoHint';
 import TickAnalyticsPanel from '@/components/charts/TickAnalyticsPanel';
+import ShortBehaviorPanel from '@/components/domain/ShortBehaviorPanel';
 import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart';
 import { DataThrough, ScoreBar, SignalChip, StateChip } from '@/components/domain';
 import { useAccess } from '@/hooks/useAccess';
 import { STRUCTURE_HINTS, TECHNICAL_HINTS, type ScoreHint } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
-import { fmtDate, fmtPct, fmtPrice, fmtTimeJst, fmtYenCompact } from '@/lib/format';
+import { quoteSourceLabel } from '@/lib/quoteSource';
+import { fmtDate, fmtDateShort, fmtPct, fmtPrice, fmtShares, fmtTimeJst, fmtYenCompact } from '@/lib/format';
 import type {
   FinancialSummaryView,
   IntradayChart,
   MarginInterestRow,
+  ShortInterestSummary,
   ShortPositionRow,
   TechnicalStructure,
   TickView,
@@ -249,7 +252,7 @@ export default function StockDetail() {
                 </span>
                 <span className="mt-0.5 flex items-center gap-1 text-micro text-warn-700">
                   <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
-                  {t('延迟{n}分 · 非官方源', { n: live.data?.delayed_minutes ?? 15 })}
+                  {quoteSourceLabel(live.data).text}
                   {liveQuote.as_of_epoch ? ` · ${fmtTimeJst(liveQuote.as_of_epoch)}` : ''}
                 </span>
               </span>
@@ -404,11 +407,17 @@ export default function StockDetail() {
         </section>
       </div>
 
+      {/* 机构空卖行为：报告本身在下面的「空卖残高报告」，这里是行为分析 */}
+      <section className="card-surface rounded-lg p-4">
+        <h2 className="mb-3 text-h3 text-ink-900">{t('机构空卖行为')}</h2>
+        <ShortBehaviorPanel code={security.canonical_code} />
+      </section>
+
       {/* 行3: 空卖 + 发表预定 */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <section className="card-surface rounded-lg p-4">
           <h2 className="mb-3 text-h3 text-ink-900">{t('空卖残高报告')}</h2>
-          <ShortPositionsPanel rows={data.short_positions} />
+          <ShortPositionsPanel rows={data.short_positions} summary={data.short_interest} />
         </section>
         <section className="card-surface rounded-lg p-4">
           <h2 className="mb-3 text-h3 text-ink-900">{t('发表预定')}</h2>
@@ -897,24 +906,141 @@ function MarginPanel({ rows }: { rows: MarginInterestRow[] }) {
         <MiniStat label={t('信用倍率')} value={ratio !== null ? `${ratio.toFixed(2)}x` : '—'} />
       </dl>
       <p className="text-right text-micro text-ink-400">
-        {t('数据截至')} {fmtDate(latest.application_date)}（週次）
+        {t('数据截至')} {fmtDate(latest.application_date)}（{t('週次')}）
       </p>
     </div>
   );
 }
 
-function ShortPositionsPanel({ rows }: { rows: ShortPositionRow[] }) {
+function ShortPositionsPanel({
+  rows,
+  summary,
+}: {
+  rows: ShortPositionRow[];
+  summary: ShortInterestSummary | null;
+}) {
   if (rows.length === 0) return <p className="text-body-s text-ink-400">{t('暂无数据')}</p>;
+
+  const changes = summary?.changes ?? [];
+  const KIND_LABEL: Record<string, string> = {
+    new: '新規',
+    increased: '増',
+    decreased: '減',
+    below_threshold: '義務消失',
+    closed: '解消',
+    unknown: '状态未知',
+  };
+  // ラベルの色は **株にとっての向き**（赤=買い方に有利／緑=売り方に有利）。
+  // 新しい売り方が出た＝弱気で緑、義務消失・解消＝買い戻し済みで赤。
+  // 増減は隣の変化幅がすでに符号で色を持っているので、ここは無彩色にする
+  // （同じことを二度色で言わない）。
+  const KIND_TONE: Record<string, string> = {
+    new: 'text-down-600',
+    below_threshold: 'text-up-600',
+    closed: 'text-up-600',
+  };
+
   return (
-    <ul className="divide-y divide-line">
-      {rows.slice(0, 5).map((row, index) => (
-        <li key={index} className="flex items-center justify-between gap-2 py-1.5 text-body-s">
-          <span className="min-w-0 truncate text-ink-700">{row.holder_name ?? '—'}</span>
-          <span className="shrink-0 font-mono tnum text-ink-900">{fmtPct(row.short_position_ratio, 2)}</span>
-          <span className="shrink-0 text-micro text-ink-400">{fmtDate(row.calculated_date)}</span>
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-3">
+      {summary && (
+        <div className="rounded-md bg-paper-2 px-3 py-2">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className="text-micro text-ink-400">{t('报告义务中合计')}</span>
+            <span className="font-mono text-data-m text-ink-900 tnum">
+              {summary.reporting_total != null ? `${(summary.reporting_total * 100).toFixed(2)}%` : '—'}
+            </span>
+            {summary.reporting_shares != null && (
+              <span className="font-mono text-caption tnum text-ink-500">
+                {fmtShares(summary.reporting_shares)}
+                {t('株')}
+              </span>
+            )}
+            <span className="text-micro text-ink-400">
+              {t('{n}家', { n: summary.reporting_holders })}
+            </span>
+            {summary.change != null && (
+              <span
+                className={`font-mono text-caption tnum ${
+                  summary.change > 0 ? 'text-up-600' : summary.change < 0 ? 'text-down-600' : 'text-ink-400'
+                }`}
+              >
+                {t('2周')} {summary.change > 0 ? '+' : summary.change < 0 ? '−' : '±'}
+                {Math.abs(summary.change * 100).toFixed(2)}%
+              </span>
+            )}
+          </div>
+          {/* 閾値割れは「その値以下のどこか」で実際は不明。合計に足さない。 */}
+          {(summary.below_threshold_holders > 0 || summary.closed_holders > 0) && (
+            <p className="mt-1 text-micro text-ink-400">
+              {t('另有 {b} 家跌破{th}%（实际持仓不再披露）· {c} 家已解消', {
+                b: summary.below_threshold_holders,
+                th: (summary.reporting_threshold * 100).toFixed(1),
+                c: summary.closed_holders,
+              })}
+            </p>
+          )}
+        </div>
+      )}
+
+      {changes.length > 0 ? (
+        <div>
+          <p className="mb-1 text-micro text-ink-400">
+            {t('2周内全部变化')}
+            {summary?.baseline_date ? `（${fmtDate(summary.baseline_date)} ~）` : ''}
+          </p>
+          {/* 1 行 2 段。横に 5 列並べると「義務消失」が折り返して行の高さが
+              暴れるので、名前・区分・日付を上段、水準・株数・変化を下段に置く。 */}
+          <ul className="divide-y divide-line">
+            {changes.map((row, index) => (
+              <li key={index} className="py-1.5 text-body-s">
+                <div className="flex items-baseline gap-2">
+                  <span className="min-w-0 flex-1 truncate text-ink-700">{row.holder_name ?? '—'}</span>
+                  <span
+                    className={`shrink-0 whitespace-nowrap text-micro ${
+                      KIND_TONE[row.kind] ?? 'text-ink-400'
+                    }`}
+                  >
+                    {t(KIND_LABEL[row.kind] ?? '')}
+                  </span>
+                  <span
+                    className="shrink-0 whitespace-nowrap font-mono text-micro tnum text-ink-400"
+                    title={fmtDate(row.calculated_date)}
+                  >
+                    {fmtDateShort(row.calculated_date)}
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-2 font-mono tnum">
+                  {/* 水準（符号なし）と変化（符号あり）を分けて出す。 */}
+                  <span className="shrink-0 text-ink-900">
+                    {row.ratio != null ? `${(row.ratio * 100).toFixed(2)}%` : '—'}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-micro text-ink-400">
+                    {row.shares != null ? `${fmtShares(row.shares)}${t('株')}` : ''}
+                  </span>
+                  <span
+                    className={`shrink-0 whitespace-nowrap text-micro ${
+                      row.delta == null
+                        ? 'text-ink-400'
+                        : row.delta > 0
+                          ? 'text-up-600'
+                          : row.delta < 0
+                            ? 'text-down-600'
+                            : 'text-ink-400'
+                    }`}
+                  >
+                    {row.delta != null
+                      ? `${row.delta > 0 ? '+' : row.delta < 0 ? '−' : '±'}${Math.abs(row.delta * 100).toFixed(2)}%`
+                      : '—'}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="text-micro text-ink-400">{t('2周内没有新的残高报告')}</p>
+      )}
+    </div>
   );
 }
 

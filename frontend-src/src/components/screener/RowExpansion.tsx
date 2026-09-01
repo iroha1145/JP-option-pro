@@ -15,6 +15,7 @@ import { fmtYenCompact } from '@/lib/format';
 import Icon from '@/components/icons';
 import InfoHint from '@/components/shared/InfoHint';
 import { STRENGTH_HINTS } from '@/lib/indicatorHints';
+import { explanationLines } from '@/lib/explainText';
 import { FAMILY_META } from './types';
 import { t } from '@/i18n/core';
 
@@ -26,15 +27,21 @@ function barClass(value: number): string {
 
 export interface RowExpansionProps {
   row: StrengthRow;
+  /** 盘中叠加。無ければ何も出さない（古い値で埋めない）。 */
+  live?: { live_price: number; live_change_pct?: number; live_pct_from_high_252?: number | null };
   weights: Record<string, number> | null;
   canManageWatchlist: boolean;
 }
 
-export default function RowExpansion({ row, weights, canManageWatchlist }: RowExpansionProps) {
+export default function RowExpansion({ row, weights, canManageWatchlist, live }: RowExpansionProps) {
   const [added, setAdded] = useState(false);
   const technicals = row.structure.technicals;
   const priceAction = row.structure.price_action;
   const volPrice = row.structure.vol_price;
+  // 警告と評価根拠は後端が組み立てる。数値混じりの文（「ATR约7.3%…」）は
+  // 完成形だと辞書に当たらないので、テンプレート形の `*_items` を優先する。
+  const warnings = explanationLines(row.warning_items, row.warnings);
+  const reasons = explanationLines(row.reason_items, row.reasons);
   return (
     <div className="grid grid-cols-1 gap-x-8 gap-y-5 border-t border-line bg-card-warm/60 px-4 py-4 md:grid-cols-3">
       {/* ① 六族分项 */}
@@ -74,12 +81,12 @@ export default function RowExpansion({ row, weights, canManageWatchlist }: RowEx
             {t('缺失维度')}: {row.missing_families.join(' · ')} {t('（按缺失重新配权，不填中性值）')}
           </p>
         )}
-        {row.warnings.length > 0 && (
+        {warnings.length > 0 && (
           <ul className="mt-2.5 space-y-1">
-            {row.warnings.map((warning, index) => (
+            {warnings.map((warning, index) => (
               <li key={index} className="flex items-start gap-1.5 text-micro leading-[16px] text-warn-600">
                 <span className="mt-px shrink-0" aria-hidden="true">⚠</span>
-                {t(warning)}
+                {warning}
               </li>
             ))}
           </ul>
@@ -90,9 +97,15 @@ export default function RowExpansion({ row, weights, canManageWatchlist }: RowEx
       <div>
         <p className="eyebrow">{t('结构信号 · STRUCTURE')}</p>
         <div className="mt-3 space-y-2 text-caption">
-          <StructLine label={t('价格结构')} value={priceAction.structure_label ? t(priceAction.structure_label) : '—'} />
+          <StructLine
+            label={t('价格结构')}
+            value={priceAction.structure_label ? t(priceAction.structure_label) : '—'}
+          />
           {(priceAction.pattern_labels?.length ?? 0) > 0 && (
-            <StructLine label={t('K线形态')} value={priceAction.pattern_labels!.map((l) => t(l)).join('、')} />
+            <StructLine
+              label={t('K线形态')}
+              value={priceAction.pattern_labels!.map((label) => t(label)).join(t('、'))}
+            />
           )}
           {(priceAction.spring || priceAction.upthrust) && (
             <StructLine
@@ -122,11 +135,11 @@ export default function RowExpansion({ row, weights, canManageWatchlist }: RowEx
             }
           />
         </div>
-        {row.reasons.length > 0 && (
+        {reasons.length > 0 && (
           <div className="mt-3 border-t border-line pt-2.5">
             <p className="mb-1 text-micro text-ink-400">{t('评分依据')}</p>
             <ul className="space-y-0.5">
-              {row.reasons.map((reason, index) => (
+              {reasons.map((reason, index) => (
                 <li key={index} className="text-micro leading-[16px] text-ink-600">· {reason}</li>
               ))}
             </ul>
@@ -180,9 +193,42 @@ export default function RowExpansion({ row, weights, canManageWatchlist }: RowEx
               {row.sector_rank_percentile !== null ? `${row.sector_rank_percentile.toFixed(1)}%` : '—'}
             </span>
           </div>
+          {live && (
+            <div className="flex items-center justify-between border-b border-line pb-2">
+              <span className="flex items-center gap-1 text-warn-700">
+                <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
+                {t('盘中价')}
+              </span>
+              <span className="font-mono text-ink-800 tnum">
+                {live.live_price.toLocaleString('ja-JP')}
+                {live.live_change_pct != null && (
+                  <span className={live.live_change_pct >= 0 ? 'ml-1 text-up-600' : 'ml-1 text-down-600'}>
+                    {live.live_change_pct >= 0 ? '+' : ''}
+                    {(live.live_change_pct * 100).toFixed(2)}%
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
+          {/* 素点 → 減点 → 最終 を並べる。以前は減点だけ見えていて、
+              それが順位に効いているのかが画面から読めなかった。 */}
+          <div className="flex items-center justify-between">
+            <span className="text-ink-400">{t('原始分')}</span>
+            <span className="font-mono text-ink-800 tnum">
+              {row.raw_ranking_score != null ? row.raw_ranking_score.toFixed(1) : '—'}
+            </span>
+          </div>
           <div className="flex items-center justify-between">
             <span className="text-ink-400">{t('风险减分')}</span>
-            <span className="font-mono text-ink-800 tnum">{row.risk_penalty !== null ? `−${row.risk_penalty}` : '—'}</span>
+            <span className="font-mono text-warn-700 tnum">{row.risk_penalty !== null ? `−${row.risk_penalty}` : '—'}</span>
+          </div>
+          <div className="flex items-center justify-between border-t border-line pt-2">
+            <span className="text-ink-500">{t('最终优先级')}</span>
+            <span className="font-mono font-semibold text-ink-900 tnum">
+              {(row.final_ranking_score ?? row.ranking_score) != null
+                ? (row.final_ranking_score ?? row.ranking_score)!.toFixed(1)
+                : '—'}
+            </span>
           </div>
         </div>
         <div className="mt-3 flex items-center justify-between border-t border-line pt-3">

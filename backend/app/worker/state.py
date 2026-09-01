@@ -186,11 +186,25 @@ class WorkerStateRepository(SQLiteRepository):
             )
 
     def reconcile_task_inventory(self, task_names: tuple[str, ...]) -> None:
+        """在庫を起動時に揃える。**消すだけでなく、足りない行を作る。**
+
+        以前は削除しかしていなかったので、新しいタスクを 1 つ足すと、その
+        タスクが初回に走るまで `task_inventory_complete` が false のまま
+        —— つまり **コンテナが unhealthy** で、`deploy.sh --wait` が
+        初回遅延より短ければデプロイが失敗する（実際そうなった）。
+        まだ一度も走っていないことと、存在しないことは別。
+        """
+
         placeholders = ", ".join("?" for _ in task_names) or "''"
         with self.write() as connection:
             connection.execute(
                 f"DELETE FROM worker_task_status WHERE task_name NOT IN ({placeholders})",
                 task_names,
+            )
+            connection.executemany(
+                "INSERT INTO worker_task_status (task_name, status) VALUES (?, 'pending') "
+                "ON CONFLICT (task_name) DO NOTHING",
+                [(name,) for name in task_names],
             )
 
     # -- task status ------------------------------------------------------
@@ -499,10 +513,19 @@ class WorkerStateRepository(SQLiteRepository):
 
     def health(self, expected_tasks: tuple[str, ...]) -> dict[str, Any]:
         statuses = {item["task_name"]: item for item in self.task_statuses()}
+        # 再起動で中断された行は「壊れている」ではなく「まだ走り直していない」。
+        # 各タスクは自分の初回遅延で必ず走り直すので、これを degraded に数えると
+        # **再起動のたびに、いちばん遅延の長いタスクの時間だけコンテナが
+        # unhealthy** になる（maintenance は 300 秒。`deploy.sh --wait` は 180 秒）。
+        # 中断された事実は status と error_code に残す。
         degraded = [
             name
             for name, item in statuses.items()
-            if item.get("status") in {"failed", "interrupted", "degraded"}
+            if item.get("status") in {"failed", "degraded"}
+            or (
+                item.get("status") == "interrupted"
+                and item.get("error_code") != "worker_restarted"
+            )
         ]
         missing = [name for name in expected_tasks if name not in statuses]
         with self.read() as connection:

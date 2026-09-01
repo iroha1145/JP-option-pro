@@ -10,6 +10,7 @@ from typing import Any
 
 from app.domain.symbols import display_code, normalize_input_code
 from app.repositories.core import CoreRepository
+from app.services import short_interest as si
 from app.services.radar.base_detector import detect_base
 from app.services.radar.features import clean_series, series_excluding_last
 from app.services.radar.price_action import compute_price_action
@@ -172,6 +173,24 @@ def stock_overview(repository: CoreRepository, canonical_code: str) -> dict[str,
     summaries = repository.summaries_for_code(canonical_code, limit=24)
     quarters = derive_quarter_values(list(reversed(summaries)))
 
+    # 空売り残高: 2 週間の変化を **1 本も落とさず** 並べ、報告義務中の合計と
+    # その期間の増減を添える。閾値割れの最終報告を合計に混ぜない理由は
+    # `short_interest` の docstring を参照（混ぜると 3905 で 4.64% になる）。
+    short_rows = repository.short_positions_for_code(canonical_code, limit=400)
+    short_dates = [str(row.get("calculated_date") or "") for row in short_rows]
+    short_as_of = max(short_dates) if short_dates else None
+    baseline = None
+    if short_as_of:
+        # 2 週間 = 10 営業日。取引カレンダーで数えるので連休を跨いでも
+        # 「2 週間分の立会」になる。
+        window = repository.trading_days_between("1900-01-01", short_as_of)
+        need = si.DEFAULT_WINDOW_TRADING_DAYS + 1
+        baseline = window[-need] if len(window) >= need else (window[0] if window else None)
+    short_interest = si.summarise(short_rows, baseline_date=baseline).as_dict()
+    short_interest["changes"] = (
+        si.changes_within(short_rows, since=baseline) if baseline else []
+    )
+
     return {
         "version": STOCK_RESEARCH_VERSION,
         "security": {
@@ -204,7 +223,8 @@ def stock_overview(repository: CoreRepository, canonical_code: str) -> dict[str,
         "earnings": repository.earnings_for_code(canonical_code),
         "margin_interest": repository.margin_interest_for_code(canonical_code, limit=26),
         "margin_alerts": repository.margin_alerts_for_code(canonical_code, limit=20),
-        "short_positions": repository.short_positions_for_code(canonical_code, limit=30),
+        "short_positions": short_rows[:30],
+        "short_interest": short_interest,
         "radar_events": repository.radar_events_for_code(canonical_code, limit=20),
         "technical": technical_structure(bars),
     }

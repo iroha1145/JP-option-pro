@@ -7,7 +7,7 @@ sync for the same date set must be a no-op apart from ``ingested_at``.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -283,11 +283,21 @@ class CoreRepository(SQLiteRepository):
     def bars_matrix_since(self, start_date: str) -> dict[str, list[dict[str, Any]]]:
         """Per-code bar lists for the radar/screener full-market scan."""
 
+        # 生の OHLC と調整係数を必ず含める。
+        #
+        # 以前は close と adj_* だけを引いていた。本番では adj_* が全行 NULL
+        # （一括配信 CSV にその列が無い）なので、全市場スキャンは
+        #   * high/low を欠いたまま走り → clean_series の欠測フォールバックで
+        #     high = low = close に潰れる。ATR は日中レンジを失い、
+        #     prior_high_N は「終値の高値」になってピボットが本来より低くなる
+        #     ＝ 突破が実際より出やすくなる。
+        #   * adjustment_factor を欠く → 分割・併合の調整が効かない。
         with self.read() as connection:
             rows = connection.execute(
                 """
-                SELECT canonical_code, trade_date, close, adj_close, adj_open, adj_high, adj_low,
-                       turnover_value, volume, adj_volume, upper_limit
+                SELECT canonical_code, trade_date, open, high, low, close,
+                       adj_open, adj_high, adj_low, adj_close,
+                       adjustment_factor, turnover_value, volume, adj_volume, upper_limit
                 FROM daily_bars WHERE trade_date >= ?
                 ORDER BY canonical_code, trade_date
                 """,
@@ -315,26 +325,56 @@ class CoreRepository(SQLiteRepository):
             prior = connection.execute(
                 "SELECT MAX(trade_date) FROM daily_bars WHERE trade_date < ?", (latest,)
             ).fetchone()[0]
+            # adjustment_factor も引く。本番では adj_close が全行 NULL なので、
+            # これが無いと前日比が **常に None** になる（実際そうなっていた:
+            # 4,444 銘柄すべてで change_pct が空だった）。
             rows = connection.execute(
-                "SELECT canonical_code, trade_date, close, adj_close FROM daily_bars "
-                "WHERE trade_date IN (?, ?)",
+                "SELECT canonical_code, trade_date, close, adj_close, adjustment_factor "
+                "FROM daily_bars WHERE trade_date IN (?, ?)",
                 (latest, prior or latest),
             ).fetchall()
-        prior_adj: dict[str, float] = {}
+
+        def _price(row: Any) -> float | None:
+            for key in ("adj_close", "close"):
+                value = row[key]
+                if value is not None:
+                    try:
+                        number = float(value)
+                    except (TypeError, ValueError):
+                        continue
+                    if number > 0:
+                        return number
+            return None
+
+        prior_close: dict[str, float] = {}
+        latest_factor: dict[str, float] = {}
         result: dict[str, dict[str, Any]] = {}
         for row in rows:
+            code = row["canonical_code"]
             if row["trade_date"] == latest:
-                result[row["canonical_code"]] = {
-                    "close": row["close"], "adj_close": row["adj_close"], "change_pct": None,
-                }
+                result[code] = {"close": row["close"], "change_pct": None}
+                factor = row["adjustment_factor"]
+                try:
+                    latest_factor[code] = float(factor) if factor is not None else 1.0
+                except (TypeError, ValueError):
+                    latest_factor[code] = 1.0
+                result[code]["_price"] = _price(row)
             else:
-                if row["adj_close"] is not None:
-                    prior_adj[row["canonical_code"]] = row["adj_close"]
+                value = _price(row)
+                if value is not None:
+                    prior_close[code] = value
+
         for code, quote in result.items():
-            adj = quote.pop("adj_close", None)
-            prev = prior_adj.get(code)
-            if adj and prev:
-                quote["change_pct"] = round((adj / prev - 1.0) * 100.0, 2)
+            today = quote.pop("_price", None)
+            prev = prior_close.get(code)
+            if not today or not prev:
+                continue
+            # 前日の値は当日の調整係数で揃える。分割当日に前日の生値と
+            # 比べると、1:2 分割が −50% の下落として表示される。
+            factor = latest_factor.get(code, 1.0)
+            baseline = prev * (factor if factor > 0 else 1.0)
+            if baseline > 0:
+                quote["change_pct"] = round((today / baseline - 1.0) * 100.0, 2)
         return result
 
     def latest_bar_date(self) -> str | None:
@@ -503,6 +543,10 @@ class CoreRepository(SQLiteRepository):
             for row in rows
             if row.get("canonical_code")
         ]
+        if not prepared:
+            # 空入力で DELETE すると決算カレンダーが消える。呼び出し側が
+            # 空応答を失敗扱いするのが本筋だが、ここでも上書きしない。
+            return 0
         with self.write() as connection:
             connection.execute("DELETE FROM earnings_announcements")
             if prepared:
@@ -585,6 +629,35 @@ class CoreRepository(SQLiteRepository):
                 """
             ).fetchall()
         return {row["canonical_code"]: dict(row) for row in rows}
+
+    def latest_margin_alert_map(self) -> dict[str, dict[str, Any]]:
+        """銘柄ごとの最新の日々公表行（規制状態の判定に使う）。
+
+        訂正は「同じ申込日 × 新しい公表日」で入るので、申込日 → 公表日 の
+        順で最新を採る。載っていない銘柄は結果に入らない —— それは
+        「規制なし」の意味だが、リスト自体の鮮度は呼び出し側が見ること。
+        """
+
+        with self.read() as connection:
+            rows = connection.execute(
+                """
+                SELECT ma.* FROM margin_alerts ma
+                JOIN (
+                    SELECT canonical_code,
+                           MAX(application_date || '|' || published_date) AS latest_key
+                    FROM margin_alerts GROUP BY canonical_code
+                ) latest ON latest.canonical_code = ma.canonical_code
+                    AND ma.application_date || '|' || ma.published_date = latest.latest_key
+                """
+            ).fetchall()
+        return {row["canonical_code"]: dict(row) for row in rows}
+
+    def latest_margin_alert_date(self) -> str | None:
+        with self.read() as connection:
+            row = connection.execute(
+                "SELECT MAX(application_date) AS latest FROM margin_alerts"
+            ).fetchone()
+        return (row["latest"] if row else None) or None
 
     _MARGIN_ALERT_COLUMNS = (
         "canonical_code", "published_date", "application_date",
@@ -676,6 +749,7 @@ class CoreRepository(SQLiteRepository):
 
     _SHORT_POSITION_COLUMNS = (
         "canonical_code", "disclosed_date", "calculated_date", "holder_name",
+        "holder_address", "manager_name", "manager_address",
         "investment_fund_name", "short_position_ratio", "short_position_shares",
         "short_position_units", "previous_report_date", "previous_ratio", "notes",
         "ingested_at",
@@ -690,13 +764,20 @@ class CoreRepository(SQLiteRepository):
             values = {column: row.get(column) for column in self._SHORT_POSITION_COLUMNS}
             values["holder_name"] = values.get("holder_name") or ""
             values["calculated_date"] = values.get("calculated_date") or ""
+            # 主キー列は NULL 不可。空値は '' に揃える（NULL だと WITHOUT ROWID
+            # の PK 制約に落ちる上、'' と NULL の 2 つの「空」が併存する）。
+            values["holder_address"] = values.get("holder_address") or ""
+            values["investment_fund_name"] = values.get("investment_fund_name") or ""
             values["ingested_at"] = now
             prepared.append(tuple(values[column] for column in self._SHORT_POSITION_COLUMNS))
         if not prepared:
             return 0
         sql = _upsert_sql(
             "short_positions", self._SHORT_POSITION_COLUMNS,
-            ("canonical_code", "disclosed_date", "calculated_date", "holder_name"),
+            (
+                "canonical_code", "disclosed_date", "calculated_date",
+                "holder_name", "investment_fund_name", "holder_address",
+            ),
         )
         with self.write() as connection:
             connection.executemany(sql, prepared)
@@ -710,6 +791,435 @@ class CoreRepository(SQLiteRepository):
                 (canonical_code, int(limit)),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def iter_short_positions_by_code(self) -> Iterator[tuple[str, list[dict[str, Any]]]]:
+        """全銘柄の空売り残高報告を **銘柄ごとにまとめて** 流す。
+
+        イベント導出は「初出か再登場か」を判定するために、その銘柄の履歴を
+        最初から見る必要がある。銘柄ごとに投げ直すと 4,400 回のクエリになるので、
+        1 本の順序付きスキャンで区切る。
+        """
+
+        with self.read() as connection:
+            cursor = connection.execute(
+                "SELECT * FROM short_positions "
+                "ORDER BY canonical_code, disclosed_date, calculated_date, holder_name"
+            )
+            current: str | None = None
+            batch: list[dict[str, Any]] = []
+            for row in cursor:
+                code = row["canonical_code"]
+                if current is not None and code != current:
+                    yield current, batch
+                    batch = []
+                current = code
+                batch.append(dict(row))
+            if current is not None and batch:
+                yield current, batch
+
+    def latest_short_position_date(self) -> str | None:
+        with self.read() as connection:
+            row = connection.execute("SELECT MAX(disclosed_date) FROM short_positions").fetchone()
+        return row[0] if row and row[0] else None
+
+    # ------------------------------------------------------------------
+    # 機関空売り行動モニター
+    # ------------------------------------------------------------------
+
+    _INSTITUTION_COLUMNS = (
+        "legal_id", "display_name", "normalized_name", "group_id", "group_name",
+        "country_hint", "first_seen_date", "last_seen_date", "report_count",
+        "build_version", "updated_at",
+    )
+    _ALIAS_COLUMNS = (
+        "raw_name", "legal_id", "match_kind", "confidence", "raw_address",
+        "manager_name", "build_version", "updated_at",
+    )
+    _EVENT_COLUMNS = (
+        "event_id", "canonical_code", "legal_id", "group_id", "raw_holder_name",
+        "investment_fund_name", "holder_address", "manager_name",
+        "position_date", "published_date", "effective_trade_date", "short_ratio",
+        "short_shares", "previous_ratio", "previous_report_date", "ratio_delta",
+        "shares_delta", "event_type", "visibility_status", "correction_status",
+        "is_hedge_disclosed", "mapping_confidence", "build_version",
+        "algorithm_version", "ingested_at",
+    )
+    _LAST_KNOWN_COLUMNS = (
+        "canonical_code", "legal_id", "group_id", "last_reported_ratio",
+        "last_reported_shares", "last_position_date", "last_published_date",
+        "visibility_status", "exact_position_known", "stale_reporting", "state_age_trading_days",
+        "in_scope_ratio", "in_scope_shares", "chain_count", "unknown_chain_count",
+        "is_hedge_disclosed", "mapping_confidence", "build_version", "updated_at",
+    )
+    _SNAPSHOT_COLUMNS = (
+        "canonical_code", "as_of_date", "close", "adv20_shares", "adv20_value",
+        "drawdown_52w", "price_percentile_252", "rel_topix_20d", "rel_sector_20d",
+        "visible_short_shares", "visible_short_ratio",
+        "reported_in_scope_ratio", "reported_in_scope_shares", "unknown_institution_count",
+        "visible_institution_count", "below_threshold_count", "stale_reporting_count",
+        "largest_institution_ratio", "concentration",
+        "ratio_change_1d", "ratio_change_5d", "ratio_change_20d",
+        "shares_change_5d", "shares_change_20d", "pressure_adv20_5d", "pressure_adv20_20d",
+        "visible_days_to_cover", "entry_count_20d", "reentry_count_20d",
+        "reduction_count_20d", "threshold_exit_count_20d", "low_position_score",
+        "short_pressure_score", "price_damage_score", "absorption_score",
+        "covering_score", "rotation_score", "catalyst_score", "risk_score",
+        "data_confidence", "behavior_score", "monitor_priority", "primary_state",
+        "flags_json", "components_json", "algorithm_version", "generated_at",
+    )
+    _SIGNAL_COLUMNS = (
+        "signal_id", "canonical_code", "signal_date", "primary_state", "previous_state",
+        "behavior_score", "components_json", "evidence_json", "source_cutoff",
+        "algorithm_version", "created_at",
+    )
+
+    def _upsert_many(
+        self, table: str, columns: Sequence[str], keys: Sequence[str],
+        rows: Iterable[Mapping[str, Any]], *, stamp: str | None = None,
+    ) -> int:
+        now = utc_now_iso()
+        prepared = []
+        for row in rows:
+            values = {column: row.get(column) for column in columns}
+            if stamp:
+                values[stamp] = now
+            prepared.append(tuple(values[column] for column in columns))
+        if not prepared:
+            return 0
+        sql = _upsert_sql(table, columns, keys)
+        with self.write() as connection:
+            connection.executemany(sql, prepared)
+        return len(prepared)
+
+    def upsert_institution_entities(self, rows: Iterable[Mapping[str, Any]]) -> int:
+        return self._upsert_many(
+            "institution_entities", self._INSTITUTION_COLUMNS, ("legal_id",),
+            rows, stamp="updated_at",
+        )
+
+    def upsert_institution_aliases(self, rows: Iterable[Mapping[str, Any]]) -> int:
+        return self._upsert_many(
+            "institution_aliases", self._ALIAS_COLUMNS, ("raw_name",), rows, stamp="updated_at",
+        )
+
+    def upsert_short_position_events(self, rows: Iterable[Mapping[str, Any]]) -> int:
+        return self._upsert_many(
+            "short_position_events", self._EVENT_COLUMNS, ("event_id",),
+            rows, stamp="ingested_at",
+        )
+
+    def upsert_short_position_last_known(self, rows: Iterable[Mapping[str, Any]]) -> int:
+        return self._upsert_many(
+            "short_position_last_known", self._LAST_KNOWN_COLUMNS,
+            ("canonical_code", "legal_id"), rows, stamp="updated_at",
+        )
+
+    def upsert_short_behavior_snapshots(self, rows: Iterable[Mapping[str, Any]]) -> int:
+        return self._upsert_many(
+            "short_behavior_snapshots", self._SNAPSHOT_COLUMNS,
+            ("canonical_code", "as_of_date"), rows, stamp="generated_at",
+        )
+
+    def upsert_short_behavior_signals(self, rows: Iterable[Mapping[str, Any]]) -> int:
+        return self._upsert_many(
+            "short_behavior_signals", self._SIGNAL_COLUMNS, ("signal_id",),
+            rows, stamp="created_at",
+        )
+
+    def publish_short_behavior_day(
+        self,
+        snapshots: Sequence[Mapping[str, Any]],
+        signals: Sequence[Mapping[str, Any]],
+        *,
+        as_of_date: str,
+        run_id: str,
+        algorithm_version: str,
+    ) -> dict[str, int]:
+        """1 営業日分のスナップショットを **1 トランザクションで** 公開する。
+
+        バッチを分けて書くと、途中で落ちたときに「新しい日付なのに半分しか
+        無い断面」が MAX(as_of_date) 越しに最新として見えてしまう。全行 +
+        信号 + run マーカーを 1 つの BEGIN IMMEDIATE に入れる —— run 行が
+        見える時点でその日の断面は揃っている。
+        """
+
+        now = utc_now_iso()
+        snapshot_sql = _upsert_sql(
+            "short_behavior_snapshots", self._SNAPSHOT_COLUMNS,
+            ("canonical_code", "as_of_date"),
+        )
+        signal_sql = _upsert_sql(
+            "short_behavior_signals", self._SIGNAL_COLUMNS, ("signal_id",),
+        )
+
+        def prep(rows: Sequence[Mapping[str, Any]], columns: Sequence[str], stamp: str):
+            out = []
+            for row in rows:
+                values = {column: row.get(column) for column in columns}
+                values[stamp] = now
+                out.append(tuple(values[column] for column in columns))
+            return out
+
+        snapshot_rows = prep(snapshots, self._SNAPSHOT_COLUMNS, "generated_at")
+        signal_rows = prep(signals, self._SIGNAL_COLUMNS, "created_at")
+        with self.write() as connection:
+            # Clear the day first so a re-publish with a *smaller* universe doesn't
+            # leave ghost rows from the previous build (UPSERT alone can't remove
+            # rows that are absent this time). run_id/row_count would then disagree
+            # with the table, and rankings/coverage would double-count the ghosts.
+            connection.execute(
+                "DELETE FROM short_behavior_snapshots WHERE as_of_date = ?", (as_of_date,)
+            )
+            connection.execute(
+                "DELETE FROM short_behavior_signals WHERE signal_date = ?", (as_of_date,)
+            )
+            if snapshot_rows:
+                connection.executemany(snapshot_sql, snapshot_rows)
+            if signal_rows:
+                connection.executemany(signal_sql, signal_rows)
+            # 1 日 1 行。旧 run を残すと created_at が秒精度で並べられず、
+            # 「最新の run」が選べない —— 置き換えで一意にする。
+            connection.execute(
+                "DELETE FROM short_monitor_runs WHERE as_of_date = ?", (as_of_date,)
+            )
+            connection.execute(
+                "INSERT INTO short_monitor_runs (run_id, as_of_date, status, row_count, "
+                "signal_count, algorithm_version, created_at) VALUES (?, ?, 'ready', ?, ?, ?, ?)",
+                (run_id, as_of_date, len(snapshot_rows), len(signal_rows), algorithm_version, now),
+            )
+        return {"snapshots": len(snapshot_rows), "signals": len(signal_rows)}
+
+    def latest_short_monitor_run(self, as_of_date: str | None = None) -> dict[str, Any] | None:
+        """ETag の素材。同じ日を作り直しても run_id が変わるので 304 に化けない。"""
+
+        with self.read() as connection:
+            if as_of_date:
+                row = connection.execute(
+                    "SELECT * FROM short_monitor_runs WHERE as_of_date = ? AND status = 'ready' "
+                    "ORDER BY created_at DESC LIMIT 1",
+                    (as_of_date,),
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    "SELECT * FROM short_monitor_runs WHERE status = 'ready' "
+                    "ORDER BY created_at DESC LIMIT 1",
+                ).fetchone()
+        return dict(row) if row else None
+
+    def sweep_short_monitor_build(self, build_version: str) -> dict[str, int]:
+        """全量再構築の後片付け: 今回のビルドで導出されなかった行を消す。
+
+        UPSERT だけだと、対応づけ規則の変更・原始データの訂正・ID 規則の
+        変更のたびに旧い導出行が幽霊として残る。人手の別名（curated）は
+        導出物ではないので消さない。
+        """
+
+        removed: dict[str, int] = {}
+        with self.write() as connection:
+            for table, extra in (
+                ("short_position_events", ""),
+                ("short_position_last_known", ""),
+                ("institution_entities", ""),
+                ("institution_aliases", " AND match_kind != 'curated'"),
+            ):
+                cursor = connection.execute(
+                    f"DELETE FROM {table} WHERE (build_version IS NULL OR build_version != ?){extra}",
+                    (build_version,),
+                )
+                removed[table] = cursor.rowcount if cursor.rowcount is not None else 0
+        return removed
+
+    def institution_alias_map(self) -> dict[str, str]:
+        with self.read() as connection:
+            rows = connection.execute(
+                "SELECT raw_name, legal_id FROM institution_aliases WHERE match_kind = 'curated'"
+            ).fetchall()
+        return {row[0]: row[1] for row in rows}
+
+    def latest_short_behavior_date(self) -> str | None:
+        with self.read() as connection:
+            row = connection.execute("SELECT MAX(as_of_date) FROM short_behavior_snapshots").fetchone()
+        return row[0] if row and row[0] else None
+
+    def short_behavior_state_map(self, as_of_date: str) -> dict[str, str]:
+        with self.read() as connection:
+            rows = connection.execute(
+                "SELECT canonical_code, primary_state FROM short_behavior_snapshots "
+                "WHERE as_of_date = ?",
+                (as_of_date,),
+            ).fetchall()
+        return {row[0]: row[1] for row in rows}
+
+    def short_behavior_snapshot(self, canonical_code: str, as_of_date: str) -> dict[str, Any] | None:
+        with self.read() as connection:
+            row = connection.execute(
+                "SELECT * FROM short_behavior_snapshots WHERE canonical_code = ? AND as_of_date = ?",
+                (canonical_code, as_of_date),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def short_behavior_history(
+        self, canonical_code: str, *, limit: int = 260
+    ) -> list[dict[str, Any]]:
+        with self.read() as connection:
+            rows = connection.execute(
+                "SELECT as_of_date, visible_short_ratio, visible_short_shares, "
+                "visible_institution_count, below_threshold_count, behavior_score, primary_state "
+                "FROM short_behavior_snapshots WHERE canonical_code = ? "
+                "ORDER BY as_of_date DESC LIMIT ?",
+                (canonical_code, int(limit)),
+            ).fetchall()
+        return [dict(row) for row in reversed(rows)]
+
+    def short_position_events_for_code(
+        self, canonical_code: str, *, limit: int = 200, offset: int = 0
+    ) -> list[dict[str, Any]]:
+        with self.read() as connection:
+            rows = connection.execute(
+                "SELECT * FROM short_position_events WHERE canonical_code = ? "
+                "ORDER BY published_date DESC, position_date DESC LIMIT ? OFFSET ?",
+                (canonical_code, int(limit), int(offset)),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def short_position_event_count(self, canonical_code: str) -> int:
+        with self.read() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) FROM short_position_events WHERE canonical_code = ?",
+                (canonical_code,),
+            ).fetchone()
+        return int(row[0] or 0)
+
+    def short_position_last_known_for_code(self, canonical_code: str) -> list[dict[str, Any]]:
+        with self.read() as connection:
+            rows = connection.execute(
+                "SELECT k.*, e.display_name, e.group_name FROM short_position_last_known k "
+                "LEFT JOIN institution_entities e ON e.legal_id = k.legal_id "
+                "WHERE k.canonical_code = ? ORDER BY k.last_reported_ratio DESC",
+                (canonical_code,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def institution_directory(self, *, limit: int = 200) -> list[dict[str, Any]]:
+        with self.read() as connection:
+            rows = connection.execute(
+                "SELECT * FROM institution_entities ORDER BY report_count DESC LIMIT ?",
+                (int(limit),),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def short_behavior_rankings(
+        self,
+        as_of_date: str,
+        *,
+        states: Sequence[str] | None = None,
+        flags: Sequence[str] | None = None,
+        markets: Sequence[str] | None = None,
+        sectors: Sequence[str] | None = None,
+        codes: Sequence[str] | None = None,
+        institutions: Sequence[str] | None = None,
+        min_confidence: float | None = None,
+        min_turnover: float | None = None,
+        min_score: float | None = None,
+        order_by: str = "monitor_priority",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """ランキングは **スナップショット表だけ** を読む（再計算しない）。"""
+
+        allowed_order = {
+            "monitor_priority": "s.monitor_priority",
+            "behavior_score": "s.behavior_score",
+            "absorption_score": "s.absorption_score",
+            "covering_score": "s.covering_score",
+            "low_position_score": "s.low_position_score",
+            "pressure_adv20_20d": "s.pressure_adv20_20d",
+            "visible_days_to_cover": "s.visible_days_to_cover",
+            "drawdown_52w": "s.drawdown_52w",
+            "ratio_change_5d": "s.ratio_change_5d",
+            "rotation_score": "s.rotation_score",
+        }
+        order_column = allowed_order.get(order_by, allowed_order["monitor_priority"])
+
+        clauses = ["s.as_of_date = ?"]
+        params: list[Any] = [as_of_date]
+        if states:
+            clauses.append(f"s.primary_state IN ({', '.join('?' for _ in states)})")
+            params.extend(states)
+        if markets:
+            clauses.append(f"sec.market_code IN ({', '.join('?' for _ in markets)})")
+            params.extend(markets)
+        if sectors:
+            clauses.append(f"sec.sector33_code IN ({', '.join('?' for _ in sectors)})")
+            params.extend(sectors)
+        if codes:
+            clauses.append(f"s.canonical_code IN ({', '.join('?' for _ in codes)})")
+            params.extend(codes)
+        if institutions:
+            # その機関が **今も見えている** 銘柄だけ。閾値割れや報告停止で
+            # 見えなくなった機関で絞ると、居ない売り方で絞ることになる。
+            placeholders = ", ".join("?" for _ in institutions)
+            clauses.append(
+                "s.canonical_code IN (SELECT canonical_code FROM short_position_last_known "
+                f"WHERE legal_id IN ({placeholders}) AND visibility_status = 'reporting' "
+                "AND stale_reporting = 0)"
+            )
+            params.extend(institutions)
+        if min_confidence is not None:
+            clauses.append("s.data_confidence >= ?")
+            params.append(float(min_confidence))
+        if min_turnover is not None:
+            clauses.append("s.adv20_value >= ?")
+            params.append(float(min_turnover))
+        if min_score is not None:
+            clauses.append("s.behavior_score >= ?")
+            params.append(float(min_score))
+        for flag in flags or ():
+            # flags_json は短い JSON 配列。件数が小さいので LIKE で足りる。
+            clauses.append("s.flags_json LIKE ?")
+            params.append(f'%"{flag}"%')
+
+        where = " AND ".join(clauses)
+        with self.read() as connection:
+            total = connection.execute(
+                f"SELECT COUNT(*) FROM short_behavior_snapshots s "
+                f"LEFT JOIN securities sec ON sec.canonical_code = s.canonical_code WHERE {where}",
+                params,
+            ).fetchone()[0]
+            rows = connection.execute(
+                f"SELECT s.*, sec.display_code, sec.name_ja, sec.market_code, sec.market_name, "
+                f"sec.sector33_code, sec.sector33_name "
+                f"FROM short_behavior_snapshots s "
+                f"LEFT JOIN securities sec ON sec.canonical_code = s.canonical_code "
+                f"WHERE {where} ORDER BY {order_column} IS NULL, {order_column} DESC, "
+                f"s.canonical_code LIMIT ? OFFSET ?",
+                [*params, int(limit), int(offset)],
+            ).fetchall()
+        return [dict(row) for row in rows], int(total or 0)
+
+    def short_behavior_state_counts(self, as_of_date: str) -> dict[str, int]:
+        with self.read() as connection:
+            rows = connection.execute(
+                "SELECT primary_state, COUNT(*) FROM short_behavior_snapshots "
+                "WHERE as_of_date = ? GROUP BY primary_state",
+                (as_of_date,),
+            ).fetchall()
+        return {row[0]: int(row[1]) for row in rows}
+
+    def short_behavior_coverage(self, as_of_date: str) -> dict[str, Any]:
+        with self.read() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) total, "
+                "SUM(visible_institution_count > 0) with_visible, "
+                "SUM(data_confidence < 0.35) low_confidence "
+                "FROM short_behavior_snapshots WHERE as_of_date = ?",
+                (as_of_date,),
+            ).fetchone()
+        return {
+            "covered": int((row[0] if row else 0) or 0),
+            "with_visible_short": int((row[1] if row else 0) or 0),
+            "low_confidence": int((row[2] if row else 0) or 0),
+        }
 
     # ------------------------------------------------------------------
     # radar events
@@ -825,7 +1335,8 @@ class CoreRepository(SQLiteRepository):
         "turnover_value", "avg_turnover_20d", "turnover_ratio", "return_1d", "return_5d",
         "return_20d", "return_63d", "pct_from_high_252", "ma25_gap_pct",
         "ma75_gap_pct", "ma200_gap_pct", "ma_alignment", "rs_topix_63d",
-        "rs_sector_63d", "volatility_contraction", "drawdown_63d",
+        "rs_sector_20d", "rs_sector_63d", "regulation_level", "regulation_severity",
+        "volatility_contraction", "drawdown_63d",
         "overheat_atr_multiple", "listed_days", "data_days",
         "margin_long_short_ratio", "metrics_json", "updated_at",
     )
@@ -841,8 +1352,8 @@ class CoreRepository(SQLiteRepository):
             values["updated_at"] = now
             prepared.append(tuple(values[column] for column in self._SCREENER_COLUMNS))
         if not prepared:
-            # Don't wipe the last good snapshot on an empty rebuild (same
-            # "empty never overwrites" contract as the earnings/master syncs).
+            # Empty input must not wipe the last good snapshot
+            # ("empty never overwrites" — same as earnings/master).
             return 0
         with self.write() as connection:
             connection.execute("DELETE FROM screener_rows")
@@ -897,7 +1408,8 @@ class CoreRepository(SQLiteRepository):
         "global_rank_percentile", "sector_rank_percentile",
         "close", "change_pct", "atr_pct", "avg_turnover_20d",
         "turnover_ratio", "ath_proximity", "drawdown_63d_pct",
-        "ma_alignment_pct", "rs_topix_63d", "market_code", "sector33_code",
+        "ma_alignment_pct", "rs_topix_63d",
+        "regulation_level", "regulation_severity", "market_code", "sector33_code",
         "details_json", "built_at",
     )
 
@@ -920,7 +1432,7 @@ class CoreRepository(SQLiteRepository):
             values["built_at"] = now
             prepared.append(tuple(values[column] for column in self._STRENGTH_COLUMNS))
         if not prepared:
-            # Don't wipe the last good snapshot (rows + meta) on an empty rebuild.
+            # Empty input must not wipe the last good snapshot (rows + meta).
             return 0
         with self.write() as connection:
             connection.execute("DELETE FROM strength_rows")

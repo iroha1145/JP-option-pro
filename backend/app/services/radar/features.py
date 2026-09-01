@@ -20,14 +20,28 @@ FEATURE_VERSION = "jp-features-v2"  # v2: +return_126d/+return_252d（強度ス�
 
 MIN_BARS_FOR_FEATURES = 30
 
+from .adjustment import cumulative_factors
+from .turnover_quality import turnover_stability as compute_turnover_stability
 
-def _pick_price(bar: Mapping[str, Any], adj_key: str, raw_key: str) -> float | None:
+
+def _pick_price(
+    bar: Mapping[str, Any], adj_key: str, raw_key: str, factor: float = 1.0
+) -> float | None:
+    """調整後の値。取り込み済みの adj_* があれば優先、無ければ生値 × 累積係数。
+
+    一括配信 CSV には adj_* 列が無く AdjFactor しか来ないため、ここで作らないと
+    分割が前日比 −50% の暴落として指標に入る（本番 10 年で 1,959 銘柄が該当）。
+    """
+
     value = bar.get(adj_key)
-    if value is None:
-        value = bar.get(raw_key)
+    if value is not None:
+        number = float(value)
+        if math.isfinite(number) and number > 0.0:
+            return number
+    value = bar.get(raw_key)
     if value is None:
         return None
-    number = float(value)
+    number = float(value) * factor
     if not math.isfinite(number) or number <= 0.0:
         return None
     return number
@@ -41,11 +55,14 @@ def clean_series(bars: Sequence[Mapping[str, Any]]) -> dict[str, list] | None:
     opens: list[float] = []
     turnover: list[float | None] = []
     upper_limit: list[bool] = []
-    for bar in bars:
-        close = _pick_price(bar, "adj_close", "close")
-        high = _pick_price(bar, "adj_high", "high")
-        low = _pick_price(bar, "adj_low", "low")
-        open_ = _pick_price(bar, "adj_open", "open")
+    # そのバーより後に起きた調整の累積。窓の最終バーは必ず 1.0 なので、
+    # 直近の値は生値のまま（画面の現在値と約定可能価格の意味を変えない）。
+    factors = cumulative_factors(bars)
+    for bar, factor in zip(bars, factors):
+        close = _pick_price(bar, "adj_close", "close", factor)
+        high = _pick_price(bar, "adj_high", "high", factor)
+        low = _pick_price(bar, "adj_low", "low", factor)
+        open_ = _pick_price(bar, "adj_open", "open", factor)
         if close is None:
             continue  # 取引成立なし日はスキップ（穴は補間しない）
         if high is None or low is None:
@@ -129,7 +146,11 @@ def compute_security_features(bars: Sequence[Mapping[str, Any]]) -> dict[str, An
     return compute_features_from_series(series)
 
 
-def compute_features_from_series(series: dict[str, list]) -> dict[str, Any] | None:
+def compute_features_from_series(series: dict[str, list] | None) -> dict[str, Any] | None:
+    # `compute_features_from_series(clean_series(bars))` と繋げて書くのが
+    # 自然なので、欠測をそのまま受けて None を返す（例外にしない）。
+    if series is None:
+        return None
     closes = series["closes"]
     highs = series["highs"]
     lows = series["lows"]
@@ -157,6 +178,9 @@ def compute_features_from_series(series: dict[str, list]) -> dict[str, Any] | No
         if turnover_today is not None and turnover_median_20
         else None
     )
+    # 「毎日ちゃんと商いがあるか」は 60 日で測る（20 日だと 1 回の突発が
+    # 窓の 5% を占めてしまい、突発と常態の区別が付かない）。
+    turnover_stability_60 = compute_turnover_stability(turnover[-60:])
     recent5 = [value for value in turnover[-5:] if value is not None]
     turnover_trend = (
         (sum(recent5) / len(recent5)) / avg_turnover_20
@@ -239,6 +263,7 @@ def compute_features_from_series(series: dict[str, list]) -> dict[str, Any] | No
         "avg_turnover_20d": avg_turnover_20,
         "turnover_ratio": turnover_ratio,
         "turnover_trend": turnover_trend,
+        "turnover_stability": turnover_stability_60,
         "prior_high_20": prior_high_20,
         "prior_high_60": prior_high_60,
         "prior_high_120": prior_high_120,

@@ -64,6 +64,19 @@ _BULK_BACKFILL_ENDPOINTS = {
 }
 
 
+def _bulk_file_date(key: str) -> str | None:
+    """`.../markets_short-sale-report_20260803.csv.gz` → `2026-08-03`。
+
+    月次ファイル（`..._202607.csv.gz`）は日次の対象外なので None を返す。
+    """
+
+    stem = key.rsplit("/", 1)[-1].split(".", 1)[0]
+    digits = stem.rsplit("_", 1)[-1]
+    if len(digits) != 8 or not digits.isdigit():
+        return None
+    return f"{digits[:4]}-{digits[4:6]}-{digits[6:]}"
+
+
 class SyncResult(dict):
     """Plain dict subclass so task status JSON stays trivially serializable."""
 
@@ -320,8 +333,8 @@ class JQuantsSyncEngine:
                 if (mapped := mapping.map_earnings_announcement(row))
             ]
             if not rows:
-                # An empty calendar would wipe every announcement (replace_* deletes first);
-                # treat it as a failure instead of destroying existing state.
+                # 空の 200 で replace_* すると全件 DELETE になる。
+                # モジュール不変条件「empty never overwrites」に従い失敗扱い。
                 raise JQuantsError(
                     "empty earnings calendar response", code="jquants_empty_earnings"
                 )
@@ -408,6 +421,20 @@ class JQuantsSyncEngine:
         )
 
     def sync_short_positions(self, target_date: str) -> SyncResult:
+        """空売り残高の日次取り込み。
+
+        **REST の `/markets/short-sale-report` は `code` 必須**で、日付範囲だけの
+        問い合わせは 400 を返す（`disc_date_from`/`disc_date_to`、`from`/`to`、
+        `disclosed_date` いずれも実測で 400。`code` を付けた瞬間に 200）。
+        全銘柄を code ごとに回すのは現実的でないので、バックフィルと同じ
+        **一括配信の日次ファイル**を使う。
+
+        以前はここで日付範囲の REST を叩いており、増分取り込みは一度も
+        成立していなかった（データは全て bulk 回填由来）。しかも
+        `start > target_date` の分岐が「取りに行かずに ok」を返すため、
+        取り込めていない日が続いても同期状態は成功のまま見えていた。
+        """
+
         def work() -> SyncResult:
             checkpoint = self._checkpoint(DATASET_SHORT_POSITIONS)
             last = checkpoint.get("last_synced_date")
@@ -415,23 +442,50 @@ class JQuantsSyncEngine:
                 return SyncResult(dataset=DATASET_SHORT_POSITIONS, status="backfill_required", rows=0)
             start = add_days(last, 1)
             if start > target_date:
-                return SyncResult(dataset=DATASET_SHORT_POSITIONS, status="ok", rows=0)
-            rows = [
-                mapped
-                for row in self._client.fetch_rows(
-                    "/markets/short-sale-report",
-                    {"disc_date_from": start, "disc_date_to": target_date},
+                # 取りに行っていないことを "ok" と呼ばない。何もしていない日は
+                # そう名乗る（取り込みが壊れていても成功に見える、を防ぐ）。
+                return SyncResult(
+                    dataset=DATASET_SHORT_POSITIONS, status="up_to_date", rows=0,
+                    data_through=last,
                 )
-                if (mapped := mapping.map_short_position(row))
-            ]
-            count = self._repository.upsert_short_positions(rows)
+
+            endpoint = _BULK_BACKFILL_ENDPOINTS[DATASET_SHORT_POSITIONS]
+            files = self._client.bulk_list(endpoint=endpoint, date_from=start)
+            keys = sorted(str(item.get("Key")) for item in files if item.get("Key"))
+            # 一括ファイル名の末尾は YYYYMMDD。開始日より前のものは捨てる。
+            wanted = [key for key in keys if _bulk_file_date(key) and start <= _bulk_file_date(key) <= target_date]
+            if not wanted:
+                return SyncResult(
+                    dataset=DATASET_SHORT_POSITIONS, status="not_published", rows=0,
+                    data_through=last,
+                )
+
+            total = 0
+            latest_date = last
+            for key in wanted:
+                handle = self._client.bulk_download_csv(key)
+                batch: list[dict[str, Any]] = []
+                for raw in csv.DictReader(handle):
+                    mapped = mapping.map_short_position(raw)
+                    if mapped is not None:
+                        batch.append(mapped)
+                    if len(batch) >= 20000:
+                        total += self._repository.upsert_short_positions(batch)
+                        batch = []
+                if batch:
+                    total += self._repository.upsert_short_positions(batch)
+                latest_date = max(latest_date, _bulk_file_date(key) or last)
+
             self._repository.record_sync_success(
                 DATASET_SHORT_POSITIONS,
-                checkpoint={"last_synced_date": target_date},
-                rows_total=count,
-                data_through=target_date,
+                checkpoint={"last_synced_date": latest_date},
+                rows_total=total,
+                data_through=latest_date,
             )
-            return SyncResult(dataset=DATASET_SHORT_POSITIONS, status="ok", rows=count)
+            return SyncResult(
+                dataset=DATASET_SHORT_POSITIONS, status="ok", rows=total,
+                data_through=latest_date, files=len(wanted),
+            )
 
         return self._run_dataset(DATASET_SHORT_POSITIONS, work)
 
@@ -459,15 +513,33 @@ class JQuantsSyncEngine:
         }
         return writers[dataset]
 
+    def backfill_window_start(self) -> str:
+        """回填計画の窓の先頭。**月初に丸める**。
+
+        アーカイブの履歴ファイルは月次（`..._202001.csv.gz`）なので、計画を
+        識別する自然な粒度は月。日付のままだと窓の文字列が毎日変わり、
+        「窓が変わったら立て直す」が毎日の立て直しになってしまう。
+        """
+
+        return self._history_start_date()[:7] + "-01"
+
     def backfill_plan(self, dataset: str) -> SyncResult:
-        """List bulk files once and persist them as the pending work queue."""
+        """List bulk files and persist them as the pending work queue.
+
+        計画には **どの窓に対して立てたか**（`bulk_history_from`）を必ず残す。
+        `pending == 0` は「その窓の中では全部取り込んだ」でしかなく、
+        「履歴が揃った」ではない —— 窓が広がれば計画ごと立て直す必要がある。
+        実際、`backfill_years` を 1 から 10 に広げた後も空売り残高・空売り
+        比率・信用余額は 2025-06 起点の古い計画のまま `pending=0` を返し続け、
+        10 年分あるアーカイブのうち 35 本しか取り込めていなかった。
+        """
 
         endpoint = _BULK_BACKFILL_ENDPOINTS.get(dataset)
         if endpoint is None:
             return SyncResult(dataset=dataset, status="not_bulk", rows=0)
 
         def work() -> SyncResult:
-            start = self._history_start_date()
+            start = self.backfill_window_start()
             files = self._client.bulk_list(endpoint=endpoint, date_from=start)
             keys = sorted(str(item.get("Key")) for item in files if item.get("Key"))
             checkpoint = self._checkpoint(dataset)
@@ -475,9 +547,16 @@ class JQuantsSyncEngine:
             pending = [key for key in keys if key not in done]
             self._repository.record_sync_success(
                 dataset,
-                checkpoint={"bulk_pending": pending, "bulk_done": sorted(done)},
+                checkpoint={
+                    "bulk_pending": pending,
+                    "bulk_done": sorted(done),
+                    "bulk_history_from": start,
+                },
             )
-            return SyncResult(dataset=dataset, status="planned", pending=len(pending))
+            return SyncResult(
+                dataset=dataset, status="planned", pending=len(pending),
+                history_from=start, archive_files=len(keys),
+            )
 
         return self._run_dataset(dataset, work)
 

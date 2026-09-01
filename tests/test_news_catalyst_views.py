@@ -72,25 +72,29 @@ def test_long_aliases_unaffected_by_boundary_rule():
 
 
 def test_securities_view_aggregates_and_ai_null_without_analysis(tmp_path, monkeypatch, data_dir):
+    from datetime import datetime, timedelta, timezone
+
+    # ビューは wall-clock の N 時間窓。固定日を書くと日付が転がった瞬間に 0 件になる。
+    now = datetime.now(timezone.utc)
+    published_1 = (now - timedelta(hours=12)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    published_2 = (now - timedelta(hours=11)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
     store = NewsStore(tmp_path / "news.db")
     store.initialize()
-    now = datetime.now(timezone.utc)
-    older = (now - timedelta(hours=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    newer = (now - timedelta(hours=8)).strftime("%Y-%m-%dT%H:%M:%SZ")
     store.insert_news_items(
         [
             {
                 "news_id": "n1", "source": "test", "original_title": "トヨタ、上方修正",
-                "source_language": "ja", "published_at": older,
-                "fetched_at": older, "content_fingerprint": "f1",
+                "source_language": "ja", "published_at": published_1,
+                "fetched_at": published_1, "content_fingerprint": "f1",
                 "categories": ["業績予想修正"],
                 "securities": [{"canonical_code": "72030", "alias": "トヨタ自動車", "alias_type": "name_ja"}],
                 "importance": 88.0, "market_relevance": "security",
             },
             {
                 "news_id": "n2", "source": "test", "original_title": "トヨタ、新工場",
-                "source_language": "ja", "published_at": newer,
-                "fetched_at": newer, "content_fingerprint": "f2",
+                "source_language": "ja", "published_at": published_2,
+                "fetched_at": published_2, "content_fingerprint": "f2",
                 "categories": ["製品・技術"],
                 "securities": [{"canonical_code": "72030", "alias": "トヨタ自動車", "alias_type": "name_ja"}],
                 "importance": 60.0, "market_relevance": "security",

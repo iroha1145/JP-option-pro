@@ -1,6 +1,6 @@
 /**
  * B2 决算列表 — 对标美版 EarningsList（按日期分组、今天高亮、行 stagger）。
- * 列：代码/名称·业种 · 种别+三态 · 前期実績→会社予想（斜纹柱对，円）· 修正方向
+ * 列：代码/名称·业种 · 种别+三态 · 前期実績→会社予想→実績（三柱，円）· 修正方向/达成率
  *     · 收盘/涨跌 · 20日均额 · ★/雷达。行点击进个股页。<md 转卡片。
  * 数据纪律：目安行永远带「目安」样式；缺失显「—」不编造。
  */
@@ -14,23 +14,26 @@ import type { EarningsUpcomingItem } from '@/api/types';
 import { daysUntil, fmtMDCN, relativeDayCN, statusMeta, weekdayCN } from './types';
 import { t } from '@/i18n/core';
 
-/* ---------------- 迷你斜纹柱对（前期実績=斜纹 / 会社予想=实心；负值向下淡显） ---------------- */
-function ForecastPairBars({
+/* ---------------- 迷你柱（前期実績=斜纹 / 会社予想=淡蓝 / 実績=实心蓝；负值淡显） ----------------
+   予想は「まだ確定していない値」なので淡いブルー、実績が出たら同じ色系の
+   実心ブルーで隣に立つ —— 色が濃くなる＝確定した、と読める。
+   已公布の行だけ 3 本になり、同一スケールで並ぶ。 */
+function ForecastBars({
   prior,
   forecast,
-  index,
+  actual,
 }: {
   prior: number | null;
   forecast: number | null;
-  index: number;
+  actual?: number | null;
 }) {
-  const max = Math.max(Math.abs(prior ?? 0), Math.abs(forecast ?? 0), 1);
-  const height = (value: number | null) => (value == null ? 0 : Math.max(6, (Math.abs(value) / max) * 26));
-  void index;
+  const max = Math.max(Math.abs(prior ?? 0), Math.abs(forecast ?? 0), Math.abs(actual ?? 0), 1);
+  const height = (value: number | null | undefined) =>
+    value == null ? 0 : Math.max(6, (Math.abs(value) / max) * 26);
   return (
     /* 不做 scaleY 入场动画：whileInView 在数像素高的元素上会停在 scaleY(0)
        （决算密度条同病，实机复现）——柱子按最终高度静态渲染。 */
-    <span className="flex h-7 w-11 shrink-0 items-end justify-center gap-1" aria-hidden="true">
+    <span className="flex h-7 w-12 shrink-0 items-end justify-center gap-1" aria-hidden="true">
       {prior != null && (
         <span
           className={cn('w-2.5 rounded-t-[2px] border border-ink-300/70', prior < 0 && 'opacity-50')}
@@ -42,11 +45,74 @@ function ForecastPairBars({
       )}
       {forecast != null && (
         <span
-          className={cn('w-2.5 rounded-t-[2px] bg-brand-600', forecast < 0 && 'opacity-50')}
+          className={cn('w-2.5 rounded-t-[2px] bg-brand-300', forecast < 0 && 'opacity-50')}
           style={{ height: height(forecast) }}
         />
       )}
+      {actual != null && (
+        <span
+          className={cn('w-2.5 rounded-t-[2px] bg-brand-600', actual < 0 && 'opacity-50')}
+          style={{ height: height(actual) }}
+        />
+      )}
     </span>
+  );
+}
+
+/** 実績の比較バッジ。
+ *
+ *  **通期の達成率と四半期の進捗率を同じ言葉で出さない。** 1Q の累計を通期
+ *  予想で割った 25% は「未達」ではない —— 名前を分けるだけでなく、色も
+ *  分ける（達成率だけ赤緑、進捗率は中立）。 */
+/** 実績値。`actual_value` はバックエンドが比較込みで返す新フィールド。
+ *  古い API（デプロイ前）に当たったときは素の利益で代替する —— ここを
+ *  素通しにすると、開示済みの行が「—」に化けて今より悪くなる。 */
+function actualValueOf(actual: NonNullable<EarningsUpcomingItem['actual']>): number | null {
+  if (actual.actual_value != null) return actual.actual_value;
+  return actual.operating_profit ?? actual.net_profit ?? null;
+}
+
+/** 比率を % に。負号は全站共通の U+2212（`toFixed` の ASCII ハイフンは
+ *  等幅数字の中で細く見えて、桁区切りと紛れる）。 */
+function pct(value: number): string {
+  const shown = Math.abs(value * 100).toFixed(0);
+  return `${value < 0 ? '\u2212' : ''}${shown}%`;
+}
+
+function ActualCompare({ actual }: { actual: NonNullable<EarningsUpcomingItem['actual']> }) {
+  const parts: React.ReactNode[] = [];
+  if (actual.basis === 'full_year' && actual.achievement != null) {
+    const over = actual.achievement >= 1;
+    parts.push(
+      <span key="ach" className={over ? 'text-up-700' : 'text-down-700'}>
+        {t('対予想')} {pct(actual.achievement)}
+      </span>,
+    );
+  } else if (actual.basis === 'progress' && actual.progress != null) {
+    parts.push(
+      <span key="prg" className="text-ink-500">
+        {t('進捗')} {pct(actual.progress)}
+      </span>,
+    );
+  }
+  if (actual.yoy_change != null) {
+    parts.push(
+      <span key="yoy" className={actual.yoy_change >= 0 ? 'text-up-700' : 'text-down-700'}>
+        {t('前年同期')} {actual.yoy_change >= 0 ? '+' : ''}
+        {pct(actual.yoy_change)}
+      </span>,
+    );
+  }
+  if (parts.length === 0) return null;
+  return (
+    <>
+      {parts.map((part, index) => (
+        <span key={index} className="contents">
+          {index > 0 && <span className="text-ink-300">·</span>}
+          {part}
+        </span>
+      ))}
+    </>
   );
 }
 
@@ -85,8 +151,10 @@ interface EarningsListProps {
   onShowAll?: () => void;
 }
 
+/* 実績列は 3 値（前期→予想→実績）を持つので、旧配分（198px 実測）では
+   3 つ目が「−…」に切れた。コード列と種別列から少しずつ回す。 */
 const GRID =
-  'md:grid-cols-[minmax(150px,1.35fr)_minmax(112px,0.9fr)_minmax(168px,1.25fr)_100px_88px_56px] 2xl:grid-cols-[minmax(170px,1.35fr)_minmax(120px,0.9fr)_minmax(190px,1.25fr)_110px_96px_60px]';
+  'md:grid-cols-[minmax(150px,1.1fr)_minmax(108px,0.7fr)_minmax(210px,1.8fr)_100px_88px_56px] 2xl:grid-cols-[minmax(170px,1.1fr)_minmax(118px,0.7fr)_minmax(232px,1.8fr)_110px_96px_60px]';
 
 export default function EarningsList({ items, filteredByDay, featuredFilteredEmpty = false, onShowAll }: EarningsListProps) {
   const navigate = useNavigate();
@@ -140,7 +208,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
       <div className={cn('sticky top-0 z-20 hidden border-b border-line bg-card-warm px-4 py-2.5 md:grid md:gap-3', GRID)}>
         <span className="eyebrow">{t('代码')}</span>
         <span className="eyebrow">{t('种别 · 状态')}</span>
-        <span className="eyebrow">{t('前期実績 vs 会社予想')}</span>
+        <span className="eyebrow">{t('前期実績 → 会社予想 → 実績')}</span>
         <span className="eyebrow text-right">{t('收盘 / 涨跌')}</span>
         <span className="eyebrow text-right">{t('20日均额')}</span>
         <span className="eyebrow text-right">★</span>
@@ -176,7 +244,12 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
               const forecast = row.forecast;
               const priorValue = forecast?.prior_fy_value ?? null;
               const forecastValue = forecast?.forecast_value ?? null;
-              const released = row.actual;
+              // 「已公布」でも実績値が無い開示がある（予想修正だけの回など）。
+              // その行で三値を出すと「→ —」という宙ぶらりんの矢印になるので、
+              // 値が無いときは従来どおり 前期→予想 の二値に戻す。
+              const releasedRaw = row.actual;
+              const actualValue = releasedRaw ? actualValueOf(releasedRaw) : null;
+              const released = actualValue != null ? releasedRaw : undefined;
               const open = () => navigate(`/stock/${row.display_code}`);
               return (
                 <div key={`${row.canonical_code}-${row.period_type}-${row.date}`}>
@@ -214,19 +287,30 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                     {/* 已公布行显示实绩；否则显示 前期実績 vs 会社予想 */}
                     {released ? (
                       <span className="flex min-w-0 items-center gap-2">
+                        <ForecastBars
+                          prior={priorValue}
+                          forecast={released.compared_forecast ?? forecastValue}
+                          actual={actualValue}
+                        />
                         <span className="min-w-0 font-mono text-caption tnum">
                           <span className="block truncate">
-                            <span className="text-ink-400">{t('营利')}</span>{' '}
-                            <span className="font-semibold text-ink-900">{fmtYenCompact(released.operating_profit)}</span>
+                            <span className="text-ink-500">{priorValue != null ? fmtYenCompact(priorValue) : '—'}</span>
+                            <span className="mx-1 text-ink-300">→</span>
+                            <span className="text-ink-500">
+                              {fmtYenCompact(released.compared_forecast ?? forecastValue)}
+                            </span>
+                            <span className="mx-1 text-ink-300">→</span>
+                            <span className="font-semibold text-ink-900">{fmtYenCompact(actualValue)}</span>
                           </span>
-                          <span className="block truncate text-micro text-ink-500">
-                            {t('销售')} {fmtYenCompact(released.sales)} · {t('纯利')} {fmtYenCompact(released.net_profit)}
+                          <span className="flex items-center gap-1 truncate text-micro text-ink-400">
+                            {metricLabel(released.metric)}
+                            <ActualCompare actual={released} />
                           </span>
                         </span>
                       </span>
                     ) : (
                       <span className="flex min-w-0 items-center gap-2">
-                        <ForecastPairBars prior={priorValue} forecast={forecastValue} index={index} />
+                        <ForecastBars prior={priorValue} forecast={forecastValue} />
                         <span className="min-w-0 font-mono text-caption tnum">
                           <span className="block truncate">
                             <span className="text-ink-500">{priorValue != null ? fmtYenCompact(priorValue) : '—'}</span>
@@ -279,18 +363,31 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                     <span className="mt-2 flex items-end justify-between gap-2">
                       <StatusChip item={row} />
                       {released ? (
-                        <span className="min-w-0 text-right font-mono text-caption tnum">
-                          <span className="block truncate">
-                            <span className="text-ink-400">{t('营利')}</span>{' '}
-                            <span className="font-semibold text-ink-900">{fmtYenCompact(released.operating_profit)}</span>
-                          </span>
-                          <span className="block truncate text-micro text-ink-500">
-                            {t('销售')} {fmtYenCompact(released.sales)} · {t('纯利')} {fmtYenCompact(released.net_profit)}
+                        <span className="flex min-w-0 items-center justify-end gap-2">
+                          <ForecastBars
+                            prior={priorValue}
+                            forecast={released.compared_forecast ?? forecastValue}
+                            actual={actualValue}
+                          />
+                          <span className="min-w-0 text-right font-mono text-caption tnum">
+                            <span className="block truncate">
+                              <span className="text-ink-500">{priorValue != null ? fmtYenCompact(priorValue) : '—'}</span>
+                              <span className="mx-1 text-ink-300">→</span>
+                              <span className="text-ink-500">
+                                {fmtYenCompact(released.compared_forecast ?? forecastValue)}
+                              </span>
+                              <span className="mx-1 text-ink-300">→</span>
+                              <span className="font-semibold text-ink-900">{fmtYenCompact(actualValue)}</span>
+                            </span>
+                            <span className="flex items-center justify-end gap-1 truncate text-micro text-ink-400">
+                              {metricLabel(released.metric)}
+                              <ActualCompare actual={released} />
+                            </span>
                           </span>
                         </span>
                       ) : (
                         <span className="flex min-w-0 items-center justify-end gap-2">
-                          <ForecastPairBars prior={priorValue} forecast={forecastValue} index={index} />
+                          <ForecastBars prior={priorValue} forecast={forecastValue} />
                           <span className="min-w-0 text-right font-mono text-caption tnum">
                             <span className="block truncate">
                               <span className="text-ink-500">{priorValue != null ? fmtYenCompact(priorValue) : '—'}</span>

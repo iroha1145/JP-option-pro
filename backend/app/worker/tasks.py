@@ -45,6 +45,7 @@ TASK_MAINTENANCE = "maintenance"
 TASK_NEWS_SYNC = "news_sync"
 TASK_AI_JOBS = "ai_jobs"
 TASK_INTRADAY = "intraday_fetch"
+TASK_SHORT_MONITOR = "short_monitor_refresh"
 
 # 引け後バッチ時刻に J-Quants がまだ publish していない時の再試行間隔。
 POST_CLOSE_RETRY_SECONDS = 20 * 60.0
@@ -59,6 +60,7 @@ DEFAULT_TASK_NAMES: tuple[str, ...] = (
     TASK_NEWS_SYNC,
     TASK_AI_JOBS,
     TASK_INTRADAY,
+    TASK_SHORT_MONITOR,
 )
 
 MANUAL_ACTION_TYPES: tuple[str, ...] = (
@@ -70,6 +72,7 @@ MANUAL_ACTION_TYPES: tuple[str, ...] = (
     "news_sync",
     "intraday_fetch",
     "tick_fetch",
+    "short_monitor_refresh",
 )
 
 _BACKFILL_DATASET_ORDER = (
@@ -185,6 +188,9 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
                 results[name] = dict(step())
         scan_summary = _run_radar_and_screener(context, target)
         results["radar"] = scan_summary
+        # 雷達の後に回す。突破確認と出来高確認を「挤空確認」の条件に使うので、
+        # その日の雷達が終わっていないと判定材料が揃わない。
+        results["short_monitor"] = _run_short_monitor(context, target)
         failed = [
             name for name, value in results.items()
             if isinstance(value, dict) and value.get("status") == "error"
@@ -240,11 +246,18 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
         if not context.jquants_ready():
             return _not_configured()
         # 進行中データセットを 1 ステップ（1ファイル）ずつ進める。
+        history_from = context.engine.backfill_window_start()
         for dataset in _BACKFILL_DATASET_ORDER:
             state = context.repository.sync_state(dataset)
             checkpoint = (state or {}).get("checkpoint") or {}
             pending = checkpoint.get("bulk_pending")
-            if pending is None and not checkpoint.get("last_synced_date"):
+            # 計画は **それを立てた窓に対してのみ** 完了しうる。`backfill_years`
+            # を広げても古い計画が残っていると、`pending=0` が「履歴が揃った」
+            # に見えたまま永久に固まる（実際、空売り残高は 10 年分あるうち
+            # 2025-06 以降の 35 本で止まっていた）。窓が変わったら立て直す。
+            stale_window = checkpoint.get("bulk_history_from") != history_from
+            unplanned = pending is None and not checkpoint.get("last_synced_date")
+            if unplanned or stale_window:
                 plan = context.engine.backfill_plan(dataset)
                 if plan.get("status") == "error":
                     return TaskResult(
@@ -457,6 +470,39 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             details={**outcome, "queue": jobs.status_counts()},
         )
 
+    def short_monitor_task(payload: dict[str, Any] | None) -> TaskResult:
+        """手動更新の受け口。**定時では走らない。**
+
+        再構築は引け後バッチの中で雷達の後に走る。ここでも定時に走らせると、
+        単一ライターの SQLite を 9 分ぶん取り合って両方が `database is locked`
+        で落ちる（実際そうなった）。定時のティックは何もせず、手動の
+        `short_monitor_refresh` が来たときだけ同じ関数を呼ぶ。
+        """
+
+        if not payload:
+            return TaskResult(
+                status="completed", next_delay_seconds=6 * 3600.0,
+                details={"reason": "runs_inside_post_close_batch"},
+            )
+        target = context.latest_completed_trading_day()
+        if target is None:
+            return TaskResult(
+                status="skipped", next_delay_seconds=6 * 3600.0,
+                details={"reason": "trading_calendar_empty_or_non_trading_day"},
+            )
+        result = _run_short_monitor(context, target)
+        if result.get("status") == "busy":
+            # 書き込みロックの取り合いは「壊れている」ではない。少し待って戻る。
+            return TaskResult(
+                status="skipped", next_delay_seconds=300.0, details=result,
+            )
+        return TaskResult(
+            status="failed" if result.get("status") == "error" else "completed",
+            error_code=result.get("error_code"),
+            next_delay_seconds=6 * 3600.0,
+            details=result,
+        )
+
     return [
         TaskSpec(
             name=TASK_CALENDAR_MASTER,
@@ -498,6 +544,14 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             initial_delay_seconds=120.0,
             action_types=("intraday_fetch", "tick_fetch"),
         ),
+        # 手動更新は引け後バッチと **同じ関数** を呼ぶ。別経路を作ると
+        # 「手で押したときだけ結果が違う」が起きる。
+        TaskSpec(
+            name=TASK_SHORT_MONITOR,
+            run=short_monitor_task,
+            initial_delay_seconds=180.0,
+            action_types=("short_monitor_refresh",),
+        ),
     ]
 
 
@@ -511,6 +565,66 @@ def news_sync_outcome(summary: dict[str, Any]) -> tuple[str, str | None]:
     return "completed", None
 
 
+#: 突破が確認済みと呼べる雷達状態。挤空確認の「価格突破」条件に使う。
+_RADAR_BREAKOUT_STATES = frozenset({
+    "confirmed", "holding", "retest_held", "reaccelerating", "extended",
+})
+
+
+def _radar_confirmations(context: TaskContext) -> dict[str, dict[str, bool]]:
+    """雷達の突破確認と出来高確認を、銘柄ごとの真偽に落とす。
+
+    空売り側で価格を再判定しない —— 突破の定義は 1 か所（雷達）に置く。
+    """
+
+    out: dict[str, dict[str, bool]] = {}
+    for event in context.repository.open_radar_events(terminal_states=sorted(TERMINAL_STATES)):
+        code = event.get("canonical_code")
+        if not code:
+            continue
+        breakout = str(event.get("state") or "") in _RADAR_BREAKOUT_STATES
+        scores = event.get("scores") or {}
+        confirmation = scores.get("breakout_confirmation") or {}
+        turnover = confirmation.get("score") if isinstance(confirmation, dict) else None
+        current = out.setdefault(code, {"breakout": False, "turnover": False})
+        current["breakout"] = current["breakout"] or breakout
+        current["turnover"] = current["turnover"] or bool(turnover is not None and turnover >= 60.0)
+    return out
+
+
+def _run_short_monitor(context: TaskContext, target_date: str) -> dict[str, Any]:
+    """機関空売り行動モニターの再構築 + 当日スナップショット。
+
+    1 銘柄の異常で全市場を止めない。失敗したら前回の有効なスナップショットを
+    そのまま残す（消さない）。
+    """
+
+    from app.services.short_monitor import pipeline as short_monitor
+
+    if not context.repository.latest_short_position_date():
+        return {"status": "skipped", "reason": "no_short_position_data"}
+    try:
+        rebuilt = short_monitor.rebuild_events(context.repository)
+        refreshed = short_monitor.refresh_snapshots(
+            context.repository,
+            as_of_date=target_date,
+            radar_confirmations=_radar_confirmations(context),
+        )
+    except Exception as exc:  # noqa: BLE001 - 全市場バッチを 1 件で落とさない
+        message = str(exc)
+        # 単一ライターの SQLite でロックがぶつかるのは想定内。障害ではない。
+        if "locked" in message or "busy" in message:
+            return {"status": "busy", "message": message[:200]}
+        return {"status": "error", "error_code": type(exc).__name__, "message": message[:200]}
+
+    context.repository.record_sync_success(
+        "short_behavior",
+        rows_total=refreshed.snapshots,
+        data_through=refreshed.as_of_date,
+    )
+    return {"status": "ok", "rebuild": rebuilt.as_dict(), "refresh": refreshed.as_dict()}
+
+
 def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str, Any]:
     if not context.config.features.radar_enabled:
         return {"status": "disabled"}
@@ -522,6 +636,8 @@ def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str,
     features_by_code = summary.pop("features_by_code")
     structure_by_code = summary.pop("structure_by_code")
     sector_median_returns = summary.pop("sector_median_returns")
+    sector_median_returns_63d = summary.pop("sector_median_returns_63d", {})
+    regulation_map = summary.pop("regulation_map", {})
     rs_context = summary.pop("rs_context")
 
     securities = {
@@ -537,9 +653,11 @@ def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str,
         features_by_code=features_by_code,
         securities=securities,
         sector_median_returns=sector_median_returns,
+        sector_median_returns_63d=sector_median_returns_63d,
         topix_return_63d=rs_context.get("topix_return_63d"),
         margin_map=context.repository.latest_margin_map(),
         radar_state_by_code=radar_state_by_code,
+        regulation_map=regulation_map,
     )
     written = context.repository.replace_screener_rows(rows)
     context.repository.record_sync_success(
@@ -565,6 +683,7 @@ def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str,
         structure_by_code=structure_by_code,
         securities=securities,
         topix_return_63d=rs_context.get("topix_return_63d"),
+        regulation_map=regulation_map,
     )
     strength_written = context.repository.replace_strength_rows(
         strength_rows, trade_date=target_date, regime=regime

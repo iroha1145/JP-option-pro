@@ -4,6 +4,7 @@ import { del, get, patch as patchVerb, post, toQuery } from './client.ts';
 import { registryGet } from './queryRegistry.ts';
 import type {
   AccessStatus,
+  ResearchReport,
   DataStatusResponse,
   EarningsCalendarItem,
   EarningsRecentItem,
@@ -25,6 +26,10 @@ import type {
   RadarCurrent,
   RadarEvent,
   ScreenerResponse,
+  ShortMonitorDetail,
+  ShortMonitorEvents,
+  ShortMonitorOverview,
+  ShortMonitorRankings,
   SearchResult,
   SettingsView,
   StockBar,
@@ -140,6 +145,12 @@ export const earningsApi = {
   },
 };
 
+export const researchApi = {
+  report(runId?: string): Promise<ResearchReport> {
+    return get(runId ? `/research/report?run_id=${encodeURIComponent(runId)}` : '/research/report');
+  },
+};
+
 export const quotesApi = {
   overlay(scope: 'radar' | 'screener', limit = 200): Promise<IntradayOverlayResponse> {
     return get(`/quotes/overlay?${toQuery({ scope, limit })}`);
@@ -156,6 +167,38 @@ export const radarApi = {
   },
   forSecurity(code: string): Promise<{ canonical_code: string; display_code: string; events: RadarEvent[] }> {
     return get(`/radar/securities/${encodeURIComponent(code)}`);
+  },
+};
+
+export const shortMonitorApi = {
+  overview(date?: string): Promise<ShortMonitorOverview> {
+    return get(date ? `/short-monitor/overview?${toQuery({ date })}` : '/short-monitor/overview');
+  },
+  rankings(params: {
+    view?: string;
+    date?: string;
+    states?: string;
+    flags?: string;
+    markets?: string;
+    sectors?: string;
+    codes?: string;
+    min_confidence?: number;
+    min_turnover?: number;
+    min_score?: number;
+    order_by?: string;
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<ShortMonitorRankings> {
+    const query = toQuery(params);
+    return get(query ? `/short-monitor/rankings?${query}` : '/short-monitor/rankings');
+  },
+  stock(code: string, date?: string): Promise<ShortMonitorDetail> {
+    const suffix = date ? `?${toQuery({ date })}` : '';
+    return get(`/short-monitor/stocks/${encodeURIComponent(code)}${suffix}`);
+  },
+  events(code: string, params: { limit?: number; offset?: number } = {}): Promise<ShortMonitorEvents> {
+    const query = toQuery(params);
+    return get(`/short-monitor/stocks/${encodeURIComponent(code)}/events${query ? `?${query}` : ''}`);
   },
 };
 

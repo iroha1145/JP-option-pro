@@ -102,11 +102,11 @@ export const TOPN_OPTIONS: { value: number; label: string }[] = [
 
 export const TURNOVER_OPTIONS: { value: number; label: string }[] = [
   { value: 0, label: t('不限成交额') },
-  { value: 100_000_000, label: '≥ 1億円' },
-  { value: 500_000_000, label: '≥ 5億円' },
-  { value: 1_000_000_000, label: '≥ 10億円' },
-  { value: 5_000_000_000, label: '≥ 50億円' },
-  { value: 10_000_000_000, label: '≥ 100億円' },
+  { value: 100_000_000, label: t('≥ 1億円') },
+  { value: 500_000_000, label: t('≥ 5億円') },
+  { value: 1_000_000_000, label: t('≥ 10億円') },
+  { value: 5_000_000_000, label: t('≥ 50億円') },
+  { value: 10_000_000_000, label: t('≥ 100億円') },
 ];
 
 /** 每股新闻摘要：newsApi.securities 一次批量取回（72h 窗口，仅覆盖已接入 RSS 源）。 */

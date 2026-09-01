@@ -12,6 +12,7 @@ import Segmented from '@/components/shared/Segmented';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import { SkeletonRows } from '@/components/shared/Skeleton';
 import { t } from '@/i18n/core';
+import { explanationLines } from '@/lib/explainText';
 import { fmtDate, fmtJstDateTime, fmtRelativeShort } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type {
@@ -24,6 +25,8 @@ import type {
 
 type Tab = 'feed' | 'stocks' | 'econ' | 'sources';
 
+/** 値は API に渡す絞り込みキー（後端 `classify.CATEGORY_RULES` の日本語 taxonomy）。
+ *  **表示のときだけ `t()` を通す** —— ここで訳した文字列を送ると何も引っかからない。 */
 const CATEGORY_FILTERS = ['決算', '業績予想修正', 'M&A・TOB', '自社株買い', '配当', '日銀・金利', '規制・政策'];
 
 export default function News() {
@@ -87,7 +90,7 @@ export default function News() {
             </FilterChip>
             {CATEGORY_FILTERS.map((item) => (
               <FilterChip key={item} active={category === item} onClick={() => setCategory(category === item ? null : item)}>
-                {item}
+                {t(item)}
               </FilterChip>
             ))}
             <span className="mx-1 h-4 w-px bg-line" />
@@ -219,7 +222,7 @@ function HotspotCard({ group }: { group: NewsHotspotGroup }) {
       <span className="flex items-center gap-1.5 text-micro text-ink-400">
         <span>{group.item_count} {t('条')}</span>
         {group.categories.slice(0, 2).map((cat) => (
-          <span key={cat} className="rounded-sm bg-paper-2 px-1 py-0.5">{cat}</span>
+          <span key={cat} className="rounded-sm bg-paper-2 px-1 py-0.5">{t(cat)}</span>
         ))}
       </span>
     </Link>
@@ -273,7 +276,7 @@ function NewsCard({ item }: { item: NewsItem }) {
 
           <div className="mt-2 flex flex-wrap items-center gap-1.5 text-micro text-ink-400">
             {(item.categories ?? []).slice(0, 3).map((cat) => (
-              <span key={cat} className="rounded-sm border border-line bg-card px-1.5 py-0.5 text-ink-600">{cat}</span>
+              <span key={cat} className="rounded-sm border border-line bg-card px-1.5 py-0.5 text-ink-600">{t(cat)}</span>
             ))}
             {item.securities.map((security) => (
               <Link
@@ -300,9 +303,10 @@ function NewsCard({ item }: { item: NewsItem }) {
           {expanded && (
             <div className="mt-2 space-y-1.5 border-t border-line pt-2 text-caption text-ink-500">
               {item.original_summary && <p className="text-ink-600">{item.original_summary}</p>}
-              {(item.importance_reasons?.length ?? 0) > 0 && (
+              {(item.importance_reason_items?.length ?? item.importance_reasons?.length ?? 0) > 0 && (
                 <p>
-                  {t('重要度依据')}: {item.importance_reasons!.join(' · ')}
+                  {t('重要度依据')}:{' '}
+                  {explanationLines(item.importance_reason_items, item.importance_reasons).join(' · ')}
                 </p>
               )}
               <p>
@@ -357,7 +361,7 @@ function StocksImpactPanel({ rows, loading }: { rows: NewsSecurityRow[]; loading
         render: (row) => (
           <span className="flex flex-wrap gap-1">
             {row.categories.map((cat) => (
-              <span key={cat} className="rounded-sm bg-paper-2 px-1.5 py-0.5 text-micro text-ink-600">{cat}</span>
+              <span key={cat} className="rounded-sm bg-paper-2 px-1.5 py-0.5 text-micro text-ink-600">{t(cat)}</span>
             ))}
           </span>
         ),
@@ -417,7 +421,7 @@ function EconCalendarPanel({ events, note, loading }: { events: EconEvent[]; not
                 </span>
                 <EconImportanceDot importance={event.importance} />
                 <span className="min-w-0 flex-1 text-body-s text-ink-800">{event.name_ja}</span>
-                <span className="rounded-sm bg-paper-2 px-1.5 py-0.5 text-micro text-ink-500">{event.category}</span>
+                <span className="rounded-sm bg-paper-2 px-1.5 py-0.5 text-micro text-ink-500">{t(event.category)}</span>
                 <span className="text-micro text-ink-400">{event.organizer}</span>
                 {!event.confirmed && (
                   <span className="rounded-sm bg-warn-50 px-1.5 py-0.5 text-micro text-warn-700" title={event.note ?? ''}>

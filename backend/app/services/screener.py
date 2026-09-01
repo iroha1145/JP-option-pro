@@ -22,7 +22,10 @@ SCREENER_VERSION = "jp-screener-v1"
 _SORTABLE_COLUMNS = {
     "close", "turnover_value", "avg_turnover_20d", "turnover_ratio",
     "return_1d", "return_5d", "return_20d", "return_63d", "pct_from_high_252",
-    "rs_topix_63d", "rs_sector_63d", "volatility_contraction",
+    "rs_topix_63d", "rs_sector_20d", "rs_sector_63d",
+    # 規制は序数の severity だけ並べ替え可（level はテキストなので辞書順に
+    # 並べても意味がない）。
+    "regulation_severity", "volatility_contraction",
     "drawdown_63d", "overheat_atr_multiple", "margin_long_short_ratio",
     "canonical_code",
 }
@@ -45,6 +48,7 @@ class ScreenerFilters(BaseModel):
     above_ma200: bool | None = None
     min_return_20d: float | None = None
     min_rs_topix_63d: float | None = None
+    min_rs_sector_20d: float | None = None
     min_rs_sector_63d: float | None = None
     min_volatility_contraction: float | None = None
     max_drawdown_63d: float | None = None
@@ -52,7 +56,7 @@ class ScreenerFilters(BaseModel):
     max_margin_ratio: float | None = Field(default=None, ge=0)
     sort_by: Literal[
         "turnover_ratio", "return_20d", "return_63d", "rs_topix_63d",
-        "rs_sector_63d", "pct_from_high_252", "avg_turnover_20d",
+        "rs_sector_20d", "rs_sector_63d", "pct_from_high_252", "avg_turnover_20d",
         "volatility_contraction", "close", "canonical_code",
     ] = "rs_topix_63d"
     sort_dir: Literal["asc", "desc"] = "desc"
@@ -82,6 +86,7 @@ def compile_filters(filters: ScreenerFilters) -> tuple[str, list[Any], str]:
         ("pct_from_high_252", ">=", filters.max_pct_from_high_252),
         ("return_20d", ">=", filters.min_return_20d),
         ("rs_topix_63d", ">=", filters.min_rs_topix_63d),
+        ("rs_sector_20d", ">=", filters.min_rs_sector_20d),
         ("rs_sector_63d", ">=", filters.min_rs_sector_63d),
         ("volatility_contraction", ">=", filters.min_volatility_contraction),
         ("drawdown_63d", ">=", filters.max_drawdown_63d),
@@ -140,9 +145,11 @@ def build_screener_rows(
     features_by_code: Mapping[str, Mapping[str, Any]],
     securities: Mapping[str, Mapping[str, Any]],
     sector_median_returns: Mapping[str, float],
+    sector_median_returns_63d: Mapping[str, float] | None = None,
     topix_return_63d: float | None,
     margin_map: Mapping[str, Mapping[str, Any]],
     radar_state_by_code: Mapping[str, str],
+    regulation_map: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for code, features in features_by_code.items():
@@ -153,10 +160,17 @@ def build_screener_rows(
         rs_topix = None
         if features.get("return_63d") is not None and topix_return_63d is not None:
             rs_topix = features["return_63d"] - topix_return_63d
-        rs_sector = None
+        # 20 日リターン同士の差は 20 日指標。63 日の名前で保存していたので
+        # 画面・API・DB が揃って「63日」と言いながら中身は 20 日だった。
+        rs_sector_20d = None
         sector_median = sector_median_returns.get(sector or "")
         if features.get("return_20d") is not None and sector_median is not None:
-            rs_sector = features["return_20d"] - sector_median
+            rs_sector_20d = features["return_20d"] - sector_median
+        rs_sector_63d = None
+        sector_median_63 = (sector_median_returns_63d or {}).get(sector or "")
+        if features.get("return_63d") is not None and sector_median_63 is not None:
+            rs_sector_63d = features["return_63d"] - sector_median_63
+        regulation = (regulation_map or {}).get(code)
         margin_row = margin_map.get(code)
         margin_ratio = None
         if margin_row:
@@ -187,7 +201,10 @@ def build_screener_rows(
                     else (1 if features.get("ma_alignment") else 0)
                 ),
                 "rs_topix_63d": rs_topix,
-                "rs_sector_63d": rs_sector,
+                "rs_sector_20d": rs_sector_20d,
+                "rs_sector_63d": rs_sector_63d,
+                "regulation_level": getattr(regulation, "level", None),
+                "regulation_severity": getattr(regulation, "severity", None),
                 "volatility_contraction": features.get("volatility_contraction"),
                 "drawdown_63d": features.get("drawdown_63d"),
                 "overheat_atr_multiple": features.get("overheat_atr_multiple"),

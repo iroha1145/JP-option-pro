@@ -47,6 +47,8 @@ from app.api import (
     strength as strength_api,
     watchlist as watchlist_api,
     worker_actions as worker_api,
+    research as research_api,
+    short_monitor as short_monitor_api,
 )
 from app.config import get_settings  # noqa: E402
 from app.services.request_security import (  # noqa: E402
@@ -220,6 +222,8 @@ app.include_router(news_api.router, dependencies=_PUBLIC_READ)
 app.include_router(data_status_api.router, dependencies=_PUBLIC_READ)
 app.include_router(settings_api.router, dependencies=_PUBLIC_READ)
 app.include_router(quotes.router, dependencies=_PUBLIC_READ)
+app.include_router(research_api.router, dependencies=_PUBLIC_READ)
+app.include_router(short_monitor_api.router, dependencies=_PUBLIC_READ)
 # 自選はルート内で主体（オーナー / 訪客アカウント）を解決し、書き込みは
 # 同一オリジンガードを各ルートで掛ける — ルータ級のオーナー強制を外す。
 app.include_router(watchlist_api.router)

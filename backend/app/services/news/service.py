@@ -11,6 +11,7 @@ from app.repositories.core import CoreRepository
 from app.repositories.news_store import NewsStore
 from app.services.ai_jobs.store import AIJobStore, request_hash  # noqa: F401 — request_hash は enqueue 用
 from app.services.ai_jobs import runtime as ai
+from app.services import display_text
 from app.services.news import classify
 from app.services.news.entities import EntityMatcher, build_alias_rows
 from app.services.news.fetcher import fetch_feed
@@ -134,7 +135,7 @@ def sync_feeds_once(
                 seen_titles.append((news_id, bigrams, set(codes)))
             in_watchlist = any(code in watchlist_codes for code in codes)
             has_radar = any(code in radar_codes for code in codes)
-            importance, components, reasons = classify.importance_score(
+            importance, components, reason_items = classify.importance_score(
                 categories=categories,
                 securities_count=len(codes),
                 published_at=item.published_at,
@@ -163,7 +164,14 @@ def sync_feeds_once(
                     ],
                     "market_relevance": relevance,
                     "importance": importance,
-                    "importance_components": {"components": components, "reasons": reasons},
+                    # `reasons` は中文で置換済み、`reason_items` は翻訳用の
+                    # テンプレート形。既存行には後者が無いので、読み出し側は
+                    # 前者へフォールバックする。
+                    "importance_components": {
+                        "components": components,
+                        "reasons": display_text.rendered(reason_items),
+                        "reason_items": reason_items,
+                    },
                 }
             )
         stored += store.insert_news_items(batch)
@@ -672,6 +680,7 @@ def _item_view(item: dict[str, Any], names: dict[str, str | None] | None = None)
         ],
         "importance": item.get("importance"),
         "importance_reasons": (components.get("reasons") or [])[:4],
+        "importance_reason_items": (components.get("reason_items") or [])[:4],
         "market_relevance": item.get("market_relevance"),
     }
 

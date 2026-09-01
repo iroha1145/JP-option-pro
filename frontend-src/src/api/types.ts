@@ -1,5 +1,22 @@
 /** 后端契约类型（与 FastAPI 路由一一对应；缺失字段一律 null，UI 渲染 '—'）。 */
 
+/**
+ * 後端が組み立てた表示文の 1 行。**テンプレート + パラメータ**。
+ *
+ * サーバは相手の言語を知らない（応答は ETag で共有される）ので、完成した文
+ * ではなくテンプレートを返す。描画は `lib/explainText` の `explanationLine`。
+ * 後端側の約束は `backend/app/services/display_text.py`。
+ */
+export interface ExplanationItem {
+  template: string;
+  params?: Record<string, string | number>;
+  /** 列挙（「3家减仓、1家跌破门槛」）の結合前の項目。区切りは言語で違う。 */
+  parts?: ExplanationItem[];
+  /** parts が埋めるパラメータ名（既定 `moves`）と区切り（既定 `、`）。 */
+  parts_key?: string;
+  parts_sep?: string;
+}
+
 export interface IndexSummary {
   index_code: string;
   name: string;
@@ -38,6 +55,8 @@ export interface SectorMemberRow {
   turnover_ratio: number | null;
   avg_turnover_20d: number | null;
   pct_from_high_252: number | null;
+  /** 業種相対は 20 日と 63 日で別物。以前は 20 日の値を 63 日の名前で運んでいた。 */
+  rs_sector_20d?: number | null;
   rs_sector_63d: number | null;
   turnover_share: number | null;
 }
@@ -64,20 +83,27 @@ export interface IntradayQuote {
   source: string;
 }
 
-export interface IntradayQuotesResponse {
-  version: string;
-  enabled: boolean;
+/** 供給元の素性。値の意味はこれで決まるので、画面はベンダ名を焼き込まない。 */
+export interface QuoteSourceEnvelope {
   source: string;
+  /** realtime | delayed | end_of_day | unknown */
+  delay_class?: string;
+  is_official?: boolean;
+  is_realtime?: boolean;
+  source_detail?: string | null;
   delayed?: boolean;
   delayed_minutes?: number;
+}
+
+export interface IntradayQuotesResponse extends QuoteSourceEnvelope {
+  version: string;
+  enabled: boolean;
   quotes: Record<string, IntradayQuote>;
   indices?: Record<string, IntradayQuote & { name: string }>;
 }
 
-export interface IntradaySectorsResponse {
+export interface IntradaySectorsResponse extends QuoteSourceEnvelope {
   enabled: boolean;
-  source: string;
-  delayed_minutes?: number;
   universe?: number;
   quoted?: number;
   sectors: { sector33_code: string; sector33_name: string; median_return_1d: number; advancers_share: number; covered: number }[];
@@ -93,10 +119,9 @@ export interface IntradayOverlayRow {
   live_pct_from_high_252?: number | null;
 }
 
-export interface IntradayOverlayResponse {
+export interface IntradayOverlayResponse extends QuoteSourceEnvelope {
   enabled: boolean;
   scope: 'radar' | 'screener';
-  delayed_minutes?: number;
   requested?: number;
   quoted?: number;
   above_pivot_count?: number;
@@ -202,6 +227,7 @@ export interface StockOverview {
   margin_interest: MarginInterestRow[];
   margin_alerts: Record<string, unknown>[];
   short_positions: ShortPositionRow[];
+  short_interest: ShortInterestSummary | null;
   radar_events: RadarEvent[];
   technical: TechnicalStructure | null;
 }
@@ -275,6 +301,38 @@ export interface MarginInterestRow {
   short_standardized: number | null;
   long_standardized: number | null;
   issue_type: string | null;
+}
+
+/** 空売り残高: 2週間の変化一覧 + 報告義務中の合計 */
+export interface ShortInterestChange {
+  holder_name: string | null;
+  calculated_date: string;
+  disclosed_date: string | null;
+  ratio: number | null;
+  shares: number | null;
+  units: number | null;
+  previous_ratio: number | null;
+  delta: number | null;
+  /** new | increased | decreased | below_threshold | closed | unknown */
+  kind: string;
+  state: string;
+}
+
+export interface ShortInterestSummary {
+  as_of: string | null;
+  baseline_date: string | null;
+  window_trading_days: number;
+  /** 報告義務が続いている保有者だけの合計。閾値割れの最終報告は含まない。 */
+  reporting_total: number | null;
+  /** 同じ保有者集合の株数合計。1 件でも欠ければ null（欠損を 0 で埋めない）。 */
+  reporting_shares: number | null;
+  reporting_holders: number;
+  below_threshold_holders: number;
+  closed_holders: number;
+  baseline_total: number | null;
+  change: number | null;
+  reporting_threshold: number;
+  changes: ShortInterestChange[];
 }
 
 export interface ShortPositionRow {
@@ -387,7 +445,11 @@ export interface ScreenerRow {
   ma200_gap_pct: number | null;
   ma_alignment: number | null;
   rs_topix_63d: number | null;
+  rs_sector_20d?: number | null;
   rs_sector_63d: number | null;
+  /** none | precaution | daily_publication | restricted | severe | unknown */
+  regulation_level?: string | null;
+  regulation_severity?: number | null;
   volatility_contraction: number | null;
   drawdown_63d: number | null;
   margin_long_short_ratio: number | null;
@@ -608,6 +670,16 @@ export interface EarningsUpcomingItem {
     net_profit: number | null;
     disclosed_time: string | null;
     is_revision: boolean;
+    /* 实绩与「和什么比」。缺这组字段 = 该开示没有实绩值（如仅预想修正）。
+       达成率只有通期才有；季度是**进度率**（累计÷通期预想），两者不能混用。 */
+    metric?: 'operating_profit' | 'net_profit';
+    actual_value?: number | null;
+    compared_forecast?: number | null;
+    basis?: 'full_year' | 'progress';
+    achievement?: number | null;
+    progress?: number | null;
+    yoy_value?: number | null;
+    yoy_change?: number | null;
   };
 }
 
@@ -656,7 +728,12 @@ export interface StrengthRow {
   close: number | null;
   change_pct: number | null;
   intrinsic_score: number | null;
+  /** リスク調整後（並べ替えに使われる値）。raw − penalty。 */
   ranking_score: number | null;
+  /** 減点前の素点 */
+  raw_ranking_score?: number | null;
+  /** 明示的な最終値（ranking_score と同値。意図を読めるように併記） */
+  final_ranking_score?: number | null;
   market_fit_score: number | null;
   profile_fit_score: number | null;
   confidence: number | null;
@@ -678,8 +755,12 @@ export interface StrengthRow {
   risk_penalty: number | null;
   classification: string | null;
   tags: string[];
+  /** 中文で置換済み（後端が古い場合の唯一の情報源） */
   reasons: string[];
   warnings: string[];
+  /** 訳せる形（テンプレート + パラメータ）。あればこちらを使う。 */
+  reason_items?: ExplanationItem[];
+  warning_items?: ExplanationItem[];
   selected_view_rank: number | null;
   families: Record<string, number | null>;
   effective_weights: Record<string, number>;
@@ -758,6 +839,8 @@ export interface NewsItem {
   securities: { canonical_code: string; display_code: string; name_ja: string | null }[];
   importance: number | null;
   importance_reasons?: string[];
+  /** 訳せる形。古い記事（保存済み JSON）には無いので importance_reasons に落ちる。 */
+  importance_reason_items?: ExplanationItem[];
   market_relevance?: string | null;
 }
 
@@ -849,4 +932,225 @@ export interface SettingsView {
   news_mode: string;
   app_version: string;
   app_commit: string;
+}
+
+/** 走步検証レポート（読み取り専用・研究ページ用） */
+export interface ResearchBucket {
+  bucket: string;
+  samples: number;
+  median_return: number | null;
+  median_excess_topix: number | null;
+  hit_rate: number | null;
+  median_mfe: number | null;
+  median_mae: number | null;
+  target_before_stop: number | null;
+  /** 標本不足の層も返す。隠すと上位だけ綺麗に見えるため。 */
+  reliable: boolean;
+}
+
+export interface ResearchWindow {
+  train: [string, string];
+  test: [string, string];
+  horizon_trading_days: number;
+  samples: number;
+  buckets: ResearchBucket[];
+  deciles: ResearchBucket[];
+  monotonic: boolean | null;
+  decile_monotonic: boolean | null;
+  top_bottom_spread: number | null;
+}
+
+export interface ResearchReport {
+  run_id: string;
+  finished_at?: string | null;
+  score_version: string;
+  replay_version: string;
+  signals: number;
+  evaluation_dates: number;
+  windows: ResearchWindow[];
+  summary: {
+    windows: number;
+    windows_judged: number;
+    windows_monotonic: number;
+    windows_with_spread?: number;
+    windows_positive_spread?: number;
+    median_top_bottom_spread?: number | null;
+    verdict: 'monotonic' | 'weak' | 'not_monotonic' | 'insufficient_data';
+    note: string;
+  };
+  point_in_time_limits: string[];
+}
+
+/* -- 机构空卖行为监控 ------------------------------------------------------
+   命名规则与后端一致：只有 `visible` / `reported`，没有 total_short_*。
+   J-Quants 的机构空卖报告只覆盖达到公开披露条件的部分。 */
+
+export interface ShortMonitorScores {
+  low_position: number | null;
+  short_pressure: number | null;
+  price_damage: number | null;
+  absorption: number | null;
+  covering: number | null;
+  rotation: number | null;
+  catalyst: number | null;
+  risk: number | null;
+}
+
+export interface ShortMonitorRow {
+  canonical_code: string;
+  display_code: string;
+  name: string | null;
+  market_code: string | null;
+  market_name: string | null;
+  sector33_code: string | null;
+  sector33_name: string | null;
+  as_of_date: string;
+  close: number | null;
+  drawdown_52w: number | null;
+  price_percentile_252: number | null;
+  visible_short_ratio: number | null;
+  visible_short_shares: number | null;
+  /** 官方口径：最后报告仍在公开范围内（≥0.5%）的全部机构之和，不含新鲜度条件。
+   *  visible_* 是近 125 个交易日有更新的子集——两个口径都出，不互相冒充。 */
+  reported_in_scope_ratio: number | null;
+  reported_in_scope_shares: number | null;
+  visible_institution_count: number;
+  below_threshold_count: number;
+  /** 未跌破门槛但报告已停止更新。不计入 visible_*，仍在 reported_in_scope_* 中。 */
+  stale_reporting_count: number | null;
+  /** 最新报告缺少可读比例的机构数。缺失不是解消。 */
+  unknown_institution_count: number | null;
+  largest_institution_ratio: number | null;
+  concentration: number | null;
+  ratio_change_5d: number | null;
+  ratio_change_20d: number | null;
+  shares_change_20d: number | null;
+  pressure_adv20_5d: number | null;
+  pressure_adv20_20d: number | null;
+  visible_days_to_cover: number | null;
+  rel_topix_20d: number | null;
+  rel_sector_20d: number | null;
+  entry_count_20d: number;
+  reentry_count_20d: number;
+  reduction_count_20d: number;
+  threshold_exit_count_20d: number;
+  scores: ShortMonitorScores;
+  behavior_score: number | null;
+  monitor_priority: number | null;
+  data_confidence: number | null;
+  primary_state: string;
+  flags: string[];
+  algorithm_version: string | null;
+}
+
+export interface ShortMonitorOverview {
+  as_of_date: string | null;
+  synced_at?: string | null;
+  coverage: { covered: number; with_visible_short: number; low_confidence: number } | null;
+  states: Record<string, number>;
+  note: string;
+  algorithm_version?: string;
+  score_version?: string;
+  /** 门槛与权重是否已通过历史验证。未验证时界面必须说出来。 */
+  validated?: { gates: boolean; score: boolean };
+  /** 验证的**结果**。「还没验证」和「验证过但没通过」是两回事。 */
+  validation?: {
+    status: string;
+    run?: string;
+    signals?: number;
+    windows?: number;
+    summary: string;
+    document?: string;
+    caveats?: string[];
+  };
+  /** 雷达优先级联动的实际状态。验证未通过时 enabled=false，调整量恒为 0。 */
+  radar_link?: { enabled: boolean; max_shift: number };
+}
+
+export interface ShortMonitorRankings {
+  as_of_date: string | null;
+  view: string;
+  order_by: string;
+  total: number;
+  limit: number;
+  offset: number;
+  rows: ShortMonitorRow[];
+  note: string;
+}
+
+export interface ShortMonitorHolder {
+  legal_id: string;
+  name: string;
+  group_name: string | null;
+  last_reported_ratio: number | null;
+  last_reported_shares: number | null;
+  last_position_date: string | null;
+  last_published_date: string | null;
+  visibility_status: string;
+  /** true = 未跌破门槛，但报告已长期停止更新。 */
+  stale_reporting?: boolean;
+  /** true = 该值在其仓位日时点是精确的（且报告新鲜）。**不代表今天的仓位**。 */
+  exact_at_position_date: boolean;
+  state_age_trading_days: number | null;
+  /** 同一机构并行报告的基金链数（99% 为 1）。 */
+  chain_count?: number | null;
+  is_hedge_disclosed: boolean;
+  mapping_confidence: number | null;
+}
+
+export interface ShortMonitorHistoryPoint {
+  as_of_date: string;
+  visible_short_ratio: number | null;
+  visible_short_shares: number | null;
+  visible_institution_count: number;
+  below_threshold_count: number;
+  behavior_score: number | null;
+  primary_state: string;
+}
+
+export interface ShortMonitorExplanation {
+  state: string;
+  state_label: string;
+  /** 中文で置換済みの文（API 単体で読める）。UI は line_items を優先する。 */
+  lines: string[];
+  /** テンプレート + パラメータ。lib/explainText の explanationLine で描画する。 */
+  line_items?: ExplanationItem[];
+  caveat: string | null;
+}
+
+export interface ShortMonitorDetail extends ShortMonitorRow {
+  components: Record<string, unknown>;
+  holders: ShortMonitorHolder[];
+  history: ShortMonitorHistoryPoint[];
+  explanation: ShortMonitorExplanation;
+  note: string;
+}
+
+export interface ShortMonitorEvent {
+  event_id: string;
+  institution: string;
+  investment_fund_name?: string | null;
+  legal_id: string;
+  group_id: string | null;
+  position_date: string;
+  published_date: string;
+  effective_trade_date: string;
+  short_ratio: number | null;
+  short_shares: number | null;
+  previous_ratio: number | null;
+  ratio_delta: number | null;
+  event_type: string;
+  visibility_status: string;
+  correction_status: string;
+  is_hedge_disclosed: boolean;
+  mapping_confidence: number | null;
+}
+
+export interface ShortMonitorEvents {
+  canonical_code: string;
+  total: number;
+  limit: number;
+  offset: number;
+  events: ShortMonitorEvent[];
+  note: string;
 }

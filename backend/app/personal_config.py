@@ -13,7 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.runtime_environment import REPOSITORY_ROOT
 
@@ -86,8 +86,19 @@ class RadarConfig(StrictConfigModel):
     # 上場からの最低営業日数
     min_listed_days: int = Field(default=120, ge=20, le=1000)
     lookback_days: int = Field(default=320, ge=120, le=520)
-    expiry_days: int = Field(default=40, ge=5, le=200)
-    max_events_per_scan: int = Field(default=400, ge=50, le=2000)
+    # 未確認イベントの寿命。**営業日**で数える（暦日 40 日 ≒ 営業日 28 日で、
+    # 従来と同じ「観測回数」になるように既定値を移した）。連休で老化しない。
+    # 旧キー `expiry_days` は本番 toml に残っているので別名で受ける。
+    expiry_trading_days: int = Field(
+        default=28, ge=5, le=200,
+        validation_alias=AliasChoices("expiry_trading_days", "expiry_days"),
+    )
+    # 1 スキャンで **新規に作る** イベント数の上限（優先度順に採用）。
+    # 既存イベントの更新・保存済みイベント総数・API の返却件数は別物。
+    max_new_events_per_scan: int = Field(
+        default=400, ge=50, le=2000,
+        validation_alias=AliasChoices("max_new_events_per_scan", "max_events_per_scan"),
+    )
 
 
 class NewsConfig(StrictConfigModel):

@@ -496,6 +496,14 @@ export const DICT: Record<string, [string, string]> = {
   '種別 · 状態': ['Type · status', '種別 · 状態'],
   '种别 · 状态': ['Type · status', '種別 · 状態'],
   '前期実績 vs 会社予想': ['Prior FY vs company forecast', '前期実績 vs 会社予想'],
+  '前期実績 → 会社予想 → 実績': [
+    'Prior FY → forecast → actual',
+    '前期実績 → 会社予想 → 実績',
+  ],
+  // 通期の「達成率」と四半期の「進捗率」は別物。訳語も混ぜない。
+  '対予想': ['vs forecast', '対予想'],
+  '進捗': ['Progress', '進捗'],
+  '前年同期': ['YoY', '前年同期'],
   '前年同期开示日推导的目安，以公司正式公告为准': [
     'Estimated from last year\'s disclosure date; the official notice prevails.',
     '前年同期の開示日から導出した目安。正式な会社公表が優先します。',
@@ -901,6 +909,171 @@ export const DICT: Record<string, [string, string]> = {
     '市場データが不足しているため、市場次元はスコアに算入していません',
   ],
 
+  /* ---- i18n 監査 5: 後端が返す表示文で辞書に無かったもの ------------------
+   *
+   * 網羅性の監査（2026-08-04）で見つかった穴。**中文の msgid はこの回では
+   * 直さない** —— 「中文画面に日本語が漏れている」問題（`目安` `確定` `株`
+   * `実績` など）は別件として据え置き、ここでは **ja/en が出ないもの** だけを
+   * 埋める。したがって下には日本語を msgid にした行が混ざる（後端の定数が
+   * 日本語のまま、という現状をそのまま鍵にしている）。中文化するときは
+   * 後端の定数と鍵を **同時に** 変えること。
+   *
+   * 数値が混ざる文はテンプレートのまま登録する（"ATR约{atr}%…"）。完成形を
+   * 鍵にすると数字が変わるたびに引けなくなる。後端側は
+   * `backend/app/services/display_text.py` を参照。
+   */
+
+  /* 後端 strength_scan: 信用規制まわりの警告 */
+  日证金注意喚起銘柄: ['Flagged for caution by JSF', '日証金の注意喚起銘柄'],
+  东证日々公表銘柄: ['TSE daily-publication issue', '東証の日々公表銘柄'],
+  '信用取引规制中（增担保/申込停止）': [
+    'Margin trading restricted (extra collateral / new positions halted)',
+    '信用取引が規制中（増担保・申込停止）',
+  ],
+  '监理・整理・不明确信息': [
+    'Under supervision / to be delisted / unclear disclosure',
+    '監理・整理銘柄、または不明確な情報',
+  ],
+  信用规制あり: ['Margin restrictions in place', '信用規制あり'],
+  '信用规制状态未知（数据未更新）': [
+    'Margin-restriction status unknown (data not refreshed)',
+    '信用規制の状態が不明（データ未更新）',
+  ],
+  深度回撤: ['Deep drawdown', '大幅なドローダウン'],
+
+  /* 後端 strength_scan: 数値を含む警告・根拠（テンプレート） */
+  'ATR约{atr}%，波动风险高': [
+    'ATR around {atr}% — high volatility risk',
+    'ATR は約{atr}%。変動リスクが高いです',
+  ],
+  '63日最大回撤约{dd}%，趋势结构已受损': [
+    '63-day max drawdown around {dd}% — the trend structure is damaged',
+    '63日の最大ドローダウンが約{dd}%。トレンド構造が損なわれています',
+  ],
+  '成交额约为20日均额{ratio}倍': [
+    'Turnover about {ratio}× the 20-day average',
+    '売買代金が20日平均の約{ratio}倍',
+  ],
+
+  /* 後端 strength_scan: 評価根拠（`评分依据`） */
+  '近3个月跑赢TOPIX': ['Outperformed TOPIX over the last 3 months', '直近3ヶ月で TOPIX を上回る'],
+  价格接近一年高点区域: ['Price near the 52-week high zone', '株価が52週高値圏に接近'],
+  'HH/HL 上升结构完好': ['HH/HL uptrend structure intact', 'HH/HL の上昇構造が維持されている'],
+  'Spring 假跌破后回收，结构偏多': [
+    'Recovered after a Spring false breakdown — structurally bullish',
+    'Spring（ダマシの下抜け）後に回復。構造は強気寄り',
+  ],
+  价格位于关键均线上方: ['Price above the key moving averages', '主要な移動平均線の上に位置'],
+  可用价格证据已完成评分: [
+    'Scored on the available price evidence',
+    '利用できる価格の証拠で採点済み',
+  ],
+  '价格证据不足，暂不生成强势结论': [
+    'Not enough price evidence for a strength call',
+    '価格の証拠が不足。強さの結論は出しません',
+  ],
+
+  /* 後端 strength_scan: 市場レジーム（`label` / `spread_label` / 警告）
+     —— 画面用 label は中文 msgid（顺风/中立/逆风，上で定義済み）。
+     順風/逆風 は定数 REGIME_LABELS と旧スナップショット用の別名。
+     中立は中日同形なので上の 1 件だけ残す。 */
+  順風: ['Tailwind', '順風'],
+  逆風: ['Headwind', '逆風'],
+  'グロース対プライム 20日中央値差': [
+    'Growth vs Prime · 20-day median spread',
+    'グロース対プライム 20日中央値差',
+  ],
+  'TOPIX が200日線を下回っている': [
+    'TOPIX is below its 200-day line',
+    'TOPIX が200日線を下回っている',
+  ],
+  '200日線超の銘柄が3割未満（ブレッドス弱い）': [
+    'Fewer than 30% of issues are above the 200-day line (weak breadth)',
+    '200日線超の銘柄が3割未満（ブレッドス弱い）',
+  ],
+
+  /* 後端 vol_price_match: 境界状態（フロントは t() 済み・辞書だけ欠けていた） */
+  量价样本不足: ['Not enough volume/price samples', '量価のサンプルが不足'],
+  量价基准异常: ['Volume/price baseline invalid', '量価のベースラインが異常'],
+  假突破风险高: ['High false-breakout risk', 'ダマシのリスクが高い'],
+
+  /* 後端 news/classify: イベント分類（日本語 taxonomy がそのまま画面に出る）。
+     **鍵は API の絞り込み値そのもの** —— 訳した文字列を送っても何も引けない。 */
+  決算: ['Earnings', '決算'],
+  業績予想修正: ['Guidance revision', '業績予想修正'],
+  'M&A・TOB': ['M&A / Tender offer', 'M&A・TOB'],
+  自社株買い: ['Buyback', '自社株買い'],
+  配当: ['Dividend', '配当'],
+  '増資・資金調達': ['Equity raise / Financing', '増資・資金調達'],
+  大口受注: ['Large order', '大口受注'],
+  株式分割: ['Stock split', '株式分割'],
+  '事故・訴訟': ['Incident / Litigation', '事故・訴訟'],
+  '規制・政策': ['Regulation / Policy', '規制・政策'],
+  '日銀・金利': ['BOJ / Rates', '日銀・金利'],
+  人事: ['Management change', '人事'],
+  '製品・技術': ['Product / Technology', '製品・技術'],
+  供給網: ['Supply chain', '供給網'],
+  ガバナンス: ['Governance', 'ガバナンス'],
+  為替: ['FX', '為替'],
+  業界景況: ['Industry conditions', '業界景況'],
+  '信用・空売り': ['Margin / Short selling', '信用・空売り'],
+  その他: ['Other', 'その他'],
+
+  /* 経済カレンダーの分類（`domain/econ_calendar.py`） */
+  金融政策: ['Monetary policy', '金融政策'],
+  物価: ['Prices', '物価'],
+  景気: ['Business conditions', '景気'],
+  '統計(金融)': ['Financial statistics', '統計(金融)'],
+
+  /* 後端 news/classify: 重要度の根拠 */
+  '事件类别: {categories}': ['Event type: {categories}', 'イベント種別: {categories}'],
+  关联上市公司: ['Linked to listed companies', '関連する上場企業がある'],
+  发布时间较近: ['Published recently', '公開が最近'],
+  发布已有一段时间: ['Published a while ago', '公開から時間が経っている'],
+  自选股相关: ['Relates to a watchlist name', 'ウォッチリスト銘柄に関連'],
+  雷达候选相关: ['Relates to a radar candidate', 'レーダー候補に関連'],
+  '可用证据不足，未补成中性分数': [
+    'Not enough evidence — no neutral score was substituted',
+    '証拠が不足。中立値での穴埋めはしていません',
+  ],
+
+  /* 後端 research/replay.py: 点時化の限界（結果に必ず添える 3 文） */
+  'sector33_code/market_code は現在のマスタ断面のみ。過去に業種・市場区分が変わった銘柄は、当時ではなく現在の分類で集計される。':
+    [
+      'sector33_code / market_code reflect only the current master snapshot. Issues whose sector or market segment changed in the past are aggregated under today’s classification, not the one in force at the time.',
+      'sector33_code/market_code は現在のマスタ断面のみ。過去に業種・市場区分が変わった銘柄は、当時ではなく現在の分類で集計される。',
+    ],
+  '信用規制・空売り比率は履歴を保持しているが、訂正（同一申込日の再公表）は最新版で上書きされるため、当時見えていた初報とは一致しない場合がある。':
+    [
+      'Margin restrictions and short-sale ratios are kept as history, but a correction (a re-publication for the same application date) overwrites the earlier version, so the figures may not match the first report visible at the time.',
+      '信用規制・空売り比率は履歴を保持しているが、訂正（同一申込日の再公表）は最新版で上書きされるため、当時見えていた初報とは一致しない場合がある。',
+    ],
+  '財務データは開示日ベースで持つが、後日の訂正報告は反映済みの値で残る。': [
+    'Financial data is held on a disclosure-date basis, but later corrective filings remain as already-applied values.',
+    '財務データは開示日ベースで持つが、後日の訂正報告は反映済みの値で残る。',
+  ],
+  '上場廃止・長期売買停止で価格系列が窓の途中で途切れた銘柄は、その期間のリターンが欠損（None）となり集計から除外される。破滅的な結末が黙って落ちるため、生存者バイアスで結果はやや上振れしうる（意図的に「最終バーで実現」はしない —— 直近シグナルの未経過窓を誤って損益確定させないため）。':
+    [
+      'Names whose price series ends mid-window (delisting or a long trading halt) have their return for that period as missing (None) and are dropped from the aggregation. Because the catastrophic outcome silently falls out, results can be slightly upward-biased by survivorship (we deliberately do NOT realize at the last bar, so a recent signal whose window has not fully elapsed is not wrongly booked).',
+      '上場廃止・長期売買停止で価格系列が窓の途中で途切れた銘柄は、その期間のリターンが欠損（None）となり集計から除外される。破滅的な結末が黙って落ちるため、生存者バイアスで結果はやや上振れしうる（意図的に「最終バーで実現」はしない —— 直近シグナルの未経過窓を誤って損益確定させないため）。',
+    ],
+
+  /* 後端 earnings_service: 決算カレンダーの「覆盖口径」 */
+  '確定日はJ-Quants発表予定（翌営業日分のみ・3月期/9月期）。それ以外の日付は前年同期の開示日から導出した目安で、会社都合で前後する。':
+    [
+      'Confirmed dates come from the J-Quants announcement schedule (next business day only, March/September year-ends). Every other date is an estimate derived from the same quarter’s disclosure date a year earlier, and can shift at the company’s discretion.',
+      '確定日はJ-Quants発表予定（翌営業日分のみ・3月期/9月期）。それ以外の日付は前年同期の開示日から導出した目安で、会社都合で前後する。',
+    ],
+
+  /* t() を通っていなかったベタ書き */
+  週次: ['weekly', '週次'],
+  'SECTOR MATRIX · 33 業種': ['SECTOR MATRIX · 33 SECTORS', 'SECTOR MATRIX · 33 業種'],
+  '≥ 1億円': ['≥ ¥100M', '≥ 1億円'],
+  '≥ 5億円': ['≥ ¥500M', '≥ 5億円'],
+  '≥ 10億円': ['≥ ¥1B', '≥ 10億円'],
+  '≥ 50億円': ['≥ ¥5B', '≥ 50億円'],
+  '≥ 100億円': ['≥ ¥10B', '≥ 100億円'],
+
   /* ---- i18n 監査 4: 後端のプロファイル説明文 ---- */
   '波动惩罚更重、流动性权重更高': [
     'Heavier volatility penalty, higher liquidity weight',
@@ -918,7 +1091,366 @@ export const DICT: Record<string, [string, string]> = {
     'Market open · today’s data lands after the close',
     'ザラ場中 · 当日データは引け後に更新',
   ],
+  '验证': ['Validation', '検証'],
+  '走步验证 · 分层收益': ['Walk-forward · bucket returns', 'ウォークフォワード · 層別成績'],
+  '历史验证': ['Validation', '履歴検証'],
+  '走步验证：分数是否真的具有排序能力': [
+    'Walk-forward: does the score actually rank?',
+    'ウォークフォワード検証: スコアに順位付けの力があるか',
+  ],
+  '分层单调': ['Monotonic', '層が単調'],
+  '弱单调': ['Weakly monotonic', '弱い単調性'],
+  '不单调': ['Not monotonic', '単調でない'],
+  '样本不足': ['Too few samples', '標本不足'],
+  '高分层稳定优于低分层。可作为排序依据。': [
+    'Higher buckets consistently beat lower ones. Usable for ranking.',
+    '上位層が下位層を安定して上回る。順位付けに使える。',
+  ],
+  '部分窗口成立、部分不成立。不足以把分数当作概率。': [
+    'Holds in some windows, not others. Not enough to treat the score as a probability.',
+    '一部の窓でのみ成立。スコアを確率として扱う根拠にはならない。',
+  ],
+  '高分层未稳定优于低分层。当前分数不具备概率含义，只能当作粗排。': [
+    'Higher buckets do not consistently beat lower ones. The score has no probabilistic meaning; treat it only as a coarse sort.',
+    '上位層が下位層を安定して上回っていない。スコアに確率的な意味は無く、粗い並べ替え以上には使えない。',
+  ],
+  '可判定的分层不足，尚无法下结论。': [
+    'Too few usable buckets to decide.',
+    '判定できる層が足りない。',
+  ],
+  '{ok}/{n} 个窗口单调': ['{ok}/{n} windows monotonic', '{ok}/{n} 窓で単調'],
+  '信号样本': ['Signals', 'シグナル数'],
+  '评估日': ['Evaluation dates', '評価日'],
+  '验证窗口': ['Windows', '検証窓'],
+  '上位10%−下位10%': ['Top 10% − bottom 10%', '上位10% − 下位10%'],
+  '分层': ['Bucket', '層'],
+  '样本': ['Samples', '標本'],
+  '超额中位': ['Median excess', '超過中位'],
+  '胜率': ['Hit rate', '勝率'],
+  '单调': ['Monotonic', '単調'],
+  '点时限制': ['Point-in-time limits', '点時の制約'],
+  '评分版本': ['Score version', 'スコア版'],
+  '重放版本': ['Replay version', 'リプレイ版'],
+  '验证正在运行': ['Validation running', '検証を実行中'],
+  '结果尚未确定。完成后此页会显示分层收益与单调性结论。': [
+    'No result yet. Bucket returns and the monotonicity verdict appear here when it finishes.',
+    'まだ結果は確定していない。完了すると層別成績と単調性の結論がここに出る。',
+  ],
+  '尚未运行历史验证': ['Validation has not run', '履歴検証は未実行'],
+  '在服务器执行 python -m app.research 后，结果会显示在这里。': [
+    'Run python -m app.research on the server and results will appear here.',
+    'サーバで python -m app.research を実行すると、ここに結果が出る。',
+  ],
+  '请稍后重试': ['Please retry shortly', '少し待って再試行'],
+  '盘中上涨': ['Up intraday', 'ザラ場で上昇'],
+  '用{n}分延迟的盘中价筛选，分数与排序仍来自夜间官方数据': [
+    'Filters on the {n}-min delayed price; scores and ranking still come from the official nightly data',
+    '{n}分遅延の気配で絞り込む。スコアと並び順は夜間の公式データのまま',
+  ],
+  '报告义务中合计': ['Reporting total', '報告義務中の合計'],
+  '{n}家': ['{n} holders', '{n}社'],
+  '2周': ['2w', '2週'],
+  '另有 {b} 家跌破{th}%（实际持仓不再披露）· {c} 家已解消': [
+    '{b} more fell below {th}% (position no longer disclosed) · {c} closed',
+    '他に {b} 社が{th}%割れ（以降は非開示）· {c} 社が解消',
+  ],
+  '2周内全部变化': ['All changes in 2 weeks', '2週間の変化（全件）'],
+  '2周内没有新的残高报告': ['No new reports in 2 weeks', '2週間は新しい報告なし'],
+  // -- 机构空卖行为监控 ----------------------------------------------------
+  '机构空卖行为监控': ['Institutional Short-Selling Monitor', '機関空売り行動モニター'],
+  '空卖': ['Shorts', '空売り'],
+  '公开披露的机构空卖持仓发生了什么变化，股价对这部分压力作出了什么反应': [
+    'What changed in publicly disclosed institutional short positions, and how the price responded',
+    '公開開示された機関の空売り建玉に何が起きたか、株価はその圧力にどう反応したか',
+  ],
+  '本页面展示达到公开披露条件的机构空卖持仓，不代表市场全部空头仓位。跌破公开门槛不代表仓位归零。': [
+    'This page shows institutional short positions that met the public disclosure threshold. It is not the whole market short interest. Falling below the threshold does not mean the position went to zero.',
+    'このページは公開開示の条件を満たした機関の空売り建玉を表示します。市場全体の空売り残高ではありません。閾値を割ったことは建玉がゼロになったことを意味しません。',
+  ],
+  '当前门槛与权重为初始参数，尚未通过历史验证，仅作研究排序使用。': [
+    'The current gates and weights are initial parameters. They have not passed historical validation and are for research ranking only.',
+    '現在の閾値と重みは初期パラメータです。歴史検証を通っておらず、研究上の並べ替えにのみ使います。',
+  ],
+  '低位增空不跌': ['Low & absorbing', '低位で増加、下げず'],
+  '深度低位 + 公开空头增加或重新进入': [
+    'Deep low + public short increased or re-entered',
+    '深い低位 + 公開空売りの増加または再参入',
+  ],
+  '卖压吸收': ['Absorption', '売り圧の吸収'],
+  '空头压力较高，单位压力造成的价格损害较低': [
+    'High short pressure, low price damage per unit of pressure',
+    '空売り圧力は高いが、圧力あたりの価格の傷みは小さい',
+  ],
+  '回补加速': ['Covering', '回補加速'],
+  '多家机构减仓、公开空头快速下降': [
+    'Several institutions reducing, public short falling fast',
+    '複数の機関が減らし、公開空売りが速く減っている',
+  ],
+  '机构重新进入': ['Re-entry', '機関の再参入'],
+  '一度跌破门槛后再次进入公开范围': [
+    'Fell below the threshold once, then re-entered public disclosure',
+    '一度閾値を割った後、再び公開範囲に入った',
+  ],
+  '机构轮换': ['Rotation', '機関の入れ替わり'],
+  '一批退出、另一批进入。本身不是利好或利空': [
+    'One group exits while another enters. Not bullish or bearish by itself',
+    '一方が抜けて別が入る。それ自体は強気でも弱気でもない',
+  ],
+  '挤空确认': ['Squeeze confirmed', '踏み上げ確認'],
+  '仅展示满足全部严格价格确认条件的股票': [
+    'Only stocks meeting every strict price-confirmation condition',
+    '厳しい価格確認条件をすべて満たした銘柄だけ',
+  ],
+  '背离失效': ['Divergence failed', '乖離の失効'],
+  '空头继续增加且股价跌破长期支撑': [
+    'Short keeps rising and the price broke long-term support',
+    '空売りが増え続け、価格が長期支持を割った',
+  ],
+  '当日全部覆盖股票': ['All covered stocks for the day', 'その日の対象銘柄すべて'],
+  '最低数据置信度': ['Min data confidence', '最低データ信頼度'],
+  '该视图当前没有符合条件的股票': ['No stocks match this view right now', 'この条件に合う銘柄は今ありません'],
+  '最近数据日期': ['Latest data date', '最新データ日'],
+  '覆盖股票': ['Covered', '対象銘柄'],
+  '有公开机构空头': ['With visible short', '公開空売りあり'],
+  '置信度偏低': ['Low confidence', '信頼度が低い'],
+  '行为分': ['Behavior score', '行動スコア'],
+  '置信度': ['Confidence', '信頼度'],
+  '52周回撤': ['52w drawdown', '52週の下落'],
+  '公开可见空头': ['Visible short', '公開可視の空売り'],
+  '5日变化': ['5d change', '5日変化'],
+  '变化/ADV20': ['Change / ADV20', '変化 / 20日平均出来高'],
+  '机构数': ['Institutions', '機関数'],
+  '相对TOPIX': ['vs TOPIX', '対TOPIX'],
+  '相对行业': ['vs sector', '対業種'],
+  '标签': ['Labels', 'ラベル'],
+  '正常做空': ['Normal shorting', '通常の空売り'],
+  '低位冲突': ['Low conflict', '低位での衝突'],
+  '回补启动': ['Covering start', '回補の開始'],
+  '无动向': ['No move', '動きなし'],
+  // 後端の explain.py は no_signal をこの長い表記で返す（画面の短縮形とは別串）
+  '无公开空头动向': ['No disclosed short activity', '公開空売りの動きなし'],
+  // 列挙の区切り。英語だけカンマ + 半角空白。
+  '、': [', ', '、'],
+  '新规进入': ['New entry', '新規参入'],
+  '重新进入': ['Re-entry', '再参入'],
+  '空头集中': ['Concentrated', '空売りの集中'],
+  '多机构减仓': ['Multiple reducing', '複数機関が減少'],
+  '跌破门槛': ['Below threshold', '閾値割れ'],
+  '数据不可见': ['Not visible', 'データ不可視'],
+  '信用买入拥挤': ['Crowded margin long', '信用買いの混雑'],
+  '财报临近': ['Earnings near', '決算が近い'],
+  '新闻催化': ['News catalyst', 'ニュース材料'],
+  '低流动性': ['Thin liquidity', '流動性が薄い'],
+  '数据过期': ['Stale data', 'データが古い'],
+  '含对冲持仓': ['Includes hedge', 'ヘッジ建玉を含む'],
+  '仅1家可见': ['Only 1 visible', '可視は1社のみ'],
+  '读取失败': ['Failed to load', '読み込みに失敗'],
+  '不限': ['No limit', '制限なし'],
+  '报告已停止': ['Reporting stopped', '報告が停止'],
+  '机构数后的 +N? 是实际持仓不可见的机构家数（跌破门槛，或未跌破但报告长期停止），均不计入合计': [
+    'The +N? after the institution count is how many hold a position we cannot see — either below the disclosure threshold, or above it but no longer reporting. Neither is included in the total.',
+    '機関数の後の +N? は、実際の建玉が見えない機関の数（閾値割れ、または割らないまま報告が止まったもの）。どちらも合計には入れない。',
+  ],
+  '机构空卖行为': ['Institutional short behavior', '機関の空売り行動'],
+  '该股票暂无机构空卖行为快照': ['No short-behavior snapshot for this stock yet', 'この銘柄の空売り行動スナップショットはまだありません'],
+  '跌破公开披露门槛不代表实际空头仓位归零，后续精确仓位不可见。': [
+    'Falling below the public disclosure threshold does not mean the short position went to zero. The exact position is no longer visible.',
+    '公開開示の閾値を割ったことは建玉がゼロになったことを意味しません。以降の正確な建玉は見えません。',
+  ],
+  '公开可见回补天数': ['Visible days to cover', '公開可視の回補日数'],
+  '仅按可见部分计算，不是市场总空头回补天数': [
+    'Computed from the visible portion only. Not the whole-market days to cover',
+    '可視部分だけで計算。市場全体の回補日数ではありません',
+  ],
+  '回补强度': ['Covering strength', '回補の強さ'],
+  '相对TOPIX（20日）': ['vs TOPIX (20d)', '対TOPIX（20日）'],
+  '相对行业（20日）': ['vs sector (20d)', '対業種（20日）'],
+  '机构公开空头': ['Disclosed institutional shorts', '機関の公開空売り'],
+  '报告义务中': ['Reporting', '報告義務中'],
+  '当前没有公开披露的机构空头': ['No publicly disclosed institutional short right now', '現在、公開開示された機関の空売りはありません'],
+  '机构事件时间线': ['Institution event timeline', '機関イベントの時系列'],
+  '展开更多': ['Show more', 'もっと見る'],
+  '当前判定': ['Current classification', '現在の分類'],
+  '实际持仓未知': ['Actual position unknown', '実際の建玉は不明'],
+  '订正': ['Correction', '訂正'],
+  '仓位日期 → 公开日期': ['Position date → publication date', '仓位日 → 公開日'],
+  '该机构已降至公开披露门槛以下，实际剩余仓位未知。': [
+    'This institution fell below the public disclosure threshold. The remaining position is unknown.',
+    'この機関は公開開示の閾値を下回りました。残りの建玉は不明です。',
+  ],
+  '增仓': ['Increased', '増加'],
+  '减仓': ['Reduced', '減少'],
+  '解消': ['Closed', '解消'],
+
+  // -- 空卖监控页（雷达版式）新增 -------------------------------------------
+  '历史验证结果': ['Validation result', '歴史検証の結果'],
+  '未通过': ['Failed', '不合格'],
+  '个信号': ['signals', '件の信号'],
+  '个走步窗口': ['walk-forward windows', 'ウォークフォワード窓'],
+  '状态分布': ['State mix', '状態の分布'],
+  '占覆盖 {p}': ['{p} of covered', '対象の {p}'],
+  '占覆盖 {p} · 报告陈旧、可见机构少或流动性薄': [
+    '{p} of covered · stale reports, few visible institutions, or thin liquidity',
+    '対象の {p} · 報告が古い、可視機関が少ない、流動性が薄い',
+  ],
+  '可以把最低数据置信度放宽到「不限」再看一次': [
+    'Try setting the minimum data confidence back to “No limit”',
+    '最低データ信頼度を「制限なし」に戻して見直せます',
+  ],
+  '低位': ['Low position', '低位'],
+  '空头压力': ['Short pressure', '空売り圧力'],
+  '催化': ['Catalyst', '材料'],
+  '公开空头增加': ['Public short up', '公開空売りの増加'],
+  '公开空头减少或跌破门槛': ['Public short down or below threshold', '公開空売りの減少・閾値割れ'],
+  '标在公开日之后的首个交易日 —— 市场最早能知道的那天': [
+    'Marked on the first trading day after publication — the earliest the market could know',
+    '公開日の翌営業日に印を打つ —— 市場が最初に知りうる日',
+  ],
+  '公开空头增加（卖压增强）': ['Public short up (more selling pressure)', '公開空売りの増加（売り圧の強まり）'],
+  '在册合计': ['In-scope total', '在册合計'],
+  // -- 空卖监控: 後端が返す説明文（テンプレート + パラメータ）と但し書き ------
+  //    サーバは相手の言語を知らないので、中文テンプレートを msgid にして
+  //    置換だけフロントで行う。ここが欠けると ja/en で中文のまま出る。
+  '近期有更新的报告义务中机构 {n} 家，公开可见空头比例合计 {ratio}。': [
+    '{n} institution(s) still reporting with a recent update; visible short totals {ratio}.',
+    '直近に更新のある報告義務中の機関は {n} 社、公開可視の空売り比率は合計 {ratio}。',
+  ],
+  '当前没有近期更新的报告义务中机构，公开可见空头比例为 0。': [
+    'No institution has a recent update while still reporting; the visible short total is 0.',
+    '直近に更新のある報告義務中の機関は無く、公開可視の空売り比率は 0。',
+  ],
+  '另有 {n} 家按官方口径仍在报告义务中，但最后一次报告已是 {days} 个交易日之前。官方规则没有失效期限——变动不足 0.1% 就无需再报，所以旧值可能仍然成立，也可能早已不同；含这些机构的在册合计为 {ratio}，上面的「公开可见」口径未计入它们。': [
+    'Another {n} are still within the reporting duty under the official rule, but their last report was {days} trading days ago. The rule sets no expiry — no new report is due until the position moves 0.1pt, so the old value may still hold or may be long out of date. Including them, the in-scope total is {ratio}; the “visible” figure above excludes them.',
+    '他に {n} 社が公式ルール上はまだ報告義務中だが、最後の報告は {days} 営業日前。ルールに失効期限は無く、0.1% 動かない限り再報告義務は生じないため、古い値がまだ有効かもしれないし、とうに違うかもしれない。これらを含む在册合計は {ratio}。上の「公開可視」には入れていない。',
+  ],
+  '另有 {n} 家按官方口径仍在报告义务中，但最后一次报告已是 {days} 个交易日之前。官方规则没有失效期限——变动不足 0.1% 就无需再报，所以旧值可能仍然成立，也可能早已不同；上面的「公开可见」口径未计入它们。': [
+    'Another {n} are still within the reporting duty under the official rule, but their last report was {days} trading days ago. The rule sets no expiry — no new report is due until the position moves 0.1pt, so the old value may still hold or may be long out of date. The “visible” figure above excludes them.',
+    '他に {n} 社が公式ルール上はまだ報告義務中だが、最後の報告は {days} 営業日前。ルールに失効期限は無く、0.1% 動かない限り再報告義務は生じないため、古い値がまだ有効かもしれないし、とうに違うかもしれない。上の「公開可視」には入れていない。',
+  ],
+  '另有 {n} 家已跌破公开披露门槛——该机构已降至门槛以下，实际剩余仓位未知，未计入合计。': [
+    'Another {n} fell below the public disclosure threshold — the remaining position is unknown and is not included in the total.',
+    '他に {n} 社が公開開示の閾値を割った —— 残りの建玉は不明で、合計には入れていない。',
+  ],
+  '另有 {n} 家的最新报告缺少可读的比例数值，状态未知，未计入任何合计。': [
+    'Another {n} have no readable ratio on their latest report; their state is unknown and they are in no total.',
+    '他に {n} 社は最新の報告に読める比率が無く、状態は不明。どの合計にも入れていない。',
+  ],
+  '过去 20 个交易日公开空头增加，规模相当于约 {size} 个20 日平均成交量。': [
+    'Over the last 20 trading days the disclosed short rose by about {size}× the 20-day average volume.',
+    '直近 20 営業日で公開空売りが増加。規模は 20 日平均出来高の約 {size} 日分。',
+  ],
+  '过去 20 个交易日公开空头减少，规模相当于约 {size} 个20 日平均成交量。': [
+    'Over the last 20 trading days the disclosed short fell by about {size}× the 20-day average volume.',
+    '直近 20 営業日で公開空売りが減少。規模は 20 日平均出来高の約 {size} 日分。',
+  ],
+  '同期相对 TOPIX {topix}，相对东证33行业 {sector}。': [
+    'Over the same window: {topix} vs TOPIX, {sector} vs the TSE-33 sector.',
+    '同期間の相対リターンは対 TOPIX {topix}、対東証33業種 {sector}。',
+  ],
+  '公开可见回补天数约 {days} 天（仅按可见部分计算，不是市场总空头回补天数）。': [
+    'Visible days to cover is about {days} (computed from the visible portion only — not the whole-market days to cover).',
+    '公開可視の回補日数は約 {days} 日（可視部分だけの計算で、市場全体の回補日数ではない）。',
+  ],
+  '过去 20 个交易日：{moves}。': [
+    'Over the last 20 trading days: {moves}.',
+    '直近 20 営業日: {moves}。',
+  ],
+  '{n}家新规进入': [
+    '{n} new',
+    '{n}社が新規参入',
+  ],
+  '{n}家重新进入': [
+    '{n} re-entered',
+    '{n}社が再参入',
+  ],
+  '{n}家减仓': [
+    '{n} reduced',
+    '{n}社が減少',
+  ],
+  '{n}家跌破门槛': [
+    '{n} fell below the threshold',
+    '{n}社が閾値割れ',
+  ],
+  '当前被分类为「{label}」，数据置信度 {confidence}。该结果是模型分类，不代表机构意图。': [
+    'Currently classified as “{label}” with data confidence {confidence}. This is a model classification and does not represent institutional intent.',
+    '現在の分類は「{label}」、データ信頼度 {confidence}。これはモデルによる分類で、機関の意図を表すものではない。',
+  ],
+  '「挤空确认」是基于公开空头变化和价格行为的模型分类，不表示掌握全部市场空头仓位。': [
+    '“Squeeze confirmed” is a model classification from disclosed short changes and price action. It does not mean the whole market short position is known.',
+    '「踏み上げ確認」は公開空売りの変化と価格行動によるモデル分類であり、市場全体の空売り建玉を把握していることを意味しない。',
+  ],
+  '承接迹象来自价格对公开空头压力的反应，不代表机构正在吸筹。': [
+    'Signs of absorption come from how the price responded to disclosed short pressure. They do not mean institutions are accumulating.',
+    '承接の兆候は公開空売り圧力に対する価格の反応から来るもので、機関が仕込んでいることを意味しない。',
+  ],
+  '深度低位只表示处于较低价格区域，不表示一定见底。': [
+    'A deep low only means the price sits in a low zone. It does not mean a bottom is in.',
+    '深い低位は価格が低い水準にあることだけを示し、底を打ったことを意味しない。',
+  ],
+  '公开空头减少只说明报告义务范围内的仓位下降，剩余仓位未知。': [
+    'A falling disclosed short only says the position inside the reporting duty went down. The remainder is unknown.',
+    '公開空売りの減少は報告義務の範囲内の建玉が減ったことだけを示し、残りは不明。',
+  ],
+  '首次走步验证结论为否定：所有状态在所有持有期都跑输 TOPIX；权重最高的「卖压吸收」表现最差（−2.55%），而看空的「背离失效」反而略好于基准 —— 看多与看空两个状态的排序是反的。分数目前只能作为描述性分类，不能作为预期超额收益的排序。': [
+    'The first walk-forward validation came back negative: every state underperformed TOPIX at every horizon; “absorption”, which carries the largest weight, was the worst (−2.55%), while the bearish “divergence failed” edged out the baseline — the bullish and bearish states are ranked backwards. For now the score is a descriptive classification only, not a ranking of expected excess return.',
+    '初回のウォークフォワード検証は否定的だった: すべての状態がすべての保有期間で TOPIX を下回り、最も重みの大きい「売り圧の吸収」が最悪（−2.55%）、弱気の「乖離の失効」がむしろ基準をわずかに上回った —— 強気と弱気の順位が逆。現時点でスコアは記述的な分類にすぎず、期待超過リターンの並べ替えには使えない。',
+  ],
+  // -- 卡片化（一覧表を廃止し、全項目をカードに出す） --------------------------
+  '公开空头规模': ['Disclosed short size', '公開空売りの規模'],
+  '变化与压力': ['Change & pressure', '変化と圧力'],
+  '价格反应': ['Price response', '価格の反応'],
+  '近20日机构动向': ['Institution moves (20d)', '直近20日の機関の動き'],
+  '分项评分': ['Factor scores', '分項スコア'],
+  '可见股数': ['Visible shares', '可視の株数'],
+  '最大机构': ['Largest holder', '最大の保有者'],
+  '集中度': ['Concentration', '集中度'],
+  '20日变化': ['20d change', '20日変化'],
+  '5日压力': ['5d pressure', '5日圧力'],
+  '20日压力': ['20d pressure', '20日圧力'],
+  '价格分位': ['Price percentile', '価格の分位'],
+  '价格损害': ['Price damage', '価格の傷み'],
+  '减仓机构': ['Reducing', '減らした機関'],
+  '监视优先级': ['Watch priority', '監視優先度'],
+  '在册合计（官方口径）': ['In-scope total (official rule)', '在册合計（公式ルール口径）'],
+  '状态未知': ['Unknown', '状態不明'],
+  '近125个交易日有更新的报告义务中机构之和': [
+    'Sum of reporting institutions with an update in the last 125 trading days',
+    '直近125営業日に更新のある報告義務中機関の和',
+  ],
+  '最后报告仍在公开范围内的全部机构之和，含报告已长期停更者。官方规则没有失效期限': [
+    'Every institution whose last report is still above the disclosure threshold, including long-silent ones. The official rule has no expiry',
+    '最終報告がまだ公開範囲内の全機関の和（長期停止を含む）。公式ルールに失効期限はない',
+  ],
+  '最后报告仍在公开范围内的全部机构之和，含报告已长期停更者。官方规则没有失效期限，变动不足 0.1% 就无需再报': [
+    'Every institution whose last report is still above the threshold, including long-silent ones — no re-report is due until the position moves 0.1pt',
+    '最終報告がまだ公開範囲内の全機関の和（長期停止を含む）。0.1%動かない限り再報告義務は生じない',
+  ],
+  '雷达优先级联动已停用：验证未通过前，本模块不改变突破雷达的排序，只做展示、筛选与影子分。': [
+    'Radar priority linkage is disabled: until validation passes, this module never re-orders the breakout radar — display, filters and shadow score only.',
+    'レーダー優先度連動は停止中：検証を通るまで本モジュールはレーダーの並び順を一切変えません（表示・絞り込み・影子分のみ）。',
+  ],
+  '公开空头减少（买方回补）': ['Public short down (covering)', '公開空売りの減少（買い戻し）'],
+  '空头变化按对股价的方向着色；相对收益仍是红涨绿跌': [
+    'Short changes are coloured by what they mean for the price; relative returns keep the red-up / green-down convention',
+    '空売りの変化は株価にとっての向きで着色。相対リターンは赤＝上昇・緑＝下落のまま',
+  ],
+
+  '公开空头变化 · 价格反应': ['Public short changes · price response', '公開空売りの変化 · 価格の反応'],
+  '株': [' sh', '株'],
+  '新規': ['New', '新規'],
+  '義務消失': ['Below', '義務消失'],
+  '増': ['Up', '増'],
+  '減': ['Down', '減'],
+  '原始分': ['Raw score', '素点'],
+  '最终优先级': ['Final priority', '最終優先度'],
+  '业种相对（20日）': ['Sector RS (20d)', '業種相対（20日）'],
+  '业种相对（63日）': ['Sector RS (63d)', '業種相対（63日）'],
+  '信用规制': ['Margin regulation', '信用規制'],
+  '规制状态未知': ['Regulation unknown', '規制状態は不明'],
   '延迟{n}分 · 非官方源': ['{n}-min delayed · unofficial', '{n}分遅延 · 非公式ソース'],
+  '延迟{n}分 · 官方源': ['{n}-min delayed · official', '{n}分遅延 · 公式ソース'],
+  '实时 · 官方源': ['Real-time · official', 'リアルタイム · 公式ソース'],
+  '实时 · 非官方源': ['Real-time · unofficial', 'リアルタイム · 非公式ソース'],
   官方终值: ['Official close', '公式終値'],
   '日経225 · 盘中': ['Nikkei 225 · intraday', '日経225 · ザラ場'],
   延迟盘中价: ['Delayed intraday price', '遅延のザラ場価格'],

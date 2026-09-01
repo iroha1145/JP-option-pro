@@ -33,6 +33,8 @@ export interface ResultTableProps {
   weights: Record<string, number> | null;
   canManageWatchlist: boolean;
   animKey: string;
+  /** 盘中叠加（表示専用）。夜間断面のスコアは書き換えない。 */
+  overlay?: Record<string, { live_price: number; live_change_pct?: number; live_pct_from_high_252?: number | null }>;
 }
 
 export default function ResultTable({
@@ -48,6 +50,7 @@ export default function ResultTable({
   weights,
   canManageWatchlist,
   animKey,
+  overlay,
 }: ResultTableProps) {
   return (
     <div className="card-surface overflow-x-auto overscroll-x-contain">
@@ -154,7 +157,7 @@ export default function ResultTable({
                           transition={{ duration: 0.26, ease: EASE_PAPER }}
                           className="overflow-hidden"
                         >
-                          <RowExpansion row={row} weights={weights} canManageWatchlist={canManageWatchlist} />
+                          <RowExpansion row={row} weights={weights} canManageWatchlist={canManageWatchlist} live={overlay?.[row.canonical_code]} />
                         </motion.div>
                       </td>
                     </tr>

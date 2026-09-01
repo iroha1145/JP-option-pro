@@ -13,6 +13,8 @@ const Earnings = lazy(() => import('@/pages/Earnings'));
 const News = lazy(() => import('@/pages/News'));
 const StockDetail = lazy(() => import('@/pages/StockDetail'));
 const DataStatus = lazy(() => import('@/pages/DataStatus'));
+const Research = lazy(() => import('@/pages/Research'));
+const ShortMonitor = lazy(() => import('@/pages/ShortMonitor'));
 const Login = lazy(() => import('@/pages/Login'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 
@@ -33,6 +35,8 @@ export default function App() {
               <Route path="/news" element={<News />} />
               <Route path="/stock/:code" element={<StockDetail />} />
               <Route path="/data-status" element={<DataStatus />} />
+              <Route path="/research" element={<Research />} />
+              <Route path="/short-monitor" element={<ShortMonitor />} />
               <Route path="/home" element={<Navigate to="/" replace />} />
               <Route path="*" element={<NotFound />} />
             </Route>

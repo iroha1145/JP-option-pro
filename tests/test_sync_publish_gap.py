@@ -108,3 +108,21 @@ def test_financial_summaries_tolerate_empty_days(tmp_path):
     assert result["status"] == "ok"
     # 空でも進む（進まないと開示のない日で永久に止まる）
     assert core.sync_state(sync.DATASET_FINANCIAL_SUMMARY)["checkpoint"]["last_synced_date"] == "2026-08-01"
+
+
+def test_empty_earnings_calendar_does_not_wipe_existing_rows(tmp_path):
+    """決算カレンダーは全量置換。空の 200 を成功扱いすると全件が消える。"""
+
+    core = _core(tmp_path)
+    core.replace_earnings_announcements(
+        [{"canonical_code": "72030", "fiscal_quarter": "Q1", "announcement_date": "2026-08-05"}]
+    )
+
+    def empty(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": []})
+
+    result = _engine(core, empty).sync_earnings_calendar()
+    assert result["status"] == "error"
+    assert result["error_code"] == "jquants_empty_earnings"
+    rows = core.earnings_between("2026-08-01", "2026-08-31")
+    assert [row["canonical_code"] for row in rows] == ["72030"]

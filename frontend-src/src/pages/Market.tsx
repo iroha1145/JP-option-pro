@@ -16,6 +16,7 @@ import { CodeCell, DataThrough } from '@/components/domain';
 import HeatMatrix, { HeatMatrixSkeleton, metricValue, type HeatMetric } from '@/components/sectors/HeatMatrix';
 import SectorMembersPanel from '@/components/sectors/SectorMembersPanel';
 import { t } from '@/i18n/core';
+import { quoteSourceLabel } from '@/lib/quoteSource';
 import { fmtPct, fmtPrice, fmtTimeJst, fmtYenCompact } from '@/lib/format';
 import type { IntradayQuote, SectorMemberSort, SectorStrength } from '@/api/types';
 
@@ -173,7 +174,7 @@ export default function Market() {
               </span>
               <span className="flex items-center gap-1 text-micro text-warn-700">
                 <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
-                {t('延迟{n}分 · 非官方源', { n: live.data?.delayed_minutes ?? 15 })}
+                {quoteSourceLabel(live.data).text}
                 {n225.as_of_epoch ? ` · ${fmtTimeJst(n225.as_of_epoch)}` : ''}
               </span>
             </section>
@@ -250,7 +251,7 @@ export default function Market() {
           <section className="card-surface rounded-lg p-4">
             <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
-                <p className="eyebrow">SECTOR MATRIX · 33 業種</p>
+                <p className="eyebrow">{t('SECTOR MATRIX · 33 業種')}</p>
                 <h2 className="mt-0.5 text-h3 text-ink-900">{t('板块透视')}</h2>
                 <p className="mt-0.5 text-micro text-ink-400">
                   {tileSource === 'intraday' && liveByCode.size

@@ -1,9 +1,13 @@
-"""遅延ザラ場気配 API（表示専用・非公式ソース）。
+"""ザラ場気配 API（表示専用）。
 
 J-Quants は場中に一切 publish しない（実測: 場中の分足・日足とも 0 行）。
-そこで「今いくらか」を出すためだけに Yahoo の遅延気配を併用する。ここで返す
-数字は **公式の確定値ではない**ので、レスポンスは必ず source と delayed を
-申告し、UI 側で J-Quants 由来の値と視覚的に区別させる。
+そこで「今いくらか」を出すためだけに別系統の気配を併用する。ここで返す値が
+公式の確定値かどうかは供給元によって変わるので、**判断材料をレスポンスに
+必ず載せる**（source / delay_class / is_official / is_realtime / stale /
+market_session）。UI はこれを見て J-Quants 由来の値と視覚的に区別する。
+
+このモジュールは特定の供給元（Yahoo 等）を知らない。選択はレジストリの
+仕事で、将来リアルタイム源が繋がってもここは変わらない。
 
 レーダー・スクリーナー・強度スコアはこの値を一切参照しない（混ぜない）。
 """
@@ -11,47 +15,82 @@ J-Quants は場中に一切 publish しない（実測: 場中の分足・日足
 from __future__ import annotations
 
 import asyncio
-import concurrent.futures
 
 from fastapi import APIRouter, HTTPException, Query
 
 from app.api.deps import core_repository
-from app.domain.symbols import normalize_input_code
-from app.personal_config import get_personal_config
-from app.providers.yahoo_quotes import (
-    INTRADAY_INDEX_SYMBOLS,
-    MAX_SYMBOLS_PER_CALL,
-    QUOTE_SOURCE,
-    YahooQuoteProvider,
-)
 from app.domain.constants import SECTOR33
+from app.domain.symbols import normalize_input_code
 from app.services.cache import cache as shared_cache
+from app.services.intraday_quotes import (
+    all_source_statuses,
+    current_source,
+    fetch_quotes_and_indices,
+    fetch_quotes_blocking,
+)
 from app.services.market import _median_sorted
 
 router = APIRouter(prefix="/api/quotes", tags=["quotes"])
 
-QUOTES_VERSION = "jp-quotes-v1"
-# 遅延が 15 分ある以上、これ以上細かく取りに行っても新しい値は出てこない。
+QUOTES_VERSION = "jp-quotes-v2"
+# 遅延がある以上、これ以上細かく取りに行っても新しい値は出てこない。
 _CACHE_SECONDS = 60
+# 全市場 1,587 銘柄 = 80 バッチ ≈ 6 秒。1 分ごとに撫でても情報は増えない。
+_SECTOR_CACHE_SECONDS = 180
+# 1 リクエストで受ける銘柄数の上限（外部への 1 回の呼び出し上限に合わせる）。
+MAX_CODES_PER_REQUEST = 60
 
 
-def _disabled() -> dict:
+def _source_envelope() -> dict:
+    """毎レスポンスに載せる供給元の申告（値の意味を決めるのはこれ）。"""
+
+    status = current_source()
     return {
         "version": QUOTES_VERSION,
+        "source": status.name,
+        "delay_class": status.delay_class,
+        "is_official": status.is_official,
+        "is_realtime": status.is_realtime,
+        "source_detail": status.detail,
+        # 互換: 既存の画面は delayed / delayed_minutes を読んでいる。値は
+        # プロバイダの申告から導くので、リアルタイム源に切り替われば
+        # delayed=False・0 分になり、文言も自動で正しくなる。
+        "delayed": not status.is_realtime,
+        "delayed_minutes": status.delay_minutes,
+    }
+
+
+def _disabled(**extra) -> dict:
+    return {
+        **_source_envelope(),
         "enabled": False,
-        "source": QUOTE_SOURCE,
         "reason": "feature_disabled",
         "quotes": {},
+        **extra,
+    }
+
+
+def _enabled() -> bool:
+    return current_source().available
+
+
+@router.get("/sources")
+def quote_sources() -> dict:
+    """全供給元の状態。未接続のリレーも隠さずに出す（データ状態ページ用）。"""
+
+    return {
+        "version": QUOTES_VERSION,
+        "selected": current_source().as_dict(),
+        "providers": [status.as_dict() for status in all_source_statuses()],
     }
 
 
 @router.get("/intraday")
 async def intraday_quotes(codes: str = Query(default="", max_length=800)) -> dict:
-    """codes=7203,9984 → 遅延気配。取得できなかった銘柄は単に欠落する。"""
+    """codes=7203,9984 → 気配。取得できなかった銘柄は単に欠落する。"""
 
-    config = get_personal_config()
-    if not config.features.intraday_quotes:
-        return _disabled()
+    if not _enabled():
+        return _disabled(indices={})
 
     canonical: list[str] = []
     for raw in codes.split(","):
@@ -63,7 +102,7 @@ async def intraday_quotes(codes: str = Query(default="", max_length=800)) -> dic
             raise HTTPException(status_code=422, detail={"code": "invalid_code_format"})
         if code not in canonical:
             canonical.append(code)
-    if len(canonical) > MAX_SYMBOLS_PER_CALL:
+    if len(canonical) > MAX_CODES_PER_REQUEST:
         raise HTTPException(status_code=422, detail={"code": "too_many_codes"})
 
     repository = core_repository()
@@ -74,27 +113,15 @@ async def intraday_quotes(codes: str = Query(default="", max_length=800)) -> dic
 
     key = "quotes:intraday:" + ",".join(sorted(canonical))
 
-    def _collect() -> tuple[dict, dict]:
-        provider = YahooQuoteProvider()
-        return (
-            provider.quotes_for_codes(canonical) if canonical else {},
-            provider.index_quotes(),
-        )
-
     async def build() -> dict:
-        # プロバイダは同期 HTTP。async ハンドラ内で直に回すとイベントループを
-        # 止め、同じプロセスの他リクエスト（市場ページ本体）まで道連れにする。
-        found, indices = await asyncio.to_thread(_collect)
+        found, indices = await fetch_quotes_and_indices(canonical)
         return {
-            "version": QUOTES_VERSION,
+            **_source_envelope(),
             "enabled": True,
-            "source": QUOTE_SOURCE,
-            "delayed": True,
-            "delayed_minutes": 15,
             "requested": len(canonical),
             "quotes": {code: quote.as_dict() for code, quote in found.items()},
             "indices": {
-                symbol: {**quote.as_dict(), "name": INTRADAY_INDEX_SYMBOLS.get(symbol, symbol)}
+                symbol: {**quote.as_dict(), **quote.extra}
                 for symbol, quote in indices.items()
             },
         }
@@ -102,22 +129,16 @@ async def intraday_quotes(codes: str = Query(default="", max_length=800)) -> dic
     return await shared_cache.get_or_set(key, _CACHE_SECONDS, build)
 
 
-# 全市場 1,587 銘柄 = 80 バッチ ≈ 6 秒。遅延 15 分のデータを 1 分ごとに撫でても
-# 情報は増えないので 3 分キャッシュ（Yahoo への負荷を 1/3 に）。
-_SECTOR_CACHE_SECONDS = 180
-
-
 @router.get("/sectors/intraday")
 async def intraday_sectors() -> dict:
-    """業種別のザラ場断面（遅延気配から中央値を作る・表示専用）。
+    """業種別のザラ場断面（気配から中央値を作る・表示専用）。
 
     公式日足の断面（/api/market/overview の sectors）とは別物として返す。
-    値は非公式・15 分遅延であり、レーダーやスコアには一切入らない。
+    レーダーやスコアには一切入らない。
     """
 
-    config = get_personal_config()
-    if not config.features.intraday_quotes:
-        return {**_disabled(), "sectors": []}
+    if not _enabled():
+        return _disabled(sectors=[])
     repository = core_repository()
     if not repository.exists():
         raise HTTPException(status_code=503, detail={"code": "data_not_initialized"})
@@ -127,25 +148,12 @@ async def intraday_sectors() -> dict:
     )
     universe = [(row["canonical_code"], row.get("sector33_code")) for row in rows]
 
-    def _collect_all() -> dict:
-        codes = [code for code, _sector in universe]
-        chunks = [codes[start : start + 60] for start in range(0, len(codes), 60)]
-
-        def _one(chunk: list[str]) -> dict:
-            return YahooQuoteProvider(max_workers=3).quotes_for_codes(chunk)
-
-        found: dict = {}
-        # 60 件窓を並列化。各窓は独自クライアントなので入れ子プールで死なない。
-        workers = min(6, max(1, len(chunks)))
-        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-            for part in pool.map(_one, chunks):
-                found.update(part)
-        return found
-
     async def build() -> dict:
         # 1,587 銘柄で 5 秒超。ここを await せずに回すとページ全体が落ちる
         # （実測: 市場ページ本体が「請求超時」になった）。
-        found = await asyncio.to_thread(_collect_all)
+        found = await asyncio.to_thread(
+            fetch_quotes_blocking, [code for code, _sector in universe]
+        )
         by_sector: dict[str, list[float]] = {}
         for code, sector in universe:
             quote = found.get(code)
@@ -168,11 +176,8 @@ async def intraday_sectors() -> dict:
             )
         sectors.sort(key=lambda item: -item["median_return_1d"])
         return {
-            "version": QUOTES_VERSION,
+            **_source_envelope(),
             "enabled": True,
-            "source": QUOTE_SOURCE,
-            "delayed": True,
-            "delayed_minutes": 15,
             "universe": len(universe),
             "quoted": len(found),
             "sectors": sectors,
@@ -186,7 +191,7 @@ async def intraday_overlay_view(
     scope: str = Query(default="radar", pattern="^(radar|screener)$"),
     limit: int = Query(default=200, ge=1, le=1000),
 ) -> dict:
-    """夜間断面 × 遅延気配のオーバーレイ（再スキャンではない）。
+    """夜間断面 × ザラ場気配のオーバーレイ（再スキャンではない）。
 
     scope=radar    : 生存中のレーダー事件に「今ピボットの上か」を付ける
     scope=screener : スクリーナー断面に「今の値段/高値からの距離」を付ける
@@ -195,9 +200,8 @@ async def intraday_overlay_view(
     1 日平均と比べるのは誤り）。
     """
 
-    config = get_personal_config()
-    if not config.features.intraday_quotes:
-        return {**_disabled(), "scope": scope, "rows": []}
+    if not _enabled():
+        return _disabled(scope=scope, rows={})
     repository = core_repository()
     if not repository.exists():
         raise HTTPException(status_code=503, detail={"code": "data_not_initialized"})
@@ -214,17 +218,11 @@ async def intraday_overlay_view(
         )
         codes = [row["canonical_code"] for row in rows]
 
-    def _collect() -> dict:
-        provider = YahooQuoteProvider(max_workers=6)
-        found: dict = {}
-        for start in range(0, len(codes), 60):
-            found.update(provider.quotes_for_codes(codes[start : start + 60]))
-        return found
-
     cache_key = f"quotes:overlay:{scope}:{limit}"
 
     async def build() -> dict:
-        quotes = await asyncio.to_thread(_collect)
+        quotes = await asyncio.to_thread(fetch_quotes_blocking, codes)
+        envelope = {**_source_envelope(), "enabled": True, "scope": scope}
         if scope == "radar":
             packs = {}
             for event in events:
@@ -234,16 +232,14 @@ async def intraday_overlay_view(
                     packs[event["event_id"]] = pack
             above = sum(1 for pack in packs.values() if pack.get("above_pivot"))
             return {
-                "version": QUOTES_VERSION, "enabled": True, "scope": scope,
-                "source": QUOTE_SOURCE, "delayed": True, "delayed_minutes": 15,
+                **envelope,
                 "requested": len(events), "quoted": len(packs),
                 "above_pivot_count": above,
                 "rows": packs,
             }
         packs = build_overlay(rows, quotes)
         return {
-            "version": QUOTES_VERSION, "enabled": True, "scope": scope,
-            "source": QUOTE_SOURCE, "delayed": True, "delayed_minutes": 15,
+            **envelope,
             "requested": len(rows), "quoted": len(packs),
             "rows": packs,
         }

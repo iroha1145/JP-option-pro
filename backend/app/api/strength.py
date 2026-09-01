@@ -131,7 +131,11 @@ def _public_row(row: dict) -> dict:
         "close": row.get("close"),
         "change_pct": row.get("change_pct"),
         "intrinsic_score": row.get("intrinsic_score"),
+        # ranking_score は互換のため残すが、中身はリスク調整後（= final）。
+        # 素点と減点を並べて出し、順位がどう作られたか画面で追えるようにする。
         "ranking_score": row.get("ranking_score"),
+        "raw_ranking_score": row.get("raw_ranking_score"),
+        "final_ranking_score": row.get("final_ranking_score"),
         "market_fit_score": row.get("market_fit_score"),
         "profile_fit_score": row.get("profile_fit_score"),
         "confidence": row.get("confidence"),
@@ -151,6 +155,9 @@ def _public_row(row: dict) -> dict:
         "rs_topix_63d": row.get("rs_topix_63d"),
         "ma_alignment_pct": row.get("ma_alignment_pct"),
         "risk_penalty": row.get("risk_penalty"),
+        # 信用规制は独立したリスク次元として出す（severity<0 = 判定不能）
+        "regulation_level": row.get("regulation_level"),
+        "regulation_severity": row.get("regulation_severity"),
         "classification": row.get("classification"),
         "tags": row.get("tags") or [],
         "reasons": row.get("reasons") or [],
