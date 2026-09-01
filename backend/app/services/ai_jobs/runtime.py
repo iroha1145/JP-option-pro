@@ -203,9 +203,16 @@ def validate_analysis_result(
     impact = str(result.get("impact_zh") or "")
     insufficient = bool(result.get("insufficient_context"))
     affected_raw = result.get("affected") or []
-    if not insufficient:
-        if not chinese_text_plausible(headline) or not chinese_text_plausible(impact):
+    # The Simplified-Chinese contract holds regardless of insufficient_context: any
+    # non-empty headline/impact must pass the language check so kana / 日本語 / garbage
+    # can never leak into the displayed analysis (the insufficient path stored the raw
+    # strings unchecked before). When the model is *not* signalling insufficient
+    # context, both fields must additionally be present.
+    for field_value in (headline, impact):
+        if field_value.strip() and not chinese_text_plausible(field_value):
             raise ResultValidationError("analysis_not_simplified_chinese")
+    if not insufficient and (not headline.strip() or not impact.strip()):
+        raise ResultValidationError("analysis_not_simplified_chinese")
     affected: list[dict[str, Any]] = []
     for entry in affected_raw:
         code = str(entry.get("code") or "")

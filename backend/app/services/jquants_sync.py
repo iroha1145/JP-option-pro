@@ -312,6 +312,12 @@ class JQuantsSyncEngine:
                 for row in self._client.fetch_rows("/equities/earnings-calendar")
                 if (mapped := mapping.map_earnings_announcement(row))
             ]
+            if not rows:
+                # An empty calendar would wipe every announcement (replace_* deletes first);
+                # treat it as a failure instead of destroying existing state.
+                raise JQuantsError(
+                    "empty earnings calendar response", code="jquants_empty_earnings"
+                )
             count = self._repository.replace_earnings_announcements(rows)
             self._repository.record_sync_success(
                 DATASET_EARNINGS_CALENDAR, rows_total=count, data_through=iso_date(today_jst())
