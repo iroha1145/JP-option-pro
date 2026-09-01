@@ -175,17 +175,33 @@ def enqueue_ai_jobs(
 
     config = get_personal_config()
     since = _iso(datetime.now(timezone.utc) - timedelta(hours=config.news.window_hours))
-    candidates = store.pending_ai_candidates(since_iso=since, limit=max_items)
+    candidates = store.pending_ai_candidates(
+        since_iso=since,
+        limit=max_items,
+        translation_version=ai.TRANSLATION_PROMPT_VERSION,
+        analysis_version=ai.ANALYSIS_PROMPT_VERSION,
+    )
     created = 0
     skipped_budget = 0
+    skipped_queue = 0
     for item in candidates:
+        # Enforce the configured queue cap (previously declared but never checked;
+        # the queue was only implicitly bounded by the daily token budget).
+        if jobs.queued_count() >= config.ai.max_queued:
+            skipped_queue += 1
+            continue
         committed = jobs.tokens_committed_today()
         if committed >= daily_token_limit:
             skipped_budget += 1
             continue
         news_id = item["news_id"]
         # 翻訳: 原文が日本語でない場合のみ。日本語原文の再翻訳はしない。
-        if item.get("translated_title_ja") is None and item.get("source_language") != "ja":
+        # 版が上がったら（prompt/schema）既訳でも再投入する（サイレントに旧結果を使い続けない）。
+        translation_stale = item.get("translation_version") != ai.TRANSLATION_PROMPT_VERSION
+        if (
+            item.get("source_language") != "ja"
+            and (item.get("translated_title_ja") is None or translation_stale)
+        ):
             payload = ai.build_translation_payload(item)
             hash_value = request_hash(
                 "news_translation_ja", payload,
@@ -203,7 +219,8 @@ def enqueue_ai_jobs(
                 token_reservation=ai.TOKEN_RESERVATION_TRANSLATION,
             )
             created += 1 if outcome["created"] else 0
-        if item.get("analysis_zh") is None and item.get("securities"):
+        analysis_stale = item.get("analysis_version") != ai.ANALYSIS_PROMPT_VERSION
+        if item.get("securities") and (item.get("analysis_zh") is None or analysis_stale):
             allowed = [entry["canonical_code"] for entry in item["securities"]]
             payload = ai.build_analysis_payload(item, allowed_codes=allowed)
             hash_value = request_hash(
@@ -222,7 +239,12 @@ def enqueue_ai_jobs(
                 token_reservation=ai.TOKEN_RESERVATION_ANALYSIS,
             )
             created += 1 if outcome["created"] else 0
-    return {"candidates": len(candidates), "jobs_created": created, "skipped_budget": skipped_budget}
+    return {
+        "candidates": len(candidates),
+        "jobs_created": created,
+        "skipped_budget": skipped_budget,
+        "skipped_queue": skipped_queue,
+    }
 
 
 def process_ai_jobs_once(*, store: NewsStore, jobs: AIJobStore, runtime: ai.OpenAIRuntime) -> dict[str, Any]:

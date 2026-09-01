@@ -247,17 +247,29 @@ class NewsStore(SQLiteRepository):
             ).fetchall()
         return [self._decode(row) for row in rows]
 
-    def pending_ai_candidates(self, *, since_iso: str, limit: int) -> list[dict[str, Any]]:
-        """重要度順で翻訳/分析が欠けているアイテムを返す。"""
+    def pending_ai_candidates(
+        self,
+        *,
+        since_iso: str,
+        limit: int,
+        translation_version: str | None = None,
+        analysis_version: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """重要度順で翻訳/分析が欠けている（または版が古い）アイテムを返す。
+
+        translation_version / analysis_version を渡すと、既訳・既分析でも保存された
+        版が現行 prompt 版と異なる行を再選択する（版更新時に旧結果を再処理するため）。
+        """
 
         with self.read() as connection:
             rows = connection.execute(
                 "SELECT * FROM news_items WHERE duplicate_of IS NULL "
                 "AND COALESCE(published_at, fetched_at) >= ? "
-                "AND (translated_title_ja IS NULL OR analysis_zh_json IS NULL) "
+                "AND (translated_title_ja IS NULL OR translation_version IS NOT ? "
+                "     OR analysis_zh_json IS NULL OR analysis_version IS NOT ?) "
                 "AND securities_json != '[]' "
                 "ORDER BY importance IS NULL, importance DESC LIMIT ?",
-                (since_iso, int(limit)),
+                (since_iso, translation_version, analysis_version, int(limit)),
             ).fetchall()
         return [self._decode(row) for row in rows]
 

@@ -115,7 +115,10 @@ def test_data_status_declares_capabilities(client):
     keys = {dataset["key"]: dataset for dataset in body["datasets"]}
     assert keys["daily_prices"]["status"] == "enabled"
     assert keys["financial_details"]["status"] == "unavailable"  # Premium 限定は正直に
-    assert body["intraday"]["enabled"] is False
+    # intraday add-on is declared enabled in CAPABILITIES (2026-08 OHLC-Min + Tick);
+    # data-status must report it consistently rather than hard-coding False.
+    assert keys["intraday_prices"]["status"] == "enabled"
+    assert body["intraday"]["enabled"] is True
     assert body["market_timezone"] == "Asia/Tokyo"
 
 

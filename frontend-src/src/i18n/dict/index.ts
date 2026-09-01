@@ -156,6 +156,7 @@ export const DICT: Record<string, [string, string]> = {
   重算雷达: ['Rescan radar', 'レーダー再計算'],
   已提交: ['Submitted', '送信済み'],
   盘中数据未接入: ['Intraday not connected', '日中データ未接続'],
+  盘中数据: ['Intraday data', '日中データ'],
   '本页为日线数据，收盘后更新': [
     'Daily data; updates after the close',
     '本ページは日足データ。大引け後に更新されます',
