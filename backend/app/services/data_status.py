@@ -20,6 +20,7 @@ _STALE_HOURS = {
     "security_master": 36,
     "daily_prices": 30,
     "index_prices": 30,
+    "topix_prices": 30,
     "financial_summary": 30,
     "earnings_calendar": 36,
     "margin_interest": 9 * 24,
@@ -101,7 +102,7 @@ def _dataset_key(capability_key: str) -> str:
     aliases = {
         "listed_master": "security_master",
         "daily_prices": "daily_prices",
-        "topix_prices": "index_prices",
+        "topix_prices": "topix_prices",
         "index_prices": "index_prices",
         "financial_summary": "financial_summary",
         "earnings_calendar": "earnings_calendar",

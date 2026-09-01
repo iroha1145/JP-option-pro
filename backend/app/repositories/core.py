@@ -462,20 +462,31 @@ class CoreRepository(SQLiteRepository):
         return [dict(row) for row in rows]
 
     def latest_summary_map(self) -> dict[str, dict[str, Any]]:
-        """Latest disclosure per security (by disclosed_date, disclosure_number)."""
+        """Latest disclosure per security (by disclosed_date, disclosure_number).
+
+        disclosure_number is ranked numerically: a string MAX on
+        ``disclosed_date || '#' || disclosure_number`` picks "#99" over "#100"
+        (lexicographic), which would select an older disclosure as "latest".
+        """
 
         with self.read() as connection:
             rows = connection.execute(
                 """
-                SELECT fs.* FROM financial_summaries fs
-                JOIN (
-                    SELECT canonical_code, MAX(disclosed_date || '#' || disclosure_number) AS latest_key
-                    FROM financial_summaries GROUP BY canonical_code
-                ) latest ON latest.canonical_code = fs.canonical_code
-                    AND (fs.disclosed_date || '#' || fs.disclosure_number) = latest.latest_key
+                SELECT * FROM (
+                    SELECT fs.*, ROW_NUMBER() OVER (
+                        PARTITION BY canonical_code
+                        ORDER BY disclosed_date DESC, CAST(disclosure_number AS INTEGER) DESC
+                    ) AS _rn
+                    FROM financial_summaries fs
+                ) WHERE _rn = 1
                 """
             ).fetchall()
-        return {row["canonical_code"]: dict(row) for row in rows}
+        result: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            record = dict(row)
+            record.pop("_rn", None)
+            result[record["canonical_code"]] = record
+        return result
 
     # ------------------------------------------------------------------
     # earnings announcements
