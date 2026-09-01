@@ -1,6 +1,7 @@
 /**
- * Beautiful UI Insight Cards 折线：渐变面积 + 终点呼吸点 + 指针/键盘刮擦。
- * 数值按真实点线性连接（不平滑），避免行情被曲线美化。
+ * Beautiful UI Insight Cards 折线（对照 beautifului.dev 截图）：
+ * 样条曲线、左淡右实、终点白圈、虚线基准、浅网格、可选对照线。
+ * 刮擦仍落在真实数据点上，读数不走曲线插值。
  */
 import {
   memo,
@@ -27,21 +28,27 @@ export type InsightScrub = {
 
 export interface InsightLineChartProps {
   data: Array<number | InsightDatum>;
+  compare?: Array<number | InsightDatum>;
   height?: number;
-  /** 固定像素宽；缺省时撑满父级并随 ResizeObserver 重算 */
   width?: number;
   change?: number;
   tone?: 'auto' | 'brand' | 'up' | 'down';
+  compareTone?: 'brand' | 'ai';
   interactive?: boolean;
-  /** 嵌在 Link 内时关掉，避免可聚焦控件套在锚点里 */
   focusable?: boolean;
   showLiveDot?: boolean;
   showCursorValue?: boolean;
+  showGrid?: boolean;
+  showAxis?: boolean;
+  showFill?: boolean;
+  strokeWidth?: number;
   formatValue?: (value: number) => string;
   onScrub?: (point: InsightScrub | null) => void;
   className?: string;
   ariaLabel?: string;
 }
+
+type Pt = { x: number; y: number };
 
 export function normalizeInsightSeries(data: Array<number | InsightDatum>): InsightDatum[] {
   const out: InsightDatum[] = [];
@@ -60,28 +67,64 @@ export function insightTone(change?: number): 'up' | 'down' | 'brand' {
   return change > 0 ? 'up' : 'down';
 }
 
-export function insightStroke(tone: 'up' | 'down' | 'brand'): string {
+export function insightStroke(tone: 'up' | 'down' | 'brand' | 'ai'): string {
   if (tone === 'up') return 'var(--up-600)';
   if (tone === 'down') return 'var(--down-600)';
+  if (tone === 'ai') return 'var(--ai-600)';
   return 'var(--brand-600)';
 }
 
-function buildPath(values: number[], width: number, height: number, padX: number, padY: number) {
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min || 1;
+/** Catmull-Rom → 三次贝塞尔，曲线过点（刮擦点与曲线一致） */
+function splinePath(points: Pt[]): string {
+  if (points.length === 0) return '';
+  if (points.length === 1) return `M${points[0].x.toFixed(2)},${points[0].y.toFixed(2)}`;
+  let d = `M${points[0].x.toFixed(2)},${points[0].y.toFixed(2)}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i - 1] ?? points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] ?? p2;
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += `C${c1x.toFixed(2)},${c1y.toFixed(2)},${c2x.toFixed(2)},${c2y.toFixed(2)},${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
+  }
+  return d;
+}
+
+function plotPoints(
+  values: number[],
+  width: number,
+  height: number,
+  padX: number,
+  padY: number,
+  min: number,
+  span: number,
+): Pt[] {
   const innerW = Math.max(width - padX * 2, 1);
   const innerH = Math.max(height - padY * 2, 1);
   const step = values.length > 1 ? innerW / (values.length - 1) : 0;
-  const points = values.map((value, index) => ({
+  return values.map((value, index) => ({
     x: padX + index * step,
     y: padY + (1 - (value - min) / span) * innerH,
   }));
-  const line = points.map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x.toFixed(2)},${point.y.toFixed(2)}`).join('');
-  const last = points[points.length - 1];
-  const first = points[0];
-  const area = `${line}L${last.x.toFixed(2)},${(height - 1).toFixed(2)}L${first.x.toFixed(2)},${(height - 1).toFixed(2)}Z`;
-  return { points, line, area };
+}
+
+function alignCompare(primary: InsightDatum[], compare: InsightDatum[]): Array<number | null> {
+  if (compare.length === 0) return [];
+  const byLabel = new Map<string, number>();
+  for (const item of compare) {
+    if (item.label) byLabel.set(item.label, item.value);
+  }
+  if (byLabel.size > 0 && primary.some((item) => item.label)) {
+    return primary.map((item) => (item.label != null ? (byLabel.get(item.label) ?? null) : null));
+  }
+  if (compare.length === primary.length) return compare.map((item) => item.value);
+  return primary.map((_, index) => {
+    const mapped = Math.round((index / Math.max(primary.length - 1, 1)) * (compare.length - 1));
+    return compare[mapped]?.value ?? null;
+  });
 }
 
 function pointFromClientX(clientX: number, rect: DOMRect, count: number, padX: number): number {
@@ -92,16 +135,27 @@ function pointFromClientX(clientX: number, rect: DOMRect, count: number, padX: n
   return Math.max(0, Math.min(count - 1, Math.round(ratio * (count - 1))));
 }
 
+function axisTick(label: string | undefined): string {
+  if (!label) return '';
+  return label.length >= 10 ? label.slice(5) : label;
+}
+
 const InsightLineChart = memo(function InsightLineChart({
   data,
+  compare,
   height = 72,
   width: fixedWidth,
   change,
   tone = 'auto',
+  compareTone = 'brand',
   interactive = true,
   focusable = true,
   showLiveDot = true,
   showCursorValue = false,
+  showGrid = false,
+  showAxis = false,
+  showFill = false,
+  strokeWidth,
   formatValue,
   onScrub,
   className,
@@ -115,11 +169,17 @@ const InsightLineChart = memo(function InsightLineChart({
   const [scrub, setScrub] = useState<InsightScrub | null>(null);
 
   const series = useMemo(() => normalizeInsightSeries(data), [data]);
+  const compareSeries = useMemo(() => (compare ? normalizeInsightSeries(compare) : []), [compare]);
   const values = useMemo(() => series.map((item) => item.value), [series]);
+  const compareValues = useMemo(() => alignCompare(series, compareSeries), [series, compareSeries]);
   const resolvedTone = tone === 'auto' ? insightTone(change) : tone;
   const color = insightStroke(resolvedTone);
-  const padX = 8;
-  const padY = 10;
+  const compareColor = insightStroke(compareTone);
+  const lineWidth = strokeWidth ?? (height >= 140 ? 2.6 : 2.15);
+  const axisH = showAxis ? 16 : 0;
+  const padX = showAxis ? 10 : 8;
+  const padY = height >= 140 ? 16 : 10;
+  const plotH = height - axisH;
 
   useLayoutEffect(() => {
     const node = wrapRef.current;
@@ -135,10 +195,32 @@ const InsightLineChart = memo(function InsightLineChart({
     return () => observer.disconnect();
   }, [fixedWidth]);
 
-  const geometry = useMemo(
-    () => (values.length >= 2 && width > 0 ? buildPath(values, width, height, padX, padY) : null),
-    [values, width, height],
-  );
+  const geometry = useMemo(() => {
+    if (values.length < 2 || width <= 0) return null;
+    const pooled = [...values, ...compareValues.filter((value): value is number => value != null)];
+    const min = Math.min(...pooled);
+    const max = Math.max(...pooled);
+    const span = max - min || 1;
+    const points = plotPoints(values, width, plotH, padX, padY, min, span);
+    const innerW = Math.max(width - padX * 2, 1);
+    const innerH = Math.max(plotH - padY * 2, 1);
+    const step = values.length > 1 ? innerW / (values.length - 1) : 0;
+    const comparePoints: Pt[] = [];
+    for (let index = 0; index < compareValues.length; index++) {
+      const value = compareValues[index];
+      if (value == null) continue;
+      comparePoints.push({
+        x: padX + index * step,
+        y: padY + (1 - (value - min) / span) * innerH,
+      });
+    }
+    const line = splinePath(points);
+    const last = points[points.length - 1];
+    const first = points[0];
+    const area = `${line}L${last.x.toFixed(2)},${(plotH - 1).toFixed(2)}L${first.x.toFixed(2)},${(plotH - 1).toFixed(2)}Z`;
+    const compareLine = comparePoints.length >= 2 ? splinePath(comparePoints) : '';
+    return { points, comparePoints, line, compareLine, area, min, max, span };
+  }, [values, compareValues, width, plotH, padX, padY]);
 
   useLayoutEffect(() => {
     if (!pathRef.current || !geometry) {
@@ -183,10 +265,18 @@ const InsightLineChart = memo(function InsightLineChart({
   };
 
   const last = geometry?.points[geometry.points.length - 1];
+  const compareLast = geometry?.comparePoints[geometry.comparePoints.length - 1];
   const cursor = scrub && geometry ? geometry.points[scrub.index] : null;
   const liveText = scrub
     ? `${scrub.label ?? ''} ${formatValue ? formatValue(scrub.value) : scrub.value}`.trim()
     : ariaLabel ?? '';
+  const axisMarks = showAxis && series.length
+    ? [
+        { x: padX, text: axisTick(series[0]?.label) },
+        { x: width / 2, text: axisTick(series[Math.floor((series.length - 1) / 2)]?.label) },
+        { x: Math.max(width - padX, padX), text: axisTick(series[series.length - 1]?.label) },
+      ]
+    : [];
 
   return (
     <div
@@ -210,44 +300,111 @@ const InsightLineChart = memo(function InsightLineChart({
       {geometry && (
         <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true" className="block">
           <defs>
-            <linearGradient id={`ig-${rawId}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={color} stopOpacity="0.28" />
-              <stop offset="70%" stopColor={color} stopOpacity="0.06" />
+            <linearGradient id={`fade-${rawId}`} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#fff" stopOpacity="0" />
+              <stop offset="16%" stopColor="#fff" stopOpacity="0.28" />
+              <stop offset="48%" stopColor="#fff" stopOpacity="0.85" />
+              <stop offset="100%" stopColor="#fff" stopOpacity="1" />
+            </linearGradient>
+            <mask id={`mask-${rawId}`} maskUnits="userSpaceOnUse">
+              <rect x="0" y="0" width={width} height={plotH} fill={`url(#fade-${rawId})`} />
+            </mask>
+            <linearGradient id={`fill-${rawId}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity="0.16" />
               <stop offset="100%" stopColor={color} stopOpacity="0" />
             </linearGradient>
+            <filter id={`glow-${rawId}`} x="-20%" y="-40%" width="140%" height="180%">
+              <feGaussianBlur stdDeviation="2.1" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
           </defs>
-          <line
-            x1={padX}
-            x2={width - padX}
-            y1={height - 0.5}
-            y2={height - 0.5}
-            stroke="var(--line)"
-            strokeWidth="1"
-          />
-          <path d={geometry.area} fill={`url(#ig-${rawId})`} stroke="none" />
-          <path
-            ref={pathRef}
-            d={geometry.line}
-            fill="none"
-            stroke={color}
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="spark-draw"
-            style={pathLen ? { strokeDasharray: pathLen, strokeDashoffset: pathLen } : undefined}
-          />
+
+          {showGrid &&
+            [0.25, 0.5, 0.75].map((ratio) => {
+              const y = padY + ratio * Math.max(plotH - padY * 2, 1);
+              return (
+                <line
+                  key={ratio}
+                  x1={padX}
+                  x2={width - padX}
+                  y1={y}
+                  y2={y}
+                  stroke="var(--line-chart)"
+                  strokeWidth="1"
+                  strokeDasharray="3 5"
+                />
+              );
+            })}
+
+          {last && (
+            <line
+              x1={padX}
+              x2={width - padX}
+              y1={last.y}
+              y2={last.y}
+              stroke={color}
+              strokeWidth="1"
+              strokeDasharray="4 5"
+              strokeOpacity="0.38"
+            />
+          )}
+          {compareLast && (
+            <line
+              x1={padX}
+              x2={width - padX}
+              y1={compareLast.y}
+              y2={compareLast.y}
+              stroke={compareColor}
+              strokeWidth="1"
+              strokeDasharray="4 5"
+              strokeOpacity="0.32"
+            />
+          )}
+
+          <g mask={`url(#mask-${rawId})`}>
+            {showFill && <path d={geometry.area} fill={`url(#fill-${rawId})`} stroke="none" />}
+            {geometry.compareLine && (
+              <path
+                d={geometry.compareLine}
+                fill="none"
+                stroke={compareColor}
+                strokeWidth={Math.max(lineWidth - 0.4, 1.6)}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )}
+            <path
+              d={geometry.line}
+              fill="none"
+              stroke={color}
+              strokeWidth={lineWidth + 4}
+              strokeLinecap="round"
+              strokeOpacity="0.16"
+              filter={`url(#glow-${rawId})`}
+            />
+            <path
+              ref={pathRef}
+              d={geometry.line}
+              fill="none"
+              stroke={color}
+              strokeWidth={lineWidth}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="spark-draw"
+              style={pathLen ? { strokeDasharray: pathLen, strokeDashoffset: pathLen } : undefined}
+            />
+          </g>
+
+          {showLiveDot && compareLast && (
+            <circle cx={compareLast.x} cy={compareLast.y} r="3.4" fill={compareColor} stroke="var(--card)" strokeWidth="2" />
+          )}
           {showLiveDot && last && (
             <g>
-              <circle
-                className="insight-live-ring"
-                cx={last.x}
-                cy={last.y}
-                r="4.5"
-                fill="none"
-                stroke={color}
-                strokeWidth="1.25"
-              />
-              <circle cx={last.x} cy={last.y} r="3" fill={color} stroke="var(--card)" strokeWidth="1.5" />
+              <circle cx={last.x} cy={last.y} r="5.2" fill={color} fillOpacity="0.18" />
+              <circle cx={last.x} cy={last.y} r="3.6" fill={color} stroke="var(--card)" strokeWidth="2" />
             </g>
           )}
           {cursor && (
@@ -256,14 +413,27 @@ const InsightLineChart = memo(function InsightLineChart({
                 x1={cursor.x}
                 x2={cursor.x}
                 y1={4}
-                y2={height - 2}
+                y2={plotH - 2}
                 stroke="var(--ink-300)"
                 strokeWidth="1"
                 strokeDasharray="3 3"
               />
-              <circle cx={cursor.x} cy={cursor.y} r="4.5" fill={color} stroke="var(--card)" strokeWidth="2" />
+              <circle cx={cursor.x} cy={cursor.y} r="4.6" fill={color} stroke="var(--card)" strokeWidth="2" />
             </g>
           )}
+          {axisMarks.map((mark) => (
+            <text
+              key={`${mark.x}-${mark.text}`}
+              x={mark.x}
+              y={height - 3}
+              textAnchor={mark.x <= padX + 1 ? 'start' : mark.x >= width - padX - 1 ? 'end' : 'middle'}
+              fill="var(--ink-400)"
+              fontSize="10"
+              fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+            >
+              {mark.text}
+            </text>
+          ))}
         </svg>
       )}
       {showCursorValue && scrub && width > 0 && (
@@ -274,7 +444,7 @@ const InsightLineChart = memo(function InsightLineChart({
           <span className="font-mono text-micro tnum text-ink-800">
             {formatValue ? formatValue(scrub.value) : scrub.value.toLocaleString('ja-JP')}
           </span>
-          {scrub.label && <span className="ml-1 text-micro text-ink-400">{scrub.label.slice(5)}</span>}
+          {scrub.label && <span className="ml-1 text-micro text-ink-400">{axisTick(scrub.label)}</span>}
         </div>
       )}
     </div>

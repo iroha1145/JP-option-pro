@@ -138,7 +138,8 @@ export function insightLineSeries(options: {
     showSymbol: false,
     symbol: 'circle',
     symbolSize: 9,
-    lineStyle: { color, width: 2, cap: 'round', join: 'round' },
+    smooth: 0.35,
+    lineStyle: { color, width: 2.4, cap: 'round', join: 'round' },
     areaStyle: insightAreaStyle(color),
     emphasis: {
       scale: false,

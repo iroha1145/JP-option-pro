@@ -10,7 +10,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
 import ChangeBadge from '@/components/shared/ChangeBadge';
 import { SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
-import InsightLineChart, { type InsightScrub } from '@/components/charts/InsightLineChart';
+import InsightLineChart, { insightStroke, insightTone, type InsightScrub } from '@/components/charts/InsightLineChart';
 import { CodeCell, DataThrough, SignalChip, StateChip } from '@/components/domain';
 import { t } from '@/i18n/core';
 import { fmtDate, fmtPct, fmtPrice, fmtYenCompact } from '@/lib/format';
@@ -35,9 +35,9 @@ export default function Home() {
 
       {/* 指数带 */}
       {marketState === 'loading' ? (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <SkeletonCard key={i} className="h-24" />
+            <SkeletonCard key={i} className="h-44" />
           ))}
         </div>
       ) : marketState === 'error' ? (
@@ -45,7 +45,13 @@ export default function Home() {
       ) : (
         <div className="stagger-in grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {market.data?.indices.map((index) => (
-            <IndexInsightCard key={index.index_code} index={index} />
+            <IndexInsightCard
+              key={index.index_code}
+              index={index}
+              compare={market.data?.indices.find(
+                (row) => row.index_code === (index.index_code === '0000' ? '0500' : '0000'),
+              )}
+            />
           ))}
         </div>
       )}
@@ -212,29 +218,46 @@ export default function Home() {
   );
 }
 
-function IndexInsightCard({ index }: { index: IndexSummary }) {
+function IndexInsightCard({ index, compare }: { index: IndexSummary; compare?: IndexSummary }) {
   const [scrub, setScrub] = useState<InsightScrub | null>(null);
   const value = scrub?.value ?? index.close;
+  const windowN = Math.max(index.sparkline.length, 1);
   return (
-    <Link
-      to="/market"
-      className="card-surface card-hover flex flex-col gap-2 rounded-lg p-3"
-    >
-      <div className="flex items-start justify-between gap-2">
+    <Link to="/market" className="card-surface card-hover flex flex-col overflow-hidden rounded-xl">
+      <div className="flex items-center justify-between gap-2 px-3 pt-3">
         <span className="truncate text-caption text-ink-500">{index.name}</span>
-        <ChangeBadge value={index.change_pct} size="sm" />
+        <span className="shrink-0 rounded-full bg-paper-2 px-2 py-0.5 text-micro text-ink-500">{t('快照')}</span>
       </div>
-      <span className="font-mono text-data-xl tnum text-ink-900">{fmtPrice(value)}</span>
-      <InsightLineChart
-        data={index.sparkline}
-        height={64}
-        change={index.change_pct ?? 0}
-        interactive
-        focusable={false}
-        showLiveDot
-        onScrub={setScrub}
-        ariaLabel={`${index.name} ${t('趋势快照')}`}
-      />
+      <div className="mt-2 border-t border-line px-2 pt-2">
+        {compare && (
+          <div className="mb-1 flex items-center gap-1.5 px-1">
+            <span className="inline-flex size-5 items-center justify-center rounded-md bg-paper-2" aria-hidden>
+              <i className="block size-1.5 rounded-full" style={{ background: insightStroke(insightTone(index.change_pct ?? 0)) }} />
+            </span>
+            <span className="inline-flex size-5 items-center justify-center rounded-md bg-paper-2" aria-hidden>
+              <i className="block size-1.5 rounded-full" style={{ background: 'var(--brand-600)' }} />
+            </span>
+          </div>
+        )}
+        <InsightLineChart
+          data={index.sparkline}
+          compare={compare?.sparkline}
+          height={72}
+          change={index.change_pct ?? 0}
+          interactive
+          focusable={false}
+          showLiveDot
+          onScrub={setScrub}
+          ariaLabel={`${index.name} ${t('趋势快照')}`}
+        />
+      </div>
+      <div className="flex items-baseline justify-between gap-2 px-3 pb-3 pt-1">
+        <span className="font-mono text-data-xl tnum text-ink-900">{fmtPrice(value)}</span>
+        <span className="flex items-center gap-1.5">
+          <ChangeBadge value={index.change_pct} size="sm" />
+          <span className="text-micro text-ink-400">{t('vs {n}日', { n: windowN })}</span>
+        </span>
+      </div>
     </Link>
   );
 }

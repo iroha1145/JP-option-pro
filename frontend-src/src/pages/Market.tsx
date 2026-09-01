@@ -10,7 +10,7 @@ import ChangeBadge from '@/components/shared/ChangeBadge';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import Segmented from '@/components/shared/Segmented';
 import { SkeletonCard } from '@/components/shared/Skeleton';
-import InsightLineChart, { type InsightScrub } from '@/components/charts/InsightLineChart';
+import InsightLineChart, { insightStroke, insightTone, type InsightScrub } from '@/components/charts/InsightLineChart';
 import { CodeCell, DataThrough } from '@/components/domain';
 import HeatMatrix, { HeatMatrixSkeleton, metricValue, type HeatMetric } from '@/components/sectors/HeatMatrix';
 import SectorMembersPanel from '@/components/sectors/SectorMembersPanel';
@@ -194,6 +194,10 @@ export default function Market() {
               changePct={
                 market.data?.indices.find((index) => index.index_code === indexCode)?.change_pct ?? null
               }
+              compareName={
+                market.data?.indices.find((index) => index.index_code === (indexCode === '0000' ? '0500' : '0000'))
+                  ?.name
+              }
             />
 
             <section className="space-y-3">
@@ -333,6 +337,7 @@ function IndexTrendPanel({
   bars,
   loading,
   changePct,
+  compareName,
 }: {
   name: string;
   seriesCode: string;
@@ -342,7 +347,10 @@ function IndexTrendPanel({
   bars: { trade_date: string; close: number | null }[];
   loading: boolean;
   changePct: number | null;
+  compareName?: string;
 }) {
+  const compareCode = indexCode === '0000' ? '0500' : '0000';
+  const compare = usePolling(() => marketApi.indexSeries(compareCode, 250), null, [compareCode]);
   const [scrub, setScrub] = useState<InsightScrub | null>(null);
   const points = useMemo(
     () =>
@@ -350,6 +358,13 @@ function IndexTrendPanel({
         .filter((bar): bar is { trade_date: string; close: number } => bar.close != null && Number.isFinite(bar.close))
         .map((bar) => ({ value: bar.close, label: bar.trade_date })),
     [bars],
+  );
+  const comparePoints = useMemo(
+    () =>
+      (compare.data?.bars ?? [])
+        .filter((bar): bar is { trade_date: string; close: number } => bar.close != null && Number.isFinite(bar.close))
+        .map((bar) => ({ value: bar.close, label: bar.trade_date })),
+    [compare.data],
   );
   const last = points[points.length - 1];
   const shown = scrub ?? (last ? { index: points.length - 1, value: last.value, label: last.label, x: 0, y: 0 } : null);
@@ -361,42 +376,61 @@ function IndexTrendPanel({
   }, [scrub, points, changePct]);
 
   return (
-    <section className="card-surface rounded-lg p-4 lg:col-span-2">
-      <header className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-h3 text-ink-900">{t('指数')}</h2>
-        <Segmented options={options} value={indexCode} onChange={onIndexChange} />
+    <section className="card-surface flex flex-col overflow-hidden rounded-xl p-0 lg:col-span-2">
+      <header className="flex items-center justify-between gap-3 px-4 pt-3">
+        <h2 className="text-body text-ink-500">{t('趋势快照')}</h2>
+        <span className="rounded-full bg-paper-2 px-2.5 py-0.5 text-micro text-ink-500">{t('快照')}</span>
       </header>
-      {loading ? (
-        <SkeletonCard className="h-64" />
-      ) : points.length === 0 ? (
-        <EmptyState title={t('暂无数据')} />
-      ) : (
-        <>
-          <div className="mb-3 flex items-end justify-between gap-3">
-            <div>
-              <p className="eyebrow">{t('趋势快照')}</p>
-              <p className="mt-1 font-mono text-data-xl tnum text-ink-900">{fmtPrice(shown?.value)}</p>
-              <p className="mt-0.5 text-micro text-ink-400">
-                {shown?.label ?? '—'} · {t('收盘')}
-                {scrub ? '' : ` · ${t('在图表上滑动查看点位')}`}
-              </p>
-            </div>
-            <ChangeBadge value={badgeValue} />
+      <div className="mt-3 border-t border-line px-4 pt-3">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex size-6 items-center justify-center rounded-md bg-paper-2" title={name} aria-label={name}>
+              <i className="block size-1.5 rounded-full" style={{ background: insightStroke(insightTone(changePct ?? 0)) }} />
+            </span>
+            <span
+              className="inline-flex size-6 items-center justify-center rounded-md bg-paper-2"
+              title={compareName ?? t('对照')}
+              aria-label={compareName ?? t('对照')}
+            >
+              <i className="block size-1.5 rounded-full" style={{ background: 'var(--brand-600)' }} />
+            </span>
           </div>
+          <Segmented options={options} value={indexCode} onChange={onIndexChange} />
+        </div>
+        {loading ? (
+          <SkeletonCard className="h-64" />
+        ) : points.length === 0 ? (
+          <EmptyState title={t('暂无数据')} />
+        ) : (
           <InsightLineChart
             key={seriesCode}
             data={points}
-            height={220}
+            compare={comparePoints}
+            height={228}
             change={changePct ?? 0}
             interactive
             showLiveDot
             showCursorValue
+            showGrid
+            showAxis
             formatValue={(value) => fmtPrice(value)}
             onScrub={setScrub}
             ariaLabel={`${name} ${t('趋势快照')}`}
           />
-        </>
-      )}
+        )}
+      </div>
+      <div className="flex items-baseline justify-between gap-3 px-4 pb-4 pt-2">
+        <div>
+          <p className="font-mono text-data-xl tnum text-ink-900">{fmtPrice(shown?.value)}</p>
+          <p className="mt-0.5 text-micro text-ink-400">
+            {shown?.label ?? '—'} · {t('收盘')}
+          </p>
+        </div>
+        <span className="flex items-center gap-1.5">
+          <ChangeBadge value={badgeValue} />
+          <span className="text-micro text-ink-400">{t('vs {n}日', { n: points.length || 1 })}</span>
+        </span>
+      </div>
     </section>
   );
 }

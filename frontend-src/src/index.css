@@ -316,7 +316,7 @@
   animation: spark-draw 700ms cubic-bezier(.16, 1, .3, 1) forwards;
 }
 
-/* beautifului Insight Cards：终点呼吸环 + 刮擦读数 pill */
+/* beautifului Insight Cards：刮擦读数 pill（终点用白圈实心点，不再呼吸） */
 .insight-chart-interactive {
   touch-action: none;
   cursor: crosshair;
