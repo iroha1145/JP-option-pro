@@ -11,7 +11,82 @@ from app.services.ai_jobs import runtime as ai
 from app.services.ai_jobs.store import AIJobStore, request_hash
 from app.services.news import classify
 from app.services.news.fetcher import parse_feed_xml
-from app.services.news.service import rebuild_entity_catalog, sync_feeds_once
+from app.services.news import service as news_service
+from app.services.news.service import (
+    process_ai_jobs_once,
+    rebuild_entity_catalog,
+    sync_feeds_once,
+)
+
+
+class _FakePoll:
+    """Minimal runtime stub exposing only poll() for process_ai_jobs_once."""
+
+    def __init__(self, response: dict) -> None:
+        self._response = response
+
+    def poll(self, _response_id: str) -> dict:
+        return self._response
+
+
+def _submit_translation_job(jobs, news_id: str):
+    payload = {"news_id": news_id, "title": "t"}
+    hash_value = request_hash(
+        "news_translation_ja", payload, model=ai.OFFICIAL_OPENAI_MODEL,
+        prompt_version=ai.TRANSLATION_PROMPT_VERSION,
+        schema_version=ai.TRANSLATION_SCHEMA_VERSION,
+        schema_sha256=ai.schema_sha256(ai.TRANSLATION_SCHEMA),
+    )
+    job = jobs.create_job(
+        job_type="news_translation_ja", news_id=news_id, payload=payload,
+        prompt_version=ai.TRANSLATION_PROMPT_VERSION, schema_version=ai.TRANSLATION_SCHEMA_VERSION,
+        model=ai.OFFICIAL_OPENAI_MODEL, request_hash_value=hash_value, token_reservation=6000,
+    )
+    jobs.mark_submitted(job["job_id"], "resp_1")
+    return job
+
+
+def test_stale_submitted_completed_poll_recovers_work(tmp_path, monkeypatch):
+    """A background response that completed past the staleness window must be applied,
+    not discarded as a timeout."""
+
+    store = NewsStore(tmp_path / "news.db")
+    store.initialize()
+    store.insert_news_items([{
+        "news_id": "n1", "source": "test", "original_title": "Toyota raises guidance",
+        "source_language": "en", "content_fingerprint": "n1",
+    }])
+    jobs = AIJobStore(tmp_path / "ai.db")
+    jobs.initialize()
+    _submit_translation_job(jobs, "n1")
+    monkeypatch.setattr(news_service, "SUBMITTED_STALE_SECONDS", -1)  # force "stale"
+    runtime = _FakePoll({
+        "status": "completed",
+        "result": {"news_id": "n1", "title_ja": "トヨタが通期予想を上方修正", "summary_ja": None},
+        "tokens_used": 100,
+    })
+    outcome = process_ai_jobs_once(store=store, jobs=jobs, runtime=runtime)
+    assert outcome["settled"] == 1 and outcome["pending"] == 0
+    # completed work is recovered rather than thrown away by the timeout path
+    assert store.get_item("n1")["translated_title_ja"] == "トヨタが通期予想を上方修正"
+
+
+def test_stale_submitted_pending_poll_times_out(tmp_path, monkeypatch):
+    """A response that is STILL pending past the deadline is timed out (failed)."""
+
+    store = NewsStore(tmp_path / "news.db")
+    store.initialize()
+    store.insert_news_items([{
+        "news_id": "n1", "source": "test", "original_title": "Toyota raises guidance",
+        "source_language": "en", "content_fingerprint": "n1",
+    }])
+    jobs = AIJobStore(tmp_path / "ai.db")
+    jobs.initialize()
+    _submit_translation_job(jobs, "n1")
+    monkeypatch.setattr(news_service, "SUBMITTED_STALE_SECONDS", -1)
+    outcome = process_ai_jobs_once(store=store, jobs=jobs, runtime=_FakePoll({"status": "pending"}))
+    assert outcome["settled"] == 1  # timed out
+    assert store.get_item("n1")["translated_title_ja"] is None
 
 RSS_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel><title>テスト経済</title>

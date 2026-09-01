@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Mapping
 
 from app.data_paths import get_data_paths
 from app.personal_config import get_personal_config
@@ -239,7 +239,13 @@ def enqueue_ai_jobs(
             )
             created += 1 if outcome["created"] else 0
         analysis_stale = item.get("analysis_version") != ai.ANALYSIS_PROMPT_VERSION
-        if item.get("securities") and (item.get("analysis_zh") is None or analysis_stale):
+        # Re-check the cap before the second job of the item so one candidate can't
+        # push the queue past max_queued (the top-of-loop check only gates entry).
+        if (
+            item.get("securities")
+            and (item.get("analysis_zh") is None or analysis_stale)
+            and jobs.queued_count() < config.ai.max_queued
+        ):
             allowed = [entry["canonical_code"] for entry in item["securities"]]
             payload = ai.build_analysis_payload(item, allowed_codes=allowed)
             hash_value = request_hash(
@@ -266,6 +272,19 @@ def enqueue_ai_jobs(
     }
 
 
+def _submission_stale(submitted: Mapping[str, Any]) -> bool:
+    """True when a submitted job has been in flight past SUBMITTED_STALE_SECONDS."""
+
+    submitted_at = submitted.get("submitted_at")
+    if not submitted_at:
+        return False
+    try:
+        started = datetime.fromisoformat(str(submitted_at).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return (datetime.now(timezone.utc) - started).total_seconds() > SUBMITTED_STALE_SECONDS
+
+
 def process_ai_jobs_once(*, store: NewsStore, jobs: AIJobStore, runtime: ai.OpenAIRuntime) -> dict[str, Any]:
     """送信 1 回 + 回収 1 回。並行度 1・予算はジョブ表が守る。"""
 
@@ -274,25 +293,21 @@ def process_ai_jobs_once(*, store: NewsStore, jobs: AIJobStore, runtime: ai.Open
     # 1) 回収
     submitted = jobs.submitted_job()
     if submitted is not None:
-        stale = False
-        submitted_at = submitted.get("submitted_at")
-        if submitted_at:
-            try:
-                started = datetime.fromisoformat(str(submitted_at).replace("Z", "+00:00"))
-                stale = (datetime.now(timezone.utc) - started).total_seconds() > SUBMITTED_STALE_SECONDS
-            except ValueError:
-                stale = False
-        if stale:
-            jobs.settle(
-                submitted["job_id"], status="failed", result=None,
-                tokens_used=None, error_code="model_poll_timeout",
-            )
-            outcome["settled"] = 1
-        else:
-            poll = runtime.poll(str(submitted.get("openai_response_id")))
-            if poll["status"] == "pending":
+        # Always poll first so a background response that actually completed is
+        # captured even past the staleness window. Only time out when the response
+        # is STILL pending beyond the deadline — never discard finished work.
+        poll = runtime.poll(str(submitted.get("openai_response_id")))
+        if poll["status"] == "pending":
+            if _submission_stale(submitted):
+                jobs.settle(
+                    submitted["job_id"], status="failed", result=None,
+                    tokens_used=None, error_code="model_poll_timeout",
+                )
+                outcome["settled"] = 1
+            else:
                 outcome["pending"] = 1
-            elif poll["status"] == "failed":
+        else:
+            if poll["status"] == "failed":
                 jobs.settle(
                     submitted["job_id"], status="failed", result=None,
                     tokens_used=poll.get("tokens_used"), error_code=poll.get("error_code"),

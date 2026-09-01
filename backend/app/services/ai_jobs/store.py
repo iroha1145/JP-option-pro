@@ -119,10 +119,13 @@ class AIJobStore(SQLiteRepository):
                 "WHERE completed_at LIKE ? AND tokens_used IS NOT NULL",
                 (f"{day}%",),
             ).fetchone()[0]
+            # In-flight reservations count regardless of creation day: a job created
+            # just before UTC midnight but still queued/submitted/unknown today will
+            # spend its tokens today, so filtering reservations by created_at let the
+            # daily budget be overspent by stale carryover.
             reserved = connection.execute(
                 "SELECT COALESCE(SUM(token_reservation), 0) FROM ai_jobs "
-                "WHERE status IN ('queued', 'submitted', 'unknown') AND created_at LIKE ?",
-                (f"{day}%",),
+                "WHERE status IN ('queued', 'submitted', 'unknown')",
             ).fetchone()[0]
         return int(settled) + int(reserved)
 
@@ -213,8 +216,11 @@ class AIJobStore(SQLiteRepository):
         now = utc_now_iso()
         with self.write() as connection:
             connection.execute(
+                # Clear the transient CLAIMING_MARKER stored in error_code so a
+                # submitted row isn't left with a misleading 'claiming' diagnostic.
                 "UPDATE ai_jobs SET status = 'submitted', openai_response_id = ?, "
-                "submitted_at = ?, updated_at = ? WHERE job_id = ? AND status = 'queued'",
+                "submitted_at = ?, updated_at = ?, error_code = NULL "
+                "WHERE job_id = ? AND status = 'queued'",
                 (response_id, now, now, job_id),
             )
 
