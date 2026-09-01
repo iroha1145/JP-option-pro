@@ -909,6 +909,7 @@ function ShortPositionsPanel({
     decreased: '減',
     below_threshold: '義務消失',
     closed: '解消',
+    unknown: '状态未知',
   };
   // ラベルの色は **株にとっての向き**（赤=買い方に有利／緑=売り方に有利）。
   // 新しい売り方が出た＝弱気で緑、義務消失・解消＝買い戻し済みで赤。

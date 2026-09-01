@@ -1,6 +1,15 @@
 """空売り残高サマリ: 欠損は「解消」ではなく「不明」。規制不明は信頼度を下げる。"""
 
-from app.services.short_interest import STATE_CLOSED, STATE_UNKNOWN, _state, summarise
+from app.services.short_interest import (
+    MOVE_CLOSED,
+    MOVE_INCREASED,
+    MOVE_UNKNOWN,
+    STATE_CLOSED,
+    STATE_UNKNOWN,
+    _state,
+    changes_within,
+    summarise,
+)
 from app.services.short_monitor.factors import data_confidence
 
 
@@ -25,6 +34,32 @@ def test_missing_latest_ratio_is_unknown_not_closed():
     summary = summarise(rows, as_of="2026-07-30").as_dict()
     assert summary["unknown_holders"] == 1  # A
     assert summary["closed_holders"] == 1   # B only (was 2 before the fix)
+
+
+def test_changes_within_does_not_label_a_missing_ratio_as_increased():
+    """2 周变化列表的 `or INCREASED` 回退不能把数据穴标成「增」。"""
+
+    rows = [
+        {
+            "holder_name": "A", "calculated_date": "2026-07-30",
+            "disclosed_date": "2026-07-30",
+            "short_position_ratio": None, "previous_ratio": 0.006,
+        },
+        {
+            "holder_name": "B", "calculated_date": "2026-07-30",
+            "disclosed_date": "2026-07-30",
+            "short_position_ratio": 0.0, "previous_ratio": 0.006,
+        },
+        {
+            "holder_name": "C", "calculated_date": "2026-07-30",
+            "disclosed_date": "2026-07-30",
+            "short_position_ratio": 0.008, "previous_ratio": 0.006,
+        },
+    ]
+    kinds = {row["holder_name"]: row["kind"] for row in changes_within(rows, since="2026-07-01")}
+    assert kinds["A"] == MOVE_UNKNOWN
+    assert kinds["B"] == MOVE_CLOSED
+    assert kinds["C"] == MOVE_INCREASED
 
 
 def test_regulation_unknown_lowers_data_confidence():

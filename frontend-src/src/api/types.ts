@@ -313,7 +313,7 @@ export interface ShortInterestChange {
   units: number | null;
   previous_ratio: number | null;
   delta: number | null;
-  /** new | increased | decreased | below_threshold | closed */
+  /** new | increased | decreased | below_threshold | closed | unknown */
   kind: string;
   state: string;
 }

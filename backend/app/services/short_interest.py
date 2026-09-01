@@ -46,6 +46,7 @@ MOVE_INCREASED = "increased"
 MOVE_DECREASED = "decreased"
 MOVE_BELOW_THRESHOLD = "below_threshold"   # 0.5% 割れ（義務消失）
 MOVE_CLOSED = "closed"                     # 解消
+MOVE_UNKNOWN = "unknown"                   # 比率が読めない。増減でも解消でもない。
 
 
 def _finite(value: Any) -> float | None:
@@ -205,6 +206,8 @@ def _classify_move(previous: float | None, current: float | None) -> str | None:
         return MOVE_CLOSED
     if before == STATE_REPORTING and after == STATE_BELOW_THRESHOLD:
         return MOVE_BELOW_THRESHOLD
+    if after == STATE_UNKNOWN or before == STATE_UNKNOWN:
+        return MOVE_UNKNOWN
     if current is not None and previous is not None:
         if current > previous:
             return MOVE_INCREASED
@@ -301,7 +304,9 @@ def changes_within(
                 "units": _finite(row.get("short_position_units")),
                 "previous_ratio": previous,
                 "delta": (ratio - previous) if (ratio is not None and previous is not None) else None,
-                "kind": _classify_move(previous, ratio) or MOVE_INCREASED,
+                "kind": _classify_move(previous, ratio) or (
+                    MOVE_UNKNOWN if (ratio is None or previous is None) else MOVE_INCREASED
+                ),
                 "state": _state(ratio),
             }
         )
@@ -321,6 +326,7 @@ __all__ = [
     "MOVE_DECREASED",
     "MOVE_INCREASED",
     "MOVE_NEW",
+    "MOVE_UNKNOWN",
     "REPORTING_THRESHOLD",
     "STATE_BELOW_THRESHOLD",
     "STATE_CLOSED",
