@@ -527,9 +527,14 @@ def risk_penalty(row: Mapping[str, Any], profile: str) -> tuple[float, list[str]
         penalty += 7
         flags.append("回撤较深")
     vol_price = details.get("vol_price") or {}
-    vol_adjustment = _finite(vol_price.get("risk_penalty_adjustment")) or 0.0
-    if vol_adjustment:
-        penalty += vol_adjustment
+    # vol_price_match never emits `risk_penalty_adjustment`, so the previous read was
+    # dead code and vacuum/absorption structures never actually reached the risk tier.
+    # Fold the reported false-breakout risk in instead. This penalty feeds the risk
+    # tier / classification (not the ranking score — the breakout family already nets
+    # out false_breakout_risk), so there is no double count of the score.
+    false_risk = _finite(vol_price.get("false_breakout_risk"), 0.0) or 0.0
+    if false_risk > 0:
+        penalty += min(false_risk, 12.0)
     setup_type = str(vol_price.get("setup_type") or "")
     if setup_type == "vacuum":
         flags.append("真空型")
@@ -681,7 +686,6 @@ def build_strength_rows(
                         "setup_label": vol_price.get("setup_label"),
                         "breakout_quality_adjustment": vol_price.get("breakout_quality_adjustment"),
                         "false_breakout_risk": vol_price.get("false_breakout_risk"),
-                        "risk_penalty_adjustment": vol_price.get("risk_penalty_adjustment"),
                         "tags": (vol_price.get("tags") or [])[:3],
                     },
                 },

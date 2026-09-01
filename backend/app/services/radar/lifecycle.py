@@ -95,7 +95,13 @@ def resolve_target(
         return STATE_EXPIRED, REASON_EXPIRED
     if observation.get("failed"):
         return STATE_FAILED, REASON_FAILED
-    if observation.get("extended"):
+    # Only pre-empt with EXTENDED where it is a legal transition. For DISCOVERED/
+    # WATCHING it is not (a name must trigger before it can be extended), so a
+    # single large gap-up (>3.5 ATR) must resolve to TRIGGERED first — otherwise
+    # transition() rejects WATCHING/DISCOVERED->EXTENDED and the event is stranded.
+    if observation.get("extended") and STATE_EXTENDED in ALLOWED_TRANSITIONS.get(
+        current, frozenset()
+    ):
         return STATE_EXTENDED, REASON_EXTENDED
     if current in (STATE_DISCOVERED, STATE_WATCHING):
         if observation.get("triggered"):
