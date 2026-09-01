@@ -19,6 +19,7 @@ from app.repositories.core import CoreRepository
 from . import lifecycle as lc
 from .base_detector import detect_base
 from .features import (
+    _median,
     clean_series,
     compute_features_from_series,
     index_return,
@@ -438,7 +439,7 @@ class RadarEngine:
                 sector_returns.setdefault(sector, []).append(features["return_20d"])
 
         sector_median_returns = {
-            sector: sorted(values)[len(values) // 2]
+            sector: _median(values)
             for sector, values in sector_returns.items()
             if values
         }

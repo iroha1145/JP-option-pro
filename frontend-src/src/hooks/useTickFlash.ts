@@ -32,9 +32,18 @@ export function useTickFlash<T>(
   const [flashes, setFlashes] = useState<FlashMap>({});
   const previous = useRef<Record<string, number>>({});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Read the accessors through refs so an unrelated re-render with inline
+  // (non-memoized) keyOf/valueOf does not re-run the effect, clear the timer and
+  // truncate an in-progress flash. The effect keys only on new data (rows).
+  const keyOfRef = useRef(keyOf);
+  keyOfRef.current = keyOf;
+  const valueOfRef = useRef(valueOf);
+  valueOfRef.current = valueOf;
 
   useEffect(() => {
     if (!rows) return;
+    const keyOf = keyOfRef.current;
+    const valueOf = valueOfRef.current;
     // 每轮先清掉上一轮的定时器与状态：闪烁的结束不能依赖「下一轮恰好也有变化」。
     if (timer.current !== null) {
       clearTimeout(timer.current);
@@ -63,7 +72,8 @@ export function useTickFlash<T>(
       }, durationMs);
     }
     // 只在卸载时清理定时器；状态复位由下一轮开头统一处理。
-  }, [rows, keyOf, valueOf, durationMs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, durationMs]);
 
   useEffect(
     () => () => {

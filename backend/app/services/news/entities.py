@@ -156,6 +156,10 @@ class EntityMatcher:
                 break
         for match_obj in _CODE_CONTEXT.finditer(text):
             display = match_obj.group(1)
+            if display.isdigit() and 1900 <= int(display) <= 2099:
+                # "（2025）" is almost always a calendar year, not a ticker. Skip the
+                # bracket-code shortcut; such tickers are still caught by name aliases.
+                continue
             code = self._display_to_code.get(display)
             if code and code not in found:
                 found[code] = EntityMatch(code, display, "code_context")

@@ -12,6 +12,18 @@ from app.domain.constants import HOME_INDEX_CODES, INDEX_CODES, SECTOR33, TOPIX_
 from app.domain.symbols import display_code
 from app.repositories.core import CoreRepository
 
+
+def _median_sorted(sorted_values: list[float]) -> float | None:
+    """True median of an already-sorted list (averages the two central values
+    for even lengths instead of taking the upper-middle element)."""
+
+    if not sorted_values:
+        return None
+    mid = len(sorted_values) // 2
+    if len(sorted_values) % 2:
+        return sorted_values[mid]
+    return (sorted_values[mid - 1] + sorted_values[mid]) / 2.0
+
 MARKET_OVERVIEW_VERSION = "jp-market-v1"
 SECTOR_MEMBERS_VERSION = "jp-sector-members-v1"
 
@@ -117,8 +129,8 @@ def market_overview(repository: CoreRepository) -> dict[str, Any]:
                     "sector33_code": sector_code,
                     "sector33_name": SECTOR33.get(sector_code, sector_code),
                     "member_count": len(members),
-                    "median_return_1d": r1_values[len(r1_values) // 2] if r1_values else None,
-                    "median_return_20d": r20_values[len(r20_values) // 2] if r20_values else None,
+                    "median_return_1d": _median_sorted(r1_values),
+                    "median_return_20d": _median_sorted(r20_values),
                     "advancers_share": advancers_share,
                     "leaders": [
                         {

@@ -1,0 +1,1 @@
+import{j as e,L as t,t as n}from"./index-CpkdapPr.js";function a(){return e.jsxs("div",{className:"flex min-h-[50vh] flex-col items-center justify-center gap-3",children:[e.jsx("span",{className:"font-mono text-display-xl text-ink-300",children:"404"}),e.jsx(t,{to:"/",className:"text-body text-brand-700 hover:underline",children:n("首页")})]})}export{a as default};

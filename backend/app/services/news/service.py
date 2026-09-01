@@ -106,7 +106,10 @@ def sync_feeds_once(
                 for known_id, known_bigrams, known_codes in seen_titles:
                     if known_id == news_id:
                         continue
-                    shared_entity = bool(code_set & known_codes) or (not code_set and not known_codes)
+                    # Only a genuine shared ticker relaxes the similarity threshold.
+                    # Treating "both have no codes" as shared over-deduped distinct
+                    # macro headlines (BOJ/CPI/FX) that merely share common bigrams.
+                    shared_entity = bool(code_set & known_codes)
                     threshold = 0.5 if shared_entity else 0.72
                     if classify.titles_similar(bigrams, known_bigrams, threshold=threshold):
                         duplicate_of = known_id
@@ -376,8 +379,14 @@ def _analysis_states(items: list[dict[str, Any]]) -> dict[str, str]:
     return states
 
 
+def _clamp_window_hours(hours: int) -> int:
+    """Clamp the requested window to [6h, 14d] — the range actually queried."""
+
+    return max(6, min(24 * 14, hours))
+
+
 def _window_items(store: NewsStore, hours: int, *, limit: int = 300) -> list[dict[str, Any]]:
-    since = _iso(datetime.now(timezone.utc) - timedelta(hours=max(6, min(24 * 14, hours))))
+    since = _iso(datetime.now(timezone.utc) - timedelta(hours=_clamp_window_hours(hours)))
     return store.recent_items(since_iso=since, limit=limit)
 
 
@@ -412,7 +421,7 @@ def news_feed_view(
     states = _analysis_states(items)
     return {
         "mode": config.features.news_mode,
-        "window_hours": hours,
+        "window_hours": _clamp_window_hours(hours),
         "items": [
             {**_item_view(item, names), "analysis_state": states.get(item["news_id"], "none")}
             for item in items
@@ -463,7 +472,7 @@ def news_hotspots_view(*, hours: int = 72, limit: int = 8) -> dict[str, Any]:
         group["display_code"] = _display(code)
         group["name_ja"] = names.get(code)
         group["categories"] = group["categories"][:3]
-    return {"window_hours": hours, "groups": ranked}
+    return {"window_hours": _clamp_window_hours(hours), "groups": ranked}
 
 
 def news_securities_view(*, hours: int = 72, limit: int = 50) -> dict[str, Any]:
@@ -515,7 +524,7 @@ def news_securities_view(*, hours: int = 72, limit: int = 50) -> dict[str, Any]:
         row["categories"] = row["categories"][:3]
         analyzed = row.pop("analyzed_count")
         row["ai"] = {"analyzed": analyzed} if analyzed else None
-    return {"window_hours": hours, "rows": rows}
+    return {"window_hours": _clamp_window_hours(hours), "rows": rows}
 
 
 def news_pipeline_status_view() -> dict[str, Any]:

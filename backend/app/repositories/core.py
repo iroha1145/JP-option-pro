@@ -840,14 +840,19 @@ class CoreRepository(SQLiteRepository):
             values["metrics_json"] = json.dumps(row.get("metrics") or {}, ensure_ascii=False, sort_keys=True)
             values["updated_at"] = now
             prepared.append(tuple(values[column] for column in self._SCREENER_COLUMNS))
+        if not prepared:
+            # Don't wipe the last good snapshot on an empty rebuild (same
+            # "empty never overwrites" contract as the earnings/master syncs).
+            return 0
         with self.write() as connection:
             connection.execute("DELETE FROM screener_rows")
-            if prepared:
-                connection.executemany(
-                    f"INSERT INTO screener_rows ({', '.join(self._SCREENER_COLUMNS)}) "
-                    f"VALUES ({', '.join('?' for _ in self._SCREENER_COLUMNS)})",
-                    prepared,
-                )
+            connection.executemany(
+                # OR IGNORE: a spurious duplicate canonical_code must not abort the
+                # whole rebuild (rows are DELETE-d first, so no cross-run conflict).
+                f"INSERT OR IGNORE INTO screener_rows ({', '.join(self._SCREENER_COLUMNS)}) "
+                f"VALUES ({', '.join('?' for _ in self._SCREENER_COLUMNS)})",
+                prepared,
+            )
         return len(prepared)
 
     def screener_query(
@@ -914,14 +919,16 @@ class CoreRepository(SQLiteRepository):
             )
             values["built_at"] = now
             prepared.append(tuple(values[column] for column in self._STRENGTH_COLUMNS))
+        if not prepared:
+            # Don't wipe the last good snapshot (rows + meta) on an empty rebuild.
+            return 0
         with self.write() as connection:
             connection.execute("DELETE FROM strength_rows")
-            if prepared:
-                connection.executemany(
-                    f"INSERT INTO strength_rows ({', '.join(self._STRENGTH_COLUMNS)}) "
-                    f"VALUES ({', '.join('?' for _ in self._STRENGTH_COLUMNS)})",
-                    prepared,
-                )
+            connection.executemany(
+                f"INSERT OR IGNORE INTO strength_rows ({', '.join(self._STRENGTH_COLUMNS)}) "
+                f"VALUES ({', '.join('?' for _ in self._STRENGTH_COLUMNS)})",
+                prepared,
+            )
             connection.execute(
                 "INSERT INTO strength_meta (id, trade_date, regime_json, universe_count, built_at) "
                 "VALUES (1, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET trade_date=excluded.trade_date, "

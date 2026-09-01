@@ -166,6 +166,7 @@ export const DICT: Record<string, [string, string]> = {
   沪深不适用: ['—', '—'],
   年初来: ['YTD', '年初来'],
   近20日: ['20d', '20日'],
+  近1日: ['1d', '1日'],
   近63日: ['63d', '63日'],
   近5日: ['5d', '5日'],
   当日: ['1d', '当日'],
@@ -902,7 +903,7 @@ export const DICT: Record<string, [string, string]> = {
     '高めのボラティリティを許容し、ブレイクの比重を高く',
   ],
   '进取评分 + 强度分 ≥70': ['Aggressive scoring + strength ≥70', '進取スコア ＋ 強度スコア 70 以上'],
-  '稳健评分（波动惩罚加重）': ['Conservative scoring (heavier volatility penalty)', '稳健スコア（ボラティリティのペナルティを加重）'],
+  '稳健评分（波动惩罚加重）': ['Conservative scoring (heavier volatility penalty)', '保守スコア（ボラティリティのペナルティを加重）'],
 
   /* ---- 場中の「当日データ未発表」表示 ---- */
   '盘中 · 当日数据收盘后更新': [

@@ -47,6 +47,18 @@ TIER_FLOORS: tuple[tuple[str, float], ...] = (
 )
 
 
+def _median(values: Any) -> float | None:
+    """True median (averages the two central values for even lengths)."""
+
+    items = sorted(values)
+    if not items:
+        return None
+    mid = len(items) // 2
+    if len(items) % 2:
+        return items[mid]
+    return (items[mid - 1] + items[mid]) / 2.0
+
+
 def _finite(value: Any, lo: float | None = None, hi: float | None = None) -> float | None:
     try:
         number = float(value)
@@ -381,7 +393,7 @@ def compute_market_regime_jp(
     )
     risk_appetite = None
     if r20_values:
-        median = sorted(r20_values)[len(r20_values) // 2]
+        median = _median(r20_values)
         risk_appetite = round(max(0.0, min(100.0, 50.0 + median * 1000.0)), 1)
 
     # リスクオン価差: グロース市場と プライム市場の 20 日中央値リターン差。
@@ -390,7 +402,7 @@ def compute_market_regime_jp(
     growth = sorted(r20_by_market.get("0113") or [])
     prime = sorted(r20_by_market.get("0111") or [])
     if len(growth) >= 30 and len(prime) >= 30:
-        spread = growth[len(growth) // 2] - prime[len(prime) // 2]
+        spread = _median(growth) - _median(prime)
         risk_on_spread = round(max(0.0, min(100.0, 50.0 + spread * 600.0)), 1)
         # Chinese msgid (front-end runs it through t()); keeps the app-wide
         # "backend emits Chinese, frontend localizes" contract.

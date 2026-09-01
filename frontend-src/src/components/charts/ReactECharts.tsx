@@ -36,10 +36,10 @@ export default function ReactECharts({ option, className, style, onClick, onInit
     const chart = chartRef.current;
     if (!chart) return;
     chart.setOption(option, { notMerge: true });
-    if (onClick) {
-      chart.off('click');
-      chart.on('click', onClick);
-    }
+    // Always detach first so a transition to onClick=undefined removes the stale
+    // handler (previously the off() lived inside the if and leaked the old binding).
+    chart.off('click');
+    if (onClick) chart.on('click', onClick);
   }, [option, onClick]);
 
   return (

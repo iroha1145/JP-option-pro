@@ -160,7 +160,8 @@ def importance_score(
             age_hours = max(0.0, ((now or datetime.now(timezone.utc)) - published).total_seconds() / 3600.0)
             components["recency"] = max(0.0, 100.0 - age_hours * 1.4)
             reasons.append("发布时间较近" if age_hours < 24 else "发布已有一段时间")
-        except ValueError:
+        except (ValueError, TypeError):
+            # TypeError guards a tz-naive published_at (naive - aware subtraction).
             pass
 
     bonus = 0.0

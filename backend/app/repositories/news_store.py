@@ -117,14 +117,17 @@ class NewsStore(SQLiteRepository):
 
     def replace_entity_aliases(self, rows: Iterable[tuple[str, str, str]]) -> int:
         prepared = [(alias, code, alias_type) for alias, code, alias_type in rows if alias and code]
+        if not prepared:
+            # Don't wipe the alias catalog on an empty rebuild (e.g. a transient
+            # empty master); keep the last good set.
+            return 0
         with self.write() as connection:
             connection.execute("DELETE FROM entity_aliases")
-            if prepared:
-                connection.executemany(
-                    "INSERT OR IGNORE INTO entity_aliases (alias, canonical_code, alias_type) "
-                    "VALUES (?, ?, ?)",
-                    prepared,
-                )
+            connection.executemany(
+                "INSERT OR IGNORE INTO entity_aliases (alias, canonical_code, alias_type) "
+                "VALUES (?, ?, ?)",
+                prepared,
+            )
         return len(prepared)
 
     def all_entity_aliases(self) -> list[dict[str, Any]]:
