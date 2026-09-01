@@ -37,6 +37,8 @@ export const DICT: Record<string, [string, string]> = {
   行业强弱: ['Sector strength', '業種強弱'],
   今日领涨: ['Leaders', '本日の上昇上位'],
   指数: ['Indices', '指数'],
+  趋势快照: ['Trend snapshot', 'トレンドスナップショット'],
+  在图表上滑动查看点位: ['Hover the chart to inspect a point', 'チャートをなぞって点を確認'],
   市场广度: ['Breadth', '騰落状況'],
   雷达信号: ['Radar signals', 'レーダーシグナル'],
   最近决算: ['Recent earnings', '直近の決算'],

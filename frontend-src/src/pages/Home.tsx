@@ -1,14 +1,16 @@
 /** 首页：市场状态 → 行业强弱 → 雷达信号 → 最近决算 → 自选异动。 */
 
+import { useState } from 'react';
 import { Link } from 'react-router';
 import { marketApi, radarApi, earningsApi, watchlistApi } from '@/api/modules';
+import type { IndexSummary } from '@/api/types';
 import { usePolling } from '@/hooks/usePolling';
 import { remoteState } from '@/hooks/remoteState';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
 import ChangeBadge from '@/components/shared/ChangeBadge';
 import { SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
-import Sparkline from '@/components/charts/Sparkline';
+import InsightLineChart, { type InsightScrub } from '@/components/charts/InsightLineChart';
 import { CodeCell, DataThrough, SignalChip, StateChip } from '@/components/domain';
 import { t } from '@/i18n/core';
 import { fmtDate, fmtPct, fmtPrice, fmtYenCompact } from '@/lib/format';
@@ -41,20 +43,9 @@ export default function Home() {
       ) : marketState === 'error' ? (
         <EmptyState variant="error" title={t('加载失败')} description={String(market.error?.message ?? '')} />
       ) : (
-        <div className="stagger-in grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <div className="stagger-in grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {market.data?.indices.map((index) => (
-            <Link
-              key={index.index_code}
-              to="/market"
-              className="card-surface card-hover flex flex-col gap-1 rounded-lg p-3"
-            >
-              <span className="truncate text-caption text-ink-500">{index.name}</span>
-              <span className="font-mono text-data-l tnum text-ink-900">{fmtPrice(index.close)}</span>
-              <div className="flex items-center justify-between">
-                <ChangeBadge value={index.change_pct} size="sm" />
-                <Sparkline data={index.sparkline} width={64} height={20} change={index.change_pct ?? 0} />
-              </div>
-            </Link>
+            <IndexInsightCard key={index.index_code} index={index} />
           ))}
         </div>
       )}
@@ -218,6 +209,33 @@ export default function Home() {
         </section>
       </div>
     </div>
+  );
+}
+
+function IndexInsightCard({ index }: { index: IndexSummary }) {
+  const [scrub, setScrub] = useState<InsightScrub | null>(null);
+  const value = scrub?.value ?? index.close;
+  return (
+    <Link
+      to="/market"
+      className="card-surface card-hover flex flex-col gap-2 rounded-lg p-3"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className="truncate text-caption text-ink-500">{index.name}</span>
+        <ChangeBadge value={index.change_pct} size="sm" />
+      </div>
+      <span className="font-mono text-data-xl tnum text-ink-900">{fmtPrice(value)}</span>
+      <InsightLineChart
+        data={index.sparkline}
+        height={64}
+        change={index.change_pct ?? 0}
+        interactive
+        focusable={false}
+        showLiveDot
+        onScrub={setScrub}
+        ariaLabel={`${index.name} ${t('趋势快照')}`}
+      />
+    </Link>
   );
 }
 

@@ -10,8 +10,7 @@ import ChangeBadge from '@/components/shared/ChangeBadge';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import Segmented from '@/components/shared/Segmented';
 import { SkeletonCard } from '@/components/shared/Skeleton';
-import ReactECharts from '@/components/charts/ReactECharts';
-import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart';
+import InsightLineChart, { type InsightScrub } from '@/components/charts/InsightLineChart';
 import { CodeCell, DataThrough } from '@/components/domain';
 import HeatMatrix, { HeatMatrixSkeleton, metricValue, type HeatMetric } from '@/components/sectors/HeatMatrix';
 import SectorMembersPanel from '@/components/sectors/SectorMembersPanel';
@@ -181,43 +180,21 @@ export default function Market() {
           )}
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <section className="card-surface rounded-lg p-4 lg:col-span-2">
-              {/* 窄屏竖排：并排会把「指数」压成竖字、把 Segmented 压到换行 */}
-              <header className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <h2 className="text-h3 text-ink-900">{t('指数')}</h2>
-                <Segmented
-                  options={(market.data?.indices ?? []).slice(0, 4).map((index) => ({
-                    value: index.index_code,
-                    label: index.name.replace('東証', '').replace('市場指数', ''),
-                  }))}
-                  value={indexCode}
-                  onChange={setIndexCode}
-                />
-              </header>
-              {series.data && series.data.bars.length > 0 ? (
-                <ReactECharts
-                  className="h-64 w-full"
-                  ariaLabel={series.data.name}
-                  option={{
-                    grid: baseGrid({ top: 16 }),
-                    tooltip: glassTooltip(),
-                    xAxis: categoryAxis(series.data.bars.map((bar) => bar.trade_date.slice(5))),
-                    yAxis: valueAxis({ scale: true }),
-                    series: [
-                      {
-                        type: 'line',
-                        data: series.data.bars.map((bar) => bar.close),
-                        showSymbol: false,
-                        lineStyle: { color: CH.brand600, width: 1.6 },
-                        areaStyle: { color: CH.brand400, opacity: 0.08 },
-                      },
-                    ],
-                  }}
-                />
-              ) : (
-                <SkeletonCard className="h-64" />
-              )}
-            </section>
+            <IndexTrendPanel
+              name={series.data?.name ?? t('指数')}
+              seriesCode={series.data?.index_code ?? indexCode}
+              indexCode={indexCode}
+              onIndexChange={setIndexCode}
+              options={(market.data?.indices ?? []).slice(0, 4).map((index) => ({
+                value: index.index_code,
+                label: index.name.replace('東証', '').replace('市場指数', ''),
+              }))}
+              bars={series.data?.bars ?? []}
+              loading={series.loading && !series.data}
+              changePct={
+                market.data?.indices.find((index) => index.index_code === indexCode)?.change_pct ?? null
+              }
+            />
 
             <section className="space-y-3">
               {(market.data?.indices ?? []).map((index) => (
@@ -233,13 +210,25 @@ export default function Market() {
                     <span className="block truncate text-body-s text-ink-700">{index.name}</span>
                     <span className="font-mono text-data-m tnum text-ink-900">{fmtPrice(index.close)}</span>
                   </span>
-                  <span className="flex flex-col items-end gap-0.5">
-                    <ChangeBadge value={index.change_pct} size="sm" />
-                    <span className="text-micro text-ink-400">
-                      {t('20日')} {fmtPct(index.return_20d)}
+                  <span className="flex items-center gap-3">
+                    <span className="w-[88px] shrink-0">
+                      <InsightLineChart
+                        data={index.sparkline}
+                        height={32}
+                        change={index.change_pct ?? 0}
+                        interactive={false}
+                        showLiveDot
+                        ariaLabel={`${index.name} ${t('趋势快照')}`}
+                      />
                     </span>
-                    <span className="block text-micro text-ink-300">
-                      {index.trade_date ?? '—'} {t('收盘')}
+                    <span className="flex flex-col items-end gap-0.5">
+                      <ChangeBadge value={index.change_pct} size="sm" />
+                      <span className="text-micro text-ink-400">
+                        {t('20日')} {fmtPct(index.return_20d)}
+                      </span>
+                      <span className="block text-micro text-ink-300">
+                        {index.trade_date ?? '—'} {t('收盘')}
+                      </span>
                     </span>
                   </span>
                 </button>
@@ -332,5 +321,82 @@ export default function Market() {
         </>
       )}
     </div>
+  );
+}
+
+function IndexTrendPanel({
+  name,
+  seriesCode,
+  indexCode,
+  onIndexChange,
+  options,
+  bars,
+  loading,
+  changePct,
+}: {
+  name: string;
+  seriesCode: string;
+  indexCode: string;
+  onIndexChange: (code: string) => void;
+  options: { value: string; label: string }[];
+  bars: { trade_date: string; close: number | null }[];
+  loading: boolean;
+  changePct: number | null;
+}) {
+  const [scrub, setScrub] = useState<InsightScrub | null>(null);
+  const points = useMemo(
+    () =>
+      bars
+        .filter((bar): bar is { trade_date: string; close: number } => bar.close != null && Number.isFinite(bar.close))
+        .map((bar) => ({ value: bar.close, label: bar.trade_date })),
+    [bars],
+  );
+  const last = points[points.length - 1];
+  const shown = scrub ?? (last ? { index: points.length - 1, value: last.value, label: last.label, x: 0, y: 0 } : null);
+  const badgeValue = useMemo(() => {
+    if (!scrub || points.length < 2) return changePct;
+    const prev = points[Math.max(0, scrub.index - 1)];
+    if (!prev || prev.value === 0) return changePct;
+    return (scrub.value - prev.value) / prev.value;
+  }, [scrub, points, changePct]);
+
+  return (
+    <section className="card-surface rounded-lg p-4 lg:col-span-2">
+      <header className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-h3 text-ink-900">{t('指数')}</h2>
+        <Segmented options={options} value={indexCode} onChange={onIndexChange} />
+      </header>
+      {loading ? (
+        <SkeletonCard className="h-64" />
+      ) : points.length === 0 ? (
+        <EmptyState title={t('暂无数据')} />
+      ) : (
+        <>
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <p className="eyebrow">{t('趋势快照')}</p>
+              <p className="mt-1 font-mono text-data-xl tnum text-ink-900">{fmtPrice(shown?.value)}</p>
+              <p className="mt-0.5 text-micro text-ink-400">
+                {shown?.label ?? '—'} · {t('收盘')}
+                {scrub ? '' : ` · ${t('在图表上滑动查看点位')}`}
+              </p>
+            </div>
+            <ChangeBadge value={badgeValue} />
+          </div>
+          <InsightLineChart
+            key={seriesCode}
+            data={points}
+            height={220}
+            change={changePct ?? 0}
+            interactive
+            showLiveDot
+            showCursorValue
+            formatValue={(value) => fmtPrice(value)}
+            onScrub={setScrub}
+            ariaLabel={`${name} ${t('趋势快照')}`}
+          />
+        </>
+      )}
+    </section>
   );
 }

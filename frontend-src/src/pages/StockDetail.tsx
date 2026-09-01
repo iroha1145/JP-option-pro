@@ -18,7 +18,7 @@ import ReactECharts from '@/components/charts/ReactECharts';
 import InfoHint from '@/components/shared/InfoHint';
 import TickAnalyticsPanel from '@/components/charts/TickAnalyticsPanel';
 import ShortBehaviorPanel from '@/components/domain/ShortBehaviorPanel';
-import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart';
+import { CH, baseGrid, categoryAxis, glassTooltip, insightLineSeries, valueAxis } from '@/lib/chart';
 import { DataThrough, ScoreBar, SignalChip, StateChip } from '@/components/domain';
 import { useAccess } from '@/hooks/useAccess';
 import { STRUCTURE_HINTS, TECHNICAL_HINTS, type ScoreHint } from '@/lib/indicatorHints';
@@ -594,13 +594,12 @@ function TickPane({
       ],
       series: [
         {
-          type: 'line' as const,
-          data: points.map((point) => point.price),
-          xAxisIndex: 0,
-          yAxisIndex: 0,
-          showSymbol: false,
-          lineStyle: { width: 1.2, color: CH.brand600 },
-          areaStyle: { color: CH.brand400, opacity: 0.08 },
+          ...insightLineSeries({
+            data: points.map((point) => point.price),
+            color: CH.brand600,
+            xAxisIndex: 0,
+            yAxisIndex: 0,
+          }),
         },
         {
           type: 'bar' as const,
