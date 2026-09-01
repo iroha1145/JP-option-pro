@@ -370,6 +370,44 @@ def test_snapshot_publication_is_atomic_and_changes_the_run_token(tmp_path):
     )
 
 
+def test_earnings_distance_counts_announcements_after_as_of(tmp_path):
+    """カレンダーが as_of で切れていても、未来の決算までの営業日を数える。"""
+
+    import json
+
+    core = _core(tmp_path)
+    extra = [f"2026-08-{day:02d}" for day in range(1, 15)]
+    core.upsert_trading_days(
+        [{"calendar_date": day, "holiday_division": "1"} for day in extra]
+    )
+    _seed_prices(core, ["10000"])
+    _seed_reports(core, [
+        _report("10000", "Alpha", "2026-07-28", 0.020, shares=1_000_000),
+    ])
+    pipeline.rebuild_events(core)
+    core.replace_earnings_announcements([
+        {
+            "canonical_code": "10000",
+            "fiscal_quarter": "第１四半期",
+            "announcement_date": "2026-08-05",
+        }
+    ])
+
+    calendar = core.trading_days_between("2000-01-01", AS_OF)
+    assert calendar[-1] == AS_OF
+    distance = pipeline._earnings_distance(core, calendar=calendar, as_of=AS_OF)
+    # 07-31 起点、08-01..05 が全て営業日なら 5
+    assert distance["10000"] == extra.index("2026-08-05") + 1
+
+    pipeline.refresh_snapshots(core, as_of_date=AS_OF)
+    row = core.short_behavior_snapshot("10000", AS_OF)
+    assert row is not None
+    flags = json.loads(row["flags_json"] or "[]")
+    assert "earnings_near" in flags
+    assert row["catalyst_score"] is not None
+    assert row["catalyst_score"] > 0
+
+
 # -- スキーマ移行 --------------------------------------------------------------
 
 def test_v7_database_migrates_to_v8_without_losing_rows(tmp_path, monkeypatch):

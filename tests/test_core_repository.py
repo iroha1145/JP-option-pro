@@ -97,6 +97,10 @@ def test_earnings_replace_semantics(tmp_path):
     )
     rows = repo.earnings_between("2026-08-01", "2026-08-31")
     assert [row["canonical_code"] for row in rows] == ["67580"]  # 全量置換
+    # 空入力は既存を消さない（空の 200 がカレンダーを消す経路）
+    repo.replace_earnings_announcements([])
+    rows = repo.earnings_between("2026-08-01", "2026-08-31")
+    assert [row["canonical_code"] for row in rows] == ["67580"]
 
 
 def test_screener_query_null_sorts_last(tmp_path):

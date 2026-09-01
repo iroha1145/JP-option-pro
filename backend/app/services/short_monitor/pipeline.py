@@ -380,21 +380,41 @@ def _regulation_map(
 def _earnings_distance(
     repository: CoreRepository, *, calendar: Sequence[str], as_of: str
 ) -> dict[str, int]:
-    """次の決算発表まで何営業日か。過ぎた予定は数えない。"""
+    """次の決算発表まで何営業日か。過ぎた予定は数えない。
 
-    horizon = calendar[-1] if calendar else as_of
-    rows = repository.earnings_between(as_of, _add_calendar_days(horizon, 60))
-    index = {day: position for position, day in enumerate(calendar)}
-    today = index.get(as_of, len(calendar) - 1)
+    呼び出し側の ``calendar`` はスナップショット日で切れている（履歴窓）。
+    距離を測るには **as_of より後** の営業日が要るので、ここでは独立に取る。
+    発表日が休日なら、その直後の営業日までの距離にする。
+    """
+
+    import bisect
+
+    horizon_end = _add_calendar_days(as_of, 90)
+    days = list(calendar)
+    seen = set(days)
+    for day in repository.trading_days_between(as_of, horizon_end):
+        if day not in seen:
+            days.append(day)
+            seen.add(day)
+    if as_of not in seen:
+        days.append(as_of)
+        days.sort()
+
+    rows = repository.earnings_between(as_of, horizon_end)
+    today = bisect.bisect_left(days, as_of)
+    if today >= len(days) or days[today] != as_of:
+        return {}
     out: dict[str, int] = {}
     for row in rows:
         code = row.get("canonical_code")
         day = str(row.get("announcement_date") or row.get("date") or "")
         if not code or not day:
             continue
-        position = index.get(day)
-        distance = (position - today) if position is not None else None
-        if distance is None or distance < 0:
+        position = bisect.bisect_left(days, day)
+        if position >= len(days):
+            continue
+        distance = position - today
+        if distance < 0:
             continue
         out[code] = min(out.get(code, distance), distance)
     return out

@@ -122,6 +122,19 @@ def test_us_and_uk_entities_of_the_same_group_stay_apart():
     assert uk.legal_id != us.legal_id, "英国法人と米国法人を 1 つに潰している"
 
 
+def test_japanese_majors_sharing_a_latin_token_stay_apart():
+    """slug が非 ASCII を捨てると 三菱UFJ信託 と 三菱UFJ証券 が ufj に潰れる。"""
+
+    resolver = InstitutionResolver()
+    trust = resolver.resolve("三菱UFJ信託銀行株式会社")
+    broker = resolver.resolve("三菱UFJ証券株式会社")
+    assert trust.legal_id != broker.legal_id, "UFJ だけで同一法人に潰している"
+    sbi = resolver.resolve("株式会社SBI証券")
+    sbi_holdings = resolver.resolve("株式会社SBIホールディングス")
+    assert sbi.legal_id != sbi_holdings.legal_id, "SBI だけで同一法人に潰している"
+    assert resolver.resolve("XYZ Asset").legal_id == "xyz-asset"
+
+
 def test_homonym_names_split_by_observed_address():
     """同じ正規化名に複数の住所が観測されたときだけ、住所で実体を分ける。"""
 

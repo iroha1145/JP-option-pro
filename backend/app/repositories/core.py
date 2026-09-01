@@ -532,6 +532,10 @@ class CoreRepository(SQLiteRepository):
             for row in rows
             if row.get("canonical_code")
         ]
+        if not prepared:
+            # 空入力で DELETE すると決算カレンダーが消える。呼び出し側が
+            # 空応答を失敗扱いするのが本筋だが、ここでも上書きしない。
+            return 0
         with self.write() as connection:
             connection.execute("DELETE FROM earnings_announcements")
             if prepared:

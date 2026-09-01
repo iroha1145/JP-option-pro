@@ -33,6 +33,7 @@ from typing import Any, Mapping, Sequence
 
 from app.data_paths import get_data_paths
 from app.repositories.core import CoreRepository
+from app.services.radar.adjustment import adjust_series
 from app.services.short_monitor import pipeline, snapshot as snap
 from app.services.short_monitor.states import STATE_NO_SIGNAL
 
@@ -76,10 +77,10 @@ class _CloseIndex:
         for code, series in bars.items():
             dates: list[str] = []
             closes: list[float] = []
-            for bar in series:
-                value = bar.get("adj_close")
-                if value is None:
-                    value = bar.get("close")
+            # 一括 CSV は adj_close が無く adjustment_factor だけ。生値のままだと
+            # 分割が業種中位・コホート判定に −50% / +900% として混ざる。
+            for bar in adjust_series(series):
+                value = bar.get("close")
                 try:
                     number = float(value)
                 except (TypeError, ValueError):

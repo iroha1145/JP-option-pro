@@ -100,13 +100,6 @@ def forward_bars(bars: Sequence[Mapping[str, Any]], signal_date: str, horizon: i
     # その銘柄の成績は全て無意味になる（本番 10 年で 1,959 銘柄が該当）。
     factors = cumulative_factors(bars)
 
-    def _price(row: Mapping[str, Any], adj_key: str, raw_key: str, factor: float):
-        stored = _finite(row.get(adj_key))
-        if stored is not None and stored > 0:
-            return stored
-        raw = _finite(row.get(raw_key))
-        return (raw * factor) if raw is not None else None
-
     out: list[Bar] = []
     for row, factor in zip(bars, factors):
         date = str(row.get("trade_date") or "")
@@ -115,15 +108,38 @@ def forward_bars(bars: Sequence[Mapping[str, Any]], signal_date: str, horizon: i
         out.append(
             Bar(
                 trade_date=date,
-                open=_price(row, "adj_open", "open", factor),
-                high=_price(row, "adj_high", "high", factor),
-                low=_price(row, "adj_low", "low", factor),
-                close=_price(row, "adj_close", "close", factor),
+                open=_adjusted_price(row, "adj_open", "open", factor),
+                high=_adjusted_price(row, "adj_high", "high", factor),
+                low=_adjusted_price(row, "adj_low", "low", factor),
+                close=_adjusted_price(row, "adj_close", "close", factor),
             )
         )
         if len(out) >= horizon:
             break
     return out
+
+
+def _adjusted_price(
+    row: Mapping[str, Any], adj_key: str, raw_key: str, factor: float
+) -> float | None:
+    """保存済みの adj_* を優先。無ければ生値 × そのバーより後の累積係数。"""
+
+    stored = _finite(row.get(adj_key))
+    if stored is not None and stored > 0:
+        return stored
+    raw = _finite(row.get(raw_key))
+    return (raw * factor) if raw is not None else None
+
+
+def _adjusted_close_on(bars: Sequence[Mapping[str, Any]], date: str) -> float | None:
+    """指定日の終値を、前向きバーと同じ調整基準で取る。"""
+
+    factors = cumulative_factors(bars)
+    for row, factor in zip(bars, factors):
+        if str(row.get("trade_date") or "") != date:
+            continue
+        return _adjusted_price(row, "adj_close", "close", factor)
+    return None
 
 
 def _series_return(bars: Sequence[Bar], base: float, horizon: int) -> float | None:
@@ -165,18 +181,13 @@ def compute_outcome(
     outcome.forward_bars = len(ahead)
     outcome.truncated = len(ahead) < need
 
-    # 基準価格も前向きバーと **同じ調整基準**で取る。片方だけ調整すると、
-    # 分割を挟んだシグナルのリターンが丸ごと係数分ずれる。
-    reference = _finite(signal_close)
+    # 基準価格も前向きバーと **同じ調整基準**で取る。呼び出し側が渡す
+    # signal_close は features.close の生値であることが多く、それを使うと
+    # シグナル後の分割がリターン / MFE / MAE / ドローダウンを丸ごと歪める。
+    # シグナル日がバーに無いときだけ、渡された値を最後の手段にする。
+    reference = _adjusted_close_on(bars, signal_date)
     if reference is None:
-        factors_all = cumulative_factors(bars)
-        for row, factor in zip(bars, factors_all):
-            if str(row.get("trade_date") or "") == signal_date:
-                stored = _finite(row.get("adj_close"))
-                reference = stored if (stored and stored > 0) else (
-                    (_finite(row.get("close")) or 0.0) * factor or None
-                )
-                break
+        reference = _finite(signal_close)
     outcome.entry_reference_close = reference
     if not ahead:
         return outcome
@@ -213,11 +224,7 @@ def compute_outcome(
         if not benchmark:
             continue
         bench_ahead = forward_bars(benchmark, signal_date, horizon_max)
-        bench_base = None
-        for row in benchmark:
-            if str(row.get("trade_date") or "") == signal_date:
-                bench_base = _finite(row.get("close"))
-                break
+        bench_base = _adjusted_close_on(benchmark, signal_date)
         if bench_base is None or bench_base <= 0:
             continue
         for horizon in HORIZONS:

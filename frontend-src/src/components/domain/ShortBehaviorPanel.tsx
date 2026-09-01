@@ -26,6 +26,7 @@ const EVENT_TONE: Record<string, string> = {
   new: 'text-down-600',
   reentry: 'text-down-600',
   increased: 'text-down-600',
+  decreased: 'text-up-600',
   below_threshold: 'text-up-600',
   closed: 'text-up-600',
 };
@@ -39,6 +40,13 @@ export default function ShortBehaviorPanel({ code }: { code: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    // StockDetail は銘柄切替でアンマウントしない。前銘柄の 404 を残すと
+    // 以降ずっと「暫無快照」になる。
+    setMissing(false);
+    setDetail(null);
+    setEvents([]);
+    setEventTotal(0);
+    setShown(20);
     shortMonitorApi
       .stock(code)
       .then((data) => !cancelled && setDetail(data))

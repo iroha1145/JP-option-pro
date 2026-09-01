@@ -42,7 +42,10 @@ from dataclasses import dataclass
 #:     `Morgan Stanley & Co. International plc`（英国）と
 #:     `Morgan Stanley & Co. LLC`（米国）が同一実体に化けた。
 #:     加えて、同じ正規化名に複数の住所が観測された場合は住所で実体を分ける。
-INSTITUTION_VERSION = "inst-v2"
+#: v3: slug が ASCII 以外を捨てていたため、三菱UFJ信託 / 三菱UFJ証券 /
+#:     SBI証券 / SBIホールディングス などが同一 legal_id に潰れ、
+#:     last_known の合算が大手を二重計上していた。Unicode の語を残す。
+INSTITUTION_VERSION = "inst-v3"
 
 MATCH_EXACT = "exact"          # この実体に属する生表記が 1 つだけ（統合していない）
 MATCH_NORMALIZED = "normalized"  # 正規化で別の生表記と一致した
@@ -152,10 +155,12 @@ def normalize_name(raw: str | None) -> str:
 
 
 def _slug(normalized: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", normalized).strip("-")
+    # Unicode の語（漢字・かな）を残す。ASCII だけ残すと UFJ / SBI / SMBC
+    # を共有する別法人が 1 つの legal_id に潰れる。
+    slug = re.sub(r"[^\w]+", "-", normalized, flags=re.UNICODE).strip("-")
     if slug:
         return slug[:64]
-    # 日本語のみの名前は英数字が残らない。安定したハッシュに落とす。
+    # 記号だけの名前は安定したハッシュに落とす。
     import hashlib
 
     return "jp-" + hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:16]

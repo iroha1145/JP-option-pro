@@ -166,6 +166,42 @@ def test_forward_bars_are_adjusted_on_the_same_basis_as_the_signal_day():
     assert all(bar.close == pytest.approx(500.0, rel=0.02) for bar in ahead)
 
 
+def test_raw_signal_close_does_not_poison_split_adjusted_outcomes():
+    """呼び出し側が生のシグナル日終値を渡しても、基準は調整後で取る。
+
+    本番の runner は features.close（未調整）を signal_close に渡す。
+    前向きバーだけ調整すると 1:2 分割が −50% リターンとして残る。
+    """
+
+    dates = _dates(30)
+    bars = [_bar(dates[i], 1000.0) for i in range(10)]
+    bars += [_bar(dates[i], 500.0) for i in range(10, 30)]
+    bars[10]["adjustment_factor"] = 0.5
+
+    outcome = compute_outcome(
+        canonical_code="14140", signal_date=dates[5], bars=bars,
+        signal_close=1000.0,
+    )
+    assert outcome.entry_reference_close == pytest.approx(500.0)
+    assert outcome.returns[20] == pytest.approx(0.0, abs=0.02)
+    assert outcome.mae_pct is not None
+    assert outcome.mae_pct > -5.0, f"生の基準が MAE {outcome.mae_pct:.1f}% を作っている"
+
+
+def test_close_index_applies_split_factor_when_adj_close_is_missing():
+    """業種中位 / コホート用の終値索引も、一括 CSV の係数を使う。"""
+
+    from app.research.short_behavior_runner import _CloseIndex
+
+    dates = _dates(5)
+    bars = [_bar(dates[i], 1000.0 if i < 3 else 500.0) for i in range(5)]
+    bars[3]["adjustment_factor"] = 0.5
+    index = _CloseIndex({"14140": bars})
+    assert index.at("14140", dates[0]) == pytest.approx(500.0)
+    assert index.at("14140", dates[3]) == pytest.approx(500.0)
+    assert index.ret("14140", dates[0], dates[4]) == pytest.approx(0.0)
+
+
 # ---------------------------------------------------------------------------
 # 3. 既に adj_* が入っている行はそのまま尊重する
 # ---------------------------------------------------------------------------
