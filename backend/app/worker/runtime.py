@@ -165,9 +165,11 @@ class WorkerSupervisor:
                 return
             queue = self._pending_payloads.setdefault(spec.name, deque())
             payload = queue.popleft() if (triggered and queue) else None
+            # Consume the wake-up. Re-arm only while more actions remain; a leftover
+            # set trigger would make the next wait return True with an empty payload
+            # and run the scheduled body as if it were a manual action.
+            self._triggers[spec.name].clear()
             if queue:
-                # More queued actions remain; keep the trigger armed so the next
-                # loop iteration drains them (success and failure exits alike).
                 self._triggers[spec.name].set()
             action_id = payload.pop("__action_id", None) if payload else None
             # Keep __action_type in the payload so dispatchers (e.g. post_close_dispatch

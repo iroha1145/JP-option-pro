@@ -91,7 +91,7 @@ def test_two_action_types_same_task_both_run():
     ran: list[int] = []
 
     def body(payload):
-        ran.append(int((payload or {}).get("n") or 0))
+        ran.append((int((payload or {}).get("n") or 0), (payload or {}).get("__action_type")))
         return TaskResult(status="completed", next_delay_seconds=30.0)
 
     spec = TaskSpec(name="intraday_fetch", run=body, action_types=("intraday_fetch", "tick_fetch"))
@@ -113,7 +113,7 @@ def test_two_action_types_same_task_both_run():
         await asyncio.wait_for(loop, timeout=2.0)
 
     asyncio.run(drive())
-    assert ran == [1, 2]
+    assert ran == [(1, "intraday_fetch"), (2, "tick_fetch")]
     assert state.completed == [(11, "completed"), (22, "completed")]
 
 

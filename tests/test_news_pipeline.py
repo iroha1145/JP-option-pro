@@ -1,5 +1,7 @@
 """ニュース: フィード解析 → 実体照合 → 重複排除 → 保存 → AI 契約検証。"""
 
+from datetime import datetime, timedelta, timezone
+
 import httpx
 import pytest
 
@@ -274,3 +276,75 @@ def test_prompt_version_change_moves_request_hash():
     base = request_hash("news_translation_ja", payload, model="m", prompt_version="v1", schema_version="s1", schema_sha256="x")
     bumped = request_hash("news_translation_ja", payload, model="m", prompt_version="v2", schema_version="s1", schema_sha256="x")
     assert base != bumped  # プロンプト更新は古い結果を静かに再利用しない
+
+
+def test_pending_ai_candidates_japanese_analyzed_does_not_starve(tmp_path):
+    """日本語の既分析行（翻訳版なし）が limit を埋め、未分析を押し出してはいけない。"""
+
+    store = NewsStore(tmp_path / "news.db")
+    store.initialize()
+    now = datetime.now(timezone.utc)
+    recent = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    since = (now - timedelta(hours=72)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    analyzed = [
+        {
+            "news_id": f"ja-{index}",
+            "source": "test",
+            "original_title": f"トヨタ既分析{index}",
+            "source_language": "ja",
+            "published_at": recent,
+            "fetched_at": recent,
+            "content_fingerprint": f"ja-{index}",
+            "categories": ["決算"],
+            "securities": [{"canonical_code": "72030", "alias": "トヨタ", "alias_type": "name_ja"}],
+            "importance": 90.0,
+            "market_relevance": "security",
+        }
+        for index in range(20)
+    ]
+    pending = {
+        "news_id": "needs-analysis",
+        "source": "test",
+        "original_title": "ソニー、未分析",
+        "source_language": "ja",
+        "published_at": recent,
+        "fetched_at": recent,
+        "content_fingerprint": "needs-analysis",
+        "categories": ["決算"],
+        "securities": [{"canonical_code": "67580", "alias": "ソニー", "alias_type": "name_ja"}],
+        "importance": 10.0,
+        "market_relevance": "security",
+    }
+    store.insert_news_items([*analyzed, pending])
+    for index in range(20):
+        store.attach_analysis(
+            f"ja-{index}",
+            analysis={"headline_zh": "已分析", "impact_zh": "无增量"},
+            model="m",
+            version="analysis-v2",
+            fingerprint=f"a{index}",
+        )
+
+    found = store.pending_ai_candidates(
+        since_iso=since,
+        limit=10,
+        translation_version="tr-v1",
+        analysis_version="analysis-v2",
+    )
+    ids = [row["news_id"] for row in found]
+    assert ids == ["needs-analysis"]
+
+    store.attach_analysis(
+        "needs-analysis",
+        analysis={"headline_zh": "旧版", "impact_zh": "旧版"},
+        model="m",
+        version="analysis-v1",
+        fingerprint="stale",
+    )
+    stale = store.pending_ai_candidates(
+        since_iso=since,
+        limit=10,
+        translation_version="tr-v1",
+        analysis_version="analysis-v2",
+    )
+    assert [row["news_id"] for row in stale] == ["needs-analysis"]
