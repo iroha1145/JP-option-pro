@@ -392,7 +392,9 @@ def compute_market_regime_jp(
     if len(growth) >= 30 and len(prime) >= 30:
         spread = growth[len(growth) // 2] - prime[len(prime) // 2]
         risk_on_spread = round(max(0.0, min(100.0, 50.0 + spread * 600.0)), 1)
-        spread_label = "グロース対プライム 20日中央値差"
+        # Chinese msgid (front-end runs it through t()); keeps the app-wide
+        # "backend emits Chinese, frontend localizes" contract.
+        spread_label = "强弱价差 · グロース−プライム"
 
     dims = {
         "index_trend": index_trend,
@@ -413,7 +415,8 @@ def compute_market_regime_jp(
         warnings.append("200日線超の銘柄が3割未満（ブレッドス弱い）")
     label = None
     if score is not None:
-        label = "順風" if score >= 64 else ("中立" if score >= 45 else "逆風")
+        # Chinese msgids; localized on the front-end via t().
+        label = "顺风" if score >= 64 else ("中立" if score >= 45 else "逆风")
     return {
         "score": round(score, 1) if score is not None else None,
         "label": label,

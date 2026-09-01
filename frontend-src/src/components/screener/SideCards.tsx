@@ -47,10 +47,10 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
       {(regime.label || regime.spread_label) && (
         <p className="mt-1.5 flex flex-wrap items-center gap-1.5">
           {regime.label && (
-            <span className="rounded-xs bg-brand-50 px-1.5 py-px text-micro font-medium text-brand-700">{regime.label}</span>
+            <span className="rounded-xs bg-brand-50 px-1.5 py-px text-micro font-medium text-brand-700">{t(regime.label)}</span>
           )}
           {regime.spread_label && (
-            <span className="rounded-xs border border-line bg-card-warm px-1.5 py-px text-micro text-ink-500">{regime.spread_label}</span>
+            <span className="rounded-xs border border-line bg-card-warm px-1.5 py-px text-micro text-ink-500">{t(regime.spread_label)}</span>
           )}
         </p>
       )}

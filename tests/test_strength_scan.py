@@ -102,7 +102,7 @@ def test_market_regime_breadth_and_spread():
     assert regime["dims"]["volume"] == 50.0
     assert regime["dims"]["risk_on_spread"] is None
     assert regime["score"] is not None
-    assert regime["label"] in ("順風", "中立", "逆風")
+    assert regime["label"] in ("顺风", "中立", "逆风")
 
 
 def test_build_and_view_rows(tmp_path):
@@ -132,7 +132,7 @@ def test_build_and_view_rows(tmp_path):
     assert by_code["72030"]["global_rank_percentile"] == 100.0
     assert by_code["67580"]["global_rank_percentile"] == 0.0
 
-    regime = {"score": 70.0, "confidence": 1.0, "label": "順風", "dims": {}, "warnings": []}
+    regime = {"score": 70.0, "confidence": 1.0, "label": "顺风", "dims": {}, "warnings": []}
     view = build_view_rows(rows, regime, profile="balanced")
     top = max(view, key=lambda r: r["ranking_score"])
     assert top["canonical_code"] == "72030"
@@ -155,7 +155,7 @@ def test_build_and_view_rows(tmp_path):
     assert stored[0]["details"]["families"]
     meta = repo.strength_meta()
     assert meta["trade_date"] == "2026-07-31"
-    assert meta["regime"]["label"] == "順風"
+    assert meta["regime"]["label"] == "顺风"
 
 
 def test_core_v1_database_migrates_forward(tmp_path):

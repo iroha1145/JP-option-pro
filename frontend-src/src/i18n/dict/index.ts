@@ -334,6 +334,10 @@ export const DICT: Record<string, [string, string]> = {
   量能配合: ['Volume', '出来高確認'],
   风险偏好: ['Risk appetite', 'リスク選好'],
   强弱价差: ['Risk-on spread', 'リスクオン価差'],
+  顺风: ['Tailwind', '順風'],
+  中立: ['Neutral', '中立'],
+  逆风: ['Headwind', '逆風'],
+  '强弱价差 · グロース−プライム': ['Risk-on spread · Growth−Prime', 'リスクオン価差 · グロース−プライム'],
   '6 维': ['6 dims', '6 次元'],
   '数据暂不可用 · 稍后刷新再试': ['Unavailable · retry later', 'データなし · 後で再試行'],
   '由 TOPIX 与全市场日线断面推导 · 收盘后更新': [
