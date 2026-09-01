@@ -43,18 +43,35 @@ export default function StockDetail() {
   const [priceMode, setPriceMode] = useState<PriceMode>('adjusted');
   const overview = usePolling(() => stocksApi.overview(code), null, [code]);
   const chart = usePolling(() => stocksApi.chart(code, range), null, [code, range]);
+  const [intradayPollMs, setIntradayPollMs] = useState<number | null>(null);
+  const [tickPollMs, setTickPollMs] = useState<number | null>(null);
+  const wantIntraday = interval !== '1d' && interval !== 'tick';
+  const wantTicks = interval === 'tick';
   const intraday = usePolling(
-    () =>
-      interval === '1d' || interval === 'tick'
-        ? Promise.resolve(null)
-        : stocksApi.intradayChart(code, interval),
-    null,
-    [code, interval],
+    async () => {
+      if (!wantIntraday) {
+        setIntradayPollMs(null);
+        return null;
+      }
+      const data = await stocksApi.intradayChart(code, interval as '1m' | '5m' | '60m');
+      setIntradayPollMs(data?.reason === 'fetching' ? 5_000 : null);
+      return data;
+    },
+    wantIntraday ? intradayPollMs : null,
+    [code, interval, wantIntraday],
   );
   const ticks = usePolling(
-    () => (interval === 'tick' ? stocksApi.tickView(code) : Promise.resolve(null)),
-    null,
-    [code, interval],
+    async () => {
+      if (!wantTicks) {
+        setTickPollMs(null);
+        return null;
+      }
+      const data = await stocksApi.tickView(code);
+      setTickPollMs(data?.reason === 'fetching' ? 8_000 : null);
+      return data;
+    },
+    wantTicks ? tickPollMs : null,
+    [code, interval, wantTicks],
   );
   /* 遅延気配は 1 分ポーリング。J-Quants は場中に何も出さないので、
      「今いくらか」はこの非公式・15分遅延の値でしか埋められない。 */
@@ -491,6 +508,7 @@ function IntradayPane({
     );
   }
   const planBlocked = data?.reason === 'plan_not_included';
+  const empty = data?.reason === 'empty';
   return (
     <div className="flex h-72 flex-col items-center justify-center gap-3 rounded-md bg-paper-2">
       <p className="max-w-md px-6 text-center text-body-s text-ink-600">
@@ -498,7 +516,9 @@ function IntradayPane({
           ? t('分钟线需要 J-Quants 分足加购（当前订阅未包含）')
           : data?.reason === 'fetching'
             ? t('正在取得分钟数据，请稍候刷新')
-            : t('该股票的分钟数据尚未取得')}
+            : empty
+              ? t('已取得，但没有可显示的分钟数据')
+              : t('该股票的分钟数据尚未取得')}
       </p>
       {data?.note_ja && <p className="max-w-md px-6 text-center text-caption text-ink-400">{data.note_ja}</p>}
       {isOwner && !planBlocked && (
@@ -636,6 +656,7 @@ function TickPane({
   }
   const planBlocked = data?.reason === 'plan_not_included';
   const fetching = data?.reason === 'fetching';
+  const empty = data?.reason === 'empty';
   return (
     <div className="flex h-72 flex-col items-center justify-center gap-3 rounded-md bg-paper-2">
       <p className="max-w-md px-6 text-center text-body-s text-ink-600">
@@ -643,7 +664,9 @@ function TickPane({
           ? t('逐笔需要 J-Quants Tick 加购（刚购买时，API 侧生效可能有延迟）')
           : fetching
             ? t('正在取得逐笔数据（全市场日次文件约 50MB，稍候刷新）')
-            : t('该股票的逐笔数据尚未取得')}
+            : empty
+              ? t('已取得，但没有可显示的逐笔数据（可能尚未配信）')
+              : t('该股票的逐笔数据尚未取得')}
       </p>
       {data?.note_ja && <p className="max-w-md px-6 text-center text-caption text-ink-400">{data.note_ja}</p>}
       {isOwner && !planBlocked && (

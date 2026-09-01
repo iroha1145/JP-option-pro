@@ -128,7 +128,9 @@ def resolve_target(
     if current == STATE_RETEST_HELD:
         if observation.get("new_event_high"):
             return STATE_REACCELERATING, REASON_REACCELERATING
-        if observation.get("retesting"):
+        # 回収済み（close > pivot*1.005）のまま帯の上端にいる日は
+        # RETESTING に戻さない。戻すと翌日また RETEST_HELD へ振動する。
+        if observation.get("retesting") and not observation.get("retest_reclaimed"):
             return STATE_RETESTING, REASON_RETESTING
         return current, "no_change"
     return current, "no_change"

@@ -163,7 +163,17 @@ def intraday_chart(
             "bars": [],
         }
     minute_rows = store.minute_bars(canonical_code)
+    fetched = store.fetched_days_for(canonical_code)
     if not minute_rows:
+        if fetched:
+            return {
+                "available": False,
+                "reason": "empty",
+                "availability": state["availability"],
+                "note_ja": "この銘柄の分足は取得済みですが、表示できるバーがありません。",
+                "days": sorted(fetched.keys()),
+                "bars": [],
+            }
         return {
             "available": False,
             "reason": "not_fetched",
@@ -172,7 +182,6 @@ def intraday_chart(
             "bars": [],
         }
     bars = resample_minutes(minute_rows, interval)
-    fetched = store.fetched_days_for(canonical_code)
     return {
         "available": True,
         "availability": state["availability"],
@@ -237,6 +246,8 @@ def fetch_latest_ticks(
         return {"status": "error", "error_code": exc.code, "trade_date": latest}
     if key is None:
         # 営業日なのにファイルが無い = まだ publish されていない（当日は引け後）。
+        # 0 件の tick_day を残さないとビューが not_fetched のまま自動再投入が回る。
+        store.replace_ticks(str(canonical_code), latest, [], truncated=False)
         store.record_availability(AVAILABILITY_AVAILABLE, dataset=DATASET_TICK)
         return {"status": "not_published", "trade_date": latest}
 
@@ -266,8 +277,6 @@ def fetch_latest_ticks(
 
     stored_by_code = {}
     for code, rows in collected.items():
-        if not rows:
-            continue
         stored_by_code[code] = store.replace_ticks(
             code, latest, rows, truncated=code in truncated
         )
@@ -407,6 +416,17 @@ def tick_view(
         }
     trade_date = max(days.keys())
     meta = days[trade_date]
+    if int(meta["tick_count"] or 0) == 0:
+        return {
+            "available": False,
+            "reason": "empty",
+            "availability": state["availability"],
+            "note_ja": "ティックは取得済みですが、この銘柄の約定が無い、または日次ファイルが未配信です。",
+            "trade_date": trade_date,
+            "tick_count": 0,
+            "points": [],
+            "tape": [],
+        }
     rows = store.ticks_for(canonical_code, trade_date)
     points, bucket_seconds = downsample_ticks(rows, max_points=max_points)
     from app.services.tick_analytics import analyse

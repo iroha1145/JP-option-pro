@@ -44,7 +44,7 @@ export const marketApi = {
     );
   },
   intradaySectors(): Promise<IntradaySectorsResponse> {
-    return get('/quotes/sectors/intraday');
+    return get('/quotes/sectors/intraday', { timeoutMs: 60_000 });
   },
   sectorMembers(code: string, sort: SectorMemberSort, limit = 12): Promise<SectorMembersView> {
     return get(`/market/sectors/${encodeURIComponent(code)}/members?${toQuery({ sort, limit })}`);
@@ -201,7 +201,14 @@ export const workerApi = {
     return registryGet<Record<string, unknown>>('/worker/status');
   },
   trigger(actionType: string, body?: { code?: string }) {
-    return post<{ action_type: string; action_id: number | null; status: string; duplicate: boolean }>(
+    return post<{
+      action_type: string;
+      action_id: number | null;
+      status: string;
+      duplicate: boolean;
+      accepted?: boolean;
+      reason?: string;
+    }>(
       `/worker/actions/${encodeURIComponent(actionType)}`,
       body,
     );
