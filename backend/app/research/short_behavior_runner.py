@@ -375,8 +375,13 @@ def replay(
                         own = record.get(f"return_{horizon}d")
                         if own is None or entry_pos < 0:
                             continue
-                        end_pos = entry_pos + horizon
-                        if end_pos >= len(stock_dates):
+                        # Align the benchmark window to the SAME exit bar the own
+                        # return uses: next_open exits at ahead[N-1] (open→close over
+                        # N sessions), next_close at ahead[N]. Using entry_pos+horizon
+                        # for next_open compared an N-session stock move against an
+                        # (N+1)-session benchmark.
+                        end_pos = entry_pos + horizon - (1 if entry_basis == "next_open" else 0)
+                        if end_pos >= len(stock_dates) or end_pos <= entry_pos:
                             continue
                         end_date = stock_dates[end_pos]
                         bench = topix_ret(str(entry_date), end_date)
