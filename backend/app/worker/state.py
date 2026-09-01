@@ -276,20 +276,47 @@ class WorkerStateRepository(SQLiteRepository):
                     "duplicate": True,
                     "accepted": True,
                 }
-            if action_type in FETCH_ACTION_TYPES and wanted_code:
-                actives = connection.execute(
-                    "SELECT action_id, status, payload_json FROM worker_action_requests "
-                    "WHERE action_type = ? AND status IN ('queued', 'running')",
-                    (action_type,),
-                ).fetchall()
-                for row in actives:
-                    if _payload_code(payload_json=row["payload_json"]) == wanted_code:
+            if action_type in FETCH_ACTION_TYPES:
+                if wanted_code:
+                    actives = connection.execute(
+                        "SELECT action_id, status, payload_json FROM worker_action_requests "
+                        "WHERE action_type = ? AND status IN ('queued', 'running')",
+                        (action_type,),
+                    ).fetchall()
+                    for row in actives:
+                        if _payload_code(payload_json=row["payload_json"]) == wanted_code:
+                            return {
+                                "action_id": row["action_id"],
+                                "status": row["status"],
+                                "duplicate": True,
+                                "accepted": True,
+                            }
+                    # Cooldown keyed by CODE, not idempotency_key: once a code has
+                    # succeeded, subsequent re-fetches insert under a mangled key
+                    # (idempotency_key:<now>), so the exact-key same_key lookup below
+                    # can't see the recent failure. Check the most-recent same-code row.
+                    latest_code = connection.execute(
+                        "SELECT action_id, status, completed_at, idempotency_key "
+                        "FROM worker_action_requests "
+                        "WHERE action_type = ? AND json_extract(payload_json, '$.code') = ? "
+                        "ORDER BY action_id DESC LIMIT 1",
+                        (action_type, wanted_code),
+                    ).fetchone()
+                    if (
+                        latest_code is not None
+                        and latest_code[1] == "failed"
+                        and str(latest_code[3] or "").startswith("auto:")
+                        and _recent_failure(latest_code[2])
+                    ):
                         return {
-                            "action_id": row["action_id"],
-                            "status": row["status"],
+                            "action_id": latest_code[0],
+                            "status": "failed",
                             "duplicate": True,
-                            "accepted": True,
+                            "accepted": False,
+                            "reason": "recent_failure",
                         }
+                # A code-less fetch has nothing to coalesce/cool down; fall through to
+                # enqueue rather than being blocked as an unrelated type_busy.
             else:
                 active = connection.execute(
                     "SELECT action_id, status FROM worker_action_requests "
@@ -335,6 +362,21 @@ class WorkerStateRepository(SQLiteRepository):
                 return self._request_action_conflict(
                     connection, action_type, idempotency_key, insert_key, wanted_code
                 )
+
+    def prune_action_requests(self, cutoff_iso: str) -> int:
+        """Delete terminal (completed/failed) action-request rows older than cutoff.
+
+        The table is an append-only audit/dedup log; without pruning it grows
+        unbounded (one row per fetch request). Terminal rows are safe to drop.
+        """
+
+        with self.write() as connection:
+            cursor = connection.execute(
+                "DELETE FROM worker_action_requests "
+                "WHERE status IN ('completed', 'failed') AND requested_at < ?",
+                (cutoff_iso,),
+            )
+            return cursor.rowcount or 0
 
     def _request_action_conflict(
         self,

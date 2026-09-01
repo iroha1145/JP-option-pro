@@ -86,6 +86,52 @@ def test_request_action_retry_after_terminal(tmp_path):
     assert again["accepted"] is True
 
 
+def test_auto_fetch_cooldown_by_code_after_prior_success(tmp_path):
+    """Once a code has succeeded, a later failed re-fetch (stored under a mangled
+    idempotency key) must still cool down subsequent auto requests for that code."""
+
+    repo = WorkerStateRepository(tmp_path / "worker.db")
+    repo.initialize()
+    token = repo.acquire_lease("owner")
+    key = "auto:minute:72030:latest"
+    a1 = repo.request_action("intraday_fetch", idempotency_key=key, payload={"code": "72030"})
+    repo.complete_action("owner", token, a1["action_id"], status="completed", error_code=None)
+
+    a2 = repo.request_action("intraday_fetch", idempotency_key=key, payload={"code": "72030"})
+    assert a2["accepted"] is True and a2["action_id"] != a1["action_id"]  # re-fetch after success
+    repo.complete_action("owner", token, a2["action_id"], status="failed", error_code="x")
+
+    a3 = repo.request_action("intraday_fetch", idempotency_key=key, payload={"code": "72030"})
+    assert a3["accepted"] is False and a3["reason"] == "recent_failure"
+
+
+def test_codeless_fetch_not_blocked_by_unrelated_fetch(tmp_path):
+    """A fetch action without a code must not be rejected as type_busy by an
+    unrelated in-flight fetch of a different code."""
+
+    repo = WorkerStateRepository(tmp_path / "worker.db")
+    repo.initialize()
+    repo.acquire_lease("owner")
+    repo.request_action("intraday_fetch", idempotency_key="auto:minute:72030:latest", payload={"code": "72030"})
+    codeless = repo.request_action("intraday_fetch", idempotency_key="manual-nocode", payload={})
+    assert codeless["accepted"] is True
+
+
+def test_prune_action_requests_removes_terminal_rows(tmp_path):
+    repo = WorkerStateRepository(tmp_path / "worker.db")
+    repo.initialize()
+    token = repo.acquire_lease("owner")
+    done = repo.request_action("intraday_fetch", idempotency_key="auto:minute:72030:latest", payload={"code": "72030"})
+    repo.complete_action("owner", token, done["action_id"], status="completed", error_code=None)
+    with repo.write() as connection:
+        connection.execute(
+            "UPDATE worker_action_requests SET requested_at = '2020-01-01T00:00:00Z' WHERE action_id = ?",
+            (done["action_id"],),
+        )
+    pruned = repo.prune_action_requests("2020-06-01T00:00:00Z")
+    assert pruned == 1
+
+
 def test_two_action_types_same_task_both_run():
     state = _FakeState()
     ran: list[int] = []

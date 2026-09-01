@@ -291,6 +291,20 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             except Exception as exc:  # noqa: BLE001
                 outcomes[label] = f"failed:{type(exc).__name__}"
                 status = "failed"
+        # Prune the append-only action-request log so it can't grow unbounded.
+        try:
+            from datetime import datetime, timedelta, timezone
+
+            from app.worker.state import WorkerStateRepository
+
+            if context.paths.worker_db.is_file():
+                cutoff = (datetime.now(timezone.utc) - timedelta(days=14)).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                )
+                pruned = WorkerStateRepository(context.paths.worker_db).prune_action_requests(cutoff)
+                outcomes["action_requests_pruned"] = pruned
+        except Exception as exc:  # noqa: BLE001 — pruning is best-effort
+            outcomes["action_requests_pruned"] = f"failed:{type(exc).__name__}"
         return TaskResult(
             status=status,
             error_code=None if status == "completed" else "backup_failed",
