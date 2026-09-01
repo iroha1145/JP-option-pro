@@ -414,19 +414,24 @@ def tick_view(
             "note_ja": "この銘柄のティックはまだ取得されていません。取得は日次 CSV（全市場 50MB 超）からの抽出になるため、必要な時だけ実行します。",
             **empty,
         }
-    trade_date = max(days.keys())
-    meta = days[trade_date]
-    if int(meta["tick_count"] or 0) == 0:
+    # Pick the newest fetched day that actually has ticks. Since zero-count days are
+    # now recorded (not_published marker), the newest day is often empty on top of a
+    # good earlier day; selecting max(days) would hide the real tape as "empty".
+    non_empty = sorted(day for day, m in days.items() if int(m["tick_count"] or 0) > 0)
+    if not non_empty:
+        newest = max(days.keys())
         return {
             "available": False,
             "reason": "empty",
             "availability": state["availability"],
             "note_ja": "ティックは取得済みですが、この銘柄の約定が無い、または日次ファイルが未配信です。",
-            "trade_date": trade_date,
+            "trade_date": newest,
             "tick_count": 0,
             "points": [],
             "tape": [],
         }
+    trade_date = non_empty[-1]
+    meta = days[trade_date]
     rows = store.ticks_for(canonical_code, trade_date)
     points, bucket_seconds = downsample_ticks(rows, max_points=max_points)
     from app.services.tick_analytics import analyse

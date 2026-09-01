@@ -279,6 +279,27 @@ def test_fetch_ticks_reports_not_published_when_file_missing(tmp_path):
     assert view["available"] is False
 
 
+def test_tick_view_prefers_earlier_nonempty_day(tmp_path):
+    """When the newest fetched day is empty (zero-count marker) but an earlier day
+    has ticks, tick_view must serve the earlier day, not report 'empty'."""
+
+    store = IntradayStore(tmp_path / "intraday.db")
+    store.initialize()
+    store.replace_ticks(
+        "72030",
+        "2026-07-30",
+        [
+            {"tick_time": "09:00:00", "price": 3000.0, "volume": 100},
+            {"tick_time": "09:00:01", "price": 3001.0, "volume": 200},
+        ],
+    )
+    store.replace_ticks("72030", "2026-07-31", [])  # newer day, empty marker
+    view = tick_view(store, "72030")
+    assert view["available"] is True
+    assert view["trade_date"] == "2026-07-30"
+    assert view["tick_count"] == 2
+
+
 # ---------------- v1 → v2 前方移行 ----------------
 
 def test_intraday_v1_database_migrates_forward(tmp_path):

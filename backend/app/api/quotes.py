@@ -26,6 +26,7 @@ from app.providers.yahoo_quotes import (
 )
 from app.domain.constants import SECTOR33
 from app.services.cache import cache as shared_cache
+from app.services.market import _median_sorted
 
 router = APIRouter(prefix="/api/quotes", tags=["quotes"])
 
@@ -154,7 +155,7 @@ async def intraday_sectors() -> dict:
         sectors = []
         for sector_code, changes in by_sector.items():
             changes.sort()
-            median = changes[len(changes) // 2]
+            median = _median_sorted(changes)  # true median (avg of two central for even n)
             advancing = sum(1 for value in changes if value > 0.0005)
             sectors.append(
                 {
