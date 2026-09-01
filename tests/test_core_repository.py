@@ -119,3 +119,48 @@ def test_screener_query_null_sorts_last(tmp_path):
     )
     assert total == 3
     assert [row["canonical_code"] for row in rows] == ["C0030", "A0010", "B0020"]  # NULL は末尾
+
+
+def _snapshot_row(code: str, as_of: str) -> dict:
+    from app.repositories.core import CoreRepository as _C
+
+    row = {column: 0 for column in _C._SNAPSHOT_COLUMNS}
+    row.update(
+        canonical_code=code, as_of_date=as_of, primary_state="no_signal",
+        flags_json="[]", components_json="{}", algorithm_version="test",
+    )
+    return row
+
+
+def test_republish_with_fewer_codes_leaves_no_ghost_snapshot_rows(tmp_path):
+    repo = _repo(tmp_path)
+    day = "2026-07-31"
+    repo.publish_short_behavior_day(
+        [_snapshot_row("1", day), _snapshot_row("2", day), _snapshot_row("3", day)],
+        [], as_of_date=day, run_id="r1", algorithm_version="test",
+    )
+    assert len(repo.short_behavior_state_map(day)) == 3
+    # Re-publish the SAME day with a smaller universe (e.g. correction rebuild).
+    repo.publish_short_behavior_day(
+        [_snapshot_row("1", day)], [], as_of_date=day, run_id="r2", algorithm_version="test",
+    )
+    remaining = repo.short_behavior_state_map(day)
+    assert set(remaining) == {"1"}  # no ghosts from the first build
+    run = repo.latest_short_monitor_run(day)
+    assert run["row_count"] == 1  # marker matches the table
+
+
+def test_empty_replace_does_not_wipe_screener_or_strength(tmp_path):
+    repo = _repo(tmp_path)
+    assert repo.replace_screener_rows([{"canonical_code": "72030", "trade_date": "2026-07-31"}]) == 1
+    assert repo.replace_screener_rows([]) == 0  # empty input must not wipe
+    rows, total = repo.screener_query(where_sql="1=1", params=[], order_sql="canonical_code", limit=10, offset=0)
+    assert total == 1
+
+    assert repo.replace_strength_rows(
+        [{"canonical_code": "72030", "trade_date": "2026-07-31"}],
+        trade_date="2026-07-31", regime={"score": 50.0},
+    ) == 1
+    assert repo.replace_strength_rows([], trade_date="2026-08-01", regime={"score": 10.0}) == 0
+    assert len(repo.strength_rows_all()) == 1  # kept last good snapshot
+    assert repo.strength_meta()["trade_date"] == "2026-07-31"  # meta not clobbered

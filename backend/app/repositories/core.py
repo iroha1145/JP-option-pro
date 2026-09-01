@@ -952,6 +952,16 @@ class CoreRepository(SQLiteRepository):
         snapshot_rows = prep(snapshots, self._SNAPSHOT_COLUMNS, "generated_at")
         signal_rows = prep(signals, self._SIGNAL_COLUMNS, "created_at")
         with self.write() as connection:
+            # Clear the day first so a re-publish with a *smaller* universe doesn't
+            # leave ghost rows from the previous build (UPSERT alone can't remove
+            # rows that are absent this time). run_id/row_count would then disagree
+            # with the table, and rankings/coverage would double-count the ghosts.
+            connection.execute(
+                "DELETE FROM short_behavior_snapshots WHERE as_of_date = ?", (as_of_date,)
+            )
+            connection.execute(
+                "DELETE FROM short_behavior_signals WHERE signal_date = ?", (as_of_date,)
+            )
             if snapshot_rows:
                 connection.executemany(snapshot_sql, snapshot_rows)
             if signal_rows:
@@ -1330,14 +1340,17 @@ class CoreRepository(SQLiteRepository):
             values["metrics_json"] = json.dumps(row.get("metrics") or {}, ensure_ascii=False, sort_keys=True)
             values["updated_at"] = now
             prepared.append(tuple(values[column] for column in self._SCREENER_COLUMNS))
+        if not prepared:
+            # Empty input must not wipe the last good snapshot (matches
+            # replace_security_master / refresh_short_behavior_day).
+            return 0
         with self.write() as connection:
             connection.execute("DELETE FROM screener_rows")
-            if prepared:
-                connection.executemany(
-                    f"INSERT INTO screener_rows ({', '.join(self._SCREENER_COLUMNS)}) "
-                    f"VALUES ({', '.join('?' for _ in self._SCREENER_COLUMNS)})",
-                    prepared,
-                )
+            connection.executemany(
+                f"INSERT INTO screener_rows ({', '.join(self._SCREENER_COLUMNS)}) "
+                f"VALUES ({', '.join('?' for _ in self._SCREENER_COLUMNS)})",
+                prepared,
+            )
         return len(prepared)
 
     def screener_query(
@@ -1405,14 +1418,16 @@ class CoreRepository(SQLiteRepository):
             )
             values["built_at"] = now
             prepared.append(tuple(values[column] for column in self._STRENGTH_COLUMNS))
+        if not prepared:
+            # Empty input must not wipe the last good snapshot (rows + meta).
+            return 0
         with self.write() as connection:
             connection.execute("DELETE FROM strength_rows")
-            if prepared:
-                connection.executemany(
-                    f"INSERT INTO strength_rows ({', '.join(self._STRENGTH_COLUMNS)}) "
-                    f"VALUES ({', '.join('?' for _ in self._STRENGTH_COLUMNS)})",
-                    prepared,
-                )
+            connection.executemany(
+                f"INSERT INTO strength_rows ({', '.join(self._STRENGTH_COLUMNS)}) "
+                f"VALUES ({', '.join('?' for _ in self._STRENGTH_COLUMNS)})",
+                prepared,
+            )
             connection.execute(
                 "INSERT INTO strength_meta (id, trade_date, regime_json, universe_count, built_at) "
                 "VALUES (1, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET trade_date=excluded.trade_date, "
