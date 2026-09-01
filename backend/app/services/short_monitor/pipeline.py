@@ -251,6 +251,7 @@ def refresh_snapshots(
             sector33_code=security.get("sector33_code"),
             margin=margin.get(code),
             regulation_severity=int((regulation.get(code) or {}).get("severity") or 0),
+            regulation_known=bool((regulation.get(code) or {}).get("known", True)),
             trading_days_to_earnings=earnings.get(code),
             news_count_5d=int(news.get(code) or 0),
             breakout_confirmed=bool(confirm.get("breakout")),
@@ -372,7 +373,14 @@ def _regulation_map(
         alerts.values(), as_of=as_of, trading_days_since=since, universe=universe,
     )
     return {
-        code: {"severity": getattr(state, "severity", 0), "level": getattr(state, "level", None)}
+        code: {
+            # Normalize the unknown sentinel (severity=-1) to 0 so a plain int of 0
+            # unambiguously means "known & clear"; carry `known` separately so an
+            # unknown regulation can lower data confidence downstream.
+            "severity": max(0, int(getattr(state, "severity", 0) or 0)),
+            "level": getattr(state, "level", None),
+            "known": bool(getattr(state, "known", True)),
+        }
         for code, state in states.items()
     }
 

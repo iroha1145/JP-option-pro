@@ -188,7 +188,10 @@ def build_events(
         )
         disclosure_count.setdefault(key, []).append(str(row.get("disclosed_date") or ""))
 
-    seen_reporting: set[str] = set()
+    # Keyed by the reporting *chain* (legal_id, fund), not the institution alone:
+    # otherwise the first-ever disclosure of a second fund of the same institution
+    # is misclassified as `reentry` instead of `new`.
+    seen_reporting: set[tuple[str, str]] = set()
     events: list[dict[str, Any]] = []
     for row in ordered:
         raw_name = str(row.get("holder_name") or "").strip()
@@ -211,10 +214,11 @@ def build_events(
         shares = _finite(row.get("short_position_shares"))
         previous = _finite(row.get("previous_ratio"))
         legal_id = mapping.legal_id
+        chain = (legal_id, fund)
 
-        event_type = _classify(previous, ratio, seen_before=legal_id in seen_reporting)
+        event_type = _classify(previous, ratio, seen_before=chain in seen_reporting)
         if visibility_of(ratio) == VISIBLE_REPORTING:
-            seen_reporting.add(legal_id)
+            seen_reporting.add(chain)
 
         disclosures = disclosure_count.get((position_date, raw_name, str(row.get("investment_fund_name") or ""))) or []
         is_correction = len(disclosures) > 1 and published_date != min(disclosures)

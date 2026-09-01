@@ -61,6 +61,7 @@ class StockInputs:
     sector33_code: str | None = None
     margin: Mapping[str, Any] | None = None
     regulation_severity: int = 0
+    regulation_known: bool = True
     trading_days_to_earnings: int | None = None
     news_count_5d: int = 0
     breakout_confirmed: bool = False
@@ -405,6 +406,7 @@ def _finalize(
         has_correction=counts["correction"] > 0,
         adv20_value=price.get("adv20_value"),
         unknown_records=int(now.get("unknown_count") or 0) + int(counts.get("unknown") or 0),
+        regulation_unknown=not stock.regulation_known,
     )
 
     evidence = {

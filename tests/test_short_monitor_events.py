@@ -49,6 +49,29 @@ def _events(rows, resolver=None):
     )
 
 
+def test_second_fund_first_disclosure_is_new_not_reentry():
+    """同一機関の別ファンドの初出は new。seen を legal_id だけで持つと
+    2 本目のファンドの初出が reentry に化ける（連鎖 (legal_id, fund) で持つ）。"""
+
+    rows = [
+        {
+            "canonical_code": "39050", "holder_name": "アルファ・アセットマネジメント",
+            "investment_fund_name": "Alpha Fund",
+            "calculated_date": "2026-07-16", "disclosed_date": "2026-07-16",
+            "short_position_ratio": 0.62, "previous_ratio": None,
+        },
+        {
+            "canonical_code": "39050", "holder_name": "アルファ・アセットマネジメント",
+            "investment_fund_name": "Beta Fund",
+            "calculated_date": "2026-07-21", "disclosed_date": "2026-07-21",
+            "short_position_ratio": 0.55, "previous_ratio": None,
+        },
+    ]
+    by_fund = {e["investment_fund_name"]: e["event_type"] for e in _events(rows)}
+    assert by_fund["Alpha Fund"] == ev.EVENT_NEW
+    assert by_fund["Beta Fund"] == ev.EVENT_NEW  # was reentry before the chain-key fix
+
+
 # -- 機関実体 ---------------------------------------------------------------
 
 def test_case_and_width_differences_are_the_same_entity():

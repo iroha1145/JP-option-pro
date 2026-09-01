@@ -364,6 +364,7 @@ def data_confidence(
     has_correction: bool = False,
     adv20_value: float | None = None,
     unknown_records: int = 0,
+    regulation_unknown: bool = False,
 ) -> dict[str, Any]:
     """この銘柄の判定をどれだけ信じてよいか（0〜1）。
 
@@ -416,6 +417,12 @@ def data_confidence(
         # しても使えない —— その分だけ信頼を下げる。
         confidence *= 0.85
         reasons.append("unreadable_report_rows")
+
+    if regulation_unknown:
+        # 信用規制が解決できない（例: 貸借注意喚起の同期が古い）。
+        # 「規制なし」と確信してはいけないので信頼度を下げる。
+        confidence *= 0.9
+        reasons.append("regulation_unknown")
 
     value = _finite(adv20_value)
     if value is not None and value < 50_000_000.0:

@@ -38,6 +38,7 @@ DEFAULT_WINDOW_TRADING_DAYS = 10
 STATE_REPORTING = "reporting"
 STATE_BELOW_THRESHOLD = "below_threshold"
 STATE_CLOSED = "closed"
+STATE_UNKNOWN = "unknown"  # 最新報告の比率が読めない（欠損）。解消ではない。
 
 # 窓の中で何が起きたか
 MOVE_NEW = "new"                    # 新規に報告義務が発生
@@ -56,7 +57,12 @@ def _finite(value: Any) -> float | None:
 
 
 def _state(ratio: float | None) -> str:
-    if ratio is None or ratio <= 0.0:
+    # 欠損（比率が読めない）と、明示的なゼロ（解消）は別物。欠損を解消に
+    # 混ぜると、データ穴のある保有者が「建玉を閉じた」と誤って数えられる
+    # （events.py の VISIBLE_UNKNOWN と同じ不変条件）。
+    if ratio is None:
+        return STATE_UNKNOWN
+    if ratio <= 0.0:
         return STATE_CLOSED
     return STATE_REPORTING if ratio >= REPORTING_THRESHOLD else STATE_BELOW_THRESHOLD
 
@@ -94,6 +100,7 @@ class ShortInterestSummary:
     reporting_holders: int = 0
     below_threshold_holders: int = 0
     closed_holders: int = 0
+    unknown_holders: int = 0
     baseline_total: float | None = None
     baseline_holders: int = 0
     change: float | None = None
@@ -111,6 +118,7 @@ class ShortInterestSummary:
             "reporting_holders": self.reporting_holders,
             "below_threshold_holders": self.below_threshold_holders,
             "closed_holders": self.closed_holders,
+            "unknown_holders": self.unknown_holders,
             "baseline_total": self.baseline_total,
             "baseline_holders": self.baseline_holders,
             "change": self.change,
@@ -237,6 +245,9 @@ def summarise(
     summary.closed_holders = sum(
         1 for value in current.values() if _state(value) == STATE_CLOSED
     )
+    summary.unknown_holders = sum(
+        1 for value in current.values() if _state(value) == STATE_UNKNOWN
+    )
 
     if baseline_date is None:
         return summary
@@ -314,6 +325,7 @@ __all__ = [
     "STATE_BELOW_THRESHOLD",
     "STATE_CLOSED",
     "STATE_REPORTING",
+    "STATE_UNKNOWN",
     "ShortInterestSummary",
     "positions_as_of",
     "summarise",
