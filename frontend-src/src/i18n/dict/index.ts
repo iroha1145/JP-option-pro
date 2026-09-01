@@ -1016,6 +1016,7 @@ export const DICT: Record<string, [string, string]> = {
   ガバナンス: ['Governance', 'ガバナンス'],
   為替: ['FX', '為替'],
   業界景況: ['Industry conditions', '業界景況'],
+  市場概況: ['Market overview', '市場概況'],
   '信用・空売り': ['Margin / Short selling', '信用・空売り'],
   その他: ['Other', 'その他'],
 
