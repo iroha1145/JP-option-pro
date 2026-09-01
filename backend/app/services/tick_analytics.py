@@ -53,13 +53,18 @@ def _same_instant(rows: Sequence[Mapping[str, Any]], index: int) -> list[Mapping
     if not rows:
         return []
     stamp = str(rows[index].get("tick_time") or "")
-    out = [rows[index]]
-    step = -1 if index else 1
-    cursor = index + step
-    while 0 <= cursor < len(rows) and str(rows[cursor].get("tick_time") or "") == stamp:
-        out.append(rows[cursor])
-        cursor += step
-    return out
+    # Collect contiguous same-timestamp rows on BOTH sides of `index`. A single
+    # direction (the old `step = -1 if index else 1`) only worked for the first/last
+    # row; called with a middle index (the afternoon-open auction) it walked into
+    # earlier, different timestamps and returned just one print — undercounting the
+    # 板寄せ volume/prints/share.
+    lo = index
+    while lo - 1 >= 0 and str(rows[lo - 1].get("tick_time") or "") == stamp:
+        lo -= 1
+    hi = index
+    while hi + 1 < len(rows) and str(rows[hi + 1].get("tick_time") or "") == stamp:
+        hi += 1
+    return list(rows[lo : hi + 1])
 
 
 def auction_prints(rows: Sequence[Mapping[str, Any]]) -> set[int]:

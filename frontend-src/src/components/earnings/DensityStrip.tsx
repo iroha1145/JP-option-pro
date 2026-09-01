@@ -113,7 +113,7 @@ export default function DensityStrip({ items, onJumpDay }: DensityStripProps) {
       <div className="mt-1.5 flex justify-between font-mono text-[9px] text-ink-300">
         <span>{t('今天')}</span>
         <span>+17</span>
-        <span>+35</span>
+        <span>+34</span>
       </div>
       <div className="mt-2 flex items-center gap-3 text-micro text-ink-400">
         <span className="flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-[2px] bg-brand-500" />{t('確定/已公布')}</span>

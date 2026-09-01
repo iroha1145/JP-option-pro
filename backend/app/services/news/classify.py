@@ -33,6 +33,7 @@ CATEGORY_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("為替", ("円安", "円高", "為替", "ドル円"), ("yen", "usd/jpy", "currency")),
     ("日銀・金利", ("日銀", "日本銀行", "金融政策決定会合", "利上げ", "利下げ", "国債買い入れ", "金利", "YCC"), ("bank of japan", "boj", "rate hike", "rate cut", "monetary policy")),
     ("業界景況", ("業界", "市況", "需要", "景気", "統計", "出荷", "販売台数"), ("industry", "demand", "shipments")),
+    ("市場概況", ("日経平均", "東証株価", "東京株式", "株価指数", "TOPIX", "プライム市場", "グロース市場", "大納会", "大発会"), ("nikkei average", "topix", "tokyo stock exchange")),
     ("信用・空売り", ("信用規制", "空売り", "貸借", "日々公表", "増担保"), ("short selling", "margin regulation")),
 )
 
@@ -41,7 +42,7 @@ CATEGORY_WEIGHTS: dict[str, float] = {
     "増資・資金調達": 80.0, "配当": 75.0, "大口受注": 75.0, "株式分割": 70.0,
     "事故・訴訟": 70.0, "規制・政策": 60.0, "日銀・金利": 60.0, "人事": 50.0,
     "製品・技術": 55.0, "供給網": 55.0, "ガバナンス": 55.0, "為替": 45.0,
-    "業界景況": 40.0, "信用・空売り": 55.0, "その他": 25.0,
+    "業界景況": 40.0, "市場概況": 50.0, "信用・空売り": 55.0, "その他": 25.0,
 }
 
 
@@ -127,7 +128,7 @@ def market_relevance(
 
     if securities:
         return "security"
-    market_level = {"日銀・金利", "為替", "規制・政策", "業界景況", "信用・空売り"}
+    market_level = {"日銀・金利", "為替", "規制・政策", "業界景況", "市場概況", "信用・空売り"}
     if any(category in market_level for category in categories):
         return "market"
     return None
@@ -160,7 +161,8 @@ def importance_score(
             age_hours = max(0.0, ((now or datetime.now(timezone.utc)) - published).total_seconds() / 3600.0)
             components["recency"] = max(0.0, 100.0 - age_hours * 1.4)
             reasons.append("发布时间较近" if age_hours < 24 else "发布已有一段时间")
-        except ValueError:
+        except (ValueError, TypeError):
+            # TypeError guards a tz-naive published_at (naive - aware subtraction).
             pass
 
     bonus = 0.0

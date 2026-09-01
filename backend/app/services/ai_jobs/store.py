@@ -24,6 +24,8 @@ JOB_TYPES = ("news_translation_ja", "news_analysis_zh")
 
 UNKNOWN_HOLD_WITH_RESPONSE_SECONDS = 24 * 3600
 UNKNOWN_HOLD_NO_RESPONSE_SECONDS = 15 * 60
+CLAIMING_MARKER = "claiming"
+CLAIMING_STALE_SECONDS = 120
 
 AI_DDL: tuple[str, ...] = (
     """
@@ -125,7 +127,7 @@ class AIJobStore(SQLiteRepository):
         return int(settled) + int(reserved)
 
     def slot_blocked(self) -> bool:
-        """同時実行 1 の судьба: submitted か有効な unknown が残っていれば塞がる。"""
+        """同時実行 1 の規律: submitted / 進行中の claim / 有効な unknown が残っていれば塞がる。"""
 
         now = datetime.now(timezone.utc)
         with self.read() as connection:
@@ -134,6 +136,17 @@ class AIJobStore(SQLiteRepository):
             ).fetchone()[0]
             if submitted:
                 return True
+            claiming_rows = connection.execute(
+                "SELECT updated_at FROM ai_jobs WHERE status = 'queued' AND error_code = ?",
+                (CLAIMING_MARKER,),
+            ).fetchall()
+            for row in claiming_rows:
+                try:
+                    updated = datetime.fromisoformat(str(row[0]).replace("Z", "+00:00"))
+                except ValueError:
+                    return True
+                if (now - updated).total_seconds() < CLAIMING_STALE_SECONDS:
+                    return True
             unknown_rows = connection.execute(
                 "SELECT openai_response_id, updated_at FROM ai_jobs WHERE status = 'unknown'"
             ).fetchall()
@@ -150,13 +163,32 @@ class AIJobStore(SQLiteRepository):
         return False
 
     def claim_next(self) -> dict[str, Any] | None:
+        now = utc_now_iso()
+        now_dt = datetime.now(timezone.utc)
         with self.write() as connection:
-            row = connection.execute(
-                "SELECT * FROM ai_jobs WHERE status = 'queued' ORDER BY job_id LIMIT 1"
-            ).fetchone()
-            if row is None:
+            rows = connection.execute(
+                "SELECT * FROM ai_jobs WHERE status = 'queued' ORDER BY job_id"
+            ).fetchall()
+            chosen = None
+            for row in rows:
+                if row["error_code"] == CLAIMING_MARKER:
+                    try:
+                        updated = datetime.fromisoformat(str(row["updated_at"]).replace("Z", "+00:00"))
+                    except ValueError:
+                        chosen = row
+                        break
+                    if (now_dt - updated).total_seconds() < CLAIMING_STALE_SECONDS:
+                        continue
+                chosen = row
+                break
+            if chosen is None:
                 return None
-            item = dict(row)
+            connection.execute(
+                "UPDATE ai_jobs SET error_code = ?, updated_at = ? "
+                "WHERE job_id = ? AND status = 'queued'",
+                (CLAIMING_MARKER, now, chosen["job_id"]),
+            )
+            item = dict(chosen)
             try:
                 item["payload"] = json.loads(item.pop("payload_json"))
             except ValueError:

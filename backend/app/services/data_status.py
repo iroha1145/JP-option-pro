@@ -20,6 +20,7 @@ _STALE_HOURS = {
     "security_master": 36,
     "daily_prices": 30,
     "index_prices": 30,
+    "topix_prices": 30,
     "financial_summary": 30,
     "earnings_calendar": 36,
     "margin_interest": 9 * 24,
@@ -90,10 +91,50 @@ def data_status(repository: CoreRepository, *, jquants_configured: bool) -> dict
         "api_key_configured": jquants_configured,
         "market_timezone": "Asia/Tokyo",
         "datasets": datasets,
-        "intraday": {
-            "enabled": False,
-            "note_ja": "現プランは日足まで。分足・リアルタイムは将来の拡張ポイント（IntradayProvider）で追加予定。",
-        },
+        "intraday": intraday_addon_status(),
+    }
+
+
+def intraday_addon_status() -> dict[str, Any]:
+    """分足・ティックのアドオン実況: 能力宣言（契約状態）＋実データ可用性。
+
+    以前は data_status() が enabled=False を直書きしており、CAPABILITIES で
+    intraday_prices / tick_trades を enabled と宣言し実装も存在するのと矛盾していた。
+    """
+
+    from app.data_paths import get_data_paths
+    from app.providers.jquants.capabilities import capability_map
+    from app.repositories.intraday_store import (
+        DATASET_MINUTE,
+        DATASET_TICK,
+        IntradayStore,
+    )
+
+    caps = capability_map()
+    minute_cap = caps.get("intraday_prices")
+    tick_cap = caps.get("tick_trades")
+    enabled = bool(
+        (minute_cap is not None and minute_cap.status == "enabled")
+        or (tick_cap is not None and tick_cap.status == "enabled")
+    )
+    note = (
+        "分足・ティックはアドオン契約済み。銘柄別オンデマンド取得（全市場の常時取得ではない）。"
+        if enabled
+        else "現プランは日足まで。分足・リアルタイムは将来の拡張ポイント（IntradayProvider）で追加予定。"
+    )
+    store = IntradayStore(get_data_paths().intraday_db, read_only=True)
+    if not store.exists():
+        return {
+            "enabled": enabled,
+            "note_ja": note,
+            "minute": {"availability": "unknown"},
+            "tick": {"availability": "unknown"},
+        }
+    return {
+        "enabled": enabled,
+        "note_ja": note,
+        "minute": store.availability(DATASET_MINUTE),
+        "tick": store.availability(DATASET_TICK),
     }
 
 
@@ -101,7 +142,7 @@ def _dataset_key(capability_key: str) -> str:
     aliases = {
         "listed_master": "security_master",
         "daily_prices": "daily_prices",
-        "topix_prices": "index_prices",
+        "topix_prices": "topix_prices",
         "index_prices": "index_prices",
         "financial_summary": "financial_summary",
         "earnings_calendar": "earnings_calendar",
@@ -114,4 +155,4 @@ def _dataset_key(capability_key: str) -> str:
     return aliases.get(capability_key, capability_key)
 
 
-__all__ = ["DATA_STATUS_VERSION", "data_status"]
+__all__ = ["DATA_STATUS_VERSION", "data_status", "intraday_addon_status"]

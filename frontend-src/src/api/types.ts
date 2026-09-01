@@ -479,7 +479,12 @@ export interface DataStatusResponse {
   market_timezone: string;
   core_database_ready?: boolean;
   datasets: DatasetStatus[];
-  intraday: { enabled: boolean; note_ja?: string };
+  intraday: {
+    enabled: boolean;
+    note_ja?: string;
+    minute?: { availability?: string };
+    tick?: { availability?: string };
+  };
   worker?: {
     healthy: boolean;
     tasks?: Record<string, { status: string; last_success_at?: string | null; error_code?: string | null }>;
@@ -504,7 +509,7 @@ export interface IntradayChart {
   interval: '1m' | '5m' | '60m';
   available: boolean;
   availability?: string;
-  reason?: 'plan_not_included' | 'not_fetched' | 'fetching';
+  reason?: 'plan_not_included' | 'not_fetched' | 'fetching' | 'empty';
   queued?: boolean;
   note_ja?: string;
   days?: string[];
@@ -557,7 +562,7 @@ export interface TickView {
   display_code: string;
   available: boolean;
   availability?: string;
-  reason?: 'plan_not_included' | 'not_fetched' | 'fetching';
+  reason?: 'plan_not_included' | 'not_fetched' | 'fetching' | 'empty';
   queued?: boolean;
   note_ja?: string;
   trade_date: string | null;

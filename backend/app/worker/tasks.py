@@ -343,8 +343,12 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
 
         cutoff = (datetime.now(timezone.utc) - timedelta(days=cutoff_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
         summary["pruned"] = store.prune_older_than(cutoff)
+        status, error_code = news_sync_outcome(summary)
         return TaskResult(
-            status="completed", next_delay_seconds=float(config.news.sync_seconds), details=summary
+            status=status,
+            error_code=error_code,
+            next_delay_seconds=float(config.news.sync_seconds),
+            details=summary,
         )
 
     def intraday_fetch_task(payload: dict[str, Any] | None) -> TaskResult:
@@ -404,7 +408,11 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
                 canonical_code=str(code), days=FETCH_TRADING_DAYS,
             )
             store.prune_older_than(add_days(iso_date(today_jst()), -RETENTION_TRADING_DAYS * 2))
-        status = "completed" if result.get("status") in ("ok", "plan_not_included") else "failed"
+        status = (
+            "completed"
+            if result.get("status") in ("ok", "plan_not_included", "not_published")
+            else "failed"
+        )
         return TaskResult(
             status=status,
             error_code=result.get("error_code"),
@@ -479,6 +487,16 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
     ]
 
 
+def news_sync_outcome(summary: dict[str, Any]) -> tuple[str, str | None]:
+    """全フィードが失敗した同期は completed にしない（健全性をごまかさない）。"""
+
+    errors = summary.get("feed_errors") or {}
+    feeds = int(summary.get("feeds") or 0)
+    if feeds > 0 and len(errors) >= feeds:
+        return "failed", "all_feeds_failed"
+    return "completed", None
+
+
 def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str, Any]:
     if not context.config.features.radar_enabled:
         return {"status": "disabled"}
@@ -550,4 +568,5 @@ __all__ = [
     "MANUAL_ACTION_TYPES",
     "TaskContext",
     "build_default_tasks",
+    "news_sync_outcome",
 ]

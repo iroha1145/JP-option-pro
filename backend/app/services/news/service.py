@@ -16,6 +16,7 @@ from app.services.news.entities import EntityMatcher, build_alias_rows
 from app.services.news.fetcher import fetch_feed
 
 NEWS_SERVICE_VERSION = "jp-news-service-v1"
+SUBMITTED_STALE_SECONDS = 30 * 60
 
 
 def _iso(dt: datetime) -> str:
@@ -77,12 +78,24 @@ def sync_feeds_once(
                 items_seen=0, error_code=result.error_code,
             )
             continue
+        if result.status == "not_modified":
+            store.record_feed_fetch(
+                feed_url, etag=result.etag, last_modified=result.last_modified,
+                items_seen=0, error_code=None,
+            )
+            continue
+        if not result.items:
+            # 空の 200 + 新 ETag を保存すると次回 304 で永久に空になる。
+            feed_errors[feed_url] = "feed_empty_body"
+            store.record_feed_fetch(
+                feed_url, etag=state.get("etag"), last_modified=state.get("last_modified"),
+                items_seen=0, error_code="feed_empty_body",
+            )
+            continue
         store.record_feed_fetch(
             feed_url, etag=result.etag, last_modified=result.last_modified,
             items_seen=len(result.items), error_code=None,
         )
-        if result.status == "not_modified":
-            continue
 
         batch: list[dict[str, Any]] = []
         for item in result.items:
@@ -97,7 +110,10 @@ def sync_feeds_once(
                 continue  # 日本株と接点のない記事はフィードに入れない
             codes = sorted({m.canonical_code for m in matches})
             fingerprint = classify.content_fingerprint(item.title, item.published_at, codes)
-            duplicate_of = store.fingerprint_exists_since(fingerprint, since_iso=dedup_window_start)
+            # 日付のない指紋は日をまたいで衝突するので、指紋照合は日付があるときだけ。
+            duplicate_of = None
+            if item.published_at:
+                duplicate_of = store.fingerprint_exists_since(fingerprint, since_iso=dedup_window_start)
             if duplicate_of == news_id:
                 duplicate_of = None
             bigrams = classify.title_bigrams(item.title)
@@ -106,7 +122,10 @@ def sync_feeds_once(
                 for known_id, known_bigrams, known_codes in seen_titles:
                     if known_id == news_id:
                         continue
-                    shared_entity = bool(code_set & known_codes) or (not code_set and not known_codes)
+                    # Only a genuine shared ticker relaxes the similarity threshold.
+                    # Treating "both have no codes" as shared over-deduped distinct
+                    # macro headlines (BOJ/CPI/FX) that merely share common bigrams.
+                    shared_entity = bool(code_set & known_codes)
                     threshold = 0.5 if shared_entity else 0.72
                     if classify.titles_similar(bigrams, known_bigrams, threshold=threshold):
                         duplicate_of = known_id
@@ -175,17 +194,33 @@ def enqueue_ai_jobs(
 
     config = get_personal_config()
     since = _iso(datetime.now(timezone.utc) - timedelta(hours=config.news.window_hours))
-    candidates = store.pending_ai_candidates(since_iso=since, limit=max_items)
+    candidates = store.pending_ai_candidates(
+        since_iso=since,
+        limit=max_items,
+        translation_version=ai.TRANSLATION_PROMPT_VERSION,
+        analysis_version=ai.ANALYSIS_PROMPT_VERSION,
+    )
     created = 0
     skipped_budget = 0
+    skipped_queue = 0
     for item in candidates:
+        # Enforce the configured queue cap (previously declared but never checked;
+        # the queue was only implicitly bounded by the daily token budget).
+        if jobs.queued_count() >= config.ai.max_queued:
+            skipped_queue += 1
+            continue
         committed = jobs.tokens_committed_today()
         if committed >= daily_token_limit:
             skipped_budget += 1
             continue
         news_id = item["news_id"]
         # 翻訳: 原文が日本語でない場合のみ。日本語原文の再翻訳はしない。
-        if item.get("translated_title_ja") is None and item.get("source_language") != "ja":
+        # 版が上がったら（prompt/schema）既訳でも再投入する（サイレントに旧結果を使い続けない）。
+        translation_stale = item.get("translation_version") != ai.TRANSLATION_PROMPT_VERSION
+        if (
+            item.get("source_language") != "ja"
+            and (item.get("translated_title_ja") is None or translation_stale)
+        ):
             payload = ai.build_translation_payload(item)
             hash_value = request_hash(
                 "news_translation_ja", payload,
@@ -203,7 +238,8 @@ def enqueue_ai_jobs(
                 token_reservation=ai.TOKEN_RESERVATION_TRANSLATION,
             )
             created += 1 if outcome["created"] else 0
-        if item.get("analysis_zh") is None and item.get("securities"):
+        analysis_stale = item.get("analysis_version") != ai.ANALYSIS_PROMPT_VERSION
+        if item.get("securities") and (item.get("analysis_zh") is None or analysis_stale):
             allowed = [entry["canonical_code"] for entry in item["securities"]]
             payload = ai.build_analysis_payload(item, allowed_codes=allowed)
             hash_value = request_hash(
@@ -222,7 +258,12 @@ def enqueue_ai_jobs(
                 token_reservation=ai.TOKEN_RESERVATION_ANALYSIS,
             )
             created += 1 if outcome["created"] else 0
-    return {"candidates": len(candidates), "jobs_created": created, "skipped_budget": skipped_budget}
+    return {
+        "candidates": len(candidates),
+        "jobs_created": created,
+        "skipped_budget": skipped_budget,
+        "skipped_queue": skipped_queue,
+    }
 
 
 def process_ai_jobs_once(*, store: NewsStore, jobs: AIJobStore, runtime: ai.OpenAIRuntime) -> dict[str, Any]:
@@ -233,25 +274,40 @@ def process_ai_jobs_once(*, store: NewsStore, jobs: AIJobStore, runtime: ai.Open
     # 1) 回収
     submitted = jobs.submitted_job()
     if submitted is not None:
-        poll = runtime.poll(str(submitted.get("openai_response_id")))
-        if poll["status"] == "pending":
-            outcome["pending"] = 1
-        elif poll["status"] == "failed":
+        stale = False
+        submitted_at = submitted.get("submitted_at")
+        if submitted_at:
+            try:
+                started = datetime.fromisoformat(str(submitted_at).replace("Z", "+00:00"))
+                stale = (datetime.now(timezone.utc) - started).total_seconds() > SUBMITTED_STALE_SECONDS
+            except ValueError:
+                stale = False
+        if stale:
             jobs.settle(
                 submitted["job_id"], status="failed", result=None,
-                tokens_used=poll.get("tokens_used"), error_code=poll.get("error_code"),
+                tokens_used=None, error_code="model_poll_timeout",
             )
             outcome["settled"] = 1
         else:
-            settled = _apply_result(store, submitted, poll["result"])
-            jobs.settle(
-                submitted["job_id"],
-                status="completed" if settled["accepted"] else "failed",
-                result=poll["result"],
-                tokens_used=poll.get("tokens_used"),
-                error_code=settled.get("error_code"),
-            )
-            outcome["settled"] = 1
+            poll = runtime.poll(str(submitted.get("openai_response_id")))
+            if poll["status"] == "pending":
+                outcome["pending"] = 1
+            elif poll["status"] == "failed":
+                jobs.settle(
+                    submitted["job_id"], status="failed", result=None,
+                    tokens_used=poll.get("tokens_used"), error_code=poll.get("error_code"),
+                )
+                outcome["settled"] = 1
+            else:
+                settled = _apply_result(store, submitted, poll["result"])
+                jobs.settle(
+                    submitted["job_id"],
+                    status="completed" if settled["accepted"] else "failed",
+                    result=poll["result"],
+                    tokens_used=poll.get("tokens_used"),
+                    error_code=settled.get("error_code"),
+                )
+                outcome["settled"] = 1
 
     # 2) 送信（スロットが空いていれば）
     if not jobs.slot_blocked():
@@ -354,8 +410,14 @@ def _analysis_states(items: list[dict[str, Any]]) -> dict[str, str]:
     return states
 
 
+def _clamp_window_hours(hours: int) -> int:
+    """Clamp the requested window to [6h, 14d] — the range actually queried."""
+
+    return max(6, min(24 * 14, hours))
+
+
 def _window_items(store: NewsStore, hours: int, *, limit: int = 300) -> list[dict[str, Any]]:
-    since = _iso(datetime.now(timezone.utc) - timedelta(hours=max(6, min(24 * 14, hours))))
+    since = _iso(datetime.now(timezone.utc) - timedelta(hours=_clamp_window_hours(hours)))
     return store.recent_items(since_iso=since, limit=limit)
 
 
@@ -390,7 +452,7 @@ def news_feed_view(
     states = _analysis_states(items)
     return {
         "mode": config.features.news_mode,
-        "window_hours": hours,
+        "window_hours": _clamp_window_hours(hours),
         "items": [
             {**_item_view(item, names), "analysis_state": states.get(item["news_id"], "none")}
             for item in items
@@ -441,7 +503,7 @@ def news_hotspots_view(*, hours: int = 72, limit: int = 8) -> dict[str, Any]:
         group["display_code"] = _display(code)
         group["name_ja"] = names.get(code)
         group["categories"] = group["categories"][:3]
-    return {"window_hours": hours, "groups": ranked}
+    return {"window_hours": _clamp_window_hours(hours), "groups": ranked}
 
 
 def news_securities_view(*, hours: int = 72, limit: int = 50) -> dict[str, Any]:
@@ -493,7 +555,7 @@ def news_securities_view(*, hours: int = 72, limit: int = 50) -> dict[str, Any]:
         row["categories"] = row["categories"][:3]
         analyzed = row.pop("analyzed_count")
         row["ai"] = {"analyzed": analyzed} if analyzed else None
-    return {"window_hours": hours, "rows": rows}
+    return {"window_hours": _clamp_window_hours(hours), "rows": rows}
 
 
 def news_pipeline_status_view() -> dict[str, Any]:

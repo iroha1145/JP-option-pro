@@ -117,14 +117,17 @@ class NewsStore(SQLiteRepository):
 
     def replace_entity_aliases(self, rows: Iterable[tuple[str, str, str]]) -> int:
         prepared = [(alias, code, alias_type) for alias, code, alias_type in rows if alias and code]
+        if not prepared:
+            # Don't wipe the alias catalog on an empty rebuild (e.g. a transient
+            # empty master); keep the last good set.
+            return 0
         with self.write() as connection:
             connection.execute("DELETE FROM entity_aliases")
-            if prepared:
-                connection.executemany(
-                    "INSERT OR IGNORE INTO entity_aliases (alias, canonical_code, alias_type) "
-                    "VALUES (?, ?, ?)",
-                    prepared,
-                )
+            connection.executemany(
+                "INSERT OR IGNORE INTO entity_aliases (alias, canonical_code, alias_type) "
+                "VALUES (?, ?, ?)",
+                prepared,
+            )
         return len(prepared)
 
     def all_entity_aliases(self) -> list[dict[str, Any]]:
@@ -247,17 +250,50 @@ class NewsStore(SQLiteRepository):
             ).fetchall()
         return [self._decode(row) for row in rows]
 
-    def pending_ai_candidates(self, *, since_iso: str, limit: int) -> list[dict[str, Any]]:
-        """重要度順で翻訳/分析が欠けているアイテムを返す。"""
+    def pending_ai_candidates(
+        self,
+        *,
+        since_iso: str,
+        limit: int,
+        translation_version: str | None = None,
+        analysis_version: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """重要度順で翻訳/分析が欠けている（または版が古い）アイテムを返す。
 
+        translation_version / analysis_version を渡すと、既訳・既分析でも保存された
+        版が現行 prompt 版と異なる行を再選択する（版更新時に旧結果を再処理するため）。
+
+        SQLite の ``col IS NOT ?`` は bind が非 NULL でも ``col IS NULL`` を真にする。
+        日本語原文は翻訳しないので ``translation_version`` がずっと NULL のままになり、
+        素の ``IS NOT ?`` だと「既に分析済みの日本語」が候補を埋め尽くす。
+        欠落、または「成果物があるのに版が違う」だけを拾う。
+        """
+
+        if translation_version is None and analysis_version is None:
+            predicate = "(translated_title_ja IS NULL OR analysis_zh_json IS NULL)"
+            params: tuple[Any, ...] = (since_iso, int(limit))
+        else:
+            # 翻訳: 日本語以外で未訳、または既訳だが版が違う / 版が空。
+            # 分析: 未分析、または既分析だが版が違う / 版が空。
+            predicate = """(
+                (translated_title_ja IS NULL AND source_language != 'ja')
+                OR (translated_title_ja IS NOT NULL AND (
+                    translation_version IS NULL OR translation_version IS NOT ?
+                ))
+                OR analysis_zh_json IS NULL
+                OR (analysis_zh_json IS NOT NULL AND (
+                    analysis_version IS NULL OR analysis_version IS NOT ?
+                ))
+            )"""
+            params = (since_iso, translation_version, analysis_version, int(limit))
         with self.read() as connection:
             rows = connection.execute(
                 "SELECT * FROM news_items WHERE duplicate_of IS NULL "
                 "AND COALESCE(published_at, fetched_at) >= ? "
-                "AND (translated_title_ja IS NULL OR analysis_zh_json IS NULL) "
+                f"AND {predicate} "
                 "AND securities_json != '[]' "
                 "ORDER BY importance IS NULL, importance DESC LIMIT ?",
-                (since_iso, int(limit)),
+                params,
             ).fetchall()
         return [self._decode(row) for row in rows]
 

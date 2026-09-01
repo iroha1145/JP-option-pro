@@ -1,0 +1,15 @@
+{
+  "name": "Optix Japan",
+  "install": "bash .cursor/install.sh",
+  "terminals": [
+    {
+      "name": "backend",
+      "command": "cd backend && export DATA_DIR=/tmp/jp-dev PYTHONPATH=. && ../.venv/bin/python -m app.tools.dev_fixture && exec ../.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 2100"
+    },
+    {
+      "name": "frontend",
+      "command": "cd frontend-src && exec npm run dev"
+    }
+  ],
+  "ports": [2100, 3100]
+}

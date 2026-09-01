@@ -113,11 +113,16 @@ def _ensure_intraday_fetch(canonical: str, dataset: str, trade_date: str | None)
     """欠けている日中データの取得をワーカーに依頼する（API はプロバイダに触れない）。
 
     個股頁を開いただけで使えるようにするための自動化。冪等キーに銘柄と日付を
-    含めるので、同じページを何度開いてもキューは 1 件しか積まれない。
+    含めるので、進行中の同一依頼は合流する。完了済みキーは再投入できる。
+    GET の副作用はオーナーに限る（公開読取でワーカーを埋めない）。
+    実際にこの銘柄の取得が queued/running のときだけ True。
     """
 
+    from app.access import current_request_is_owner
     from app.api.deps import worker_state_write
 
+    if not current_request_is_owner():
+        return False
     try:
         repository = worker_state_write()
         if not repository.exists():
@@ -125,11 +130,11 @@ def _ensure_intraday_fetch(canonical: str, dataset: str, trade_date: str | None)
         payload = {"code": canonical}
         if dataset == "tick":
             payload["dataset"] = "tick"
-        repository.request_action(
+        outcome = repository.request_action(
             "tick_fetch" if dataset == "tick" else "intraday_fetch",
             idempotency_key=f"auto:{dataset}:{canonical}:{trade_date or 'latest'}",
             payload=payload,
         )
-        return True
+        return bool(outcome.get("accepted"))
     except Exception:  # noqa: BLE001 — 取得依頼が積めなくても閲覧は続行させる
         return False

@@ -11,6 +11,7 @@ J-Quants は場中に一切 publish しない（実測: 場中の分足・日足
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -126,12 +127,18 @@ async def intraday_sectors() -> dict:
     universe = [(row["canonical_code"], row.get("sector33_code")) for row in rows]
 
     def _collect_all() -> dict:
-        provider = YahooQuoteProvider(max_workers=6)
         codes = [code for code, _sector in universe]
+        chunks = [codes[start : start + 60] for start in range(0, len(codes), 60)]
+
+        def _one(chunk: list[str]) -> dict:
+            return YahooQuoteProvider(max_workers=3).quotes_for_codes(chunk)
+
         found: dict = {}
-        # プロバイダ側の 60 件ガードに合わせて分割（内部でさらに 20 件バッチ）
-        for start in range(0, len(codes), 60):
-            found.update(provider.quotes_for_codes(codes[start : start + 60]))
+        # 60 件窓を並列化。各窓は独自クライアントなので入れ子プールで死なない。
+        workers = min(6, max(1, len(chunks)))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            for part in pool.map(_one, chunks):
+                found.update(part)
         return found
 
     async def build() -> dict:

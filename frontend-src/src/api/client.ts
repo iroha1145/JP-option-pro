@@ -55,8 +55,12 @@ const BASE = '/api';
  */
 export const PRINCIPAL_INVALID_EVENT = 'optixjp:principal-invalid';
 
-/** 会让前端认定「当前主体已失效」的业务码（本项目仅所有者一种主体）。 */
-const PRINCIPAL_INVALID_CODES = new Set(['owner_login_required']);
+/**
+ * 会让前端认定「当前主体已失效」的业务码。两种主体都要覆盖：owner（所有者会话）
+ * 与 account（客户账号会话）。缺了 account_login_required 时，客户会话过期不会触发
+ * 降级，页面继续显示已登录状态和自选管理按钮而请求持续 401。
+ */
+const PRINCIPAL_INVALID_CODES = new Set(['owner_login_required', 'account_login_required']);
 
 export function notifyPrincipalInvalid(): void {
   if (typeof window !== 'undefined') {

@@ -108,12 +108,17 @@ export function usePolling<T>(
     }
     void tick(true, generation);
     if (intervalMs && intervalMs > 0) {
+      // Bind to the live generation (tick's default), not the captured one: a
+      // force refresh bumps generationRef without re-running this effect, and a
+      // stale captured generation would make every later tick fail the guard
+      // (discarding results and wedging `refreshing` on). clearInterval on cleanup
+      // still scopes the timer to this effect's lifetime.
       timer = setInterval(() => {
-        if (document.visibilityState === 'visible') void tick(false, generation);
+        if (document.visibilityState === 'visible') void tick(false);
       }, intervalMs);
     }
     const onVisible = () => {
-      if (document.visibilityState === 'visible' && intervalMs && intervalMs > 0) void tick(false, generation);
+      if (document.visibilityState === 'visible' && intervalMs && intervalMs > 0) void tick(false);
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => {

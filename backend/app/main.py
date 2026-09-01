@@ -49,7 +49,12 @@ from app.api import (
     worker_actions as worker_api,
 )
 from app.config import get_settings  # noqa: E402
-from app.services.request_security import client_ip_from_scope  # noqa: E402
+from app.services.request_security import (  # noqa: E402
+    TRUST_PROXY_HEADERS,
+    TRUSTED_PROXY_NETWORKS,
+    client_ip_from_scope,
+    request_is_https,
+)
 from fastapi import Depends  # noqa: E402
 
 APP_NAME = "Optix Japan"
@@ -178,7 +183,9 @@ class _GatewayMiddleware:
                 add(b"cross-origin-opener-policy", b"same-origin")
                 add(b"x-app-version", _settings.APP_VERSION.encode())
                 add(b"x-app-commit", _settings.APP_COMMIT.encode())
-                if scope.get("scheme") == "https":
+                if request_is_https(
+                    scope, enabled=TRUST_PROXY_HEADERS, networks=TRUSTED_PROXY_NETWORKS
+                ):
                     add(b"strict-transport-security", b"max-age=31536000")
                 if path.startswith("/assets/"):
                     add(b"cache-control", b"public, max-age=31536000, immutable")
@@ -282,13 +289,39 @@ def _is_spa_document_path(path: str) -> bool:
     return "." not in tail
 
 
+def _apply_document_security_headers(response: Response, scope: Scope) -> None:
+    """Mirror the gateway's document-path headers onto the SPA HTML response.
+
+    `_spa_fallback` is registered after ``_GatewayMiddleware`` and thus runs *outside*
+    it, returning directly without passing through ``send_with_headers``. Without this
+    the primary HTML document ships with no CSP / X-Frame-Options / nosniff / COOP /
+    HSTS. Keep this in sync with the ``else`` branch of ``send_with_headers``.
+    """
+
+    headers = response.headers
+    headers.setdefault("x-content-type-options", "nosniff")
+    headers.setdefault("x-frame-options", "DENY")
+    headers.setdefault("referrer-policy", "no-referrer")
+    headers.setdefault("cross-origin-opener-policy", "same-origin")
+    headers.setdefault("x-app-version", _settings.APP_VERSION)
+    headers.setdefault("x-app-commit", _settings.APP_COMMIT)
+    headers.setdefault("cache-control", "no-cache, no-store, must-revalidate")
+    headers.setdefault("content-security-policy", _CSP)
+    if request_is_https(
+        scope, enabled=TRUST_PROXY_HEADERS, networks=TRUSTED_PROXY_NETWORKS
+    ):
+        headers.setdefault("strict-transport-security", "max-age=31536000")
+
+
 @app.middleware("http")
 async def _spa_fallback(request: Request, call_next):
     path = request.url.path
     if request.method in {"GET", "HEAD"} and (path == "/" or _is_spa_document_path(path)):
         body = _index_html_bytes()
         if body is not None:
-            return Response(content=body, media_type="text/html")
+            response = Response(content=body, media_type="text/html")
+            _apply_document_security_headers(response, request.scope)
+            return response
     return await call_next(request)
 
 

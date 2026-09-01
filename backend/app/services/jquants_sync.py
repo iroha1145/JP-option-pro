@@ -29,6 +29,7 @@ DATASET_TRADING_CALENDAR = "trading_calendar"
 DATASET_SECURITY_MASTER = "security_master"
 DATASET_DAILY_PRICES = "daily_prices"
 DATASET_INDEX_PRICES = "index_prices"
+DATASET_TOPIX_PRICES = "topix_prices"
 DATASET_FINANCIAL_SUMMARY = "financial_summary"
 DATASET_EARNINGS_CALENDAR = "earnings_calendar"
 DATASET_MARGIN_INTEREST = "margin_interest"
@@ -108,7 +109,13 @@ class JQuantsSyncEngine:
 
     def _history_start_date(self) -> str:
         today = today_jst()
-        return iso_date(today.replace(year=today.year - self._backfill_years))
+        target_year = today.year - self._backfill_years
+        try:
+            return iso_date(today.replace(year=target_year))
+        except ValueError:
+            # today is Feb 29 and target_year is not a leap year: clamp to Feb 28
+            # rather than raising and failing the whole calendar/backfill/TOPIX sync.
+            return iso_date(today.replace(year=target_year, day=28))
 
     # ------------------------------------------------------------------
     # trading calendar & master
@@ -312,6 +319,12 @@ class JQuantsSyncEngine:
                 for row in self._client.fetch_rows("/equities/earnings-calendar")
                 if (mapped := mapping.map_earnings_announcement(row))
             ]
+            if not rows:
+                # An empty calendar would wipe every announcement (replace_* deletes first);
+                # treat it as a failure instead of destroying existing state.
+                raise JQuantsError(
+                    "empty earnings calendar response", code="jquants_empty_earnings"
+                )
             count = self._repository.replace_earnings_announcements(rows)
             self._repository.record_sync_success(
                 DATASET_EARNINGS_CALENDAR, rows_total=count, data_through=iso_date(today_jst())
@@ -565,12 +578,15 @@ class JQuantsSyncEngine:
                 ]
             count = self._repository.upsert_index_bars(rows)
             data_through = max((row["trade_date"] for row in rows), default=None)
+            # Use a dedicated sync-state key: sharing DATASET_INDEX_PRICES with the
+            # generic index sync would reset its data_through/last_error and hide a
+            # stalled incremental index lane behind a healthy TOPIX pass.
             self._repository.record_sync_success(
-                DATASET_INDEX_PRICES, rows_total=count, data_through=data_through
+                DATASET_TOPIX_PRICES, rows_total=count, data_through=data_through
             )
-            return SyncResult(dataset=DATASET_INDEX_PRICES, status="ok", rows=count)
+            return SyncResult(dataset=DATASET_TOPIX_PRICES, status="ok", rows=count)
 
-        return self._run_dataset(DATASET_INDEX_PRICES, work)
+        return self._run_dataset(DATASET_TOPIX_PRICES, work)
 
 
 INDEX_UNIVERSE = tuple(INDEX_CODES)
@@ -581,6 +597,7 @@ __all__ = [
     "DATASET_EARNINGS_CALENDAR",
     "DATASET_FINANCIAL_SUMMARY",
     "DATASET_INDEX_PRICES",
+    "DATASET_TOPIX_PRICES",
     "DATASET_MARGIN_ALERTS",
     "DATASET_MARGIN_INTEREST",
     "DATASET_SECURITY_MASTER",

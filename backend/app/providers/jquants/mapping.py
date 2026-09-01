@@ -59,6 +59,14 @@ def _flag(row: Mapping[str, Any], key: str) -> int | None:
     return 1 if str(value).strip() in ("1", "1.0", "true", "True") else 0
 
 
+def _sector33_code(row: Mapping[str, Any]) -> str | None:
+    """Normalize the 33-sector code once (zero-padded to 4). Applied consistently by
+    both the master and short-ratio mappers so their sector33_code always joins."""
+
+    code = _text(row, "S33")
+    return code.zfill(4) if code else code
+
+
 def map_security_master(row: Mapping[str, Any]) -> dict[str, Any] | None:
     code = _code(row)
     if not code:
@@ -70,7 +78,7 @@ def map_security_master(row: Mapping[str, Any]) -> dict[str, Any] | None:
         "name_en": _text(row, "CoNameEn"),
         "sector17_code": _text(row, "S17"),
         "sector17_name": _text(row, "S17Nm"),
-        "sector33_code": _text(row, "S33"),
+        "sector33_code": _sector33_code(row),
         "sector33_name": _text(row, "S33Nm"),
         "scale_category": _text(row, "ScaleCat"),
         "market_code": _text(row, "Mkt"),
@@ -348,7 +356,7 @@ def map_short_ratio(row: Mapping[str, Any]) -> dict[str, Any] | None:
     if not sector or not date:
         return None
     return {
-        "sector33_code": sector.zfill(4),
+        "sector33_code": _sector33_code(row),
         "trade_date": date,
         "selling_ex_short_value": _num(row, "SellExShortVa"),
         "short_with_restriction_value": _num(row, "ShrtWithResVa"),
