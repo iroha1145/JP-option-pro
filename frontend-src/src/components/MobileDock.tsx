@@ -5,8 +5,9 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { springSoft } from '@/lib/motion';
 import { useAccess } from '@/hooks/useAccess';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { Icon, type IconName } from '@/components/icons';
@@ -35,6 +36,7 @@ export default function MobileDock() {
   const navigate = useNavigate();
   const { isOwner, accountUsername } = useAccess();
   const [moreOpen, setMoreOpen] = useState(false);
+  const reduceMotion = useReducedMotion();
   /* aria-modal 配套：声明了模态就要真的困住焦点 */
   const sheetRef = useRef<HTMLDivElement | null>(null);
   useFocusTrap(sheetRef, moreOpen);
@@ -65,18 +67,17 @@ export default function MobileDock() {
       <Link
         key={item.path}
         to={item.path}
-        className="relative flex min-h-[44px] flex-1 flex-col items-center justify-center gap-1"
+        className="relative flex min-h-[44px] flex-1 flex-col items-center justify-center gap-1 press-spring"
         aria-label={item.label}
         aria-current={active ? 'page' : undefined}
       >
-        {/* 当前页的小标记：图标上方一枚 4px 圆点，比整块高亮安静 */}
-        <span
-          aria-hidden="true"
-          className={cn(
-            'absolute top-1.5 size-1 rounded-full bg-brand-600 transition-opacity duration-fast',
-            active ? 'opacity-100' : 'opacity-0',
-          )}
-        />
+        {active && (
+          <motion.span
+            layoutId="dock-pill"
+            className="absolute inset-x-1 inset-y-1 -z-10 rounded-xl bg-brand-50"
+            transition={reduceMotion ? { duration: 0 } : springSoft}
+          />
+        )}
         <Icon name={item.icon} size={19} className={active ? 'text-brand-600' : 'text-ink-400'} />
         <span className={cn('text-[10px] leading-none', active ? 'font-medium text-brand-600' : 'text-ink-400')}>{item.label}</span>
       </Link>
@@ -93,7 +94,7 @@ export default function MobileDock() {
         {DOCK_ITEMS.map(renderItem)}
         <button
           onClick={() => setMoreOpen(true)}
-          className="flex min-h-[44px] flex-1 flex-col items-center justify-center gap-1"
+          className="press-spring flex min-h-[44px] flex-1 flex-col items-center justify-center gap-1"
           aria-label={t('更多')}
         >
           <Icon name="menu" size={19} className="text-ink-400" />
@@ -153,7 +154,7 @@ export default function MobileDock() {
                       setMoreOpen(false);
                       navigate(m.path);
                     }}
-                    className="flex w-full items-center gap-3 rounded-md px-3 py-3 text-left transition-colors hover:bg-paper-2"
+                    className="press-spring flex w-full items-center gap-3 rounded-md px-3 py-3 text-left transition-colors hover:bg-paper-2"
                   >
                     <span className="flex size-9 items-center justify-center rounded-md border border-line bg-card-warm text-brand-600">
                       <Icon name={m.icon} size={17} />

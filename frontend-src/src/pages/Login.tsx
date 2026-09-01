@@ -5,10 +5,13 @@
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { motion } from 'framer-motion';
 import { useAccess } from '@/hooks/useAccess';
 import { accountApi } from '@/api/modules';
 import { ApiError } from '@/api/client';
 import { t } from '@/i18n/core';
+import { springSoft } from '@/lib/motion';
+import { cn } from '@/lib/utils';
 
 export default function Login() {
   const { login, refresh } = useAccess();
@@ -69,12 +72,18 @@ export default function Login() {
                 setMode(value);
                 setError(null);
               }}
-              className={
-                mode === value
-                  ? 'flex-1 rounded-[6px] bg-card px-3 py-1.5 text-caption font-medium text-ink-800 shadow-sh-1'
-                  : 'flex-1 rounded-[6px] px-3 py-1.5 text-caption text-ink-400 hover:text-ink-600'
-              }
+              className={cn(
+                'relative z-10 flex-1 rounded-[6px] px-3 py-1.5 text-caption transition-colors',
+                mode === value ? 'font-medium text-ink-800' : 'text-ink-400 hover:text-ink-600',
+              )}
             >
+              {mode === value && (
+                <motion.span
+                  layoutId="login-mode"
+                  className="absolute inset-0 -z-10 rounded-[6px] bg-card shadow-sh-1"
+                  transition={springSoft}
+                />
+              )}
               {value === 'login' ? t('登录') : t('注册新账号')}
             </button>
           ))}
@@ -103,11 +112,15 @@ export default function Login() {
           onChange={(event) => setPassword(event.target.value)}
           className="mb-3 w-full rounded-md border border-line bg-card px-3 py-2 text-body text-ink-900 outline-none focus-ring"
         />
-        {error && <p className="mb-3 text-body-s text-down-700">{error}</p>}
+        {error && (
+          <p key={error} className="animate-nudge-shake mb-3 text-body-s text-down-700">
+            {error}
+          </p>
+        )}
         <button
           type="submit"
           disabled={busy || password.length === 0 || (mode === 'register' && username.trim().length === 0)}
-          className="w-full rounded-md bg-brand-600 py-2 text-body font-medium text-white transition-opacity disabled:opacity-50"
+          className="press-spring w-full rounded-md bg-brand-600 py-2 text-body font-medium text-white shadow-btn-hi transition-opacity disabled:opacity-50"
         >
           {mode === 'login' ? t('登录') : t('注册并登录')}
         </button>

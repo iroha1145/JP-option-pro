@@ -163,6 +163,7 @@ module.exports = {
         /* design.md §4.1 缓动 */
         paper: 'cubic-bezier(.16,1,.3,1)',
         snap: 'cubic-bezier(.22,1,.36,1)',
+        spring: 'cubic-bezier(.22,1.15,.36,1)',
         'in-out-circ': 'cubic-bezier(.45,0,.15,1)',
       },
       transitionDuration: {

@@ -41,7 +41,7 @@ export default function Home() {
       ) : marketState === 'error' ? (
         <EmptyState variant="error" title={t('加载失败')} description={String(market.error?.message ?? '')} />
       ) : (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <div className="stagger-in grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
           {market.data?.indices.map((index) => (
             <Link
               key={index.index_code}

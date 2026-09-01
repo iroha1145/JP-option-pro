@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router';
+import { NavLink, useLocation, useNavigate } from 'react-router';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Icon } from '@/components/icons';
 import { LOCALES, getLocale, setLocale, t } from '@/i18n/core';
 import { stocksApi } from '@/api/modules';
 import type { SearchResult } from '@/api/types';
 import { useAccess } from '@/hooks/useAccess';
 import { cn } from '@/lib/utils';
+import { popoverReduced, popoverVariants, springSoft } from '@/lib/motion';
+import Segmented from '@/components/shared/Segmented';
 
 /* 导航用短标签，不用页面全称：全称的日文译文（ブレイクアウトレーダー 等）
    在 8 项并排时必然折行（用户实拍）。页面标题仍用全称。 */
@@ -25,32 +28,58 @@ export const NAV_ITEMS: { path: string; label: string; index: string }[] = [
 export default function Navbar() {
   const { isOwner, mode, logout, accountUsername } = useAccess();
   const navigate = useNavigate();
+  const location = useLocation();
+  const reduceMotion = useReducedMotion();
+  const [hovered, setHovered] = useState<string | null>(null);
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-overlay backdrop-blur-md">
       <div className="mx-auto flex h-12 max-w-shell items-center gap-3 px-4 md:h-14 md:gap-4 md:px-8">
-        <NavLink to="/" className="flex shrink-0 items-baseline gap-2">
+        <NavLink to="/" className="flex shrink-0 items-baseline gap-2 press-spring">
           <span className="font-display text-h3 font-semibold text-ink-900">Optix</span>
           <span className="rounded-sm bg-brand-600 px-1.5 py-0.5 text-micro font-bold uppercase tracking-wider text-white">
             Japan
           </span>
         </NavLink>
-        <nav aria-label={t('主导航')} className="hidden flex-1 items-center gap-1 xl:flex">
-          {NAV_ITEMS.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              end={item.path === '/'}
-              className={({ isActive }) =>
-                cn(
-                  'whitespace-nowrap rounded-md px-2.5 py-1.5 text-body-s text-ink-600 transition-colors hover:bg-brand-50 hover:text-ink-900',
-                  isActive && 'bg-brand-50 font-medium text-brand-700',
-                )
-              }
-            >
-              <span className="mr-1 font-mono text-micro text-ink-300">{item.index}</span>
-              {t(item.label)}
-            </NavLink>
-          ))}
+        <nav
+          aria-label={t('主导航')}
+          className="hidden flex-1 items-center gap-0.5 xl:flex"
+          onMouseLeave={() => setHovered(null)}
+        >
+          {NAV_ITEMS.map((item) => {
+            const active =
+              item.path === '/'
+                ? location.pathname === '/'
+                : location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+            return (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                end={item.path === '/'}
+                onMouseEnter={() => setHovered(item.path)}
+                className={cn(
+                  'relative isolate whitespace-nowrap rounded-md px-2.5 py-1.5 text-body-s text-ink-600 transition-colors hover:text-ink-900',
+                  active && 'font-medium text-brand-700',
+                )}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="nav-active"
+                    className="absolute inset-0 -z-10 rounded-md bg-brand-50"
+                    transition={reduceMotion ? { duration: 0 } : springSoft}
+                  />
+                )}
+                {!active && hovered === item.path && (
+                  <motion.span
+                    layoutId="nav-hover"
+                    className="absolute inset-0 -z-10 rounded-md bg-ink-900/[0.04]"
+                    transition={reduceMotion ? { duration: 0 } : springSoft}
+                  />
+                )}
+                <span className="mr-1 font-mono text-micro text-ink-300">{item.index}</span>
+                {t(item.label)}
+              </NavLink>
+            );
+          })}
         </nav>
         <div className="ml-auto flex min-w-0 items-center gap-2">
           <SearchBox onPick={(code) => navigate(`/stock/${code}`)} />
@@ -72,7 +101,7 @@ export default function Navbar() {
               <button
                 type="button"
                 onClick={() => void logout()}
-                className="flex items-center gap-1 rounded-md px-2 py-1.5 text-body-s text-ink-500 hover:bg-brand-50 hover:text-ink-900"
+                className="press-spring flex items-center gap-1 rounded-md px-2 py-1.5 text-body-s text-ink-500 hover:bg-brand-50 hover:text-ink-900"
                 title={t('登出')}
               >
                 <Icon name="logout" size={16} />
@@ -91,18 +120,12 @@ export default function Navbar() {
 function LanguageSwitcher() {
   const current = getLocale();
   return (
-    <select
-      aria-label={t('切换语言')}
-      className="rounded-md border border-line bg-card px-1.5 py-1 text-caption text-ink-600"
+    <Segmented
+      ariaLabel={t('切换语言')}
+      options={LOCALES.map((locale) => ({ value: locale.code, label: locale.short }))}
       value={current}
-      onChange={(event) => setLocale(event.target.value as typeof current)}
-    >
-      {LOCALES.map((locale) => (
-        <option key={locale.code} value={locale.code}>
-          {locale.short}
-        </option>
-      ))}
-    </select>
+      onChange={(code) => setLocale(code)}
+    />
   );
 }
 
@@ -112,6 +135,8 @@ function SearchBox({ onPick }: { onPick: (code: string) => void }) {
   const [open, setOpen] = useState(false);
   const timer = useRef<number | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const reduceMotion = useReducedMotion();
+  const variants = reduceMotion ? popoverReduced : popoverVariants;
 
   useEffect(() => {
     if (timer.current) window.clearTimeout(timer.current);
@@ -143,7 +168,7 @@ function SearchBox({ onPick }: { onPick: (code: string) => void }) {
 
   return (
     <div ref={boxRef} className="relative min-w-0">
-      <div className="flex items-center gap-1.5 rounded-md border border-line bg-card px-2 py-1.5">
+      <div className="flex items-center gap-1.5 rounded-md border border-line bg-card px-2 py-1.5 transition-[box-shadow,border-color] duration-fast ease-paper focus-within:border-brand-300 focus-within:shadow-focus-ring">
         <Icon name="search" size={14} className="text-ink-400" />
         <input
           value={query}
@@ -153,27 +178,35 @@ function SearchBox({ onPick }: { onPick: (code: string) => void }) {
           className="w-28 bg-transparent text-body-s text-ink-900 outline-none placeholder:text-ink-300 sm:w-40"
         />
       </div>
-      {open && results.length > 0 && (
-        <ul className="absolute right-0 top-full z-50 mt-1 w-72 overflow-hidden rounded-lg border border-line bg-card shadow-sh-2">
-          {results.map((item) => (
-            <li key={item.canonical_code}>
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-brand-50"
-                onClick={() => {
-                  setOpen(false);
-                  setQuery('');
-                  onPick(item.display_code);
-                }}
-              >
-                <span className="font-mono text-body-s font-medium text-ink-900">{item.display_code}</span>
-                <span className="min-w-0 flex-1 truncate text-body-s text-ink-600">{item.name_ja ?? item.name_en ?? '—'}</span>
-                <span className="text-micro text-ink-400">{item.market_name ?? ''}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <AnimatePresence>
+        {open && results.length > 0 && (
+          <motion.ul
+            variants={variants}
+            initial="hidden"
+            animate="show"
+            exit="exit"
+            className="absolute right-0 top-full z-50 mt-1 w-72 origin-top-right overflow-hidden rounded-lg border border-line bg-card shadow-sh-2"
+          >
+            {results.map((item) => (
+              <li key={item.canonical_code}>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors duration-fast hover:bg-brand-50"
+                  onClick={() => {
+                    setOpen(false);
+                    setQuery('');
+                    onPick(item.display_code);
+                  }}
+                >
+                  <span className="font-mono text-body-s font-medium text-ink-900">{item.display_code}</span>
+                  <span className="min-w-0 flex-1 truncate text-body-s text-ink-600">{item.name_ja ?? item.name_en ?? '—'}</span>
+                  <span className="text-micro text-ink-400">{item.market_name ?? ''}</span>
+                </button>
+              </li>
+            ))}
+          </motion.ul>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
