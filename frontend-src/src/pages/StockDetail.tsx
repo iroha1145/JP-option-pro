@@ -4,7 +4,7 @@
  *  行3: 空卖报告 + 发表预定 (两列)
  *  K线叠加: 基底阻力带 markArea + 枢轴/失效位 markLine + 摆动点。 */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { stocksApi, watchlistApi, workerApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
@@ -48,31 +48,27 @@ export default function StockDetail() {
   const wantIntraday = interval !== '1d' && interval !== 'tick';
   const wantTicks = interval === 'tick';
   const intraday = usePolling(
-    async () => {
-      if (!wantIntraday) {
-        setIntradayPollMs(null);
-        return null;
-      }
-      const data = await stocksApi.intradayChart(code, interval as '1m' | '5m' | '60m');
-      setIntradayPollMs(data?.reason === 'fetching' ? 5_000 : null);
-      return data;
-    },
+    () =>
+      wantIntraday
+        ? stocksApi.intradayChart(code, interval as '1m' | '5m' | '60m')
+        : Promise.resolve(null),
     wantIntraday ? intradayPollMs : null,
     [code, interval, wantIntraday],
   );
   const ticks = usePolling(
-    async () => {
-      if (!wantTicks) {
-        setTickPollMs(null);
-        return null;
-      }
-      const data = await stocksApi.tickView(code);
-      setTickPollMs(data?.reason === 'fetching' ? 8_000 : null);
-      return data;
-    },
+    () => (wantTicks ? stocksApi.tickView(code) : Promise.resolve(null)),
     wantTicks ? tickPollMs : null,
     [code, interval, wantTicks],
   );
+  // Derive the poll cadence from the committed (generation-guarded) response instead
+  // of setting state inside the fetcher: that avoided a stale in-flight response
+  // clobbering the cadence for a newer selection.
+  useEffect(() => {
+    setIntradayPollMs(wantIntraday && intraday.data?.reason === 'fetching' ? 5_000 : null);
+  }, [wantIntraday, intraday.data]);
+  useEffect(() => {
+    setTickPollMs(wantTicks && ticks.data?.reason === 'fetching' ? 8_000 : null);
+  }, [wantTicks, ticks.data]);
   /* 遅延気配は 1 分ポーリング。J-Quants は場中に何も出さないので、
      「今いくらか」はこの非公式・15分遅延の値でしか埋められない。 */
   const live = usePolling(() => stocksApi.intradayQuotes([code]), 60_000, [code]);

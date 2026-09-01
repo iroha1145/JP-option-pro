@@ -72,7 +72,6 @@ export function useTickFlash<T>(
       }, durationMs);
     }
     // 只在卸载时清理定时器；状态复位由下一轮开头统一处理。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, durationMs]);
 
   useEffect(
