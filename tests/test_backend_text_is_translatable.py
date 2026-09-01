@@ -133,6 +133,12 @@ def _text_builder_literals() -> dict[str, str]:
             first = node.args[0]
             if isinstance(first, ast.Constant) and isinstance(first.value, str):
                 found.setdefault(first.value, str(path.relative_to(ROOT)))
+            elif isinstance(first, ast.IfExp):
+                # `line(a if cond else b)` — collect both literal branches so a
+                # conditional first-arg can't slip an untranslated string past the gate.
+                for branch in (first.body, first.orelse):
+                    if isinstance(branch, ast.Constant) and isinstance(branch.value, str):
+                        found.setdefault(branch.value, str(path.relative_to(ROOT)))
             elif isinstance(first, ast.Dict):
                 # `line({...}.get(level, "既定"))` の形。分岐の全部を拾う。
                 for value in [*first.values, *(a for a in ast.walk(first))]:

@@ -172,10 +172,13 @@ def importance_score(
             published = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
             age_hours = max(0.0, ((now or datetime.now(timezone.utc)) - published).total_seconds() / 3600.0)
             components["recency"] = max(0.0, 100.0 - age_hours * 1.4)
+            # Hoist to literal display_text.line(...) calls so the translatability
+            # gate (which only scans constant first-args) actually covers both
+            # strings; a line(<conditional>) argument bypassed the gate entirely.
             reasons.append(
-                display_text.line(
-                    "发布时间较近" if age_hours < 24 else "发布已有一段时间"
-                )
+                display_text.line("发布时间较近")
+                if age_hours < 24
+                else display_text.line("发布已有一段时间")
             )
         except ValueError:
             pass

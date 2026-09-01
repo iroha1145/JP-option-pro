@@ -1037,6 +1037,11 @@ export const DICT: Record<string, [string, string]> = {
     'Financial data is held on a disclosure-date basis, but later corrective filings remain as already-applied values.',
     '財務データは開示日ベースで持つが、後日の訂正報告は反映済みの値で残る。',
   ],
+  '上場廃止・長期売買停止で価格系列が窓の途中で途切れた銘柄は、その期間のリターンが欠損（None）となり集計から除外される。破滅的な結末が黙って落ちるため、生存者バイアスで結果はやや上振れしうる（意図的に「最終バーで実現」はしない —— 直近シグナルの未経過窓を誤って損益確定させないため）。':
+    [
+      'Names whose price series ends mid-window (delisting or a long trading halt) have their return for that period as missing (None) and are dropped from the aggregation. Because the catastrophic outcome silently falls out, results can be slightly upward-biased by survivorship (we deliberately do NOT realize at the last bar, so a recent signal whose window has not fully elapsed is not wrongly booked).',
+      '上場廃止・長期売買停止で価格系列が窓の途中で途切れた銘柄は、その期間のリターンが欠損（None）となり集計から除外される。破滅的な結末が黙って落ちるため、生存者バイアスで結果はやや上振れしうる（意図的に「最終バーで実現」はしない —— 直近シグナルの未経過窓を誤って損益確定させないため）。',
+    ],
 
   /* 後端 earnings_service: 決算カレンダーの「覆盖口径」 */
   '確定日はJ-Quants発表予定（翌営業日分のみ・3月期/9月期）。それ以外の日付は前年同期の開示日から導出した目安で、会社都合で前後する。':

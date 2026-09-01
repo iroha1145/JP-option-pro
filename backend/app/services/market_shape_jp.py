@@ -129,7 +129,18 @@ GATES_VALIDATED = False
 
 
 def _score(regime: Mapping[str, Any], key: str) -> float | None:
-    dims = regime.get("dimensions") if isinstance(regime.get("dimensions"), Mapping) else regime
+    # compute_market_regime_jp nests its six dimensions under "dims" (not
+    # "dimensions"); read that first, then a legacy "dimensions", then a flat dict
+    # (the shape used directly in tests). Reading only "dimensions" made every
+    # dimension resolve to None, so classify_state never established a state.
+    dims: Mapping[str, Any] | None = None
+    for container_key in ("dims", "dimensions"):
+        candidate = regime.get(container_key)
+        if isinstance(candidate, Mapping):
+            dims = candidate
+            break
+    if dims is None:
+        dims = regime
     value = dims.get(key) if isinstance(dims, Mapping) else None
     if value is None:
         value = regime.get(key)

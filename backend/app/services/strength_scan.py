@@ -613,15 +613,16 @@ def risk_penalty(row: Mapping[str, Any], profile: str) -> tuple[float, list[str]
         penalty += {1: 3.0, 2: 6.0, 3: 10.0, 4: 16.0}.get(int(severity), 0.0)
         flags.append("信用规制")
         level = str(row.get("regulation_level") or "")
+        # Wrap each literal in _line so the translatability gate (which statically
+        # scans for line("...") constant args) collects them; a line(<dict>.get(...))
+        # call hid every branch from the gate.
         warnings.append(
-            _line(
-                {
-                    "precaution": "日证金注意喚起銘柄",
-                    "daily_publication": "东证日々公表銘柄",
-                    "restricted": "信用取引规制中（增担保/申込停止）",
-                    "severe": "监理・整理・不明确信息",
-                }.get(level, "信用规制あり")
-            )
+            {
+                "precaution": _line("日证金注意喚起銘柄"),
+                "daily_publication": _line("东证日々公表銘柄"),
+                "restricted": _line("信用取引规制中（增担保/申込停止）"),
+                "severe": _line("监理・整理・不明确信息"),
+            }.get(level, _line("信用规制あり"))
         )
     elif severity is not None and severity < 0:
         warnings.append(_line("信用规制状态未知（数据未更新）"))
@@ -964,11 +965,9 @@ def _annotate(
     tags.extend(risk_flags[:2])
     if not reasons:
         reasons.append(
-            _line(
-                "可用价格证据已完成评分"
-                if row.get("intrinsic_score") is not None
-                else "价格证据不足，暂不生成强势结论"
-            )
+            _line("可用价格证据已完成评分")
+            if row.get("intrinsic_score") is not None
+            else _line("价格证据不足，暂不生成强势结论")
         )
     seen: dict[str, None] = {}
     for tag in tags:

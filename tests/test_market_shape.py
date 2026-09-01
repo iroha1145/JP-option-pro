@@ -17,6 +17,21 @@ def _regime(**overrides) -> dict:
     return base
 
 
+def test_classify_state_reads_nested_dims_from_producer():
+    """compute_market_regime_jp nests its dimensions under 'dims'; classify_state must
+    read them there (reading only 'dimensions' made every dim None -> never a state)."""
+
+    flat = _regime()
+    nested = {
+        "dims": {k: flat[k] for k in ("index_trend", "momentum", "breadth", "risk_on_spread")},
+        "score": flat["score"],
+    }
+    flat_state, flat_missing = ms.classify_state(flat)
+    nested_state, nested_missing = ms.classify_state(nested)
+    assert nested_state is not None and nested_state == flat_state
+    assert nested_missing == flat_missing
+
+
 def _series(states: list[dict], start_day: int = 1) -> list[tuple[str, dict]]:
     return [
         (f"2026-03-{start_day + index:02d}", regime)
