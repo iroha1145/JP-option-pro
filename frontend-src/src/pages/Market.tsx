@@ -114,7 +114,7 @@ export default function Market() {
     },
     {
       key: 'r1',
-      title: t('当日'),
+      title: t('近1日'),
       align: 'right',
       sortable: true,
       sortValue: (row) => row.median_return_1d ?? Number.NEGATIVE_INFINITY,

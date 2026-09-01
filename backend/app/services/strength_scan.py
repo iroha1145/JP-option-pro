@@ -47,6 +47,18 @@ TIER_FLOORS: tuple[tuple[str, float], ...] = (
 )
 
 
+def _median(values: Any) -> float | None:
+    """True median (averages the two central values for even lengths)."""
+
+    items = sorted(values)
+    if not items:
+        return None
+    mid = len(items) // 2
+    if len(items) % 2:
+        return items[mid]
+    return (items[mid - 1] + items[mid]) / 2.0
+
+
 def _finite(value: Any, lo: float | None = None, hi: float | None = None) -> float | None:
     try:
         number = float(value)
@@ -381,7 +393,7 @@ def compute_market_regime_jp(
     )
     risk_appetite = None
     if r20_values:
-        median = sorted(r20_values)[len(r20_values) // 2]
+        median = _median(r20_values)
         risk_appetite = round(max(0.0, min(100.0, 50.0 + median * 1000.0)), 1)
 
     # リスクオン価差: グロース市場と プライム市場の 20 日中央値リターン差。
@@ -390,9 +402,11 @@ def compute_market_regime_jp(
     growth = sorted(r20_by_market.get("0113") or [])
     prime = sorted(r20_by_market.get("0111") or [])
     if len(growth) >= 30 and len(prime) >= 30:
-        spread = growth[len(growth) // 2] - prime[len(prime) // 2]
+        spread = _median(growth) - _median(prime)
         risk_on_spread = round(max(0.0, min(100.0, 50.0 + spread * 600.0)), 1)
-        spread_label = "グロース対プライム 20日中央値差"
+        # Chinese msgid (front-end runs it through t()); keeps the app-wide
+        # "backend emits Chinese, frontend localizes" contract.
+        spread_label = "强弱价差 · グロース−プライム"
 
     dims = {
         "index_trend": index_trend,
@@ -413,7 +427,8 @@ def compute_market_regime_jp(
         warnings.append("200日線超の銘柄が3割未満（ブレッドス弱い）")
     label = None
     if score is not None:
-        label = "順風" if score >= 64 else ("中立" if score >= 45 else "逆風")
+        # Chinese msgids; localized on the front-end via t().
+        label = "顺风" if score >= 64 else ("中立" if score >= 45 else "逆风")
     return {
         "score": round(score, 1) if score is not None else None,
         "label": label,
@@ -527,9 +542,14 @@ def risk_penalty(row: Mapping[str, Any], profile: str) -> tuple[float, list[str]
         penalty += 7
         flags.append("回撤较深")
     vol_price = details.get("vol_price") or {}
-    vol_adjustment = _finite(vol_price.get("risk_penalty_adjustment")) or 0.0
-    if vol_adjustment:
-        penalty += vol_adjustment
+    # vol_price_match never emits `risk_penalty_adjustment`, so the previous read was
+    # dead code and vacuum/absorption structures never actually reached the risk tier.
+    # Fold the reported false-breakout risk in instead. This penalty feeds the risk
+    # tier / classification (not the ranking score — the breakout family already nets
+    # out false_breakout_risk), so there is no double count of the score.
+    false_risk = _finite(vol_price.get("false_breakout_risk"), 0.0) or 0.0
+    if false_risk > 0:
+        penalty += min(false_risk, 12.0)
     setup_type = str(vol_price.get("setup_type") or "")
     if setup_type == "vacuum":
         flags.append("真空型")
@@ -681,7 +701,6 @@ def build_strength_rows(
                         "setup_label": vol_price.get("setup_label"),
                         "breakout_quality_adjustment": vol_price.get("breakout_quality_adjustment"),
                         "false_breakout_risk": vol_price.get("false_breakout_risk"),
-                        "risk_penalty_adjustment": vol_price.get("risk_penalty_adjustment"),
                         "tags": (vol_price.get("tags") or [])[:3],
                     },
                 },

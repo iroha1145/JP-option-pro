@@ -156,6 +156,7 @@ export const DICT: Record<string, [string, string]> = {
   重算雷达: ['Rescan radar', 'レーダー再計算'],
   已提交: ['Submitted', '送信済み'],
   盘中数据未接入: ['Intraday not connected', '日中データ未接続'],
+  盘中数据: ['Intraday data', '日中データ'],
   '本页为日线数据，收盘后更新': [
     'Daily data; updates after the close',
     '本ページは日足データ。大引け後に更新されます',
@@ -165,6 +166,7 @@ export const DICT: Record<string, [string, string]> = {
   沪深不适用: ['—', '—'],
   年初来: ['YTD', '年初来'],
   近20日: ['20d', '20日'],
+  近1日: ['1d', '1日'],
   近63日: ['63d', '63日'],
   近5日: ['5d', '5日'],
   当日: ['1d', '当日'],
@@ -337,6 +339,10 @@ export const DICT: Record<string, [string, string]> = {
   量能配合: ['Volume', '出来高確認'],
   风险偏好: ['Risk appetite', 'リスク選好'],
   强弱价差: ['Risk-on spread', 'リスクオン価差'],
+  顺风: ['Tailwind', '順風'],
+  中立: ['Neutral', '中立'],
+  逆风: ['Headwind', '逆風'],
+  '强弱价差 · グロース−プライム': ['Risk-on spread · Growth−Prime', 'リスクオン価差 · グロース−プライム'],
   '6 维': ['6 dims', '6 次元'],
   '数据暂不可用 · 稍后刷新再试': ['Unavailable · retry later', 'データなし · 後で再試行'],
   '由 TOPIX 与全市场日线断面推导 · 收盘后更新': [
@@ -905,7 +911,7 @@ export const DICT: Record<string, [string, string]> = {
     '高めのボラティリティを許容し、ブレイクの比重を高く',
   ],
   '进取评分 + 强度分 ≥70': ['Aggressive scoring + strength ≥70', '進取スコア ＋ 強度スコア 70 以上'],
-  '稳健评分（波动惩罚加重）': ['Conservative scoring (heavier volatility penalty)', '稳健スコア（ボラティリティのペナルティを加重）'],
+  '稳健评分（波动惩罚加重）': ['Conservative scoring (heavier volatility penalty)', '保守スコア（ボラティリティのペナルティを加重）'],
 
   /* ---- 場中の「当日データ未発表」表示 ---- */
   '盘中 · 当日数据收盘后更新': [

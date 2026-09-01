@@ -90,9 +90,9 @@ export default function RowExpansion({ row, weights, canManageWatchlist }: RowEx
       <div>
         <p className="eyebrow">{t('结构信号 · STRUCTURE')}</p>
         <div className="mt-3 space-y-2 text-caption">
-          <StructLine label={t('价格结构')} value={priceAction.structure_label ?? '—'} />
+          <StructLine label={t('价格结构')} value={priceAction.structure_label ? t(priceAction.structure_label) : '—'} />
           {(priceAction.pattern_labels?.length ?? 0) > 0 && (
-            <StructLine label={t('K线形态')} value={priceAction.pattern_labels!.join('、')} />
+            <StructLine label={t('K线形态')} value={priceAction.pattern_labels!.map((l) => t(l)).join('、')} />
           )}
           {(priceAction.spring || priceAction.upthrust) && (
             <StructLine

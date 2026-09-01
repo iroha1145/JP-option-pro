@@ -17,7 +17,6 @@ import Segmented from '@/components/shared/Segmented';
 import SourceNote from '@/components/shared/SourceNote';
 import { SkeletonBlock, SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
 import { DataThrough } from '@/components/domain';
-import ChangeBadge from '@/components/shared/ChangeBadge';
 import Icon from '@/components/icons';
 import WeekScrubber from '@/components/earnings/WeekScrubber';
 import MonthCalendar from '@/components/earnings/MonthCalendar';
@@ -351,8 +350,16 @@ function RecentPanel({ items, loading }: { items: EarningsRecentItem[]; loading:
               </span>
               <span className="shrink-0 text-right">
                 <span className="block font-mono text-caption text-ink-800 tnum">{fmtYenCompact(row.operating_profit)}</span>
-                {row.forecast_direction === 'upward' && <ChangeBadge value={0.001} size="sm" />}
-                {row.forecast_direction === 'downward' && <ChangeBadge value={-0.001} size="sm" />}
+                {row.forecast_direction === 'upward' && (
+                  <span className="inline-flex text-up-700" title={t('上方修正')} aria-label={t('上方修正')}>
+                    <Icon name="arrow-up-right" size={12} />
+                  </span>
+                )}
+                {row.forecast_direction === 'downward' && (
+                  <span className="inline-flex text-down-700" title={t('下方修正')} aria-label={t('下方修正')}>
+                    <Icon name="arrow-down-right" size={12} />
+                  </span>
+                )}
               </span>
             </Link>
           ))}

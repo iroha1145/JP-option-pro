@@ -41,9 +41,11 @@ DEFAULT_TIMEOUT_SECONDS = 30.0
 DEFAULT_MAX_ATTEMPTS = 4
 DEFAULT_MAX_RESPONSE_BYTES = 64 * 1024 * 1024  # bulk daily files are large
 DEFAULT_MAX_PAGES = 2000
-# 429 without Retry-After: the docs describe a ~5 minute escalation block,
-# so the client backs off far enough to stay out of it.
-RATE_LIMIT_DEFAULT_COOLDOWN_SECONDS = 65.0
+# 429 without Retry-After: the docs describe a ~5 minute escalation block, so the
+# client backs off for the full window. block_all_for() blocks every bucket, and a
+# per-attempt sleep is capped at 120s (see _request), so the remaining wait is served
+# by the next acquire() — the whole cooldown is honored across retries.
+RATE_LIMIT_DEFAULT_COOLDOWN_SECONDS = 300.0
 
 
 class JQuantsClient:

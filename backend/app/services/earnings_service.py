@@ -341,6 +341,11 @@ def upcoming_view(
         if anchor is None or not anchor.get("disclosed_date"):
             continue
         candidate = _shift_days(anchor["disclosed_date"], 364)
+        if candidate < today:
+            # A stale anchor (last disclosure >~1y ago) would otherwise snap forward
+            # to trading_days[0] (today) via bisect_left and fabricate a near-term
+            # "estimated" earnings that the `estimated < today` guard can never catch.
+            continue
         estimated = _next_trading_day_on_or_after(candidate, trading_days)
         if estimated is None or estimated < today or estimated > window_end:
             continue

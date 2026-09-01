@@ -138,7 +138,9 @@ export default function DataStatus() {
           <DataTable columns={columns} rows={query.data.datasets} rowKey={(row) => row.key} rowHeight={56} />
 
           <section className="card-surface rounded-lg p-4">
-            <h2 className="mb-2 text-h3 text-ink-900">{t('盘中数据未接入')}</h2>
+            <h2 className="mb-2 text-h3 text-ink-900">
+              {query.data.intraday.enabled ? t('盘中数据') : t('盘中数据未接入')}
+            </h2>
             <p className="text-body-s text-ink-500">{query.data.intraday.note_ja ?? ''}</p>
           </section>
 

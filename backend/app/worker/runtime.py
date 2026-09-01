@@ -56,6 +56,10 @@ class WorkerSupervisor:
         self._fencing_token = 0
         self._stop_event = asyncio.Event()
         self._triggers: dict[str, asyncio.Event] = {}
+        # FIFO per task: a task can own several action types (intraday/tick fetch,
+        # or post_close_batch + radar_refresh). A single-slot dict dropped the first
+        # payload when a second action queued before the task ran, stranding an
+        # action that claim_next_action had already marked running.
         self._pending_payloads: dict[str, deque[dict[str, Any]]] = {}
         self._action_owner: dict[str, str] = {}
         self._lease_lost = threading.Event()
@@ -147,9 +151,7 @@ class WorkerSupervisor:
             payload = dict(action.get("payload") or {})
             payload["__action_id"] = action["action_id"]
             payload["__action_type"] = action["action_type"]
-            # 同一タスクに複数 action_type が載る（intraday_fetch / tick_fetch 等）。
-            # 上書きすると先に claim した行が running のまま固まる。
-            self._pending_payloads[task_name].append(payload)
+            self._pending_payloads.setdefault(task_name, deque()).append(payload)
             self._triggers[task_name].set()
 
     # -- task loops ------------------------------------------------------------
@@ -161,12 +163,16 @@ class WorkerSupervisor:
             triggered = await self._wait(spec.name, delay)
             if self._stop_event.is_set():
                 return
-            payload = None
-            if triggered:
-                queue = self._pending_payloads[spec.name]
-                payload = queue.popleft() if queue else None
+            queue = self._pending_payloads.setdefault(spec.name, deque())
+            payload = queue.popleft() if (triggered and queue) else None
+            if queue:
+                # More queued actions remain; keep the trigger armed so the next
+                # loop iteration drains them (success and failure exits alike).
+                self._triggers[spec.name].set()
             action_id = payload.pop("__action_id", None) if payload else None
-            payload_type = payload.pop("__action_type", None) if payload else None
+            # Keep __action_type in the payload so dispatchers (e.g. post_close_dispatch
+            # branching on radar_refresh) can read it; only mirror it for bookkeeping.
+            payload_type = payload.get("__action_type") if payload else None
             await asyncio.to_thread(
                 self._state.record_task,
                 self._owner_id, self._fencing_token, spec.name, status="running",

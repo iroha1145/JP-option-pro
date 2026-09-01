@@ -462,20 +462,31 @@ class CoreRepository(SQLiteRepository):
         return [dict(row) for row in rows]
 
     def latest_summary_map(self) -> dict[str, dict[str, Any]]:
-        """Latest disclosure per security (by disclosed_date, disclosure_number)."""
+        """Latest disclosure per security (by disclosed_date, disclosure_number).
+
+        disclosure_number is ranked numerically: a string MAX on
+        ``disclosed_date || '#' || disclosure_number`` picks "#99" over "#100"
+        (lexicographic), which would select an older disclosure as "latest".
+        """
 
         with self.read() as connection:
             rows = connection.execute(
                 """
-                SELECT fs.* FROM financial_summaries fs
-                JOIN (
-                    SELECT canonical_code, MAX(disclosed_date || '#' || disclosure_number) AS latest_key
-                    FROM financial_summaries GROUP BY canonical_code
-                ) latest ON latest.canonical_code = fs.canonical_code
-                    AND (fs.disclosed_date || '#' || fs.disclosure_number) = latest.latest_key
+                SELECT * FROM (
+                    SELECT fs.*, ROW_NUMBER() OVER (
+                        PARTITION BY canonical_code
+                        ORDER BY disclosed_date DESC, CAST(disclosure_number AS INTEGER) DESC
+                    ) AS _rn
+                    FROM financial_summaries fs
+                ) WHERE _rn = 1
                 """
             ).fetchall()
-        return {row["canonical_code"]: dict(row) for row in rows}
+        result: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            record = dict(row)
+            record.pop("_rn", None)
+            result[record["canonical_code"]] = record
+        return result
 
     # ------------------------------------------------------------------
     # earnings announcements
@@ -829,14 +840,19 @@ class CoreRepository(SQLiteRepository):
             values["metrics_json"] = json.dumps(row.get("metrics") or {}, ensure_ascii=False, sort_keys=True)
             values["updated_at"] = now
             prepared.append(tuple(values[column] for column in self._SCREENER_COLUMNS))
+        if not prepared:
+            # Don't wipe the last good snapshot on an empty rebuild (same
+            # "empty never overwrites" contract as the earnings/master syncs).
+            return 0
         with self.write() as connection:
             connection.execute("DELETE FROM screener_rows")
-            if prepared:
-                connection.executemany(
-                    f"INSERT INTO screener_rows ({', '.join(self._SCREENER_COLUMNS)}) "
-                    f"VALUES ({', '.join('?' for _ in self._SCREENER_COLUMNS)})",
-                    prepared,
-                )
+            connection.executemany(
+                # OR IGNORE: a spurious duplicate canonical_code must not abort the
+                # whole rebuild (rows are DELETE-d first, so no cross-run conflict).
+                f"INSERT OR IGNORE INTO screener_rows ({', '.join(self._SCREENER_COLUMNS)}) "
+                f"VALUES ({', '.join('?' for _ in self._SCREENER_COLUMNS)})",
+                prepared,
+            )
         return len(prepared)
 
     def screener_query(
@@ -903,14 +919,16 @@ class CoreRepository(SQLiteRepository):
             )
             values["built_at"] = now
             prepared.append(tuple(values[column] for column in self._STRENGTH_COLUMNS))
+        if not prepared:
+            # Don't wipe the last good snapshot (rows + meta) on an empty rebuild.
+            return 0
         with self.write() as connection:
             connection.execute("DELETE FROM strength_rows")
-            if prepared:
-                connection.executemany(
-                    f"INSERT INTO strength_rows ({', '.join(self._STRENGTH_COLUMNS)}) "
-                    f"VALUES ({', '.join('?' for _ in self._STRENGTH_COLUMNS)})",
-                    prepared,
-                )
+            connection.executemany(
+                f"INSERT OR IGNORE INTO strength_rows ({', '.join(self._STRENGTH_COLUMNS)}) "
+                f"VALUES ({', '.join('?' for _ in self._STRENGTH_COLUMNS)})",
+                prepared,
+            )
             connection.execute(
                 "INSERT INTO strength_meta (id, trade_date, regime_json, universe_count, built_at) "
                 "VALUES (1, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET trade_date=excluded.trade_date, "

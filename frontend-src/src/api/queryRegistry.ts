@@ -209,11 +209,10 @@ export async function restorePersistedQuery<T>(path: string): Promise<T | null> 
   entry.restored = true;
   const record = await readPersisted(path);
   if (!record || record.principal !== principalKey) return null;
-  if (
-    record.appCommit &&
-    knownAppCommit &&
-    record.appCommit !== knownAppCommit
-  ) {
+  if (record.appCommit && (!knownAppCommit || record.appCommit !== knownAppCommit)) {
+    // Fail closed: a record stamped with a build we can't confirm as current
+    // (meta tag missing → knownAppCommit null) is treated as unverifiable and
+    // skipped, rather than restoring a possibly cross-deploy snapshot.
     return null;
   }
   if (!persistedRecordWithinAge(config, record, Date.now())) {

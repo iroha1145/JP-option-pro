@@ -99,7 +99,9 @@ export default function WeekScrubber({
               const isSelected = selectedDay === date;
               const shown = dayItems.slice(0, MAX_CHIPS);
               const extra = dayItems.length - shown.length;
-              const confirmedCount = dayItems.filter((it) => it.status !== 'estimated').length;
+              // Only truly-confirmed dates count toward the 確定 badge; released
+              // (already-disclosed) items are not 確定 and were being mislabeled.
+              const confirmedCount = dayItems.filter((it) => it.status === 'confirmed').length;
               return (
                 <motion.div
                   key={date}

@@ -158,7 +158,7 @@ def _contains_simplified_only(text: str) -> bool:
     return any(ch in _SIMPLIFIED_ONLY for ch in text)
 
 
-def chinese_text_plausible(text: str) -> bool:
+def chinese_text_plausible(text: str, *, min_cjk: int = 8) -> bool:
     if not text or not text.strip():
         return False
     if _KANA_RE.search(text):
@@ -168,7 +168,9 @@ def chinese_text_plausible(text: str) -> bool:
     total_letters = sum(
         1 for ch in text if not ch.isspace() and not ch.isdigit() and ch not in punctuation
     )
-    return cjk >= 8 and cjk >= total_letters * 0.5
+    # min_cjk defaults to a paragraph-length floor for impact bodies; headlines
+    # ("一句话结论") are legitimately short (e.g. 股价承压), so callers pass a lower floor.
+    return cjk >= min_cjk and cjk >= total_letters * 0.5
 
 
 class ResultValidationError(ValueError):
@@ -203,9 +205,17 @@ def validate_analysis_result(
     impact = str(result.get("impact_zh") or "")
     insufficient = bool(result.get("insufficient_context"))
     affected_raw = result.get("affected") or []
-    if not insufficient:
-        if not chinese_text_plausible(headline) or not chinese_text_plausible(impact):
-            raise ResultValidationError("analysis_not_simplified_chinese")
+    # The Simplified-Chinese contract holds regardless of insufficient_context: any
+    # non-empty headline/impact must pass the language check so kana / 日本語 / garbage
+    # can never leak into the displayed analysis (the insufficient path stored the raw
+    # strings unchecked before). When the model is *not* signalling insufficient
+    # context, both fields must additionally be present.
+    if headline.strip() and not chinese_text_plausible(headline, min_cjk=3):
+        raise ResultValidationError("analysis_not_simplified_chinese")
+    if impact.strip() and not chinese_text_plausible(impact):
+        raise ResultValidationError("analysis_not_simplified_chinese")
+    if not insufficient and (not headline.strip() or not impact.strip()):
+        raise ResultValidationError("analysis_not_simplified_chinese")
     affected: list[dict[str, Any]] = []
     for entry in affected_raw:
         code = str(entry.get("code") or "")
