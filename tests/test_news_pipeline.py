@@ -87,6 +87,50 @@ def test_stale_submitted_pending_poll_times_out(tmp_path, monkeypatch):
     outcome = process_ai_jobs_once(store=store, jobs=jobs, runtime=_FakePoll({"status": "pending"}))
     assert outcome["settled"] == 1  # timed out
     assert store.get_item("n1")["translated_title_ja"] is None
+    assert jobs.jobs_for_news(["n1"])["n1"]["news_translation_ja"] == "failed"
+
+
+class _BoomPoll:
+    def poll(self, _response_id: str) -> dict:
+        raise RuntimeError("openai_unreachable")
+
+
+def test_stale_submitted_poll_error_releases_slot(tmp_path, monkeypatch):
+    """A stale submitted job must not pin the concurrency-1 slot when poll throws."""
+
+    store = NewsStore(tmp_path / "news.db")
+    store.initialize()
+    store.insert_news_items([{
+        "news_id": "n1", "source": "test", "original_title": "Toyota raises guidance",
+        "source_language": "en", "content_fingerprint": "n1",
+    }])
+    jobs = AIJobStore(tmp_path / "ai.db")
+    jobs.initialize()
+    _submit_translation_job(jobs, "n1")
+    monkeypatch.setattr(news_service, "SUBMITTED_STALE_SECONDS", -1)
+    outcome = process_ai_jobs_once(store=store, jobs=jobs, runtime=_BoomPoll())
+    assert outcome["settled"] == 1 and outcome["pending"] == 0
+    assert jobs.jobs_for_news(["n1"])["n1"]["news_translation_ja"] == "failed"
+    assert jobs.slot_blocked() is False
+
+
+def test_live_submitted_poll_error_stays_pending(tmp_path):
+    """A still-fresh submitted job stays submitted when poll throws, so a later
+    cycle can recover a completed background response."""
+
+    store = NewsStore(tmp_path / "news.db")
+    store.initialize()
+    store.insert_news_items([{
+        "news_id": "n1", "source": "test", "original_title": "Toyota raises guidance",
+        "source_language": "en", "content_fingerprint": "n1",
+    }])
+    jobs = AIJobStore(tmp_path / "ai.db")
+    jobs.initialize()
+    _submit_translation_job(jobs, "n1")
+    outcome = process_ai_jobs_once(store=store, jobs=jobs, runtime=_BoomPoll())
+    assert outcome["settled"] == 0 and outcome["pending"] == 1
+    assert jobs.jobs_for_news(["n1"])["n1"]["news_translation_ja"] == "submitted"
+    assert jobs.slot_blocked() is True
 
 RSS_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel><title>テスト経済</title>

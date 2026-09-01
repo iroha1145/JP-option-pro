@@ -105,6 +105,39 @@ def test_auto_fetch_cooldown_by_code_after_prior_success(tmp_path):
     assert a3["accepted"] is False and a3["reason"] == "recent_failure"
 
 
+def test_manual_fetch_not_blocked_by_recent_auto_failure(tmp_path):
+    """Owner manual refresh (random hex key) must not inherit the auto: cooldown.
+    Chart GET uses auto: keys; the StockDetail fetch button does not."""
+
+    repo = WorkerStateRepository(tmp_path / "worker.db")
+    repo.initialize()
+    token = repo.acquire_lease("owner")
+    auto = repo.request_action("intraday_fetch", idempotency_key="auto:minute:72030:latest", payload={"code": "72030"})
+    repo.complete_action("owner", token, auto["action_id"], status="failed", error_code="x")
+
+    still_auto = repo.request_action(
+        "intraday_fetch", idempotency_key="auto:minute:72030:latest", payload={"code": "72030"}
+    )
+    assert still_auto["accepted"] is False and still_auto["reason"] == "recent_failure"
+
+    manual = repo.request_action("intraday_fetch", idempotency_key="deadbeef", payload={"code": "72030"})
+    assert manual["accepted"] is True and manual["action_id"] != auto["action_id"]
+
+
+def test_auto_fetch_cools_down_after_recent_manual_failure(tmp_path):
+    """A recent failure of the same code — even from a manual key — must still
+    cool down subsequent auto chart-view fetches."""
+
+    repo = WorkerStateRepository(tmp_path / "worker.db")
+    repo.initialize()
+    token = repo.acquire_lease("owner")
+    manual = repo.request_action("intraday_fetch", idempotency_key="deadbeef", payload={"code": "72030"})
+    repo.complete_action("owner", token, manual["action_id"], status="failed", error_code="x")
+
+    auto = repo.request_action("intraday_fetch", idempotency_key="auto:minute:72030:latest", payload={"code": "72030"})
+    assert auto["accepted"] is False and auto["reason"] == "recent_failure"
+
+
 def test_codeless_fetch_not_blocked_by_unrelated_fetch(tmp_path):
     """A fetch action without a code must not be rejected as type_busy by an
     unrelated in-flight fetch of a different code."""

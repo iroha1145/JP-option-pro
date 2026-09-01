@@ -296,18 +296,30 @@ def process_ai_jobs_once(*, store: NewsStore, jobs: AIJobStore, runtime: ai.Open
         # Always poll first so a background response that actually completed is
         # captured even past the staleness window. Only time out when the response
         # is STILL pending beyond the deadline — never discard finished work.
-        poll = runtime.poll(str(submitted.get("openai_response_id")))
-        if poll["status"] == "pending":
+        # If poll itself throws (network / 404), still release a stale slot so an
+        # outage cannot pin concurrency-1 forever; a live job stays submitted.
+        try:
+            poll = runtime.poll(str(submitted.get("openai_response_id")))
+        except Exception:  # noqa: BLE001 — 回収失敗はジョブ表が所有する
             if _submission_stale(submitted):
                 jobs.settle(
                     submitted["job_id"], status="failed", result=None,
-                    tokens_used=None, error_code="model_poll_timeout",
+                    tokens_used=None, error_code="model_poll_error",
                 )
                 outcome["settled"] = 1
             else:
                 outcome["pending"] = 1
         else:
-            if poll["status"] == "failed":
+            if poll["status"] == "pending":
+                if _submission_stale(submitted):
+                    jobs.settle(
+                        submitted["job_id"], status="failed", result=None,
+                        tokens_used=None, error_code="model_poll_timeout",
+                    )
+                    outcome["settled"] = 1
+                else:
+                    outcome["pending"] = 1
+            elif poll["status"] == "failed":
                 jobs.settle(
                     submitted["job_id"], status="failed", result=None,
                     tokens_used=poll.get("tokens_used"), error_code=poll.get("error_code"),

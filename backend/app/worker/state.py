@@ -292,11 +292,15 @@ class WorkerStateRepository(SQLiteRepository):
                                 "accepted": True,
                             }
                     # Cooldown keyed by CODE, not idempotency_key: once a code has
-                    # succeeded, subsequent re-fetches insert under a mangled key
+                    # succeeded, subsequent auto re-fetches insert under a mangled key
                     # (idempotency_key:<now>), so the exact-key same_key lookup below
                     # can't see the recent failure. Check the most-recent same-code row.
+                    # Gate on the INCOMING key being auto: — owner manual refresh
+                    # (random hex key) must remain an override. Gating on the stored
+                    # row's key would block that button for 15 minutes after an
+                    # auto failure.
                     latest_code = connection.execute(
-                        "SELECT action_id, status, completed_at, idempotency_key "
+                        "SELECT action_id, status, completed_at "
                         "FROM worker_action_requests "
                         "WHERE action_type = ? AND json_extract(payload_json, '$.code') = ? "
                         "ORDER BY action_id DESC LIMIT 1",
@@ -305,7 +309,7 @@ class WorkerStateRepository(SQLiteRepository):
                     if (
                         latest_code is not None
                         and latest_code[1] == "failed"
-                        and str(latest_code[3] or "").startswith("auto:")
+                        and idempotency_key.startswith("auto:")
                         and _recent_failure(latest_code[2])
                     ):
                         return {
