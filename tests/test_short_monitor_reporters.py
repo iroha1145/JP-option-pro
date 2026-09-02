@@ -43,13 +43,16 @@ def test_aggregates_and_unknowns():
     assert rep.classify("") == rep.CLASS_AGGREGATE
 
 
-def test_informed_excludes_domestic_and_aggregate_but_keeps_unknown():
+def test_informed_excludes_only_aggregates():
+    """クラス単位の校正（2026-09-02）: domestic_broker −2.15% は global_pb −2.27% と
+    同水準。外してよいと実測が言うのは aggregate（個人 −0.39%）だけ。"""
+
     assert rep.is_informed(rep.CLASS_GLOBAL_PB)
+    assert rep.is_informed(rep.CLASS_DOMESTIC_BROKER)
     assert rep.is_informed(rep.CLASS_HEDGE_FUND)
     assert rep.is_informed(rep.CLASS_MARKET_MAKER)
     assert rep.is_informed(rep.CLASS_UNKNOWN)
     assert rep.is_informed(None)
-    assert not rep.is_informed(rep.CLASS_DOMESTIC_BROKER)
     assert not rep.is_informed(rep.CLASS_AGGREGATE)
 
 
@@ -69,3 +72,4 @@ def test_classify_events_is_keyed_by_legal_id_and_counts_classes():
     assert rep.class_counts(classes, classes.keys()) == {
         rep.CLASS_GLOBAL_PB: 1, rep.CLASS_DOMESTIC_BROKER: 1, rep.CLASS_AGGREGATE: 1,
     }
+    assert rep.REPORTER_VERSION == "rep-v2"

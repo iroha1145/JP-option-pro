@@ -16,9 +16,10 @@ P0 全部、P1 中不改变排序语义的部分落成代码；**没有**调任�
 
 | 研究发现 | 落地 | 文件 |
 | --- | --- | --- |
-| 报告主体之间 20 日超额差 4 个百分点；国内证券名义 ≈ 0、海外 PB ≈ −3%；显式「ヘッジ」标注不区分 | `reporter_class`（global_pb / domestic_broker / hedge_fund / market_maker / aggregate / unknown），按实体名判定，不看 Notes；`INFORMED_CLASSES` 排除 domestic_broker 与 aggregate | 新 `services/short_monitor/reporters.py`（rep-v1） |
+| 报告主体之间 20 日超额差 4 个百分点（实体级 p10 −3.7% / p90 +0.3%）；显式「ヘッジ」标注不区分 | `reporter_class`（global_pb / domestic_broker / hedge_fund / market_maker / aggregate / unknown），按实体名判定，不看 Notes | 新 `services/short_monitor/reporters.py`（rep-v2） |
+| **类别级校正**（部署后跑 `informedness`）：global_pb −2.27% / market_maker −2.19% / domestic_broker −2.15% / unknown −1.85% / hedge_fund −1.03% / **aggregate −0.39%**。「国内证券 ≈ 0」只对 3 家小样本实体成立，整类被 MS MUFG 証券（27.6 万条）主导 | `INFORMED_CLASSES` **只排除 aggregate**（rep-v1 曾排除 domestic_broker，校正后撤回）；类别保留为描述与校正用元数据，信息量加权走实体级 | `reporters.py` |
 | 全鎖口径把信号和噪声等权 | 快照同时产出全鎖口径与 informed 口径的压力、可见机构数、窗内差值、事件计数；写在 `components_json.informed`，**不加 DB 列** | `snapshot.py` |
-| 无条件回补事件后 20 日超额 −2.56%，比增仓还差 | `covering_start` 与 `squeeze_confirmed` 额外要求 informed 口径的减少；国内证券名义单独减仓不再触发 | `states.py`（sbs-v3） |
+| 无条件回补事件后 20 日超额 −2.56%，比增仓还差 | `covering_start` 与 `squeeze_confirmed` 额外要求 informed 口径的减少；校正后 informed 只排除个人名义，所以这条闸门目前几乎只挡「個人」单独减仓 —— 机制先落地，实体级加权接上后才有实质筛选力 | `states.py`（sbs-v3） |
 | 主动回补与被动回补方向相反（Blocher） | 标签 `voluntary_covering`（回补前 10 日相对收益 ≤ 0）/ `forced_covering`（> 0）；验证器对两者分别汇报 | `states.py`, `snapshot.py`（新增 `rel_topix_10d`） |
 | 跌破门槛的 79% 停在 0.45–0.50%（bunching） | `parked_below_count`（60 个交易日内最后报告落在 [0.40%, 0.50%) 的机构数）+ 标签 `parked_below`；`covering()` 的广度项去掉 `threshold_exits` | `factors.py`（sbf-v2） |
 | 可见机构数越多越差是唯一稳定单调关系 | 雷达 `crowding_shift`：只减不加（≥2 家 −2、≥4 家 −4，乘置信度，优先用 informed 口径机构数），`CROWDING_LINK_ENABLED = False`；仮の値 `hypothetical_crowding_shift` 在 API 里可见 | `radar_link.py` |
@@ -31,7 +32,7 @@ P0 全部、P1 中不改变排序语义的部分落成代码；**没有**调任�
 | 生产 worker 没传 `news_counts`，`news_catalyst` 永不触发 | `_news_counts_5d` 读 jp-news.db 近 5 个交易日记事按证券计数；无新闻源时 `has_news_feed=False` | `worker/tasks.py` |
 | 机构命中率需要滚动样本外计算 | 研究 CLI `python -m app.research.informedness`：按事件类型 / 类别 / 增幅 / 仓位 / 实体输出 20 日超额，并列出「名簿外但样本多」的实体供校正 | 新 `research/informedness.py` |
 
-版本串：`inst-v3+evt-v3+rep-v1+sbf-v2+sbs-v3+sbscore-v1`；API `jp-short-monitor-v3`（行新增 `informed` / `parked_below_count` / `reporter_classes` / `combined_visible_days_to_cover`，status 新增 `radar_link.crowding_enabled` / `crowding_validation`）。
+版本串：`inst-v3+evt-v3+rep-v2+sbf-v2+sbs-v3+sbscore-v1`；API `jp-short-monitor-v3`（行新增 `informed` / `parked_below_count` / `reporter_classes` / `combined_visible_days_to_cover`，status 新增 `radar_link.crowding_enabled` / `crowding_validation`）。
 
 ## 2. 明确没做的
 
