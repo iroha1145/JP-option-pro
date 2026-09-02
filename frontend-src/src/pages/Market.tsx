@@ -10,7 +10,7 @@ import ChangeBadge from '@/components/shared/ChangeBadge';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import Segmented from '@/components/shared/Segmented';
 import { SkeletonCard } from '@/components/shared/Skeleton';
-import InsightLineChart, { insightStroke, insightTone, type InsightScrub } from '@/components/charts/InsightLineChart';
+import InsightLineChart, { type InsightScrub } from '@/components/charts/InsightLineChart';
 import { CodeCell, DataThrough } from '@/components/domain';
 import HeatMatrix, { HeatMatrixSkeleton, metricValue, type HeatMetric } from '@/components/sectors/HeatMatrix';
 import SectorMembersPanel from '@/components/sectors/SectorMembersPanel';
@@ -194,10 +194,6 @@ export default function Market() {
               changePct={
                 market.data?.indices.find((index) => index.index_code === indexCode)?.change_pct ?? null
               }
-              compareName={
-                market.data?.indices.find((index) => index.index_code === (indexCode === '0000' ? '0500' : '0000'))
-                  ?.name
-              }
             />
 
             <section className="space-y-3">
@@ -337,7 +333,6 @@ function IndexTrendPanel({
   bars,
   loading,
   changePct,
-  compareName,
 }: {
   name: string;
   seriesCode: string;
@@ -347,10 +342,9 @@ function IndexTrendPanel({
   bars: { trade_date: string; close: number | null }[];
   loading: boolean;
   changePct: number | null;
-  compareName?: string;
 }) {
-  const compareCode = indexCode === '0000' ? '0500' : '0000';
-  const compare = usePolling(() => marketApi.indexSeries(compareCode, 250), null, [compareCode]);
+  /* 只画选中的指数这一条线。之前叠 TOPIX/プライム 对照线：两条线颜色接近、
+     图例只是两个色点，用户看不出第二条是什么（首页同样已撤） */
   const [scrub, setScrub] = useState<InsightScrub | null>(null);
   const points = useMemo(
     () =>
@@ -358,13 +352,6 @@ function IndexTrendPanel({
         .filter((bar): bar is { trade_date: string; close: number } => bar.close != null && Number.isFinite(bar.close))
         .map((bar) => ({ value: bar.close, label: bar.trade_date })),
     [bars],
-  );
-  const comparePoints = useMemo(
-    () =>
-      (compare.data?.bars ?? [])
-        .filter((bar): bar is { trade_date: string; close: number } => bar.close != null && Number.isFinite(bar.close))
-        .map((bar) => ({ value: bar.close, label: bar.trade_date })),
-    [compare.data],
   );
   const last = points[points.length - 1];
   const shown = scrub ?? (last ? { index: points.length - 1, value: last.value, label: last.label, x: 0, y: 0 } : null);
@@ -384,18 +371,7 @@ function IndexTrendPanel({
       </header>
       <div className="mt-3 border-t border-line px-4 pt-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
-            <span className="inline-flex size-6 items-center justify-center rounded-md bg-paper-2" title={name} aria-label={name}>
-              <i className="block size-1.5 rounded-full" style={{ background: insightStroke(insightTone(changePct ?? 0)) }} />
-            </span>
-            <span
-              className="inline-flex size-6 items-center justify-center rounded-md bg-paper-2"
-              title={compareName ?? t('对照')}
-              aria-label={compareName ?? t('对照')}
-            >
-              <i className="block size-1.5 rounded-full" style={{ background: 'var(--brand-600)' }} />
-            </span>
-          </div>
+          <h3 className="min-w-0 truncate text-body-s text-ink-700">{name}</h3>
           <Segmented options={options} value={indexCode} onChange={onIndexChange} />
         </div>
         {loading ? (
@@ -406,7 +382,6 @@ function IndexTrendPanel({
           <InsightLineChart
             key={seriesCode}
             data={points}
-            compare={comparePoints}
             height={228}
             change={changePct ?? 0}
             interactive

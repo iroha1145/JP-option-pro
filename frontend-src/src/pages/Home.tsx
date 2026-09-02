@@ -10,7 +10,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
 import ChangeBadge from '@/components/shared/ChangeBadge';
 import { SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
-import InsightLineChart, { insightStroke, insightTone, type InsightScrub } from '@/components/charts/InsightLineChart';
+import InsightLineChart, { type InsightScrub } from '@/components/charts/InsightLineChart';
 import { CodeCell, DataThrough, SignalChip, StateChip } from '@/components/domain';
 import { t } from '@/i18n/core';
 import { fmtDate, fmtPct, fmtPrice, fmtYenCompact } from '@/lib/format';
@@ -45,13 +45,7 @@ export default function Home() {
       ) : (
         <div className="stagger-in grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {market.data?.indices.map((index) => (
-            <IndexInsightCard
-              key={index.index_code}
-              index={index}
-              compare={market.data?.indices.find(
-                (row) => row.index_code === (index.index_code === '0000' ? '0500' : '0000'),
-              )}
-            />
+            <IndexInsightCard key={index.index_code} index={index} />
           ))}
         </div>
       )}
@@ -218,7 +212,9 @@ export default function Home() {
   );
 }
 
-function IndexInsightCard({ index, compare }: { index: IndexSummary; compare?: IndexSummary }) {
+/* 首页指数卡只画自己这一条线：对照线（TOPIX ↔ プライム）留给市场页趋势卡，
+   那里有图例与切换；六张卡各叠一条无标注的蓝线只会让人问"第二条是什么" */
+function IndexInsightCard({ index }: { index: IndexSummary }) {
   const [scrub, setScrub] = useState<InsightScrub | null>(null);
   const value = scrub?.value ?? index.close;
   const windowN = Math.max(index.sparkline.length, 1);
@@ -240,19 +236,8 @@ function IndexInsightCard({ index, compare }: { index: IndexSummary; compare?: I
         <span className="shrink-0 rounded-full bg-paper-2 px-2 py-0.5 text-micro text-ink-500">{t('快照')}</span>
       </div>
       <div className="mt-2 border-t border-line px-2 pt-2">
-        {compare && (
-          <div className="mb-1 flex items-center gap-1.5 px-1">
-            <span className="inline-flex size-5 items-center justify-center rounded-md bg-paper-2" aria-hidden>
-              <i className="block size-1.5 rounded-full" style={{ background: insightStroke(insightTone(index.change_pct ?? 0)) }} />
-            </span>
-            <span className="inline-flex size-5 items-center justify-center rounded-md bg-paper-2" aria-hidden>
-              <i className="block size-1.5 rounded-full" style={{ background: 'var(--brand-600)' }} />
-            </span>
-          </div>
-        )}
         <InsightLineChart
           data={index.sparkline}
-          compare={compare?.sparkline}
           height={72}
           change={index.change_pct ?? 0}
           interactive

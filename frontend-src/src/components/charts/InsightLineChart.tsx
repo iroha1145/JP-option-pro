@@ -319,9 +319,10 @@ const InsightLineChart = memo(function InsightLineChart({
         <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true" className="block">
           <defs>
             <linearGradient id={`fade-${rawId}`} x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#fff" stopOpacity="0" />
-              <stop offset="16%" stopColor="#fff" stopOpacity="0.28" />
-              <stop offset="48%" stopColor="#fff" stopOpacity="0.85" />
+              {/* 左淡右实但起点仍可读（0.42 起），否则窗口前 15% 的数据等于没画 */}
+              <stop offset="0%" stopColor="#fff" stopOpacity="0.42" />
+              <stop offset="24%" stopColor="#fff" stopOpacity="0.62" />
+              <stop offset="55%" stopColor="#fff" stopOpacity="0.9" />
               <stop offset="100%" stopColor="#fff" stopOpacity="1" />
             </linearGradient>
             <mask id={`mask-${rawId}`} maskUnits="userSpaceOnUse">
