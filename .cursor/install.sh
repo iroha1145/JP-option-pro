@@ -7,10 +7,16 @@
 set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 
-# python3.12 ships in the base image but its venv/ensurepip module does not.
-if ! python3.12 -m venv --help >/dev/null 2>&1; then
+# python3.12 ships in the base image, but Debian splits ensurepip into python3.12-venv.
+# `python3.12 -m venv --help` still exits 0 without that package, so probe the module.
+if ! python3.12 -c "import ensurepip" >/dev/null 2>&1; then
   sudo apt-get update -qq
   sudo apt-get install -y -qq python3.12-venv
+fi
+
+# A previous failed attempt can leave a half-created .venv without pip.
+if [ -d .venv ] && ! .venv/bin/python -c "import pip" >/dev/null 2>&1; then
+  rm -rf .venv
 fi
 
 # Backend virtualenv (idempotent: venv creation is safe to repeat).
