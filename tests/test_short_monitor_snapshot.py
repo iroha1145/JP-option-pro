@@ -278,8 +278,33 @@ def test_signals_record_the_information_cutoff():
 
 # -- 第十四轮: informed 口径 / 潜伏空頭 ------------------------------------------
 
-def test_domestic_broker_only_covering_does_not_start_covering():
-    """国内証券名義だけが減らしても informed 口径は空: 回補開始にならない。"""
+def test_aggregate_only_covering_does_not_start_covering():
+    """「個人」名義だけが減らしても informed 口径は空: 回補開始にならない。"""
+
+    individuals = _stock(
+        "1000",
+        bars=_bars("1000", drift=0.004),
+        reports=[
+            _report("1000", "個人", OLD_DAY, 0.030, shares=3_000_000),
+            _report("1000", "個人", NEW_DAY, 0.008, prev=0.030, shares=800_000),
+        ],
+    )
+    peers = [_stock(f"90{i:02d}", bars=_bars(f"90{i:02d}")) for i in range(5)]
+    rows = _by_code(snap.build_snapshots([individuals, *peers], _market()))
+    row = rows["1000"]
+    components = json.loads(row["components_json"])
+    assert components["informed"]["institution_count"] == 0
+    assert components["informed"]["pressure_20d"]["pressure_adv20"] is None
+    assert components["reporter_classes"] == {"aggregate": 1}
+    assert row["primary_state"] != states.STATE_COVERING_START
+    flags = json.loads(row["flags_json"])
+    assert states.FLAG_NO_INFORMED_REPORTER in flags
+    # 全鎖口径の圧力そのものは従来どおり出る（どちらか一方を正とはしない）
+    assert row["pressure_adv20_20d"] is not None and row["pressure_adv20_20d"] < 0
+
+
+def test_domestic_broker_covering_counts_as_informed_after_calibration():
+    """クラス単位の校正で国内証券は海外 PB と同水準（−2.15% vs −2.27%）: informed に含める。"""
 
     domestic = _stock(
         "1000",
@@ -293,14 +318,9 @@ def test_domestic_broker_only_covering_does_not_start_covering():
     rows = _by_code(snap.build_snapshots([domestic, *peers], _market()))
     row = rows["1000"]
     components = json.loads(row["components_json"])
-    assert components["informed"]["institution_count"] == 0
-    assert components["informed"]["pressure_20d"]["pressure_adv20"] is None
     assert components["reporter_classes"] == {"domestic_broker": 1}
-    assert row["primary_state"] != states.STATE_COVERING_START
-    flags = json.loads(row["flags_json"])
-    assert states.FLAG_NO_INFORMED_REPORTER in flags
-    # 全鎖口径の圧力そのものは従来どおり出る（どちらか一方を正とはしない）
-    assert row["pressure_adv20_20d"] is not None and row["pressure_adv20_20d"] < 0
+    assert components["informed"]["institution_count"] == 1
+    assert row["primary_state"] == states.STATE_COVERING_START
 
 
 def test_informed_pressure_matches_all_chain_pressure_when_all_reporters_are_informed():

@@ -1252,7 +1252,7 @@ export const DICT: Record<string, [string, string]> = {
   停在门槛下方: ['Parked below threshold', '公開線の直下に滞留'],
   主动回补: ['Voluntary covering', '主動的な買い戻し'],
   被动回补: ['Forced covering', '受動的な買い戻し'],
-  仅国内证券或个人报告: ['Domestic brokers / individuals only', '国内証券・個人名義のみ'],
+  仅个人名义报告: ['Individuals only', '個人名義のみ'],
   '仅1家可见': ['Only 1 visible', '可視は1社のみ'],
   '读取失败': ['Failed to load', '読み込みに失敗'],
   '不限': ['No limit', '制限なし'],

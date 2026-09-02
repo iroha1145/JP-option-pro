@@ -255,22 +255,32 @@ rotation = balance × volume,  balance = 2·min(in, out) / (in + out)
 **報告主体 ≠ 判断主体。** 2026-09-02 の実測（2023-06〜、66 万イベント、公開翌営業日
 終値 → 20 営業日の対 TOPIX 超過中位）:
 
-| 報告主体 | 増仓後の 20 日超過中位 |
+| 報告主体（実体） | 増仓後の 20 日超過中位 |
 | --- | ---: |
-| 海外投行 / PB 名義（Nomura Intl / UBS / JPM …） | ≈ −3% |
-| 日本語表記の国内証券（野村證券 / 三菱UFJMS / SMBC日興）・「個人」 | ≈ 0 |
-| クオンツ・マーケットメイカー（XTX / Jane Street / Jump） | 強く負 |
+| Nomura Intl / UBS / JPM Securities Japan | −2.97 / −2.92 / −2.97% |
+| XTX / Jane Street / Jump | −3.71 / −3.64 / −3.5% |
+| 野村證券 / 三菱UFJMS証券 / SMBC日興 | −0.33 / −0.68 / +0.67% |
+| 個人 | −0.39% |
 | `Notes` の「ヘッジ」明記 vs 無し | −2.02% vs −2.18%（区別できない） |
+
+実体 48 件（標本 ≥150）の中位は p10 −3.71% … p90 +0.33% —— 差は **実体単位** にある。
+
+**クラス単位では差が出ない**（同日 `app.research.informedness` で校正）: global_pb −2.27%
+/ market_maker −2.19% / domestic_broker −2.15% / unknown −1.85% / hedge_fund −1.03% /
+aggregate −0.39%。「日本語表記の国内証券は情報が薄い」は名前の挙がった 3 社には当たるが、
+クラス全体はモルガン・スタンレーMUFG証券（27.6 万件）が占め、海外 PB と同水準だった。
 
 `reporters.py` が実体名から `reporter_class` を付ける（global_pb / domestic_broker /
 hedge_fund / market_maker / aggregate / unknown）。**Notes のヘッジ標注は使わない**。
-`INFORMED_CLASSES` は domestic_broker と aggregate を除いた全部 —— unknown は **入れる**
-（名簿に無い運用会社を「情報なし」に倒さない）。
+`INFORMED_CLASSES` は **aggregate だけ** を除く（rep-v1 は domestic_broker も除いていたが、
+校正で撤回）—— unknown は入れる（名簿に無い運用会社を「情報なし」に倒さない）。
+クラスは記述と実体別校正のためのメタデータで、情報量の重み付けは実体単位で行う（今後）。
 
 スナップショットは全鎖口径と informed 口径を **並べて** 持つ（`components_json.informed`:
 機関数・可視比率・5/20 日圧力・窓内差値・事件件数）。DB 列は増やさない。
-`covering_start` と `squeeze_confirmed` は informed 口径の減少も要求する ——
-国内証券名義だけの減少は派生商品・貸株のヘッジ解消で、実測では予測力が無い。
+`covering_start` と `squeeze_confirmed` は informed 口径の減少も要求する。校正後の
+informed は個人名義しか除かないので、この閘門は今のところ「個人」だけの減少を弾く
+程度 —— 仕組みを先に置き、実体別の重み付けが乗ったときに効くようにしてある。
 
 ### 潜伏空頭（parked_below）
 

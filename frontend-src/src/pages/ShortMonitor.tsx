@@ -95,7 +95,7 @@ const FLAG_LABELS: Record<string, string> = {
   parked_below: '停在门槛下方',
   voluntary_covering: '主动回补',
   forced_covering: '被动回补',
-  no_informed_reporter: '仅国内证券或个人报告',
+  no_informed_reporter: '仅个人名义报告',
 };
 
 /** 会降低这一行可信度的标签，与「发生了什么」的事件标签分开着色。 */
