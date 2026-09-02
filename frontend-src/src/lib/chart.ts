@@ -126,6 +126,8 @@ export function insightLineSeries(options: {
   color?: string;
   xAxisIndex?: number;
   yAxisIndex?: number;
+  /** 默认样条；成交价这类「每个点都是真实成交」的序列传 false，避免曲线越过从未成交的价位 */
+  smooth?: boolean | number;
 }): LineSeriesOption {
   const color = options.color ?? CH.brand600;
   const lastIndex = options.data.length - 1;
@@ -138,7 +140,7 @@ export function insightLineSeries(options: {
     showSymbol: false,
     symbol: 'circle',
     symbolSize: 9,
-    smooth: 0.35,
+    smooth: options.smooth ?? 0.35,
     lineStyle: { color, width: 2.4, cap: 'round', join: 'round' },
     areaStyle: insightAreaStyle(color),
     emphasis: {

@@ -2,6 +2,9 @@
  * Beautiful UI Insight Cards 折线（对照 beautifului.dev 截图）：
  * 样条曲线、左淡右实、终点白圈、虚线基准、浅网格、可选对照线。
  * 刮擦仍落在真实数据点上，读数不走曲线插值。
+ *
+ * 对照线只表达「相对走势」：按首个共同点重定基到主序列的尺度后再画。
+ * 不这样做的话 TOPIX(≈4200) 与グロース(≈1000) 共用一条绝对轴，主线会被压成直线。
  */
 import {
   memo,
@@ -127,6 +130,18 @@ function alignCompare(primary: InsightDatum[], compare: InsightDatum[]): Array<n
   });
 }
 
+/** 把对照序列按首个共同点缩放到主序列尺度（只画相对走势，对照线没有读数） */
+function rebaseCompare(primary: number[], compare: Array<number | null>): Array<number | null> {
+  for (let index = 0; index < Math.min(primary.length, compare.length); index++) {
+    const base = compare[index];
+    const anchor = primary[index];
+    if (base == null || base === 0 || anchor == null) continue;
+    const factor = anchor / base;
+    return compare.map((value) => (value == null ? null : value * factor));
+  }
+  return compare;
+}
+
 function pointFromClientX(clientX: number, rect: DOMRect, count: number, padX: number): number {
   if (count <= 1) return 0;
   const x = clientX - rect.left;
@@ -171,7 +186,10 @@ const InsightLineChart = memo(function InsightLineChart({
   const series = useMemo(() => normalizeInsightSeries(data), [data]);
   const compareSeries = useMemo(() => (compare ? normalizeInsightSeries(compare) : []), [compare]);
   const values = useMemo(() => series.map((item) => item.value), [series]);
-  const compareValues = useMemo(() => alignCompare(series, compareSeries), [series, compareSeries]);
+  const compareValues = useMemo(
+    () => rebaseCompare(values, alignCompare(series, compareSeries)),
+    [values, series, compareSeries],
+  );
   const resolvedTone = tone === 'auto' ? insightTone(change) : tone;
   const color = insightStroke(resolvedTone);
   const compareColor = insightStroke(compareTone);

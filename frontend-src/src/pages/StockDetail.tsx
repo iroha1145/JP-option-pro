@@ -599,6 +599,7 @@ function TickPane({
             color: CH.brand600,
             xAxisIndex: 0,
             yAxisIndex: 0,
+            smooth: false,
           }),
         },
         {

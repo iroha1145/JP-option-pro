@@ -8,23 +8,22 @@ import './index.css';
 // "Failed to fetch dynamically imported module" and leave a blank page until a manual
 // refresh. Vite dispatches `vite:preloadError` on that failure — reload once (guarded
 // against loops) so the user lands on the fresh bundle instead of a white screen.
-window.addEventListener('vite:preloadError', () => {
+// Loop guard is a time window, not a flag cleared on `load`: if a chunk is genuinely
+// missing (broken deploy) the failure recurs after every reload, and clearing on `load`
+// would reload forever. At most one automatic reload per 10s; otherwise let the error
+// surface so the route error boundary can show it.
+window.addEventListener('vite:preloadError', (event) => {
   const KEY = 'optixjp:preload-reloaded';
+  const now = Date.now();
   try {
-    if (sessionStorage.getItem(KEY)) return; // already reloaded once; avoid a loop
-    sessionStorage.setItem(KEY, String(Date.now()));
+    const last = Number(sessionStorage.getItem(KEY) ?? 0);
+    if (now - last < 10_000) return;
+    sessionStorage.setItem(KEY, String(now));
   } catch {
     /* private mode: still attempt the reload below */
   }
+  event.preventDefault();
   window.location.reload();
-});
-// Clear the one-shot guard once a load succeeds, so a later genuine failure can reload again.
-window.addEventListener('load', () => {
-  try {
-    sessionStorage.removeItem('optixjp:preload-reloaded');
-  } catch {
-    /* ignore */
-  }
 });
 
 createRoot(document.getElementById('root')!).render(

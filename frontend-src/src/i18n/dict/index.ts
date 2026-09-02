@@ -40,7 +40,7 @@ export const DICT: Record<string, [string, string]> = {
   趋势快照: ['Trend snapshot', 'トレンドスナップショット'],
   快照: ['Snapshot', 'スナップショット'],
   对照: ['Compare', '比較'],
-  'vs {n}日': ['vs {n}d', '{n}日比'],
+  '{n}日': ['{n}d', '{n}日'],
   在图表上滑动查看点位: ['Hover the chart to inspect a point', 'チャートをなぞって点を確認'],
   市场广度: ['Breadth', '騰落状況'],
   雷达信号: ['Radar signals', 'レーダーシグナル'],

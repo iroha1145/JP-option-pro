@@ -368,6 +368,7 @@ function IndexTrendPanel({
   );
   const last = points[points.length - 1];
   const shown = scrub ?? (last ? { index: points.length - 1, value: last.value, label: last.label, x: 0, y: 0 } : null);
+  const windowReturn = points.length > 1 && points[0].value !== 0 ? last.value / points[0].value - 1 : null;
   const badgeValue = useMemo(() => {
     if (!scrub || points.length < 2) return changePct;
     const prev = points[Math.max(0, scrub.index - 1)];
@@ -428,7 +429,9 @@ function IndexTrendPanel({
         </div>
         <span className="flex items-center gap-1.5">
           <ChangeBadge value={badgeValue} />
-          <span className="text-micro text-ink-400">{t('vs {n}日', { n: points.length || 1 })}</span>
+          <span className="text-micro text-ink-400">
+            {t('{n}日', { n: points.length || 1 })} {fmtPct(windowReturn)}
+          </span>
         </span>
       </div>
     </section>

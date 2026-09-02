@@ -222,6 +222,17 @@ function IndexInsightCard({ index, compare }: { index: IndexSummary; compare?: I
   const [scrub, setScrub] = useState<InsightScrub | null>(null);
   const value = scrub?.value ?? index.close;
   const windowN = Math.max(index.sparkline.length, 1);
+  /* 徽标始终是「当日涨跌」：刮擦时换成该点相对前一点的变化，与大数字同日 */
+  const badgeValue =
+    scrub && scrub.index > 0 && index.sparkline[scrub.index - 1]
+      ? scrub.value / index.sparkline[scrub.index - 1] - 1
+      : scrub
+        ? null
+        : index.change_pct;
+  /* 窗口收益单独给出（首→末），不借当日徽标冒充 */
+  const first = index.sparkline[0];
+  const lastValue = index.sparkline[index.sparkline.length - 1];
+  const windowReturn = first && lastValue != null && index.sparkline.length > 1 ? lastValue / first - 1 : null;
   return (
     <Link to="/market" className="card-surface card-hover flex flex-col overflow-hidden rounded-xl">
       <div className="flex items-center justify-between gap-2 px-3 pt-3">
@@ -254,8 +265,10 @@ function IndexInsightCard({ index, compare }: { index: IndexSummary; compare?: I
       <div className="flex items-baseline justify-between gap-2 px-3 pb-3 pt-1">
         <span className="font-mono text-data-xl tnum text-ink-900">{fmtPrice(value)}</span>
         <span className="flex items-center gap-1.5">
-          <ChangeBadge value={index.change_pct} size="sm" />
-          <span className="text-micro text-ink-400">{t('vs {n}日', { n: windowN })}</span>
+          <ChangeBadge value={badgeValue} size="sm" />
+          <span className="text-micro text-ink-400">
+            {t('{n}日', { n: windowN })} {fmtPct(windowReturn)}
+          </span>
         </span>
       </div>
     </Link>
