@@ -1,4 +1,4 @@
-/** Segmented 分段切换：滑块 260ms ease-paper */
+/** Segmented 分段切换：滑块走 beUI / transitions.dev 弹簧 */
 import { useLayoutEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -7,9 +7,10 @@ interface SegmentedProps<T extends string> {
   value: T;
   onChange: (v: T) => void;
   className?: string;
+  ariaLabel?: string;
 }
 
-export default function Segmented<T extends string>({ options, value, onChange, className }: SegmentedProps<T>) {
+export default function Segmented<T extends string>({ options, value, onChange, className, ariaLabel }: SegmentedProps<T>) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState<{ left: number; width: number } | null>(null);
 
@@ -25,6 +26,7 @@ export default function Segmented<T extends string>({ options, value, onChange, 
     <div
       ref={wrapRef}
       role="tablist"
+      aria-label={ariaLabel}
       /* max-w-full + 横スクロール: 英語ラベルは中文の 2〜3 倍幅になり
          （"Triggered/Confirmed/Watching/Failed/All" で 385px）、375px の
          端末では素の inline-flex が文書ごと横に溢れる。滑り子は
@@ -36,7 +38,7 @@ export default function Segmented<T extends string>({ options, value, onChange, 
     >
       <span
         aria-hidden="true"
-        className="absolute top-0.5 bottom-0.5 rounded-[4px] bg-card shadow-btn transition-[left,width,opacity] duration-ui ease-paper"
+        className="absolute top-0.5 bottom-0.5 rounded-[4px] bg-card shadow-btn transition-[left,width,opacity] duration-ui ease-spring"
         style={thumb ? { left: thumb.left, width: thumb.width } : { opacity: 0 }}
       />
       {options.map((o, index) => (

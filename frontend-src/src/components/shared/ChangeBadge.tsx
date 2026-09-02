@@ -61,8 +61,9 @@ export default function ChangeBadge({
       : fmtPct(value);
   return (
     <span
+      key={text}
       className={cn(
-        'inline-flex items-center gap-1 rounded-xs font-mono tnum',
+        'badge-pop inline-flex items-center gap-1 rounded-xs font-mono tnum',
         size === 'md' ? 'px-1.5 py-0.5 text-[13px] leading-[18px]' : 'px-1 py-px text-micro',
         direction === 'up'
           ? 'bg-up-50 text-up-700'

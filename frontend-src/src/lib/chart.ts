@@ -98,11 +98,80 @@ export function valueAxis(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function hexRgba(hex: string, alpha: number): string {
+  const raw = hex.replace('#', '');
+  const value = Number.parseInt(raw, 16);
+  return `rgba(${(value >> 16) & 255},${(value >> 8) & 255},${value & 255},${alpha})`;
+}
+
+/** Beautiful UI Insight Cards：自上而下淡出的面积填充 */
+export function insightAreaStyle(color: string = CH.brand600): LineSeriesOption['areaStyle'] {
+  return {
+    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+      { offset: 0, color: hexRgba(color, 0.24) },
+      { offset: 0.72, color: hexRgba(color, 0.06) },
+      { offset: 1, color: hexRgba(color, 0) },
+    ]),
+  };
+}
+
+export function insightLineColor(change?: number | null): string {
+  if (change == null || !Number.isFinite(change) || change === 0) return CH.brand600;
+  return change > 0 ? CH.up600 : CH.down600;
+}
+
+/** echarts 折线的 Insight Cards 工艺：渐变面积 + 圆角线 + 终点实心点 */
+export function insightLineSeries(options: {
+  data: Array<number | null>;
+  color?: string;
+  xAxisIndex?: number;
+  yAxisIndex?: number;
+  /** 默认样条；成交价这类「每个点都是真实成交」的序列传 false，避免曲线越过从未成交的价位 */
+  smooth?: boolean | number;
+}): LineSeriesOption {
+  const color = options.color ?? CH.brand600;
+  const lastIndex = options.data.length - 1;
+  const lastValue = options.data[lastIndex];
+  return {
+    type: 'line',
+    data: options.data,
+    xAxisIndex: options.xAxisIndex,
+    yAxisIndex: options.yAxisIndex,
+    showSymbol: false,
+    symbol: 'circle',
+    symbolSize: 9,
+    smooth: options.smooth ?? 0.35,
+    lineStyle: { color, width: 2.4, cap: 'round', join: 'round' },
+    areaStyle: insightAreaStyle(color),
+    emphasis: {
+      scale: false,
+      itemStyle: { color, borderColor: '#fff', borderWidth: 2, shadowBlur: 10, shadowColor: hexRgba(color, 0.45) },
+    },
+    markPoint:
+      lastValue != null && Number.isFinite(lastValue)
+        ? {
+            silent: true,
+            animation: false,
+            symbol: 'circle',
+            symbolSize: 8,
+            itemStyle: {
+              color,
+              borderColor: '#FFFFFF',
+              borderWidth: 2,
+              shadowBlur: 8,
+              shadowColor: hexRgba(color, 0.5),
+            },
+            data: [{ name: 'last', coord: [lastIndex, lastValue] }],
+          }
+        : undefined,
+  };
+}
+
 /** 毛玻璃 tooltip（§6：overlay + blur(14px) + sh-2 + r-md） */
 export function glassTooltip(overrides: Record<string, unknown> = {}) {
   return {
     trigger: 'axis' as const,
-    backgroundColor: 'rgba(253,252,249,0.88)',
+    backgroundColor: 'rgba(250,251,253,0.88)',
     /* tooltip 为 DOM 渲染：边框跟随 --line 令牌（线条细化后自动同步） */
     borderColor: 'var(--line)',
     borderWidth: 1,
@@ -113,7 +182,8 @@ export function glassTooltip(overrides: Record<string, unknown> = {}) {
       'box-shadow:0 1px 2px rgba(13,22,38,.04),0 8px 24px -12px rgba(13,22,38,.12);border-radius:8px;',
     axisPointer: {
       type: 'line' as const,
-      lineStyle: { color: CH.ink300, width: 1, type: [3, 3] as number[] },
+      snap: true,
+      lineStyle: { color: CH.ink300, width: 1, type: 'solid' as const },
     },
     ...overrides,
   };

@@ -29,7 +29,7 @@ export function SkeletonRows({ rows = 6, className }: { rows?: number; className
   return (
     <div className={cn('divide-y divide-line', className)} aria-hidden="true">
       {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="flex items-center gap-4 px-4 py-4">
+        <div key={i} className="flex items-center gap-4 px-4 py-4" style={{ animationDelay: `${i * 40}ms` }}>
           <SkeletonBlock className="size-8 rounded-sm" />
           <SkeletonBlock className="h-3 w-16" />
           <SkeletonBlock className="ml-auto h-3 w-14" />

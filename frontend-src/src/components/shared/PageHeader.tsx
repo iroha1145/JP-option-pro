@@ -19,9 +19,9 @@ interface PageHeaderProps {
 export default function PageHeader({ section, eyebrow, title, description, meta, className }: PageHeaderProps) {
   return (
     <motion.header
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.56, ease: [0.16, 1, 0.3, 1] }}
+      initial={{ y: 10 }}
+      animate={{ y: 0 }}
+      transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
       className={cn('flex flex-wrap items-end justify-between gap-x-6 gap-y-4 border-b border-line pb-5', className)}
     >
       <div className="min-w-0">

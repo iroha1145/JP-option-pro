@@ -1,14 +1,16 @@
 /** 首页：市场状态 → 行业强弱 → 雷达信号 → 最近决算 → 自选异动。 */
 
+import { useState } from 'react';
 import { Link } from 'react-router';
 import { marketApi, radarApi, earningsApi, watchlistApi } from '@/api/modules';
+import type { IndexSummary } from '@/api/types';
 import { usePolling } from '@/hooks/usePolling';
 import { remoteState } from '@/hooks/remoteState';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
 import ChangeBadge from '@/components/shared/ChangeBadge';
 import { SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
-import Sparkline from '@/components/charts/Sparkline';
+import InsightLineChart, { insightStroke, insightTone, type InsightScrub } from '@/components/charts/InsightLineChart';
 import { CodeCell, DataThrough, SignalChip, StateChip } from '@/components/domain';
 import { t } from '@/i18n/core';
 import { fmtDate, fmtPct, fmtPrice, fmtYenCompact } from '@/lib/format';
@@ -33,28 +35,23 @@ export default function Home() {
 
       {/* 指数带 */}
       {marketState === 'loading' ? (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <SkeletonCard key={i} className="h-24" />
+            <SkeletonCard key={i} className="h-44" />
           ))}
         </div>
       ) : marketState === 'error' ? (
         <EmptyState variant="error" title={t('加载失败')} description={String(market.error?.message ?? '')} />
       ) : (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <div className="stagger-in grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {market.data?.indices.map((index) => (
-            <Link
+            <IndexInsightCard
               key={index.index_code}
-              to="/market"
-              className="card-surface card-hover flex flex-col gap-1 rounded-lg p-3"
-            >
-              <span className="truncate text-caption text-ink-500">{index.name}</span>
-              <span className="font-mono text-data-l tnum text-ink-900">{fmtPrice(index.close)}</span>
-              <div className="flex items-center justify-between">
-                <ChangeBadge value={index.change_pct} size="sm" />
-                <Sparkline data={index.sparkline} width={64} height={20} change={index.change_pct ?? 0} />
-              </div>
-            </Link>
+              index={index}
+              compare={market.data?.indices.find(
+                (row) => row.index_code === (index.index_code === '0000' ? '0500' : '0000'),
+              )}
+            />
           ))}
         </div>
       )}
@@ -218,6 +215,63 @@ export default function Home() {
         </section>
       </div>
     </div>
+  );
+}
+
+function IndexInsightCard({ index, compare }: { index: IndexSummary; compare?: IndexSummary }) {
+  const [scrub, setScrub] = useState<InsightScrub | null>(null);
+  const value = scrub?.value ?? index.close;
+  const windowN = Math.max(index.sparkline.length, 1);
+  /* 徽标始终是「当日涨跌」：刮擦时换成该点相对前一点的变化，与大数字同日 */
+  const badgeValue =
+    scrub && scrub.index > 0 && index.sparkline[scrub.index - 1]
+      ? scrub.value / index.sparkline[scrub.index - 1] - 1
+      : scrub
+        ? null
+        : index.change_pct;
+  /* 窗口收益单独给出（首→末），不借当日徽标冒充 */
+  const first = index.sparkline[0];
+  const lastValue = index.sparkline[index.sparkline.length - 1];
+  const windowReturn = first && lastValue != null && index.sparkline.length > 1 ? lastValue / first - 1 : null;
+  return (
+    <Link to="/market" className="card-surface card-hover flex flex-col overflow-hidden rounded-xl">
+      <div className="flex items-center justify-between gap-2 px-3 pt-3">
+        <span className="truncate text-caption text-ink-500">{index.name}</span>
+        <span className="shrink-0 rounded-full bg-paper-2 px-2 py-0.5 text-micro text-ink-500">{t('快照')}</span>
+      </div>
+      <div className="mt-2 border-t border-line px-2 pt-2">
+        {compare && (
+          <div className="mb-1 flex items-center gap-1.5 px-1">
+            <span className="inline-flex size-5 items-center justify-center rounded-md bg-paper-2" aria-hidden>
+              <i className="block size-1.5 rounded-full" style={{ background: insightStroke(insightTone(index.change_pct ?? 0)) }} />
+            </span>
+            <span className="inline-flex size-5 items-center justify-center rounded-md bg-paper-2" aria-hidden>
+              <i className="block size-1.5 rounded-full" style={{ background: 'var(--brand-600)' }} />
+            </span>
+          </div>
+        )}
+        <InsightLineChart
+          data={index.sparkline}
+          compare={compare?.sparkline}
+          height={72}
+          change={index.change_pct ?? 0}
+          interactive
+          focusable={false}
+          showLiveDot
+          onScrub={setScrub}
+          ariaLabel={`${index.name} ${t('趋势快照')}`}
+        />
+      </div>
+      <div className="flex items-baseline justify-between gap-2 px-3 pb-3 pt-1">
+        <span className="font-mono text-data-xl tnum text-ink-900">{fmtPrice(value)}</span>
+        <span className="flex items-center gap-1.5">
+          <ChangeBadge value={badgeValue} size="sm" />
+          <span className="text-micro text-ink-400">
+            {t('{n}日', { n: windowN })} {fmtPct(windowReturn)}
+          </span>
+        </span>
+      </div>
+    </Link>
   );
 }
 
