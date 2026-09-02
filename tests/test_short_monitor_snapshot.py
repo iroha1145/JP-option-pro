@@ -274,3 +274,68 @@ def test_signals_record_the_information_cutoff():
     )
     signals = snap.build_signals(rows, {}, source_cutoff=AS_OF)
     assert signals and all(s["source_cutoff"] == AS_OF for s in signals)
+
+
+# -- 第十四轮: informed 口径 / 潜伏空頭 ------------------------------------------
+
+def test_domestic_broker_only_covering_does_not_start_covering():
+    """国内証券名義だけが減らしても informed 口径は空: 回補開始にならない。"""
+
+    domestic = _stock(
+        "1000",
+        bars=_bars("1000", drift=0.004),
+        reports=[
+            _report("1000", "野村證券株式会社", OLD_DAY, 0.030, shares=3_000_000),
+            _report("1000", "野村證券株式会社", NEW_DAY, 0.008, prev=0.030, shares=800_000),
+        ],
+    )
+    peers = [_stock(f"90{i:02d}", bars=_bars(f"90{i:02d}")) for i in range(5)]
+    rows = _by_code(snap.build_snapshots([domestic, *peers], _market()))
+    row = rows["1000"]
+    components = json.loads(row["components_json"])
+    assert components["informed"]["institution_count"] == 0
+    assert components["informed"]["pressure_20d"]["pressure_adv20"] is None
+    assert components["reporter_classes"] == {"domestic_broker": 1}
+    assert row["primary_state"] != states.STATE_COVERING_START
+    flags = json.loads(row["flags_json"])
+    assert states.FLAG_NO_INFORMED_REPORTER in flags
+    # 全鎖口径の圧力そのものは従来どおり出る（どちらか一方を正とはしない）
+    assert row["pressure_adv20_20d"] is not None and row["pressure_adv20_20d"] < 0
+
+
+def test_informed_pressure_matches_all_chain_pressure_when_all_reporters_are_informed():
+    covering = _stock(
+        "1000",
+        bars=_bars("1000", drift=0.004),
+        reports=[
+            _report("1000", "Nomura International plc", OLD_DAY, 0.030, shares=3_000_000),
+            _report("1000", "Nomura International plc", NEW_DAY, 0.008, prev=0.030, shares=800_000),
+        ],
+    )
+    peers = [_stock(f"90{i:02d}", bars=_bars(f"90{i:02d}")) for i in range(5)]
+    rows = _by_code(snap.build_snapshots([covering, *peers], _market()))
+    row = rows["1000"]
+    components = json.loads(row["components_json"])
+    assert components["informed"]["institution_count"] == 1
+    assert components["informed"]["pressure_20d"]["pressure_adv20"] == pytest.approx(row["pressure_adv20_20d"])
+    assert row["primary_state"] == states.STATE_COVERING_START
+    assert components["reporter_classes"] == {"global_pb": 1}
+
+
+def test_parked_below_holder_is_counted_and_flagged():
+    parked = _stock(
+        "1000",
+        reports=[
+            _report("1000", "Alpha", OLD_DAY, 0.0060, shares=600_000),
+            # 閾値割れの最終報告 —— 公開線のすぐ下に止まる
+            _report("1000", "Alpha", NEW_DAY, 0.0047, prev=0.0060, shares=470_000),
+        ],
+    )
+    peers = [_stock(f"90{i:02d}", bars=_bars(f"90{i:02d}")) for i in range(5)]
+    rows = _by_code(snap.build_snapshots([parked, *peers], _market()))
+    row = rows["1000"]
+    components = json.loads(row["components_json"])
+    assert components["parked_below_count"] == 1
+    assert states.FLAG_PARKED_BELOW in json.loads(row["flags_json"])
+    assert row["below_threshold_count"] == 1
+    assert row["visible_short_ratio"] == 0.0

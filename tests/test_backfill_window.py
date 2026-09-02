@@ -403,3 +403,16 @@ def test_a_locked_database_is_reported_as_busy_not_failed(tmp_path, monkeypatch)
     result = _short_monitor_task(context)({"manual": True})
     assert result.status == "skipped"
     assert result.next_delay_seconds <= 600.0
+
+
+def test_news_counts_are_per_security_not_per_article():
+    from app.worker.tasks import _count_news_by_code
+
+    items = [
+        {"securities": ["72030", "67580"]},
+        {"securities": ["72030"]},
+        {"securities": []},
+        {"securities": None},
+        {"securities": ["72030", "72030"]},   # 同じ記事の重複コードは 1 回
+    ]
+    assert _count_news_by_code(items) == {"72030": 3, "67580": 1}

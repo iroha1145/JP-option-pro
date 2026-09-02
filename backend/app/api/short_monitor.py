@@ -20,7 +20,12 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from app.api.deps import core_repository
 from app.domain.symbols import display_code, normalize_input_code
 from app.services.short_monitor import explain
-from app.services.short_monitor.radar_link import MAX_PRIORITY_SHIFT, PRIORITY_LINK_ENABLED
+from app.services.short_monitor.radar_link import (
+    CROWDING_LINK_ENABLED,
+    CROWDING_VALIDATION,
+    MAX_PRIORITY_SHIFT,
+    PRIORITY_LINK_ENABLED,
+)
 from app.services.short_monitor.scoring import SCORE_VALIDATED, SCORE_VERSION, VALIDATION
 from app.services.short_monitor.snapshot import SNAPSHOT_VERSION
 from app.services.short_monitor.states import (
@@ -35,7 +40,10 @@ from app.services.short_monitor.states import (
 
 router = APIRouter(prefix="/api/short-monitor", tags=["short-monitor"])
 
-SHORT_MONITOR_API_VERSION = "jp-short-monitor-v2"
+#: v3: 回補開始・挤空確認が informed 口径の減少を要求（sbs-v3）、行に
+#: `informed` / `parked_below_count` / `reporter_classes` を追加、status に
+#: 拥挤度叠加のスイッチと検証状態を追加。
+SHORT_MONITOR_API_VERSION = "jp-short-monitor-v3"
 
 #: 画面の各ビューが要求する状態・並び順。ここに無い名前は受け付けない。
 VIEWS: dict[str, dict[str, Any]] = {
@@ -117,10 +125,38 @@ def _flags(row: dict[str, Any]) -> list[str]:
         return []
 
 
+def _components(row: dict[str, Any]) -> dict[str, Any]:
+    try:
+        parsed = json.loads(row.get("components_json") or "{}")
+    except ValueError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _informed_view(components: dict[str, Any]) -> dict[str, Any] | None:
+    """informed 口径（国内証券・集合名義を除いた報告主体）の要約。"""
+
+    informed = components.get("informed")
+    if not isinstance(informed, dict):
+        return None
+    pressure_20 = informed.get("pressure_20d") or {}
+    pressure_5 = informed.get("pressure_5d") or {}
+    return {
+        "institution_count": informed.get("institution_count"),
+        "visible_short_ratio": informed.get("visible_short_ratio"),
+        "pressure_adv20_20d": pressure_20.get("pressure_adv20") if isinstance(pressure_20, dict) else None,
+        "pressure_adv20_5d": pressure_5.get("pressure_adv20") if isinstance(pressure_5, dict) else None,
+        "entry_count_20d": informed.get("entry_count_20d"),
+        "reentry_count_20d": informed.get("reentry_count_20d"),
+        "reduction_count_20d": informed.get("reduction_count_20d"),
+    }
+
+
 def _row_view(row: dict[str, Any]) -> dict[str, Any]:
     """1 行分の説明可能な形。**点数だけを返さない。**"""
 
     code = row.get("canonical_code") or ""
+    components = _components(row)
     return {
         "canonical_code": code,
         "display_code": row.get("display_code") or display_code(code),
@@ -174,6 +210,12 @@ def _row_view(row: dict[str, Any]) -> dict[str, Any]:
         "data_confidence": row.get("data_confidence"),
         "primary_state": row.get("primary_state"),
         "flags": _flags(row),
+        # informed 口径 / 潜伏空頭 / 報告主体クラス（v3）。古いスナップショット
+        # 行には無いので None。
+        "informed": _informed_view(components),
+        "parked_below_count": components.get("parked_below_count"),
+        "reporter_classes": components.get("reporter_classes"),
+        "combined_visible_days_to_cover": components.get("combined_visible_days_to_cover"),
         "algorithm_version": row.get("algorithm_version"),
     }
 
@@ -211,7 +253,10 @@ def overview(request: Request, response: Response, date: str | None = Query(defa
         "validation": VALIDATION,
         # 検証を通るまでレーダーの並び順には一切影響しない（表示・絞り込み・
         # 影子分のみ）。ここが False の間、priority_shift は常に 0。
-        "radar_link": {"enabled": PRIORITY_LINK_ENABLED, "max_shift": MAX_PRIORITY_SHIFT},
+        "radar_link": {
+            "enabled": PRIORITY_LINK_ENABLED, "max_shift": MAX_PRIORITY_SHIFT,
+            "crowding_enabled": CROWDING_LINK_ENABLED, "crowding_validation": CROWDING_VALIDATION,
+        },
         "api_version": SHORT_MONITOR_API_VERSION,
     }
 
@@ -437,7 +482,10 @@ def status() -> dict:
         "score_version": SCORE_VERSION,
         "validated": {"gates": GATES_VALIDATED, "score": SCORE_VALIDATED},
         "validation": VALIDATION,
-        "radar_link": {"enabled": PRIORITY_LINK_ENABLED, "max_shift": MAX_PRIORITY_SHIFT},
+        "radar_link": {
+            "enabled": PRIORITY_LINK_ENABLED, "max_shift": MAX_PRIORITY_SHIFT,
+            "crowding_enabled": CROWDING_LINK_ENABLED, "crowding_validation": CROWDING_VALIDATION,
+        },
         "note": DISCLOSURE_NOTE,
     }
 

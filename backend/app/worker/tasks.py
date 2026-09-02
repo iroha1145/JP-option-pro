@@ -13,7 +13,7 @@ trading calendar):
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Iterable, Mapping
 
 from app.config import get_settings
 from app.data_paths import get_data_paths
@@ -592,6 +592,41 @@ def _radar_confirmations(context: TaskContext) -> dict[str, dict[str, bool]]:
     return out
 
 
+def _count_news_by_code(items: Iterable[Mapping[str, Any]]) -> dict[str, int]:
+    """ニュース記事列 → {銘柄: 件数}。1 記事が複数銘柄に紐づけば各銘柄に 1 ずつ。"""
+
+    counts: dict[str, int] = {}
+    for item in items:
+        codes = item.get("securities") or []
+        if not isinstance(codes, (list, tuple, set)):
+            continue
+        for code in set(str(c) for c in codes if c):
+            counts[code] = counts.get(code, 0) + 1
+    return counts
+
+
+def _news_counts_5d(context: TaskContext, target_date: str) -> tuple[dict[str, int], bool]:
+    """直近 5 営業日のニュース件数（銘柄別）と「ニュース源があるか」。
+
+    以前はスナップショットに渡していなかったので、`news_catalyst` は本番で
+    一度も立たず、催化剂は決算距離だけになっていた。ニュースが無い・読めない
+    ときは `has_news_feed=False` を返す —— 「無い」を「0 件」と偽らない。
+    """
+
+    if context.config.features.news_mode == "off" or not context.paths.news_db.exists():
+        return {}, False
+    try:
+        from app.repositories.news_store import NewsStore
+
+        window = context.repository.trading_days_between(add_days(target_date, -14), target_date)
+        since_day = window[-5] if len(window) >= 5 else (window[0] if window else target_date)
+        store = NewsStore(context.paths.news_db, read_only=True)
+        items = store.recent_items(since_iso=f"{since_day}T00:00:00Z", limit=5000)
+    except Exception:  # noqa: BLE001 - ニュースが読めなくても空売りは止めない
+        return {}, False
+    return _count_news_by_code(items), True
+
+
 def _run_short_monitor(context: TaskContext, target_date: str) -> dict[str, Any]:
     """機関空売り行動モニターの再構築 + 当日スナップショット。
 
@@ -604,11 +639,14 @@ def _run_short_monitor(context: TaskContext, target_date: str) -> dict[str, Any]
     if not context.repository.latest_short_position_date():
         return {"status": "skipped", "reason": "no_short_position_data"}
     try:
+        news_counts, has_news_feed = _news_counts_5d(context, target_date)
         rebuilt = short_monitor.rebuild_events(context.repository)
         refreshed = short_monitor.refresh_snapshots(
             context.repository,
             as_of_date=target_date,
             radar_confirmations=_radar_confirmations(context),
+            news_counts=news_counts,
+            has_news_feed=has_news_feed,
         )
     except Exception as exc:  # noqa: BLE001 - 全市場バッチを 1 件で落とさない
         message = str(exc)

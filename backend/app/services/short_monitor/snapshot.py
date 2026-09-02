@@ -22,17 +22,20 @@ from app.services.radar.adjustment import adjust_series
 
 from . import events as ev
 from . import factors as fac
+from . import reporters
 from . import scoring, states
 from .institutions import INSTITUTION_VERSION, InstitutionResolver
 
 #: スナップショット全体の版。どれか 1 つでも変わったら作り直す対象になる。
 SNAPSHOT_VERSION = "+".join((
-    INSTITUTION_VERSION, ev.EVENT_VERSION, fac.FACTOR_VERSION,
+    INSTITUTION_VERSION, ev.EVENT_VERSION, reporters.REPORTER_VERSION, fac.FACTOR_VERSION,
     states.STATE_VERSION, scoring.SCORE_VERSION,
 ))
 
 LOOKBACK_TRADING_DAYS = 20
 SHORT_WINDOW = 5
+#: 回補が「価格が上がる前」か「上がってから」かを見る窓（主動 / 被動の判別）。
+MID_WINDOW = 10
 LONG_WINDOW = 20
 
 
@@ -181,6 +184,7 @@ def _price_context(bars: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "adv20_shares": (sum(recent_volumes) / len(recent_volumes)) if recent_volumes else None,
         "adv20_value": (sum(recent_values) / len(recent_values)) if recent_values else None,
         "return_5d": _returns(closes, SHORT_WINDOW),
+        "return_10d": _returns(closes, MID_WINDOW),
         "return_20d": _returns(closes, LONG_WINDOW),
         "made_new_low": made_new_low,
         "broke_long_support": broke_support,
@@ -192,6 +196,7 @@ def _benchmark_returns(topix_closes: Mapping[str, float], trading_days: Sequence
     series = [value for value in series if value is not None and value > 0.0]
     return {
         "topix_5d": _returns(series, SHORT_WINDOW),
+        "topix_10d": _returns(series, MID_WINDOW),
         "topix_20d": _returns(series, LONG_WINDOW),
     }
 
@@ -227,6 +232,27 @@ def build_raw_rows(
         counts_20 = _count_events(stock.events, since=since_20)
         counts_5 = _count_events(stock.events, since=since_5)
 
+        # informed 口径: 国内証券・集合名義を除いた報告主体だけの鎖。全鎖口径と
+        # **並べて** 持つ（どちらか一方を正とはしない —— 検証で別々に測る）。
+        classes = reporters.classify_events(stock.events)
+        informed_events = [
+            event for event in stock.events
+            if reporters.is_informed(classes.get(str(event.get("legal_id") or "")))
+        ]
+        informed_known = {
+            legal_id: state for legal_id, state in known_now.items()
+            if reporters.is_informed(classes.get(legal_id))
+        }
+        informed_now = ev.visible_totals(informed_known)
+        informed_changes_5 = (
+            ev.window_changes(informed_events, from_cutoff=cutoff_5, to_cutoff=market.as_of_date)
+            if (cutoff_5 and informed_events) else None
+        )
+        informed_changes_20 = (
+            ev.window_changes(informed_events, from_cutoff=cutoff_20, to_cutoff=market.as_of_date)
+            if (cutoff_20 and informed_events) else None
+        )
+
         rows.append({
             "canonical_code": stock.canonical_code,
             "sector33_code": stock.sector33_code,
@@ -239,6 +265,13 @@ def build_raw_rows(
             "counts_5": counts_5,
             "stock": stock,
             "benchmarks": benchmarks,
+            "classes": classes,
+            "informed_now": informed_now,
+            "informed_changes_5": informed_changes_5,
+            "informed_changes_20": informed_changes_20,
+            "informed_counts": _count_events(informed_events, since=since_20),
+            "informed_counts_5": _count_events(informed_events, since=since_5),
+            "parked_below_count": fac.parked_below_count(known_now),
         })
     return rows
 
@@ -285,6 +318,7 @@ def build_snapshots(
         adv_shares = price.get("adv20_shares")
 
         rel_topix_20 = _rel(price.get("return_20d"), row["benchmarks"].get("topix_20d"))
+        rel_topix_10 = _rel(price.get("return_10d"), row["benchmarks"].get("topix_10d"))
         rel_topix_5 = _rel(price.get("return_5d"), row["benchmarks"].get("topix_5d"))
         rel_sector_20 = _rel(price.get("return_20d"), median_20.get(row.get("sector33_code") or ""))
         rel_sector_5 = _rel(price.get("return_5d"), median_5.get(row.get("sector33_code") or ""))
@@ -315,8 +349,26 @@ def build_snapshots(
             rel_topix=rel_topix_20, rel_sector=rel_sector_20,
         ).raw_damage()
 
+        # informed 口径の圧力。informed 鎖が 1 本も無ければ None（0 ではない）。
+        informed_5 = row.get("informed_changes_5") or {}
+        informed_20 = row.get("informed_changes_20") or {}
+        pressure_informed_5 = (
+            fac.short_pressure(
+                shares_change=informed_5.get("shares_change"), adv20_shares=adv_shares,
+                entries=row["informed_counts_5"]["entry"], reentries=row["informed_counts_5"]["reentry"],
+            ) if row.get("informed_changes_5") else {"score": None, "pressure_adv20": None, "known": False}
+        )
+        pressure_informed_20 = (
+            fac.short_pressure(
+                shares_change=informed_20.get("shares_change"), adv20_shares=adv_shares,
+                entries=row["informed_counts"]["entry"], reentries=row["informed_counts"]["reentry"],
+            ) if row.get("informed_changes_20") else {"score": None, "pressure_adv20": None, "known": False}
+        )
+
         prepared.append({
             **row,
+            "rel_topix_10d": rel_topix_10,
+            "pressure_informed_5": pressure_informed_5, "pressure_informed_20": pressure_informed_20,
             "rel_topix_20d": rel_topix_20, "rel_topix_5d": rel_topix_5,
             "rel_sector_20d": rel_sector_20, "rel_sector_5d": rel_sector_5,
             "shares_delta_5": shares_delta_5, "shares_delta_20": shares_delta_20,
@@ -390,6 +442,12 @@ def _finalize(
         news_count_5d=stock.news_count_5d, has_news_feed=market.has_news_feed,
     )
     days_to_cover = fac.visible_days_to_cover(now.get("visible_short_shares"), adv_shares)
+    combined_days_to_cover = fac.combined_visible_days_to_cover(
+        now.get("visible_short_shares"), (stock.margin or {}).get("short_total"), adv_shares,
+    )
+    informed_now = row.get("informed_now") or {}
+    informed_count = int(informed_now.get("visible_institution_count") or 0)
+    classes = row.get("classes") or {}
 
     last_report = _last_report_age(stock.events, market.trading_days)
     confidence = fac.data_confidence(
@@ -412,6 +470,12 @@ def _finalize(
     evidence = {
         "pressure_adv20_20d": row["pressure_20"].get("pressure_adv20"),
         "pressure_adv20_5d": row["pressure_5"].get("pressure_adv20"),
+        # informed 口径（国内証券・集合名義を除く）。鎖が無ければ None。
+        "pressure_informed_adv20_20d": row["pressure_informed_20"].get("pressure_adv20"),
+        "pressure_informed_adv20_5d": row["pressure_informed_5"].get("pressure_adv20"),
+        "informed_institution_count": informed_count,
+        "parked_below_count": int(row.get("parked_below_count") or 0),
+        "rel_topix_10d": row.get("rel_topix_10d"),
         "absorption_score": absorption.get("absorption_score"),
         "covering_score": cover.get("score"),
         "low_position_score": low.get("score"),
@@ -461,6 +525,25 @@ def _finalize(
         # 逐連鎖の報告差の内訳（純増減のほかに粗い増分・減分も残す）
         "window_changes_5d": row.get("changes_5"),
         "window_changes_20d": row.get("changes_20"),
+        # informed 口径（国内証券・集合名義を除いた報告主体）。全鎖口径と並べて
+        # 持ち、検証では別々に測る。DB 列は増やさず components に載せる。
+        "informed": {
+            "reporter_version": reporters.REPORTER_VERSION,
+            "institution_count": informed_count,
+            "visible_short_ratio": informed_now.get("visible_short_ratio"),
+            "visible_short_shares": informed_now.get("visible_short_shares"),
+            "pressure_5d": row["pressure_informed_5"],
+            "pressure_20d": row["pressure_informed_20"],
+            "window_changes_5d": row.get("informed_changes_5"),
+            "window_changes_20d": row.get("informed_changes_20"),
+            "entry_count_20d": row["informed_counts"]["entry"],
+            "reentry_count_20d": row["informed_counts"]["reentry"],
+            "reduction_count_20d": row["informed_counts"]["reduction"],
+        },
+        "reporter_classes": reporters.class_counts(classes, (row.get("known_now") or {}).keys()),
+        "parked_below_count": int(row.get("parked_below_count") or 0),
+        "combined_visible_days_to_cover": combined_days_to_cover,
+        "rel_topix_10d": row.get("rel_topix_10d"),
     }
 
     return {
@@ -602,6 +685,7 @@ def build_signals(
 
 __all__ = [
     "LOOKBACK_TRADING_DAYS",
+    "MID_WINDOW",
     "MarketInputs",
     "SNAPSHOT_VERSION",
     "StockInputs",

@@ -250,6 +250,67 @@ rotation = balance × volume,  balance = 2·min(in, out) / (in + out)
 
 ---
 
+## 4b. 報告主体の分類と informed 口径（第十四轮）
+
+**報告主体 ≠ 判断主体。** 2026-09-02 の実測（2023-06〜、66 万イベント、公開翌営業日
+終値 → 20 営業日の対 TOPIX 超過中位）:
+
+| 報告主体 | 増仓後の 20 日超過中位 |
+| --- | ---: |
+| 海外投行 / PB 名義（Nomura Intl / UBS / JPM …） | ≈ −3% |
+| 日本語表記の国内証券（野村證券 / 三菱UFJMS / SMBC日興）・「個人」 | ≈ 0 |
+| クオンツ・マーケットメイカー（XTX / Jane Street / Jump） | 強く負 |
+| `Notes` の「ヘッジ」明記 vs 無し | −2.02% vs −2.18%（区別できない） |
+
+`reporters.py` が実体名から `reporter_class` を付ける（global_pb / domestic_broker /
+hedge_fund / market_maker / aggregate / unknown）。**Notes のヘッジ標注は使わない**。
+`INFORMED_CLASSES` は domestic_broker と aggregate を除いた全部 —— unknown は **入れる**
+（名簿に無い運用会社を「情報なし」に倒さない）。
+
+スナップショットは全鎖口径と informed 口径を **並べて** 持つ（`components_json.informed`:
+機関数・可視比率・5/20 日圧力・窓内差値・事件件数）。DB 列は増やさない。
+`covering_start` と `squeeze_confirmed` は informed 口径の減少も要求する ——
+国内証券名義だけの減少は派生商品・貸株のヘッジ解消で、実測では予測力が無い。
+
+### 潜伏空頭（parked_below）
+
+閾値割れの最終報告の **79% が 0.45〜0.50%** に止まる（2025-09〜）。欧州の実測
+（Jank–Roling–Smajlbegovic, JFE 2021）では公開線の下に留まる空頭は **より悪い**
+後続収益に対応する。`parked_below_count` = 60 営業日以内に [0.40%, 0.50%) で
+止まった機関の数。ラベル `parked_below`。`covering()` の広がりから `threshold_exits`
+を外した（回補ではない）。
+
+### 回補の主動 / 被動
+
+informed 口径の減少が、直近 10 日の相対リターンが非正のうちに起きれば
+`voluntary_covering`、上回った後なら `forced_covering`。文献（Blocher et al.）では
+被迫回補の後続リターンは方向が逆。状態は変えずラベルで分け、検証で別々に測る。
+
+### 拥挤度の「只減不加」叠加
+
+第十二轮で唯一安定して単調だった関係（可視機関数 0/1/2–3/4+ → −1.10/−1.42/−1.98/−2.85%）
+を、レーダー優先度を **下げる方向にだけ** 使う（`radar_link.crowding_shift`: informed
+口径の機関数 ≥2 で −2、≥4 で −4、信頼度を掛ける）。**`CROWDING_LINK_ENABLED = False`**:
+`short_behavior_runner` の `crowding.informed.verdict == "pass"`（16 窓中 ≥13 窓で負、
+かつ留出期で負）を確認してから翻す。仮の値は `hypothetical_crowding_shift`。
+
+### 検証器（sb-research-v2）
+
+* **配対基準** `excess_peer_*`: 同じ市場区分 × 流動性五分位の銘柄の前向き中位に対する
+  超過。披露サンプルは小型株に偏るので TOPIX 超過は市場区分効果を含む。状態比較は
+  配対基準があればそれを使う。
+* 状態別中位の 95% 区間は **銘柄 × 月の聚類 bootstrap**（隣接日の重複を独立標本に数えない）。
+* `monitor_priority` の逐日十分位単調性（雷達の走步と同じ判定）。
+* 信用残高を回放に読む（申込日 ≤ 評価日 − 2 暦日）。以前は読んでおらず
+  `crowded_margin` が一度も立たなかった。
+* 結果を測る足は評価終了日より後も読む（以前はカレンダーを end で切っていたため、
+  end 直前 1 か月の信号が系統的に欠損していた）。
+* `--holdout-start` で留出期を別集計。
+
+`python -m app.research.informedness` は実体ごとの情報量（増仓後 20 日超過の中位・
+年別安定性）と、名簿に無いのに標本が多い実体を出す —— `reporters.py` の名簿を
+校正する材料。
+
 ## 5. 状態と補助ラベル
 
 主要状態 1 つ + 補助ラベル。「機関の入れ替わり」は吸収とも低位衝突とも同時に
@@ -257,9 +318,9 @@ rotation = balance × volume,  balance = 2·min(in, out) / (in + out)
 
 | 状態 | 条件（要旨） |
 | --- | --- |
-| 挤空确认 | 公開空頭の明確な減少 + 可視回補天数 ≥ 1.0 + 突破確認 + 出来高確認 + 相対転強 **すべて** |
+| 挤空确认 | 公開空頭の明確な減少（全鎖 **かつ** informed 口径、5 日と 20 日の両方） + 可視回補天数 ≥ 1.0 + 突破確認 + 出来高確認 + 相対転強 **すべて** |
 | 背离失效 | 空頭増加 + 長期支持割れ + 相対悪化 |
-| 回补启动 | 空頭減少 + 相対転強（正式な突破は要求しない） |
+| 回补启动 | 空頭減少（全鎖 **かつ** informed 口径） + 相対転強（正式な突破は要求しない） |
 | 卖压吸收 | 圧力あり + 吸収スコア高 + 安値未更新 |
 | 正常做空 | 圧力あり + 吸収低 + 相対マイナス |
 | 低位冲突 | 深い低位 + 新規/再参入 |

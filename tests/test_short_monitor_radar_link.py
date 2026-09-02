@@ -146,3 +146,47 @@ def test_shadow_score_is_labelled_as_shadow():
     assert "behavior_score" not in after["short_behavior"], (
         "正式スコアと同じ名前で出すと、そのうち本物として使われる"
     )
+
+
+# -- 第十四轮: 拥挤度の「只減不加」叠加 ------------------------------------------
+
+def test_crowding_shift_is_never_positive_and_zero_while_ungated():
+    snapshot = _snapshot(states.STATE_NORMAL_SHORTING, confidence=1.0)
+    snapshot["visible_institution_count"] = 5
+    assert radar_link.CROWDING_LINK_ENABLED is False, "窓別検証を通す前に叠加が有効になっている"
+    assert radar_link.crowding_shift(snapshot) == 0.0
+    assert radar_link.hypothetical_crowding_shift(snapshot) == -4.0
+    for count in (0, 1, 2, 3, 4, 9):
+        snapshot["visible_institution_count"] = count
+        assert radar_link.hypothetical_crowding_shift(snapshot) <= 0.0
+
+
+def test_crowding_shift_prefers_informed_count_from_components():
+    """国内証券だけが 5 社いても informed 口径 0 社なら引き下げない。"""
+
+    import json
+
+    snapshot = _snapshot(states.STATE_NORMAL_SHORTING, confidence=1.0)
+    snapshot["visible_institution_count"] = 5
+    snapshot["components_json"] = json.dumps({"informed": {"institution_count": 0}})
+    assert radar_link.informed_institution_count(snapshot) == 0
+    assert radar_link.hypothetical_crowding_shift(snapshot) == 0.0
+    snapshot["components_json"] = json.dumps({"informed": {"institution_count": 2}})
+    assert radar_link.hypothetical_crowding_shift(snapshot) == -2.0
+
+
+def test_crowding_shift_scales_with_confidence_and_is_bounded():
+    snapshot = _snapshot(states.STATE_NORMAL_SHORTING, confidence=0.5)
+    snapshot["visible_institution_count"] = 4
+    assert radar_link.hypothetical_crowding_shift(snapshot) == pytest.approx(-2.0)
+    assert radar_link.hypothetical_crowding_shift(snapshot) >= -radar_link.MAX_PRIORITY_SHIFT
+
+
+def test_overlay_reports_crowding_but_does_not_apply_it_yet():
+    before = _event(priority=60.0)
+    snapshot = _snapshot(states.STATE_NORMAL_SHORTING, confidence=1.0)
+    snapshot["visible_institution_count"] = 4
+    after = radar_link.overlay([before], {"10000": snapshot})[0]
+    assert after["alert_priority"] == pytest.approx(60.0)
+    assert after["short_behavior"]["hypothetical_crowding_shift"] == -4.0
+    assert after["short_behavior"]["crowding_link_enabled"] is False
