@@ -365,3 +365,79 @@ def test_priority_discounts_low_confidence():
 
 def test_score_is_none_when_nothing_is_known():
     assert scoring.behavior_score({})["score"] is None
+
+
+# -- 第十四轮: 潜伏空頭 / 回補の広がり / informed 口径 -----------------------------
+
+def test_threshold_exits_no_longer_count_as_covering_breadth():
+    """閾値割れの最終報告の 79% は 0.45〜0.50% に止まる —— 回補ではない。"""
+
+    with_exits = f.covering(shares_change=-500_000, adv20_shares=1_000_000, reducing_institutions=1, threshold_exits=3)
+    without = f.covering(shares_change=-500_000, adv20_shares=1_000_000, reducing_institutions=1, threshold_exits=0)
+    assert with_exits["score"] == without["score"]
+    assert with_exits["threshold_exits"] == 3
+
+
+def test_parked_below_counts_recent_holders_just_under_the_line():
+    states_by_holder = {
+        "a": {"visibility_status": "below_public_threshold", "last_reported_ratio": 0.0047, "state_age_trading_days": 10},
+        "b": {"visibility_status": "below_public_threshold", "last_reported_ratio": 0.0020, "state_age_trading_days": 10},
+        "c": {"visibility_status": "below_public_threshold", "last_reported_ratio": 0.0048, "state_age_trading_days": 200},
+        "d": {"visibility_status": "reporting", "last_reported_ratio": 0.0090, "state_age_trading_days": 1},
+        "e": {"visibility_status": "closed", "last_reported_ratio": 0.0, "state_age_trading_days": 1},
+    }
+    assert f.parked_below_count(states_by_holder) == 1
+    assert f.parked_below_count(states_by_holder, max_age_trading_days=300) == 2
+
+
+def test_combined_days_to_cover_requires_both_legs():
+    assert f.combined_visible_days_to_cover(1_000_000, 500_000, 1_000_000) == 1.5
+    assert f.combined_visible_days_to_cover(1_000_000, None, 1_000_000) is None
+    assert f.combined_visible_days_to_cover(None, 500_000, 1_000_000) is None
+
+
+def _covering_evidence(**extra):
+    base = {
+        "pressure_adv20_20d": -0.30, "pressure_adv20_5d": -0.10,
+        "covering_score": 70.0, "rel_topix_20d": 0.03, "rel_sector_20d": 0.02,
+        "data_confidence": 0.9, "visible_institution_count": 2,
+    }
+    base.update(extra)
+    return base
+
+
+def test_covering_start_requires_informed_covering_when_the_key_is_present():
+    """国内証券名義だけの減少（informed 口径 None）は回補開始にならない。"""
+
+    all_chains = states.classify(_covering_evidence())
+    assert all_chains["primary_state"] == states.STATE_COVERING_START
+
+    domestic_only = states.classify(_covering_evidence(
+        pressure_informed_adv20_20d=None, pressure_informed_adv20_5d=None, informed_institution_count=0,
+    ))
+    assert domestic_only["primary_state"] != states.STATE_COVERING_START
+    assert states.FLAG_NO_INFORMED_REPORTER in domestic_only["flags"]
+
+    informed = states.classify(_covering_evidence(
+        pressure_informed_adv20_20d=-0.25, pressure_informed_adv20_5d=-0.08, informed_institution_count=1,
+    ))
+    assert informed["primary_state"] == states.STATE_COVERING_START
+
+
+def test_covering_is_labelled_voluntary_or_forced_by_the_prior_10_days():
+    voluntary = states.classify(_covering_evidence(
+        pressure_informed_adv20_20d=-0.25, pressure_informed_adv20_5d=-0.08, rel_topix_10d=-0.01,
+    ))
+    forced = states.classify(_covering_evidence(
+        pressure_informed_adv20_20d=-0.25, pressure_informed_adv20_5d=-0.08, rel_topix_10d=+0.04,
+    ))
+    assert states.FLAG_VOLUNTARY_COVERING in voluntary["flags"]
+    assert states.FLAG_FORCED_COVERING not in voluntary["flags"]
+    assert states.FLAG_FORCED_COVERING in forced["flags"]
+    assert states.FLAG_VOLUNTARY_COVERING not in forced["flags"]
+
+
+def test_parked_below_is_a_label():
+    verdict = states.classify({"pressure_adv20_20d": 0.0, "pressure_adv20_5d": 0.0, "parked_below_count": 2})
+    assert states.FLAG_PARKED_BELOW in verdict["flags"]
+    assert verdict["primary_state"] == states.STATE_NO_SIGNAL

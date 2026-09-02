@@ -233,3 +233,97 @@ def test_a_state_that_never_fires_is_reported_as_insufficient_not_as_equal():
     verdict = sb.compare_states(records)["questions"]["squeeze_vs_covering_start"]
     assert verdict["left_samples"] == 0
     assert verdict["verdict"] == "insufficient_data"
+
+
+# -- 第十四轮: 配対基準 / 聚類 bootstrap / 拥挤度の窓別判定 / 信用残高の回放 ------
+
+def test_replay_records_carry_peer_excess_and_priority(tmp_path):
+    core = _core(tmp_path)
+    records, _cohorts = replay(core, start="2026-06-25", end="2026-07-05", every=1)
+    assert records, "信号が出ていない"
+    record = records[0]
+    assert "monitor_priority" in record
+    assert "informed_institution_count" in record
+    assert "parked_below_count" in record
+    # 8 銘柄しか無い合成データでは五分位が組めない → 配対基準は None（黙って 0 にしない）
+    assert record.get("excess_peer_20d") is None or isinstance(record["excess_peer_20d"], float)
+
+
+def test_margin_map_as_of_never_uses_a_week_that_was_not_yet_published():
+    from app.research.short_behavior_runner import _margin_map_as_of
+
+    rows = [
+        {"canonical_code": "10000", "application_date": "2026-06-05", "long_total": 100.0, "short_total": 10.0},
+        {"canonical_code": "10000", "application_date": "2026-06-12", "long_total": 130.0, "short_total": 12.0},
+    ]
+    # 6/12 申込分は 6/16 に公表される。6/13 時点では 6/5 分しか知りえない。
+    assert _margin_map_as_of(rows, "2026-06-13")["10000"]["long_total"] == 100.0
+    later = _margin_map_as_of(rows, "2026-06-20")["10000"]
+    assert later["long_total"] == 130.0 and later["long_change"] == 30.0
+    assert _margin_map_as_of(rows, "2026-06-01") == {}
+
+
+def test_liquidity_groups_are_market_times_quintile():
+    from app.research.short_behavior_runner import _liquidity_groups
+
+    days = [f"2026-06-{d:02d}" for d in range(1, 29)]
+    bars = {}
+    securities = {}
+    for index in range(60):
+        code = f"2{index:04d}"
+        turnover = 1_000_000.0 * (index + 1)
+        bars[code] = [{"trade_date": d, "turnover_value": turnover} for d in days]
+        securities[code] = {"market_code": "0111" if index % 2 else "0112"}
+    group_of, members = _liquidity_groups(bars, securities, as_of=days[-1])
+    assert set(group_of) == set(bars)
+    assert all(key.split("|")[0] in ("0111", "0112") for key in members)
+    assert group_of["20000"].endswith("q1") and group_of["20059"].endswith("q5")
+
+
+def test_bootstrap_ci_brackets_the_median_and_needs_enough_clusters():
+    records = [
+        {"canonical_code": f"1{i % 12:04d}", "signal_date": f"2026-0{1 + i % 6}-10", "excess_topix_20d": (i % 7 - 3) / 100.0}
+        for i in range(120)
+    ]
+    low, high = sb.bootstrap_median_ci(records, "excess_topix_20d", resamples=50)
+    assert low is not None and high is not None and low <= 0.0 <= high
+    assert sb.bootstrap_median_ci(records[:10], "excess_topix_20d") == (None, None)
+
+
+def test_crowding_stability_reports_the_gate_honestly():
+    windows = [(f"2025-{m:02d}-01", f"2025-{m:02d}-10", f"2025-{m:02d}-11", f"2025-{m:02d}-28") for m in range(1, 13)]
+    records = []
+    for m in range(1, 13):
+        for i in range(40):
+            records.append({"canonical_code": f"3{i:04d}", "signal_date": f"2025-{m:02d}-15",
+                            "visible_institution_count": 0, "excess_topix_20d": -0.01})
+            records.append({"canonical_code": f"4{i:04d}", "signal_date": f"2025-{m:02d}-15",
+                            "visible_institution_count": 5, "excess_topix_20d": -0.03})
+    result = sb.crowding_stability(records, windows, holdout_start="2025-07-01")
+    assert result["windows_judged"] == 12 and result["windows_negative"] == 12
+    assert result["holdout_spread_4plus_minus_01"] < 0
+    # 16 窓に届かないので pass とは言わない
+    assert result["verdict"] == "insufficient_data"
+    assert result["by_bucket"]["4+"]["samples"] == 480
+
+
+def test_priority_ranking_power_uses_daily_deciles():
+    windows = [("2025-01-01", "2025-01-10", "2025-01-11", "2025-01-31")]
+    records = []
+    for day in ("2025-01-15", "2025-01-20"):
+        for i in range(40):
+            records.append({"canonical_code": f"5{i:04d}", "signal_date": day,
+                            "monitor_priority": float(i), "excess_topix_20d": i / 1000.0})
+    result = sb.priority_ranking_power(records, windows)
+    assert result["score_field"] == "monitor_priority"
+    assert result["windows"][0]["samples"] == 80
+
+
+def test_report_carries_the_new_sections(tmp_path):
+    core = _core(tmp_path)
+    records, _ = replay(core, start="2026-06-25", end="2026-07-05", every=1)
+    calendar = core.trading_days_between("2026-06-25", "2026-07-05")
+    report = sb.evaluate_signals(records, calendar=calendar, holdout_start="2026-07-01").as_dict()
+    assert report["version"] == sb.SHORT_RESEARCH_VERSION
+    assert set(report["crowding"]) == {"visible", "informed"}
+    assert "priority_ranking" in report and "holdout" in report

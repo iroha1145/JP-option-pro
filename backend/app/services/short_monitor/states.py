@@ -17,7 +17,12 @@ from typing import Any, Mapping
 #:     そう書いてあったが、コードは片側で通していた）。さらに強い主張には
 #:     対 TOPIX と対業種の **両方のデータが存在** することを要求する ——
 #:     片方欠けたまま「市場と業種の双方で転強」とは言えない。
-STATE_VERSION = "sbs-v2"
+#: v3: 回補開始・挤空確認は **informed 口径**（国内証券・集合名義を除いた
+#:     報告主体）の減少も要求する。国内証券名義の減少は派生商品・貸株の
+#:     ヘッジ解消で、実測では予測力が無い。加えて回補を「主動（価格が
+#:     上がる前に減らす）」と「被動（上がってから減らす）」にラベルで分ける
+#:     —— 文献では後者は方向が逆（Blocher et al.）。潜伏空頭ラベルを追加。
+STATE_VERSION = "sbs-v3"
 
 #: **この閾値群は歴史検証を経ていない初期パラメータ**。
 #: 「日本株の最適値」ではない。検証結果が出るまでこの表記を外さないこと。
@@ -57,6 +62,16 @@ FLAG_THIN_LIQUIDITY = "thin_liquidity"
 FLAG_STALE_DATA = "stale_data"
 FLAG_HEDGE_DISCLOSED = "hedge_disclosed"
 FLAG_SINGLE_INSTITUTION = "single_institution"
+#: v3 追加。公開線のすぐ下に最近止まった機関がいる（潜伏空頭）。
+FLAG_PARKED_BELOW = "parked_below"
+#: v3 追加。informed 口径の回補が、直近 10 日の相対リターンが非正のうちに
+#: 起きている（価格が上がる前に減らしている = 主動）。
+FLAG_VOLUNTARY_COVERING = "voluntary_covering"
+#: v3 追加。informed 口径の回補が、直近 10 日で市場を上回った後に起きている
+#: （上がってから減らした = 被動。文献では後続リターンの向きが逆）。
+FLAG_FORCED_COVERING = "forced_covering"
+#: v3 追加。可視機関はいるが、全部が国内証券・集合名義（informed 口径 0 社）。
+FLAG_NO_INFORMED_REPORTER = "no_informed_reporter"
 
 #: 初期パラメータ（未検証）
 GATES: dict[str, float] = {
@@ -116,6 +131,13 @@ def classify(evidence: Mapping[str, Any], gates: Mapping[str, float] | None = No
     # しれない —— 文書は最初から両方と書いてある）。
     decreasing = min(pressure_20, pressure_5) <= -g["pressure_floor"]
     decreasing_both = max(pressure_20, pressure_5) <= -g["pressure_floor"]
+    # informed 口径（国内証券・集合名義を除く）。キーが **無い** 呼び出し（旧い
+    # 呼び出し側）は全鎖口径に倣う。キーがあって None なら「informed 口径の
+    # 鎖が無い」= 回補開始・挤空確認には届かない。
+    informed_20 = _num(evidence.get("pressure_informed_adv20_20d", evidence.get("pressure_adv20_20d"))) or 0.0
+    informed_5 = _num(evidence.get("pressure_informed_adv20_5d", evidence.get("pressure_adv20_5d"))) or 0.0
+    decreasing_informed = min(informed_20, informed_5) <= -g["pressure_floor"]
+    decreasing_both_informed = max(informed_20, informed_5) <= -g["pressure_floor"]
     relative = _weakest(rel_topix, rel_sector)
     strengthening = relative is not None and relative > g["relative_strength_floor"]
     # 「市場対比・業種対比の双方で転強」は両方の値があるときにしか言えない。
@@ -124,10 +146,12 @@ def classify(evidence: Mapping[str, Any], gates: Mapping[str, float] | None = No
         and min(rel_topix, rel_sector) > g["relative_strength_floor"]
     )
 
-    flags = _flags(evidence, g)
+    flags = _flags(evidence, g, decreasing_informed=decreasing_informed)
     state = _pick_state(
         evidence=evidence, gates=g, increasing=increasing, decreasing=decreasing,
         decreasing_both=decreasing_both, strengthening_both=strengthening_both,
+        decreasing_informed=decreasing_informed,
+        decreasing_both_informed=decreasing_both_informed,
         absorption=absorption, covering_score=covering_score, low_position=low_position,
         relative=relative, strengthening=strengthening, days_to_cover=days_to_cover,
     )
@@ -149,6 +173,7 @@ def _weakest(*values: float | None) -> float | None:
 
 def _pick_state(
     *, evidence, gates, increasing, decreasing, decreasing_both, strengthening_both,
+    decreasing_informed, decreasing_both_informed,
     absorption, covering_score, low_position, relative, strengthening, days_to_cover,
 ) -> str:
     broke_support = bool(evidence.get("broke_long_support"))
@@ -161,6 +186,7 @@ def _pick_state(
     # 揃っていることも条件のうち）。
     if (
         decreasing_both
+        and decreasing_both_informed
         and covering_score is not None and covering_score >= gates["covering_floor"]
         and days_to_cover is not None and days_to_cover >= gates["squeeze_days_to_cover"]
         and breakout and turnover_ok and strengthening_both
@@ -172,8 +198,13 @@ def _pick_state(
     if increasing and broke_support and relative_bad:
         return STATE_DIVERGENCE_FAILED
 
-    # 3. 回補開始 —— 正式な突破は要求しない。
-    if decreasing and covering_score is not None and covering_score >= gates["covering_floor"] and strengthening:
+    # 3. 回補開始 —— 正式な突破は要求しない。ただし informed 口径の減少が要る:
+    # 国内証券名義だけの減少はヘッジ解消で、実測では予測力が無い。
+    if (
+        decreasing and decreasing_informed
+        and covering_score is not None and covering_score >= gates["covering_floor"]
+        and strengthening
+    ):
         return STATE_COVERING_START
 
     # 4. 売り圧の吸収 —— 圧力があったのに、見合う下げが出ていない。
@@ -199,8 +230,23 @@ def _pick_state(
     return STATE_NO_SIGNAL
 
 
-def _flags(evidence: Mapping[str, Any], gates: Mapping[str, float]) -> list[str]:
+def _flags(
+    evidence: Mapping[str, Any], gates: Mapping[str, float], *, decreasing_informed: bool = False
+) -> list[str]:
     flags: set[str] = set()
+    if int(evidence.get("parked_below_count") or 0) > 0:
+        flags.add(FLAG_PARKED_BELOW)
+    if decreasing_informed:
+        rel_10 = _num(evidence.get("rel_topix_10d"))
+        if rel_10 is not None:
+            flags.add(FLAG_VOLUNTARY_COVERING if rel_10 <= 0.0 else FLAG_FORCED_COVERING)
+    informed_count = evidence.get("informed_institution_count")
+    if (
+        informed_count is not None
+        and int(informed_count) == 0
+        and int(evidence.get("visible_institution_count") or 0) > 0
+    ):
+        flags.add(FLAG_NO_INFORMED_REPORTER)
     if int(evidence.get("entry_count_20d") or 0) > 0:
         flags.add(FLAG_NEW_ENTRY)
     if int(evidence.get("reentry_count_20d") or 0) > 0:
@@ -241,17 +287,21 @@ __all__ = [
     "FLAG_CONCENTRATED",
     "FLAG_CROWDED_MARGIN",
     "FLAG_EARNINGS_NEAR",
+    "FLAG_FORCED_COVERING",
     "FLAG_HEDGE_DISCLOSED",
     "FLAG_MULTI_REDUCTION",
     "FLAG_NEWS_CATALYST",
     "FLAG_NEW_ENTRY",
     "FLAG_NOT_VISIBLE",
+    "FLAG_NO_INFORMED_REPORTER",
+    "FLAG_PARKED_BELOW",
     "FLAG_REENTRY",
     "FLAG_REGULATED",
     "FLAG_ROTATION",
     "FLAG_SINGLE_INSTITUTION",
     "FLAG_STALE_DATA",
     "FLAG_THIN_LIQUIDITY",
+    "FLAG_VOLUNTARY_COVERING",
     "GATES",
     "GATES_VALIDATED",
     "ORDERED_STATES",

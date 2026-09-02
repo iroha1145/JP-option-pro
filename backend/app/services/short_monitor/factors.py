@@ -16,7 +16,14 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
 #: 因子計算の版。定義を変えたら上げる（スナップショットに載る）。
-FACTOR_VERSION = "sbf-v1"
+#: v2: 回補の広がりから `threshold_exits` を外す（閾値割れの最終報告の 79% は
+#:     0.45〜0.50% に止まる —— 「公開線の下に駐める」行動で、回補ではない）。
+#:     潜伏空頭 `parked_below_count` と `combined_visible_days_to_cover` を追加。
+FACTOR_VERSION = "sbf-v2"
+
+#: 「公開線の下に駐めている」とみなす最終報告の下限比率と、その新鮮さ。
+PARKED_BELOW_FLOOR_RATIO = 0.004
+PARKED_BELOW_MAX_AGE_TRADING_DAYS = 60
 
 #: 圧力がこれ未満の銘柄で「吸収された/されなかった」を語らない。
 #: 20 日平均出来高の 2% 相当の建玉変化。これ未満は値動きの説明にならない。
@@ -236,7 +243,10 @@ def covering(
     covered = max(0.0, -change) / adv
     capped = min(WINSOR_LIMIT, covered)
     score = _saturating(capped, 0.30)
-    breadth = min(20.0, 5.0 * (reducing_institutions + threshold_exits))
+    # 閾値割れは「回補」の広がりに数えない。最終報告の 79% が 0.45〜0.50% に
+    # 止まる —— 公開線の下に駐めただけで、建玉が消えた証拠ではない
+    # （Jank–Roling–Smajlbegovic 2021 のバンチング）。件数は返すが点には入れない。
+    breadth = min(20.0, 5.0 * reducing_institutions)
     excess = _finite(rel_topix)
     if excess is not None and excess > 0.0:
         # 減っている最中に市場をアウトパフォームしているかどうかで意味が変わる
@@ -267,6 +277,54 @@ def visible_days_to_cover(
     if shares is None or adv is None or adv <= 0.0:
         return None
     return round(min(500.0, max(0.0, shares / adv)), 4)
+
+
+def combined_visible_days_to_cover(
+    visible_short_shares: float | None,
+    margin_short_shares: float | None,
+    adv20_shares: float | None,
+) -> float | None:
+    """機関の可視分 + 信用売残（週次）を平常出来高で割った日数。
+
+    信用売残は個人の空売り。機関の可視分だけより「回補されうる量」に近いが、
+    それでも 0.5% 未満の機関建玉と貸株市場の残りは見えない —— 名前に
+    `visible` を残す。どちらか欠けたら出さない（片方だけを合計と呼ばない）。
+    """
+
+    shares = _finite(visible_short_shares)
+    margin = _finite(margin_short_shares)
+    adv = _finite(adv20_shares)
+    if shares is None or margin is None or adv is None or adv <= 0.0:
+        return None
+    return round(min(500.0, max(0.0, (shares + margin) / adv)), 4)
+
+
+def parked_below_count(
+    states: Mapping[str, Mapping[str, Any]],
+    *,
+    floor_ratio: float = PARKED_BELOW_FLOOR_RATIO,
+    max_age_trading_days: int = PARKED_BELOW_MAX_AGE_TRADING_DAYS,
+) -> int:
+    """公開線のすぐ下（既定 0.40〜0.50%）に **最近** 止まった機関の数。
+
+    閾値割れの最終報告の 79% がこの帯に落ちる（2025-09〜の実測）。欧州の
+    データでは公開線の下に留まる空頭は **より悪い** 後続収益に対応する
+    （Jank–Roling–Smajlbegovic, JFE 2021）。「見えなくなった」を中立にも
+    ゼロにも読まず、潜伏している売り方として数える。
+    """
+
+    count = 0
+    for state in states.values():
+        if state.get("visibility_status") != "below_public_threshold":
+            continue
+        ratio = _finite(state.get("last_reported_ratio"))
+        if ratio is None or ratio < floor_ratio:
+            continue
+        age = state.get("state_age_trading_days")
+        if age is not None and int(age) > max_age_trading_days:
+            continue
+        count += 1
+    return count
 
 
 # ---------------------------------------------------------------------------
@@ -489,12 +547,16 @@ __all__ = [
     "FACTOR_VERSION",
     "FactorBundle",
     "MIN_PRESSURE_ADV20",
+    "PARKED_BELOW_FLOOR_RATIO",
+    "PARKED_BELOW_MAX_AGE_TRADING_DAYS",
     "absorption_from_percentile",
     "catalyst",
+    "combined_visible_days_to_cover",
     "covering",
     "data_confidence",
     "low_position",
     "margin_environment",
+    "parked_below_count",
     "percentile_rank",
     "rotation",
     "short_pressure",

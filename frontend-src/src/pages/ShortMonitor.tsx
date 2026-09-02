@@ -92,12 +92,17 @@ const FLAG_LABELS: Record<string, string> = {
   stale_data: '数据过期',
   hedge_disclosed: '含对冲持仓',
   single_institution: '仅1家可见',
+  parked_below: '停在门槛下方',
+  voluntary_covering: '主动回补',
+  forced_covering: '被动回补',
+  no_informed_reporter: '仅国内证券或个人报告',
 };
 
 /** 会降低这一行可信度的标签，与「发生了什么」的事件标签分开着色。 */
 const RISK_FLAGS = new Set([
   'not_visible', 'crowded_margin', 'regulated', 'thin_liquidity',
-  'stale_data', 'hedge_disclosed', 'single_institution',
+  'stale_data', 'hedge_disclosed', 'single_institution', 'no_informed_reporter',
+  'parked_below', 'forced_covering',
 ]);
 
 /** 概览里点得动的四个状态。数字不只是数字，是一个入口。 */

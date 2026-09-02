@@ -20,6 +20,15 @@
 コホート A〜D** を状態機とは独立に追跡する。広い `absorption` 状態の否定は
 狭い組み合わせの否定を意味しない —— 別々に測る。E（+突破確認）はレーダーを
 再生しないため測れない（正直にそう書く）。
+
+第十四轮（sb-research-v2）で足したもの:
+
+* **配対基準** `excess_peer_*`: 同じ市場区分 × 流動性五分位の銘柄の前向き中位
+  リターンに対する超過。披露サンプルは小型株に偏る（Duong–Huszár–Yamada 2015）
+  ので、TOPIX 超過は市場区分効果を信号に帰属させる。
+* **信用残高を回放に読む**（以前は読んでおらず `crowded_margin` が一度も立たなかった）。
+* 記録に `monitor_priority` / `informed_institution_count` / `parked_below_count`
+  を載せ、十分位単調性・拥挤度の窓別安定性・informed 口径の分組を出す。
 """
 
 from __future__ import annotations
@@ -39,6 +48,9 @@ from app.services.short_monitor.states import STATE_NO_SIGNAL
 
 from .outcomes import HORIZONS, compute_outcome
 from .short_behavior import evaluate_signals, summarise_group
+
+#: 配対基準の流動性分位の数（市場区分 × この数のグループ）。
+LIQUIDITY_BUCKETS = 5
 
 #: 足の読み込み窓。スナップショットが 252 日分位と 200 日線を要求する。
 BAR_LOOKBACK = pipeline.BAR_LOOKBACK_TRADING_DAYS
@@ -176,6 +188,97 @@ def _sector_forward_median(
     return result
 
 
+def _margin_rows_between(repository: CoreRepository, start: str, end: str) -> list[dict[str, Any]]:
+    """信用残高（週次）を期間で一括して読む。日ごとに全表を走査しない。"""
+
+    with repository.read() as connection:
+        rows = connection.execute(
+            "SELECT canonical_code, application_date, long_total, short_total "
+            "FROM margin_interest WHERE application_date BETWEEN ? AND ? "
+            "ORDER BY application_date",
+            (start, end),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _margin_map_as_of(rows: Sequence[Mapping[str, Any]], day: str) -> dict[str, dict[str, Any]]:
+    """その評価日に **公開済み** の直近 2 週分から、水準と変化を組む。
+
+    週次データは申込日の 2 営業日後 16:30 に出る（docs/jquants-v2-notes.md）。
+    ここでは申込日 <= 評価日 − 2 暦日 で近似する —— 当日の残高を当日に知って
+    いたことにはしない。
+    """
+
+    from datetime import date, timedelta
+
+    try:
+        cutoff = (date.fromisoformat(day[:10]) - timedelta(days=2)).isoformat()
+    except ValueError:
+        cutoff = day
+    dates = sorted({str(r["application_date"]) for r in rows if str(r["application_date"]) <= cutoff})
+    if not dates:
+        return {}
+    latest = dates[-1]
+    prior = dates[-2] if len(dates) >= 2 else None
+    current: dict[str, dict[str, Any]] = {}
+    previous: dict[str, float] = {}
+    for row in rows:
+        stamp = str(row["application_date"])
+        code = row["canonical_code"]
+        if stamp == latest:
+            current[code] = {
+                "long_total": row.get("long_total"), "short_total": row.get("short_total"),
+                "application_date": latest,
+            }
+        elif prior is not None and stamp == prior and row.get("long_total") is not None:
+            previous[code] = float(row["long_total"])
+    for code, state in current.items():
+        before = previous.get(code)
+        now = state.get("long_total")
+        state["long_change"] = (float(now) - before) if (now is not None and before is not None) else None
+    return current
+
+
+def _liquidity_groups(
+    bars: Mapping[str, Sequence[Mapping[str, Any]]],
+    securities: Mapping[str, Mapping[str, Any]],
+    *,
+    as_of: str,
+    buckets: int = LIQUIDITY_BUCKETS,
+) -> tuple[dict[str, str], dict[str, list[str]]]:
+    """{銘柄: 市場区分|流動性分位} と、その逆引き。
+
+    流動性は `as_of` 以前の直近 20 本の平均売買代金。チャンクの先頭で 1 度
+    計算する（流動性の順位は数週間では殆ど動かない）。
+    """
+
+    values: dict[str, float] = {}
+    for code, series in bars.items():
+        recent = [b for b in series if str(b.get("trade_date") or "") <= as_of][-20:]
+        turnover = [float(b["turnover_value"]) for b in recent if b.get("turnover_value") is not None]
+        if len(turnover) >= 10:
+            values[code] = sum(turnover) / len(turnover)
+    if len(values) < buckets * 5:
+        return {}, {}
+    ordered = sorted(values.values())
+    edges = [ordered[int(len(ordered) * (i + 1) / buckets) - 1] for i in range(buckets - 1)]
+
+    def bucket(value: float) -> int:
+        for index, edge in enumerate(edges):
+            if value <= edge:
+                return index + 1
+        return buckets
+
+    group_of: dict[str, str] = {}
+    members: dict[str, list[str]] = {}
+    for code, value in values.items():
+        market = str((securities.get(code) or {}).get("market_code") or "")
+        key = f"{market}|q{bucket(value)}"
+        group_of[code] = key
+        members.setdefault(key, []).append(code)
+    return group_of, members
+
+
 def _cohorts_of(row: Mapping[str, Any], return_20d: float | None) -> set[str]:
     def _f(key: str) -> float | None:
         value = row.get(key)
@@ -216,7 +319,11 @@ def replay(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """評価日ごとの (状態変化信号 + 結果, コホート入り信号 + 結果)。"""
 
-    calendar = repository.trading_days_between("2000-01-01", end)
+    # 評価日は end まで。**結果を測る足は end より後も読む** —— カレンダーを end で
+    # 切ると、end 直前 1 か月の信号の 20 日後がいつも欠損して集計から落ちる
+    # （第十四轮で判明。以前の走步は最後の窓が系統的に薄かった）。
+    calendar_full = repository.trading_days_between("2000-01-01", "2100-01-01")
+    calendar = [day for day in calendar_full if day <= end]
     if not calendar:
         return [], []
     evaluation_days = [
@@ -239,6 +346,10 @@ def replay(
 
     records: list[dict[str, Any]] = []
     cohort_records: list[dict[str, Any]] = []
+    margin_rows: list[dict[str, Any]] = []
+    liquidity_group_of: dict[str, str] = {}
+    liquidity_members: dict[str, list[str]] = {}
+    peer_cache: dict[tuple[str, str, str], float | None] = {}
     # 状態は **プールから外れても保持** する。評価のたびに上書きすると、
     # 一時的にプールを離れた銘柄の状態が消え、戻ってきたときに同じ状態への
     # 「再遷移」が新しい信号として数えられる（監査指摘）。
@@ -269,14 +380,23 @@ def replay(
         if day > loaded_through:
             chunk = [d for d in evaluation_days if d >= day][:chunk_days]
             first = calendar[max(0, calendar.index(chunk[0]) - BAR_LOOKBACK)]
-            tail = calendar.index(chunk[-1])
-            last = calendar[min(len(calendar) - 1, tail + max(HORIZONS) + 5)]
+            tail = calendar_full.index(chunk[-1])
+            last = calendar_full[min(len(calendar_full) - 1, tail + max(HORIZONS) + 5)]
             bars = {
                 code: [b for b in series if b["trade_date"] <= last]
                 for code, series in repository.bars_matrix_since(first).items()
             }
             close_index = _CloseIndex(bars)
             sector_cache = {}
+            peer_cache = {}
+            # 信用残高（週次）はチャンク範囲で一括読み。回放で読まないと
+            # crowded_margin が一度も立たず、信用拥挤という条件が未検証のまま残る。
+            margin_rows = _margin_rows_between(
+                repository, _shift_calendar_days(chunk[0], -21), last,
+            )
+            liquidity_group_of, liquidity_members = _liquidity_groups(
+                bars, securities, as_of=chunk[0],
+            )
             topix_series = [
                 row for row in repository.index_series("0000", start_date=first)
                 if row["trade_date"] <= last
@@ -298,6 +418,7 @@ def replay(
 
         window = [d for d in calendar if d <= day][-BAR_LOOKBACK:]
         event_floor = window[-EVENT_WINDOW_TRADING_DAYS] if len(window) > EVENT_WINDOW_TRADING_DAYS else window[0]
+        margin_map = _margin_map_as_of(margin_rows, day)
         stocks: list[snap.StockInputs] = []
         for code, series in bars.items():
             # 公開日で切る。仓位日で切ると未来の情報が入る。
@@ -317,6 +438,7 @@ def replay(
             stocks.append(snap.StockInputs(
                 canonical_code=code, bars=trimmed, events=code_events,
                 sector33_code=security.get("sector33_code"),
+                margin=margin_map.get(code),
             ))
 
         market = snap.MarketInputs(
@@ -344,6 +466,13 @@ def replay(
                 topix_bars=topix_series if entry_basis == "signal_close" else None,
                 entry_basis=entry_basis,
             )
+            try:
+                components = json.loads(row.get("components_json") or "{}")
+            except ValueError:
+                components = {}
+            informed = components.get("informed") if isinstance(components, dict) else None
+            informed = informed if isinstance(informed, dict) else {}
+            informed_pressure_20 = (informed.get("pressure_20d") or {}).get("pressure_adv20") if isinstance(informed.get("pressure_20d"), dict) else None
             record = {
                 "canonical_code": code,
                 "signal_date": day,
@@ -351,6 +480,11 @@ def replay(
                 "primary_state": label,
                 "previous_state": previous,
                 "behavior_score": row.get("behavior_score"),
+                "monitor_priority": row.get("monitor_priority"),
+                "informed_institution_count": informed.get("institution_count"),
+                "pressure_informed_adv20_20d": informed_pressure_20,
+                "parked_below_count": components.get("parked_below_count") if isinstance(components, dict) else None,
+                "liquidity_group": liquidity_group_of.get(code),
                 "flags": json.loads(row.get("flags_json") or "[]"),
                 "market_code": (securities.get(code) or {}).get("market_code"),
                 "sector33_code": (securities.get(code) or {}).get("sector33_code"),
@@ -395,6 +529,15 @@ def replay(
                         record[f"excess_sector_{horizon}d"] = (
                             own - sector_bench if sector_bench is not None else None
                         )
+                        # 配対基準: 同じ市場区分 × 流動性五分位の中位（入場日に揃える）。
+                        group = liquidity_group_of.get(code)
+                        peer_bench = _sector_forward_median(
+                            peer_cache, close_index, liquidity_members,
+                            group or "", str(entry_date), end_date,
+                        ) if group else None
+                        record[f"excess_peer_{horizon}d"] = (
+                            own - peer_bench if peer_bench is not None else None
+                        )
             return record
 
         for signal in signals:
@@ -424,6 +567,15 @@ def replay(
     return records, cohort_records
 
 
+def _shift_calendar_days(day: str, count: int) -> str:
+    from datetime import date, timedelta
+
+    try:
+        return (date.fromisoformat(day[:10]) + timedelta(days=count)).isoformat()
+    except ValueError:
+        return day
+
+
 def _apply_slippage(records: list[dict[str, Any]], bps: float) -> None:
     """入場側の片道コストを引く。中位・勝率はこの後で計算される。"""
 
@@ -432,7 +584,10 @@ def _apply_slippage(records: list[dict[str, Any]], bps: float) -> None:
     cost = bps / 10_000.0
     for record in records:
         for horizon in HORIZONS:
-            for key in (f"return_{horizon}d", f"excess_topix_{horizon}d", f"excess_sector_{horizon}d"):
+            for key in (
+                f"return_{horizon}d", f"excess_topix_{horizon}d",
+                f"excess_sector_{horizon}d", f"excess_peer_{horizon}d",
+            ):
                 value = record.get(key)
                 if value is not None:
                     record[key] = value - cost
@@ -454,6 +609,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--slippage-bps", type=float, default=0.0)
     parser.add_argument("--train-days", type=int, default=250)
     parser.add_argument("--test-days", type=int, default=125)
+    parser.add_argument(
+        "--holdout-start", default=None,
+        help="この日以降を留出期として別集計（拥挤度叠加の閘門に使う。例 2025-07-01）",
+    )
     parser.add_argument("--core-db", default=None)
     parser.add_argument("--out", default=None, help="レポートの書き出し先 JSON")
     args = parser.parse_args(argv)
@@ -475,6 +634,7 @@ def main(argv: list[str] | None = None) -> int:
     calendar = repository.trading_days_between(args.start, args.end)
     report = evaluate_signals(
         records, calendar=calendar, train_days=args.train_days, test_days=args.test_days,
+        holdout_start=args.holdout_start,
     ).as_dict()
     report["entry_basis"] = args.entry_basis
     report["slippage_bps"] = args.slippage_bps
@@ -504,9 +664,20 @@ def main(argv: list[str] | None = None) -> int:
         shown = f"{excess:+.4f}" if excess is not None else "   n/a "
         sector_excess = stats.get("median_excess_sector_20d")
         sector_shown = f"{sector_excess:+.4f}" if sector_excess is not None else "   n/a "
+        peer_excess = stats.get("median_excess_peer_20d")
+        peer_shown = f"{peer_excess:+.4f}" if peer_excess is not None else "   n/a "
+        ci = stats.get("ci95_excess_peer_20d") or [None, None]
+        ci_shown = f"[{ci[0]:+.4f},{ci[1]:+.4f}]" if ci[0] is not None else ""
         mark = "" if stats["reliable"] else "  (標本不足)"
-        print(f"  {state:<20} n={stats['samples']:>6}  20日超過中位={shown}"
-              f"  対業種={sector_shown}  勝率={(stats['hit_rate_20d'] or 0) * 100:5.1f}%{mark}")
+        print(f"  {state:<20} n={stats['samples']:>6}  対TOPIX={shown}  対業種={sector_shown}"
+              f"  対配対={peer_shown} {ci_shown}  勝率={(stats['hit_rate_20d'] or 0) * 100:5.1f}%{mark}")
+    print()
+    ranking = report.get("priority_ranking") or {}
+    print(f"  monitor_priority 十分位単調性: {ranking.get('verdict')}"
+          f"（{ranking.get('windows_monotonic')}/{ranking.get('windows_judged')} 窓）")
+    for name, crowding in (report.get("crowding") or {}).items():
+        print(f"  拥挤度({name}) 4+ − 0/1: {crowding.get('windows_negative')}/{crowding.get('windows_judged')} 窓で負"
+              f"  留出期={crowding.get('holdout_spread_4plus_minus_01')}  判定={crowding.get('verdict')}")
     print()
     print("  --- 狭い条件のコホート（原案の段階） ---")
     for key in COHORT_KEYS:
