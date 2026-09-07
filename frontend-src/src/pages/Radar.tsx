@@ -23,6 +23,7 @@ import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart
 import { CodeCell, DataThrough, RADAR_STATE_LABELS, ScoreBar, SignalChip, StateChip } from '@/components/domain';
 import StrengthBar from '@/components/shared/StrengthBar';
 import HistoryRail from '@/components/radar/HistoryRail';
+import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
 import PriceScale from '@/components/radar/PriceScale';
 import ScoreBarsMini from '@/components/radar/ScoreBarsMini';
 import { useAccess } from '@/hooks/useAccess';
@@ -54,6 +55,7 @@ export default function Radar() {
   const [view, setView] = useState<ViewMode>('cards');
   const [leadId, setLeadId] = useState<string | null>(null);
   const [locateId, setLocateId] = useState<string | null>(null);
+  const [rescanning, setRescanning] = useState(false);
   const locateTimer = useRef<number | null>(null);
 
   const promoteLead = (id: string) => {
@@ -123,20 +125,24 @@ export default function Radar() {
           <div className="flex items-center gap-3">
             <DataThrough date={query.data?.scan_date} />
             {isOwner && (
-              <button
-                type="button"
-                className="control-button"
+              <ForceRefreshButton
                 onClick={async () => {
+                  if (rescanning) return;
+                  setRescanning(true);
                   try {
                     await workerApi.trigger('radar_refresh');
                     toast.success(t('重算雷达'), t('已提交'));
+                    query.refresh({ force: true });
                   } catch (error) {
                     toast.error(t('重算雷达'), String((error as Error).message ?? error));
+                  } finally {
+                    setRescanning(false);
                   }
                 }}
-              >
-                {t('重算雷达')}
-              </button>
+                spinning={rescanning}
+                label={t('重算雷达')}
+                title={t('重算雷达')}
+              />
             )}
           </div>
         }

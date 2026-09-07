@@ -1,7 +1,7 @@
 /** 新闻催化剂桌面 — 对齐美版信息设计：
  *  信息流（过滤+热点条+重要度+AI状态） / 个股影响 / 经济日历 / 数据源。 */
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { motion } from 'framer-motion';
 import { newsApi } from '@/api/modules';
@@ -18,6 +18,8 @@ import CodeMark from '@/components/shared/CodeMark';
 import InfoHint from '@/components/shared/InfoHint';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import HorizontalScroller from '@/components/shared/HorizontalScroller';
+import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
+import Switch from '@/components/shared/Switch';
 import { NEWS_HINTS } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { explanationLines } from '@/lib/explainText';
@@ -56,6 +58,18 @@ export default function News() {
   const status = usePolling(() => newsApi.status(), 300_000);
 
   const feedState = remoteState(feed, (d) => d.items.length === 0);
+  const [refreshingNews, setRefreshingNews] = useState(false);
+
+  const onRefreshNews = useCallback(() => {
+    if (refreshingNews) return;
+    setRefreshingNews(true);
+    status.refresh({ force: true });
+    hotspots.refresh({ force: true });
+    if (tab === 'feed') feed.refresh({ force: true });
+    if (tab === 'stocks') securities.refresh({ force: true });
+    if (tab === 'econ') econ.refresh({ force: true });
+    window.setTimeout(() => setRefreshingNews(false), 800);
+  }, [econ, feed, hotspots, refreshingNews, securities, status, tab]);
 
   return (
     <div className="space-y-5">
@@ -64,7 +78,17 @@ export default function News() {
         eyebrow="NEWS & CATALYSTS · JAPAN EQUITIES"
         title={t('新闻')}
         description={t('本页为日线数据，收盘后更新')}
-        meta={<StatusStrip status={status.data ?? null} />}
+        meta={
+          <>
+            <StatusStrip status={status.data ?? null} />
+            <ForceRefreshButton
+              onClick={onRefreshNews}
+              spinning={refreshingNews}
+              label={t('刷新新闻')}
+              title={t('刷新新闻')}
+            />
+          </>
+        }
       />
 
       <StatusHero status={status.data ?? null} />
@@ -120,15 +144,16 @@ export default function News() {
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              className="control-button"
-              aria-pressed={onlySecurities}
-              onClick={() => setOnlySecurities((v) => !v)}
-            >
+            <label className="ml-auto flex items-center gap-2 text-caption text-ink-600">
+              <Switch
+                checked={onlySecurities}
+                onToggle={() => setOnlySecurities((v) => !v)}
+                label={t('仅看关联个股')}
+                size="sm"
+              />
               {t('仅看关联个股')}
-            </button>
-            <span className="ml-auto text-caption text-ink-400">
+            </label>
+            <span className="text-caption text-ink-400">
               {t('共')} {feed.data?.items.length ?? '—'} {t('条')}
             </span>
           </div>
@@ -224,7 +249,7 @@ function StatusHero({ status }: { status: NewsStatus | null }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: DUR_SECTION, ease: EASE_PAPER }}
       aria-label={t('数据源')}
-      className="card-surface"
+      className="card-surface card-lift"
     >
       <div className="grid grid-cols-2 xl:grid-cols-4">
         <HeroCell label={t('数据源')} index={0}>

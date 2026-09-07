@@ -1,5 +1,6 @@
 /** 数据状态页：数据集鲜度/能力声明/Worker任务/手动刷新入口。 */
 
+import { useState } from 'react';
 import { dataStatusApi, workerApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { remoteState } from '@/hooks/remoteState';
@@ -12,6 +13,8 @@ import StaleStrip from '@/components/shared/StaleStrip';
 import StatCard from '@/components/shared/StatCard';
 import { useAccess } from '@/hooks/useAccess';
 import { useToast } from '@/hooks/useToast';
+import Icon from '@/components/icons';
+import { cn } from '@/lib/utils';
 import { t } from '@/i18n/core';
 import { fmtJstDateTime } from '@/lib/format';
 import type { DatasetStatus } from '@/api/types';
@@ -29,6 +32,7 @@ export default function DataStatus() {
   const { isOwner } = useAccess();
   const toast = useToast();
   const state = remoteState(query);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   const columns: Column<DatasetStatus>[] = [
     {
@@ -169,16 +173,27 @@ export default function DataStatus() {
                 <button
                   key={action.type}
                   type="button"
-                  className="control-button"
+                  disabled={pendingAction !== null}
+                  className="control-button inline-flex items-center gap-1.5"
                   onClick={async () => {
+                    if (pendingAction) return;
+                    setPendingAction(action.type);
                     try {
                       const result = await workerApi.trigger(action.type);
                       toast.success(t(action.label), `${t('已提交')} #${result.action_id ?? '?'}`);
+                      query.refresh({ force: true });
                     } catch (error) {
                       toast.error(t(action.label), String((error as Error).message ?? error));
+                    } finally {
+                      setPendingAction(null);
                     }
                   }}
                 >
+                  <Icon
+                    name="refresh"
+                    size={13}
+                    className={cn(pendingAction === action.type && 'animate-spin-once')}
+                  />
                   {t(action.label)}
                 </button>
               ))}

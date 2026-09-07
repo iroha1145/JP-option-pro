@@ -1928,4 +1928,5 @@ export const DICT: Record<string, [string, string]> = {
   刷新日历: ['Refresh calendar', 'カレンダーを更新'],
   日历已更新: ['Calendar updated', 'カレンダーを更新しました'],
   刷新失败: ['Refresh failed', '更新に失敗'],
+  刷新新闻: ['Refresh news', 'ニュースを更新'],
 };
