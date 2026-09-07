@@ -170,6 +170,12 @@ export default function PointerTooltip({
           claim(id);
           schedulePlace();
         }}
+        onMouseEnter={(event) => {
+          pointer.current = { x: event.clientX, y: event.clientY };
+          dismissed.current = false;
+          claim(id);
+          schedulePlace();
+        }}
         onPointerMove={(event) => {
           if (event.pointerType === 'touch' || dismissed.current) return;
           pointer.current = { x: event.clientX, y: event.clientY };
@@ -178,6 +184,10 @@ export default function PointerTooltip({
         }}
         onPointerLeave={(event) => {
           if (event.pointerType === 'touch') return;
+          pointer.current = null;
+          release(id);
+        }}
+        onMouseLeave={() => {
           pointer.current = null;
           release(id);
         }}
