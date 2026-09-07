@@ -49,6 +49,7 @@ import SoftBadge from '@/components/shared/SoftBadge';
 import StaleStrip from '@/components/shared/StaleStrip';
 import StatusNotice from '@/components/shared/StatusNotice';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
+import SourceNote from '@/components/shared/SourceNote';
 import InfoHint from '@/components/shared/InfoHint';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import { SHORT_HINTS, shortScoreHint } from '@/lib/indicatorHints';
@@ -316,6 +317,7 @@ export default function ShortMonitor() {
           )}
         </SkeletonReveal>
       )}
+      <SourceNote className="mt-8" text={t('公开披露的机构空卖持仓 · 非全市场空头')} />
     </div>
   );
 }

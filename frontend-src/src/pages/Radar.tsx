@@ -151,6 +151,11 @@ export default function Radar() {
         meta={
           <div className="flex items-center gap-3">
             <DataThrough date={query.data?.scan_date} />
+            {query.lastUpdatedAt && (
+              <span className="font-mono text-caption text-ink-400 tnum">
+                {t('更新')} {fmtTimeHHMMSS(query.lastUpdatedAt)}
+              </span>
+            )}
             {isOwner && (
               <ForceRefreshButton
                 onClick={async () => {

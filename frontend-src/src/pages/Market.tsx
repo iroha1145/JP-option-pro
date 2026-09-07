@@ -18,6 +18,7 @@ import SectorMembersPanel from '@/components/sectors/SectorMembersPanel';
 import StaleStrip from '@/components/shared/StaleStrip';
 import SessionLED from '@/components/shared/SessionLED';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
+import SourceNote from '@/components/shared/SourceNote';
 import InfoHint from '@/components/shared/InfoHint';
 import { MARKET_HINTS } from '@/lib/indicatorHints';
 import { tokyoSession } from '@/lib/tokyoSession';
@@ -368,6 +369,7 @@ export default function Market() {
           />
         </>
       )}
+      <SourceNote className="mt-8" text={t('指数与 33 业种为官方日线，收盘后更新')} />
     </div>
   );
 }

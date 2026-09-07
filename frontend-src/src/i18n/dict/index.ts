@@ -1971,4 +1971,29 @@ export const DICT: Record<string, [string, string]> = {
     'Breakout scan · updates after the cash close',
     'ブレイクアウト結果 · 日足引け後に更新',
   ],
+  数据与分析说明: ['Data and analysis notes', 'データと分析の説明'],
+  '新闻来自已配置的 RSS 源；每条标注原始来源；滞后表示上次采集时间；AI 状态与队列来自本站翻译管线': [
+    'News comes from configured RSS feeds; each item keeps its source; lag is last crawl time; AI state and queue are this site’s translation pipeline',
+    'ニュースは設定済み RSS。各件に出典。遅延は最終取得時刻。AI 状態とキューは翻訳パイプライン',
+  ],
+  '指数与 33 业种为官方日线，收盘后更新': [
+    'Indices and 33 sectors are official daily bars, updated after the close',
+    '指数と33業種は公式日足、引け後に更新',
+  ],
+  '官方终值来自日线；盘中价为延迟行情，不是实时伪装': [
+    'Official close is the daily bar; the intraday print is delayed, not a live disguise',
+    '公式終値は日足。ザラ場値は遅延気配であり、リアルタイム偽装ではない',
+  ],
+  '强度扫描结果 · 日线收盘后快照': [
+    'Strength scan · post-close daily snapshot',
+    '強度スキャン · 日足引け後の断面',
+  ],
+  '本页展示 J-Quants 同步状态与 worker 任务': [
+    'This page shows J-Quants sync status and worker tasks',
+    'このページは J-Quants 同期状態と worker タスクを示す',
+  ],
+  '公开披露的机构空卖持仓 · 非全市场空头': [
+    'Publicly disclosed institutional shorts · not the full short book',
+    '開示済み機関空売り · 市場全体の空頭ではない',
+  ],
 };

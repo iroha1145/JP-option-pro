@@ -14,6 +14,7 @@ import TickPrice from '@/components/shared/TickPrice';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import { remoteState } from '@/hooks/remoteState';
 import EmptyState from '@/components/shared/EmptyState';
+import SourceNote from '@/components/shared/SourceNote';
 import { InsightValue } from '@/components/shared/InsightCard';
 import WatchlistToggle from '@/components/shared/WatchlistToggle';
 import DataTable, { type Column } from '@/components/shared/DataTable';
@@ -47,6 +48,14 @@ import type {
   TechnicalStructure,
   TickView,
 } from '@/api/types';
+
+/** 用收盘/现价与涨跌比率还原绝对变动，不另编字段。 */
+function yenChangeFromPct(price: number | null | undefined, changePct: number | null | undefined): number | null {
+  if (price == null || changePct == null || !Number.isFinite(price) || !Number.isFinite(changePct)) return null;
+  const denom = 1 + changePct;
+  if (denom === 0) return null;
+  return (price * changePct) / denom;
+}
 
 export default function StockDetail() {
   const { code = '' } = useParams();
@@ -232,6 +241,7 @@ export default function StockDetail() {
                     </TickPrice>
                   }
                   changePct={liveQuote.change_pct}
+                  change={yenChangeFromPct(liveQuote.price, liveQuote.change_pct)}
                   basis={t('vs 昨收')}
                 />
               </div>
@@ -264,6 +274,7 @@ export default function StockDetail() {
                     </TickPrice>
                   }
                   changePct={data.quote.change_pct}
+                  change={yenChangeFromPct(data.quote.close, data.quote.change_pct)}
                   basis={t('vs 昨收')}
                 />
               </div>
@@ -415,6 +426,7 @@ export default function StockDetail() {
           )}
         </section>
       </div>
+      <SourceNote className="mt-8" text={t('官方终值来自日线；盘中价为延迟行情，不是实时伪装')} />
     </div>
   );
 }

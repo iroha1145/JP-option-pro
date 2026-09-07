@@ -24,6 +24,8 @@ import AnalysisIcon from '@/components/shared/AnalysisIcon';
 import PulseDot from '@/components/shared/PulseDot';
 import FilterButton from '@/components/shared/FilterButton';
 import SelectionViewport from '@/components/shared/SelectionViewport';
+import SourceNote from '@/components/shared/SourceNote';
+import Icon from '@/components/icons';
 import { NEWS_HINTS } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { explanationLines } from '@/lib/explainText';
@@ -284,6 +286,20 @@ function StatusHero({ status }: { status: NewsStatus | null }) {
           </p>
         </HeroCell>
       </div>
+      <details className="group border-t border-line px-4 py-1 sm:px-5">
+        <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 text-caption text-ink-500 marker:content-none [&::-webkit-details-marker]:hidden">
+          {t('数据与分析说明')}
+          <Icon
+            name="chevron-down"
+            size={14}
+            className="shrink-0 transition-transform duration-fast group-open:rotate-180 motion-reduce:transition-none"
+          />
+        </summary>
+        <SourceNote
+          className="border-0 pb-3 pt-1"
+          text={t('新闻来自已配置的 RSS 源；每条标注原始来源；滞后表示上次采集时间；AI 状态与队列来自本站翻译管线')}
+        />
+      </details>
     </motion.section>
   );
 }

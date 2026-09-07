@@ -26,6 +26,7 @@ import ResultTable from '@/components/screener/ResultTable';
 import ResultCards from '@/components/screener/ResultCards';
 import ScanHistoryPopover from '@/components/screener/ScanHistoryPopover';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
+import SourceNote from '@/components/shared/SourceNote';
 import { MarketRegimeCard, MethodCard, TierHistogram } from '@/components/screener/SideCards';
 import {
   DEFAULT_FILTERS,
@@ -575,6 +576,7 @@ export default function Screener() {
           </AnimatePresence>
         </aside>
       </div>
+      <SourceNote className="mt-8" text={t('强度扫描结果 · 日线收盘后快照')} />
     </div>
   );
 }

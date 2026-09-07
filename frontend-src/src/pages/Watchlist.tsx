@@ -5,7 +5,7 @@
  * 主体：owner 或访客账号（账号与美股版通用）；匿名显示登录引导。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { motion } from 'framer-motion';
 import { stocksApi, watchlistApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
@@ -21,6 +21,7 @@ import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
 import SessionLED from '@/components/shared/SessionLED';
 import MenuSelect from '@/components/shared/MenuSelect';
 import AdvanceDeclineBar from '@/components/shared/AdvanceDeclineBar';
+import SourceNote from '@/components/shared/SourceNote';
 import { CodeCell, DataThrough } from '@/components/domain';
 import Icon from '@/components/icons';
 import { useAccess } from '@/hooks/useAccess';
@@ -72,6 +73,7 @@ function sortWatchlist(items: WatchlistItem[], sortId: WatchSortId): WatchlistIt
 }
 
 export default function Watchlist() {
+  const navigate = useNavigate();
   const { canManageWatchlist, accountUsername, isOwner } = useAccess();
   const toast = useToast();
   const now = useNow(30_000);
@@ -211,56 +213,61 @@ export default function Watchlist() {
         render: (row) => <span className="truncate text-caption text-ink-500">{row.note ?? '—'}</span>,
       },
     ];
-    if (canManageWatchlist) {
-      base.push({
-        key: 'actions',
-        title: '',
-        align: 'right',
-        render: (row) => (
-          <span className="flex items-center justify-end gap-1.5">
-            <PointerTooltip
-              passthrough
-              label={t('标记重点')}
-              content={<span className="text-micro leading-[16px] text-ink-600">{t('标记重点')}</span>}
-            >
-              <button
-                type="button"
-                disabled={busy === row.canonical_code}
-                aria-label={t('标记重点')}
-                className={cn(
-                  'rounded-md border border-line px-2 py-0.5 text-micro shadow-btn hover:bg-brand-50',
-                  row.marked_important ? 'text-warn-600' : 'text-ink-400',
-                )}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  void doToggleStar(row);
-                }}
+    base.push({
+      key: 'actions',
+      title: '',
+      align: 'right',
+      render: (row) => (
+        <span className="flex items-center justify-end gap-1.5">
+          {canManageWatchlist && (
+            <>
+              <PointerTooltip
+                passthrough
+                label={t('标记重点')}
+                content={<span className="text-micro leading-[16px] text-ink-600">{t('标记重点')}</span>}
               >
-                ★
-              </button>
-            </PointerTooltip>
-            <PointerTooltip
-              passthrough
-              label={t('从自选移除 {code}', { code: row.display_code })}
-              content={<span className="text-micro leading-[16px] text-ink-600">{t('移出自选')}</span>}
-            >
-              <button
-                type="button"
-                disabled={busy === row.canonical_code}
-                aria-label={t('从自选移除 {code}', { code: row.display_code })}
-                className="rounded-md border border-line px-2 py-0.5 text-micro text-down-700 shadow-btn hover:bg-down-50"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  void doRemove(row.canonical_code);
-                }}
+                <button
+                  type="button"
+                  disabled={busy === row.canonical_code}
+                  aria-label={t('标记重点')}
+                  className={cn(
+                    'rounded-md border border-line px-2 py-0.5 text-micro shadow-btn opacity-0 transition-[opacity,color] duration-fast hover:bg-brand-50 focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100',
+                    row.marked_important ? 'text-warn-600' : 'text-ink-400',
+                  )}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void doToggleStar(row);
+                  }}
+                >
+                  ★
+                </button>
+              </PointerTooltip>
+              <PointerTooltip
+                passthrough
+                label={t('从自选移除 {code}', { code: row.display_code })}
+                content={<span className="text-micro leading-[16px] text-ink-600">{t('移出自选')}</span>}
               >
-                <Icon name="x" size={12} />
-              </button>
-            </PointerTooltip>
+                <button
+                  type="button"
+                  disabled={busy === row.canonical_code}
+                  aria-label={t('从自选移除 {code}', { code: row.display_code })}
+                  className="rounded-md border border-line px-2 py-0.5 text-micro text-down-700 shadow-btn opacity-0 transition-[opacity,color] duration-fast hover:bg-down-50 focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void doRemove(row.canonical_code);
+                  }}
+                >
+                  <Icon name="x" size={12} />
+                </button>
+              </PointerTooltip>
+            </>
+          )}
+          <span className="inline-flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-400 opacity-0 transition-opacity duration-fast group-hover:opacity-100 [@media(hover:none)]:opacity-100">
+            <Icon name="arrow-up-right" size={14} />
           </span>
-        ),
-      });
-    }
+        </span>
+      ),
+    });
     return base;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canManageWatchlist, busy, flashes]);
@@ -415,7 +422,13 @@ export default function Watchlist() {
                 />
               </section>
             ) : view === 'table' ? (
-              <DataTable columns={columns} rows={items} rowKey={(row) => row.canonical_code} rowHeight={44} />
+              <DataTable
+                columns={columns}
+                rows={items}
+                rowKey={(row) => row.canonical_code}
+                rowHeight={44}
+                onRowClick={(row) => navigate(`/stock/${row.display_code}`)}
+              />
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {items.map((item, index) => (
@@ -434,6 +447,7 @@ export default function Watchlist() {
           </SkeletonReveal>
         </div>
       )}
+      <SourceNote className="mt-8" text={t('本页为日线数据，收盘后更新 · 仅供研究参考，不构成投资建议')} />
     </div>
   );
 }
