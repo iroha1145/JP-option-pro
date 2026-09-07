@@ -78,7 +78,13 @@ export default function ResultCards({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-body-s text-ink-800">{row.name_ja ?? '—'}</span>
-                  <span className="block truncate text-micro text-ink-400">{row.sector33_name ?? '—'}</span>
+                  {row.sector33_name ? (
+                    <SoftBadge className="mt-0.5 max-w-[11rem]" title={row.sector33_name}>
+                      <span className="truncate">{row.sector33_name}</span>
+                    </SoftBadge>
+                  ) : (
+                    <span className="block truncate text-micro text-ink-400">—</span>
+                  )}
                 </span>
                 <ChangeBadge value={row.change_pct !== null ? row.change_pct / 100 : null} size="sm" />
                 <Icon

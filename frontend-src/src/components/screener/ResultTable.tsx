@@ -11,6 +11,7 @@ import { fmtPrice, fmtYenCompact } from '@/lib/format';
 import Icon from '@/components/icons';
 import ChangeBadge from '@/components/shared/ChangeBadge';
 import InfoHint from '@/components/shared/InfoHint';
+import SoftBadge from '@/components/shared/SoftBadge';
 import TickPrice from '@/components/shared/TickPrice';
 import { CodeCell } from '@/components/domain';
 import { STRENGTH_HINTS } from '@/lib/indicatorHints';
@@ -123,16 +124,20 @@ export default function ResultTable({
                   <td className="px-3 py-2 font-mono text-caption text-ink-400 tnum">{startIndex + index + 1}</td>
                   <td className="px-3 py-2">
                     <CodeCell displayCode={row.display_code} nameJa={row.name_ja} />
-                    <span className="block max-w-[180px] truncate pl-0.5 text-micro text-ink-400">
-                      {row.sector33_name ?? '—'}
-                    </span>
+                    {row.sector33_name ? (
+                      <SoftBadge className="mt-0.5 max-w-[11rem]" title={row.sector33_name}>
+                        <span className="truncate">{row.sector33_name}</span>
+                      </SoftBadge>
+                    ) : (
+                      <span className="block max-w-[180px] truncate pl-0.5 text-micro text-ink-400">—</span>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <ScoreCell score={score} index={index} />
                   </td>
                   <td className="px-3 py-2">
                     {row.classification ? (
-                      <span className="whitespace-nowrap rounded-xs bg-paper-2 px-1.5 py-0.5 text-micro text-ink-600">{t(row.classification)}</span>
+                      <SoftBadge>{t(row.classification)}</SoftBadge>
                     ) : (
                       <span className="text-ink-300">—</span>
                     )}
