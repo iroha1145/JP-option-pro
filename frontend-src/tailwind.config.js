@@ -23,7 +23,7 @@ module.exports = {
           700: '#2A3550',
           600: '#3D4A68',
           500: '#5A6788',
-          400: '#8A94B0',
+          400: '#626F8B',
           300: '#B7BFD3',
         },
         line: {
@@ -37,21 +37,20 @@ module.exports = {
           600: '#2E46E0', // 主色（主按钮/激活态/关键数据）
           500: '#3B59F2',
           400: '#6B82FF',
-          /* 300：目安/推定层（决算密度条淡段）。缺档时类名不生成规则、段整体透明（同 ink-700 前科） */
-          300: '#96A7FF',
           100: '#E4E9FF',
           50: '#F0F3FF',
         },
-        /* 日本・中華圏の慣習: 上昇=赤 / 下落=緑（index.css の CSS 変数と一致） */
+        /* 涨跌色走 CSS 变量，html[data-color-mode=asian] 换盘后工具类一起换。
+           <alpha-value> 保住 bg-up-600/20 这类透明度变体。 */
         up: {
-          700: '#C4302B',
-          600: '#E5484D',
-          50: '#FCECEC',
+          700: 'color-mix(in srgb, var(--up-700) calc(100% * <alpha-value>), transparent)',
+          600: 'color-mix(in srgb, var(--up-600) calc(100% * <alpha-value>), transparent)',
+          50: 'color-mix(in srgb, var(--up-50) calc(100% * <alpha-value>), transparent)',
         },
         down: {
-          700: '#0B7A55',
-          600: '#0E9F6E',
-          50: '#E5F6EF',
+          700: 'color-mix(in srgb, var(--down-700) calc(100% * <alpha-value>), transparent)',
+          600: 'color-mix(in srgb, var(--down-600) calc(100% * <alpha-value>), transparent)',
+          50: 'color-mix(in srgb, var(--down-50) calc(100% * <alpha-value>), transparent)',
         },
         warn: {
           /* 700：警示横幅主文案用档（warn-50 底上比 600 重一档，审计 2.4.5） */
@@ -111,7 +110,7 @@ module.exports = {
         'sh-1': '0 1px 2px rgba(16,24,40,.03)',
         'sh-2': '0 1px 2px rgba(16,24,40,.03), 0 12px 32px -14px rgba(16,24,40,.10)',
         'sh-3': '0 2px 4px rgba(16,24,40,.04), 0 24px 56px -16px rgba(16,24,40,.16)',
-        'card': '0 1px 2px rgba(16,24,40,.03), inset 0 1px 0 rgba(255,255,255,.7)',
+        'card': '0 2px 4px rgba(24,43,68,.02), 0 9px 25px -12px rgba(24,43,68,.12)',
         'card-hover': '0 1px 2px rgba(16,24,40,.03), 0 12px 32px -14px rgba(16,24,40,.10), inset 0 1px 0 rgba(255,255,255,.7)',
         'inset-hi': 'inset 0 1px 0 rgba(255,255,255,.7)',
         'focus-ring': '0 0 0 3px rgba(46,70,224,.18)',
@@ -129,6 +128,9 @@ module.exports = {
         'btn-hi': 'inset 0 1px 0 rgba(255,255,255,.16), 0 1px 2px rgba(16,24,40,.18), 0 4px 12px -4px rgba(16,24,40,.34)',
         chip: 'inset 0 1px 0 rgba(255,255,255,.14), 0 1px 3px -1px rgba(16,24,40,.25)',
         track: 'inset 0 1px 2px rgba(16,24,40,.16)',
+        /* v8.3 悬浮层两档登记（原 CommandPalette/MobileDock 的任意值 shadow，同族墨影） */
+        overlay: '0 24px 64px -16px rgba(16,24,40,0.35), 0 6px 20px -8px rgba(16,24,40,0.16)',
+        dock: '0 18px 40px -14px rgba(16,24,40,0.30), 0 4px 14px -6px rgba(16,24,40,0.14)',
       },
       fontFamily: {
         /* v8：display 换系统 sans 栈（与 sans 相同但独立变量保留，大标不再用衬线） */
@@ -163,7 +165,6 @@ module.exports = {
         /* design.md §4.1 缓动 */
         paper: 'cubic-bezier(.16,1,.3,1)',
         snap: 'cubic-bezier(.22,1,.36,1)',
-        spring: 'cubic-bezier(.22,1.15,.36,1)',
         'in-out-circ': 'cubic-bezier(.45,0,.15,1)',
       },
       transitionDuration: {
@@ -201,18 +202,12 @@ module.exports = {
           from: { opacity: '1' },
           to: { opacity: '0' },
         },
-        'tick-flash-up': {
-          '0%': { backgroundColor: '#E5F6EF' },
-          '100%': { backgroundColor: 'transparent' },
-        },
-        'tick-flash-down': {
-          '0%': { backgroundColor: '#FCECEC' },
-          '100%': { backgroundColor: 'transparent' },
-        },
+        /* v8.3 tick-flash keyframes 退役：keyframes 一旦触发必须跑完、无法中断，
+           改为 index.css 的 .tick-flash*（常驻 600ms 回落 transition + 瞬时上色态）。 */
         'led-pulse': {
-          '0%': { boxShadow: '0 0 0 0 rgba(14,159,110,.55)' },
-          '70%': { boxShadow: '0 0 0 6px rgba(14,159,110,0)' },
-          '100%': { boxShadow: '0 0 0 0 rgba(14,159,110,0)' },
+          '0%': { boxShadow: '0 0 0 0 color-mix(in srgb, var(--up-600) 55%, transparent)' },
+          '70%': { boxShadow: '0 0 0 6px color-mix(in srgb, var(--up-600) 0%, transparent)' },
+          '100%': { boxShadow: '0 0 0 0 color-mix(in srgb, var(--up-600) 0%, transparent)' },
         },
         'radar-sweep': {
           from: { transform: 'rotate(0deg)' },
@@ -251,8 +246,6 @@ module.exports = {
         'rise-in': 'rise-in 560ms cubic-bezier(.16,1,.3,1) both',
         'page-fade-in': 'page-fade-in 280ms cubic-bezier(.16,1,.3,1) both',
         'page-fade-out': 'page-fade-out 160ms cubic-bezier(.16,1,.3,1) both',
-        'tick-flash-up': 'tick-flash-up 600ms cubic-bezier(.22,1,.36,1)',
-        'tick-flash-down': 'tick-flash-down 600ms cubic-bezier(.22,1,.36,1)',
         'led-pulse': 'led-pulse 1.5s cubic-bezier(.45,0,.15,1) infinite',
         'radar-sweep': 'radar-sweep 3.2s linear infinite',
         'blip-ripple': 'blip-ripple 2s cubic-bezier(.45,0,.15,1) infinite',

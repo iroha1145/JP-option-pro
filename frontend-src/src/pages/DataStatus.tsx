@@ -1,6 +1,5 @@
 /** 数据状态页：数据集鲜度/能力声明/Worker任务/手动刷新入口。 */
 
-import { useState } from 'react';
 import { dataStatusApi, workerApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { remoteState } from '@/hooks/remoteState';
@@ -8,11 +7,13 @@ import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import { SkeletonRows } from '@/components/shared/Skeleton';
+import SoftBadge from '@/components/shared/SoftBadge';
+import StaleStrip from '@/components/shared/StaleStrip';
 import { useAccess } from '@/hooks/useAccess';
+import { useToast } from '@/hooks/useToast';
 import { t } from '@/i18n/core';
 import { fmtJstDateTime } from '@/lib/format';
 import type { DatasetStatus } from '@/api/types';
-import { cn } from '@/lib/utils';
 
 const MANUAL_ACTIONS: { type: string; label: string }[] = [
   { type: 'post_close_batch', label: '触发收盘批处理' },
@@ -25,8 +26,8 @@ const MANUAL_ACTIONS: { type: string; label: string }[] = [
 export default function DataStatus() {
   const query = usePolling(() => dataStatusApi.get(), 60_000);
   const { isOwner } = useAccess();
+  const toast = useToast();
   const state = remoteState(query);
-  const [actionNote, setActionNote] = useState<string | null>(null);
 
   const columns: Column<DatasetStatus>[] = [
     {
@@ -91,7 +92,7 @@ export default function DataStatus() {
   return (
     <div className="space-y-6">
       <PageHeader
-        section="08"
+        section="09"
         eyebrow="DATA STATUS · J-QUANTS V2"
         title={t('数据状态')}
         description={t('本页为日线数据，收盘后更新')}
@@ -111,33 +112,35 @@ export default function DataStatus() {
         <EmptyState variant="error" title={t('加载失败')} description={String(query.error?.message ?? '')} />
       ) : query.data ? (
         <>
+          {state === 'stale' && (
+            <StaleStrip onRetry={() => query.refresh()} refreshing={query.refreshing} />
+          )}
           {isOwner && (
-            <div className="card-surface flex flex-wrap items-center gap-2 rounded-lg p-3">
+            <div className="card-surface flex flex-wrap items-center gap-2 p-3">
               <span className="text-caption text-ink-400">{t('手动刷新')}:</span>
               {MANUAL_ACTIONS.map((action) => (
                 <button
                   key={action.type}
                   type="button"
-                  className="rounded-md border border-line bg-card px-2.5 py-1 text-caption text-ink-600 hover:bg-brand-50"
+                  className="control-button"
                   onClick={async () => {
                     try {
                       const result = await workerApi.trigger(action.type);
-                      setActionNote(`${t(action.label)} — ${t('已提交')} (#${result.action_id ?? '?'})`);
+                      toast.success(t(action.label), `${t('已提交')} #${result.action_id ?? '?'}`);
                     } catch (error) {
-                      setActionNote(String((error as Error).message ?? error));
+                      toast.error(t(action.label), String((error as Error).message ?? error));
                     }
                   }}
                 >
                   {t(action.label)}
                 </button>
               ))}
-              {actionNote && <span className="text-caption text-ink-400">{actionNote}</span>}
             </div>
           )}
 
           <DataTable columns={columns} rows={query.data.datasets} rowKey={(row) => row.key} rowHeight={56} />
 
-          <section className="card-surface rounded-lg p-4">
+          <section className="card-surface p-4">
             <h2 className="mb-2 text-h3 text-ink-900">
               {query.data.intraday.enabled ? t('盘中数据') : t('盘中数据未接入')}
             </h2>
@@ -145,17 +148,12 @@ export default function DataStatus() {
           </section>
 
           {query.data.worker && (
-            <section className="card-surface rounded-lg p-4">
+            <section className="card-surface p-4">
               <h2 className="mb-2 flex items-center gap-2 text-h3 text-ink-900">
                 Worker
-                <span
-                  className={cn(
-                    'rounded-pill px-2 py-0.5 text-micro font-medium',
-                    query.data.worker.healthy ? 'bg-up-50 text-up-700' : 'bg-down-50 text-down-700',
-                  )}
-                >
+                <SoftBadge tone={query.data.worker.healthy ? 'up' : 'down'}>
                   {query.data.worker.healthy ? 'healthy' : 'degraded'}
-                </span>
+                </SoftBadge>
               </h2>
               <ul className="grid grid-cols-1 gap-1.5 text-body-s md:grid-cols-2">
                 {Object.entries(query.data.worker.tasks ?? {}).map(([name, task]) => (
@@ -178,19 +176,13 @@ export default function DataStatus() {
 
 function CapabilityBadge({ status, freshness }: { status: DatasetStatus['status']; freshness?: string | null }) {
   if (status === 'unavailable') {
-    return <span className="rounded-pill bg-paper-2 px-2 py-0.5 text-micro text-ink-400">{t('不可用')}</span>;
+    return <SoftBadge>{t('不可用')}</SoftBadge>;
   }
   if (status === 'planned') {
-    return <span className="rounded-pill bg-brand-50 px-2 py-0.5 text-micro text-brand-700">{t('未接入')}</span>;
+    return <SoftBadge tone="brand">{t('未接入')}</SoftBadge>;
   }
-  // 鮮度は騰落色と無関係の状態表示なので teal（ai-*）を使う。
-  const tone =
-    freshness === 'fresh'
-      ? 'bg-ai-50 text-ai-600'
-      : freshness === 'stale' || freshness === 'error'
-        ? 'bg-warn-50 text-warn-700'
-        : 'bg-paper-2 text-ink-500';
+  const tone = freshness === 'fresh' ? 'ai' : freshness === 'stale' || freshness === 'error' ? 'warn' : 'neutral';
   const label =
     freshness === 'fresh' ? t('新鲜') : freshness === 'stale' ? t('过期') : freshness === 'never_synced' ? t('从未同步') : freshness ?? '—';
-  return <span className={`rounded-pill px-2 py-0.5 text-micro font-medium ${tone}`}>{label}</span>;
+  return <SoftBadge tone={tone}>{label}</SoftBadge>;
 }

@@ -14,12 +14,18 @@ import InsightLineChart, { type InsightScrub } from '@/components/charts/Insight
 import { CodeCell, DataThrough } from '@/components/domain';
 import HeatMatrix, { HeatMatrixSkeleton, metricValue, type HeatMetric } from '@/components/sectors/HeatMatrix';
 import SectorMembersPanel from '@/components/sectors/SectorMembersPanel';
+import StaleStrip from '@/components/shared/StaleStrip';
+import SessionLED from '@/components/shared/SessionLED';
+import { tokyoSession } from '@/lib/tokyoSession';
+import { useNow } from '@/hooks/useNow';
 import { t } from '@/i18n/core';
 import { quoteSourceLabel } from '@/lib/quoteSource';
 import { fmtPct, fmtPrice, fmtTimeJst, fmtYenCompact } from '@/lib/format';
 import type { IntradayQuote, SectorMemberSort, SectorStrength } from '@/api/types';
 
 export default function Market() {
+  const now = useNow(30_000);
+  const session = tokyoSession(now);
   const market = usePolling(() => marketApi.overview(), 120_000);
   const [indexCode, setIndexCode] = useState('0000');
   const series = usePolling(() => marketApi.indexSeries(indexCode, 250), null, [indexCode]);
@@ -149,17 +155,25 @@ export default function Market() {
   return (
     <div className="space-y-6">
       <PageHeader
-        section="02"
+        section="05"
         eyebrow="JAPAN MARKET · TOPIX & SECTORS"
         title={t('日本市场')}
         description={t('本页为日线数据，收盘后更新')}
-        meta={<DataThrough date={market.data?.data_through} />}
+        meta={
+          <div className="flex items-center gap-3">
+            <SessionLED session={session} />
+            <DataThrough date={market.data?.data_through} />
+          </div>
+        }
       />
 
       {state === 'error' ? (
         <EmptyState variant="error" title={t('加载失败')} description={String(market.error?.message ?? '')} />
       ) : (
         <>
+          {state === 'stale' && (
+            <StaleStrip onRetry={() => market.refresh()} refreshing={market.refreshing} />
+          )}
           {n225 && (
             <section className="card-surface flex flex-wrap items-end justify-between gap-3 rounded-lg p-4">
               <span className="flex flex-col">
@@ -202,7 +216,7 @@ export default function Market() {
                   key={index.index_code}
                   type="button"
                   onClick={() => setIndexCode(index.index_code)}
-                  className={`card-surface card-hover flex w-full items-center justify-between rounded-lg px-3 py-2 text-left ${
+                  className={`card-surface card-glare card-hover flex w-full items-center justify-between px-3 py-2 text-left ${
                     index.index_code === indexCode ? 'ring-1 ring-brand-400' : ''
                   }`}
                 >

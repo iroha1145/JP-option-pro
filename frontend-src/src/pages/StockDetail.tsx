@@ -21,6 +21,9 @@ import ShortBehaviorPanel from '@/components/domain/ShortBehaviorPanel';
 import { CH, baseGrid, categoryAxis, glassTooltip, insightLineSeries, valueAxis } from '@/lib/chart';
 import { DataThrough, ScoreBar, SignalChip, StateChip } from '@/components/domain';
 import { useAccess } from '@/hooks/useAccess';
+import { useToast } from '@/hooks/useToast';
+import SoftBadge from '@/components/shared/SoftBadge';
+import CodeMark from '@/components/shared/CodeMark';
 import { STRUCTURE_HINTS, TECHNICAL_HINTS, type ScoreHint } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { quoteSourceLabel } from '@/lib/quoteSource';
@@ -76,7 +79,7 @@ export default function StockDetail() {
      「今いくらか」はこの非公式・15分遅延の値でしか埋められない。 */
   const live = usePolling(() => stocksApi.intradayQuotes([code]), 60_000, [code]);
   const { isOwner } = useAccess();
-  const [watchNote, setWatchNote] = useState<string | null>(null);
+  const toast = useToast();
   const [fetchNote, setFetchNote] = useState<string | null>(null);
 
   const state = remoteState(overview);
@@ -208,29 +211,28 @@ export default function StockDetail() {
       {/* ヘッダー */}
       <header className="border-b border-line pb-3">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="rounded-md bg-brand-50 px-2 py-1 font-mono text-h3 font-bold text-brand-700">
-            {security.display_code}
-          </span>
+          <CodeMark code={security.display_code} size={36} />
+          <span className="font-mono text-h3 font-bold text-brand-700">{security.display_code}</span>
           <h1 className="font-display text-display-m text-ink-900">{security.name_ja ?? security.name_en ?? '—'}</h1>
           {security.active === 0 && (
-            <span className="rounded-sm bg-down-50 px-1.5 py-0.5 text-micro text-down-700">
+            <SoftBadge tone="down">
               {t('上場廃止')} {security.delisted_date ?? ''}
-            </span>
+            </SoftBadge>
           )}
           {isOwner && (
             <button
               type="button"
-              className="ml-auto rounded-md border border-line bg-card px-2.5 py-1 text-caption text-ink-600 hover:bg-brand-50"
+              className="control-button ml-auto"
               onClick={async () => {
                 try {
                   const result = await watchlistApi.add(security.canonical_code);
-                  setWatchNote(result.created ? '✓' : '★');
-                } catch {
-                  setWatchNote('—');
+                  toast.success(t('加入自选'), result.created ? t('已加入') : t('已在自选中'));
+                } catch (error) {
+                  toast.error(t('加入自选'), String((error as Error).message ?? error));
                 }
               }}
             >
-              {watchNote ?? `+ ${t('加入自选')}`}
+              + {t('加入自选')}
             </button>
           )}
         </div>
@@ -332,9 +334,12 @@ export default function StockDetail() {
               onFetch={async () => {
                 try {
                   await workerApi.trigger('tick_fetch', { code: security.canonical_code });
+                  toast.success(t('逐笔'), t('已提交，数据到达后刷新本页'));
                   setFetchNote(t('已提交，数据到达后刷新本页'));
                 } catch (error) {
-                  setFetchNote(String((error as Error).message ?? error));
+                  const message = String((error as Error).message ?? error);
+                  toast.error(t('逐笔'), message);
+                  setFetchNote(message);
                 }
               }}
               onRefresh={() => ticks.refresh({ force: true })}
@@ -348,9 +353,12 @@ export default function StockDetail() {
               onFetch={async () => {
                 try {
                   await workerApi.trigger('intraday_fetch', { code: security.canonical_code });
+                  toast.success(t('盘中'), t('已提交，数据到达后刷新本页'));
                   setFetchNote(t('已提交，数据到达后刷新本页'));
                 } catch (error) {
-                  setFetchNote(String((error as Error).message ?? error));
+                  const message = String((error as Error).message ?? error);
+                  toast.error(t('盘中'), message);
+                  setFetchNote(message);
                 }
               }}
               onRefresh={() => intraday.refresh({ force: true })}

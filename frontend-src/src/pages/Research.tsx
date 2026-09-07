@@ -16,28 +16,29 @@ import type { ResearchReport } from '@/api/types';
 import { ApiError } from '@/api/client';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
+import SoftBadge, { type BadgeTone } from '@/components/shared/SoftBadge';
 import { SkeletonCard } from '@/components/shared/Skeleton';
 import { t } from '@/i18n/core';
 
-const VERDICT_TEXT: Record<string, { label: string; tone: string; note: string }> = {
+const VERDICT_TEXT: Record<string, { label: string; tone: BadgeTone; note: string }> = {
   monotonic: {
     label: '分层单调',
-    tone: 'text-up-700 bg-up-50 border-up-200',
+    tone: 'up',
     note: '高分层稳定优于低分层。可作为排序依据。',
   },
   weak: {
     label: '弱单调',
-    tone: 'text-warn-700 bg-warn-50 border-warn-200',
+    tone: 'warn',
     note: '部分窗口成立、部分不成立。不足以把分数当作概率。',
   },
   not_monotonic: {
     label: '不单调',
-    tone: 'text-down-700 bg-down-50 border-down-200',
+    tone: 'down',
     note: '高分层未稳定优于低分层。当前分数不具备概率含义，只能当作粗排。',
   },
   insufficient_data: {
     label: '样本不足',
-    tone: 'text-ink-600 bg-ink-50 border-line',
+    tone: 'neutral',
     note: '可判定的分层不足，尚无法下结论。',
   },
 };
@@ -75,7 +76,7 @@ export default function Research() {
   const meta = VERDICT_TEXT[verdict] ?? VERDICT_TEXT.insufficient_data;
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 pb-16 pt-4 md:px-6">
+    <div className="space-y-6">
       <PageHeader
         section="10"
         eyebrow="WALK-FORWARD VALIDATION"
@@ -103,17 +104,17 @@ export default function Research() {
 
       {state === 'done' && report && (
         <div className="space-y-4">
-          <section className={`rounded-lg border px-4 py-3 ${meta.tone}`}>
+          <section className="card-surface p-4">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <span className="text-data-l font-semibold">{t(meta.label)}</span>
-              <span className="text-caption">
+              <SoftBadge tone={meta.tone} size="md">{t(meta.label)}</SoftBadge>
+              <span className="text-caption text-ink-500">
                 {t('{ok}/{n} 个窗口单调', {
                   ok: report.summary?.windows_monotonic ?? 0,
                   n: report.summary?.windows_judged ?? 0,
                 })}
               </span>
             </div>
-            <p className="mt-1 text-caption">{t(meta.note)}</p>
+            <p className="mt-2 text-caption text-ink-600">{t(meta.note)}</p>
           </section>
 
           <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -129,7 +130,7 @@ export default function Research() {
                     : '—',
               },
             ].map((item) => (
-              <div key={item.label} className="rounded-md border border-line bg-card px-3 py-2">
+              <div key={item.label} className="card-surface px-3 py-2">
                 <div className="text-micro text-ink-400">{item.label}</div>
                 <div className="font-mono text-data-m text-ink-900 tnum">{item.value}</div>
               </div>
@@ -137,7 +138,7 @@ export default function Research() {
           </section>
 
           {(report.windows ?? []).map((window) => (
-            <section key={`${window.test[0]}-${window.test[1]}`} className="rounded-lg border border-line bg-card p-4">
+            <section key={`${window.test[0]}-${window.test[1]}`} className="card-surface p-4">
               <header className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
                 <span className="font-mono text-caption text-ink-700">
                   {window.test[0]} — {window.test[1]}
@@ -164,7 +165,7 @@ export default function Research() {
                           {bucket.bucket}
                           {/* 標本不足を隠さない。消すと上位だけ綺麗に見える。 */}
                           {!bucket.reliable && (
-                            <span className="ml-1 text-micro text-warn-600">{t('样本不足')}</span>
+                            <SoftBadge tone="warn" className="ml-1">{t('样本不足')}</SoftBadge>
                           )}
                         </td>
                         <td className="py-1 text-right font-mono text-ink-600 tnum">
@@ -188,7 +189,7 @@ export default function Research() {
             </section>
           ))}
 
-          <section className="rounded-lg border border-line bg-ink-50 p-4 text-caption text-ink-600">
+          <section className="card-surface bg-ink-50 p-4 text-caption text-ink-600">
             <h3 className="mb-1 font-semibold text-ink-800">{t('点时限制')}</h3>
             <ul className="list-disc space-y-1 pl-5">
               {(report.point_in_time_limits ?? []).map((limit) => (

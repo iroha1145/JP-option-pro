@@ -18,6 +18,10 @@ import { SkeletonRows } from '@/components/shared/Skeleton';
 import { CodeCell, DataThrough } from '@/components/domain';
 import Icon from '@/components/icons';
 import { useAccess } from '@/hooks/useAccess';
+import { useToast } from '@/hooks/useToast';
+import SoftBadge from '@/components/shared/SoftBadge';
+import StaleStrip from '@/components/shared/StaleStrip';
+import CodeMark from '@/components/shared/CodeMark';
 import { t } from '@/i18n/core';
 import { cn } from '@/lib/utils';
 import { fmtPrice, fmtYenCompact } from '@/lib/format';
@@ -26,10 +30,10 @@ import type { SearchResult, WatchlistItem } from '@/api/types';
 
 export default function Watchlist() {
   const { canManageWatchlist, accountUsername, isOwner } = useAccess();
+  const toast = useToast();
   const query = usePolling(() => watchlistApi.list(), 120_000);
   const [view, setView] = useState<'cards' | 'table'>('cards');
   const [busy, setBusy] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   const items = query.data?.items ?? [];
   const maxItems = query.data?.max_items ?? null;
@@ -38,12 +42,11 @@ export default function Watchlist() {
 
   const doRemove = async (code: string) => {
     setBusy(code);
-    setNotice(null);
     try {
       await watchlistApi.remove(code);
       query.refresh({ force: true });
     } catch (error) {
-      setNotice(error instanceof ApiError ? error.message : t('移除失败'));
+      toast.error(t('移除失败'), error instanceof ApiError ? error.message : String(error));
     } finally {
       setBusy(null);
     }
@@ -155,17 +158,17 @@ export default function Watchlist() {
   return (
     <div className="space-y-6">
       <PageHeader
-        section="05"
+        section="02"
         eyebrow="WATCHLIST · PERSONAL"
         title={t('自选股')}
         description={t('本页为日线数据，收盘后更新')}
         meta={
           <>
             {accountUsername && (
-              <span className="hidden items-center gap-1.5 rounded-pill border border-line bg-card px-2.5 py-1 text-caption text-ink-600 sm:inline-flex">
-                <Icon name="command" size={12} className="text-brand-600" />
+              <SoftBadge tone="brand" className="hidden sm:inline-flex">
+                <Icon name="command" size={12} />
                 {accountUsername}
-              </span>
+              </SoftBadge>
             )}
             <DataThrough date={items.find((item) => item.quote?.trade_date)?.quote?.trade_date} />
           </>
@@ -185,11 +188,8 @@ export default function Watchlist() {
           />
           {canManageWatchlist && (
             <AddStockForm
-              onAdded={() => {
-                setNotice(null);
-                query.refresh({ force: true });
-              }}
-              onError={setNotice}
+              onAdded={() => query.refresh({ force: true })}
+              onError={(message) => toast.error(t('添加失败'), message)}
             />
           )}
         </div>
@@ -200,10 +200,8 @@ export default function Watchlist() {
         </p>
       </div>
 
-      {notice && (
-        <p className="rounded-md border border-warn-600/25 bg-warn-50 px-3 py-2 text-caption text-warn-600" role="status">
-          {notice}
-        </p>
+      {query.error && query.data && (
+        <StaleStrip onRetry={() => query.refresh()} refreshing={query.refreshing} />
       )}
 
       {anonymous ? (
@@ -340,9 +338,8 @@ function AddStockForm({ onAdded, onError }: { onAdded: () => void; onError: (mes
               onClick={() => void add(result.canonical_code)}
               className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-brand-50"
             >
-              <span className="rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-caption font-semibold text-brand-700">
-                {result.display_code}
-              </span>
+              <CodeMark code={result.display_code} size={22} />
+              <span className="font-mono text-caption font-semibold text-brand-700">{result.display_code}</span>
               <span className="min-w-0 flex-1 truncate text-caption text-ink-700">{result.name_ja ?? result.name_en ?? '—'}</span>
               <span className="shrink-0 text-micro text-ink-400">{result.sector33_name ?? ''}</span>
             </button>
@@ -376,7 +373,7 @@ function WatchCard({
     >
       <Link
         to={`/stock/${item.display_code}`}
-        className="card-surface flex w-full flex-col p-4 text-left transition-shadow duration-fast hover:shadow-sh-2"
+        className="card-surface card-glare card-hover flex w-full flex-col p-4 text-left"
       >
         <span className="flex items-center gap-2.5">
           {item.marked_important && <span className="shrink-0 text-warn-600">★</span>}

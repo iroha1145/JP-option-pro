@@ -141,3 +141,18 @@ export function fmtTimeJst(epochSeconds: number): string {
     timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false,
   }).format(new Date(epochSeconds * 1000));
 }
+
+/** 顶栏时钟：当前瞬间的 JST HH:mm。 */
+export function fmtJstClock(date: Date | number): string {
+  return JST_TIME_FMT.format(new Date(date));
+}
+
+export function fmtTimeHHMMSS(epochMs: number): string {
+  return new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date(epochMs));
+}

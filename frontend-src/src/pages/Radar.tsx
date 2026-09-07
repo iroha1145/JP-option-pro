@@ -16,6 +16,9 @@ import ReactECharts from '@/components/charts/ReactECharts';
 import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart';
 import { CodeCell, DataThrough, RADAR_STATE_LABELS, ScoreBar, SignalChip, StateChip } from '@/components/domain';
 import { useAccess } from '@/hooks/useAccess';
+import { useToast } from '@/hooks/useToast';
+import StaleStrip from '@/components/shared/StaleStrip';
+import SoftBadge from '@/components/shared/SoftBadge';
 import { t } from '@/i18n/core';
 import { fmtDate, fmtPct, fmtPrice, fmtYenCompact } from '@/lib/format';
 import type { RadarEvent, StockBar } from '@/api/types';
@@ -33,10 +36,10 @@ const GROUP_STATES: Record<StateGroup, string | undefined> = {
 
 export default function Radar() {
   const { isOwner } = useAccess();
+  const toast = useToast();
   const [group, setGroup] = useState<StateGroup>('active');
   const [view, setView] = useState<ViewMode>('cards');
   const [leadId, setLeadId] = useState<string | null>(null);
-  const [refreshNote, setRefreshNote] = useState<string | null>(null);
 
   const query = usePolling(
     () => radarApi.current(GROUP_STATES[group] ? { states: GROUP_STATES[group], limit: 200 } : { limit: 200 }),
@@ -73,7 +76,7 @@ export default function Radar() {
   return (
     <div className="space-y-6">
       <PageHeader
-        section="03"
+        section="04"
         eyebrow="BREAKOUT RADAR · POST-CLOSE SCAN"
         title={t('突破雷达')}
         description={t('本页为日线数据，收盘后更新')}
@@ -83,20 +86,19 @@ export default function Radar() {
             {isOwner && (
               <button
                 type="button"
-                className="rounded-md border border-line bg-card px-2.5 py-1 text-caption text-ink-600 hover:bg-brand-50"
+                className="control-button"
                 onClick={async () => {
                   try {
                     await workerApi.trigger('radar_refresh');
-                    setRefreshNote(t('已提交'));
+                    toast.success(t('重算雷达'), t('已提交'));
                   } catch (error) {
-                    setRefreshNote(String((error as Error).message ?? error));
+                    toast.error(t('重算雷达'), String((error as Error).message ?? error));
                   }
                 }}
               >
                 {t('重算雷达')}
               </button>
             )}
-            {refreshNote && <span className="text-caption text-ink-400">{refreshNote}</span>}
           </div>
         }
       />
@@ -151,6 +153,9 @@ export default function Radar() {
         <EmptyState title={t('暂无数据')} description={query.data?.note ?? ''} />
       ) : (
         <>
+          {state === 'stale' && (
+            <StaleStrip onRetry={() => query.refresh()} refreshing={query.refreshing} />
+          )}
           {lead && <LeadBigCard event={lead} />}
           {view === 'cards' ? (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -360,7 +365,7 @@ function EventCard({ event, onSelect, live }: {
     <button
       type="button"
       onClick={onSelect}
-      className="card-surface card-hover flex flex-col gap-2 rounded-lg p-3 text-left"
+      className="card-surface card-glare card-hover flex flex-col gap-2 p-3 text-left"
     >
       <div className="flex items-center gap-2">
         <CodeCell displayCode={event.display_code} nameJa={event.name_ja} />
@@ -373,10 +378,10 @@ function EventCard({ event, onSelect, live }: {
         <StateChip state={event.state} />
         {structure?.setup_label && <Tag tone="ai">{t(structure.setup_label)}</Tag>}
         {above && (
-          <span className="inline-flex items-center gap-1 rounded-pill bg-up-50 px-2 py-0.5 text-micro font-medium text-up-700">
+          <SoftBadge tone="up">
             <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
             {t('盘中站上枢轴')}
-          </span>
+          </SoftBadge>
         )}
       </div>
       <div className="grid grid-cols-3 gap-1 text-caption">

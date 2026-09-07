@@ -29,6 +29,8 @@ import {
   weekStartMonday,
   type ListMode,
 } from '@/components/earnings/types';
+import SoftBadge from '@/components/shared/SoftBadge';
+import StaleStrip from '@/components/shared/StaleStrip';
 import { cn } from '@/lib/utils';
 import { fmtYenCompact } from '@/lib/format';
 import { t } from '@/i18n/core';
@@ -109,15 +111,19 @@ export default function Earnings() {
           <>
             {counts && (
               <span className="hidden items-center gap-1.5 sm:flex">
-                <CountChip label={t('已公布')} value={counts.released} className="bg-paper-2 text-ink-600" />
-                <CountChip label={t('確定')} value={counts.confirmed} className="bg-brand-50 text-brand-700" />
-                <CountChip label={t('目安')} value={counts.estimated} className="border border-dashed border-line-strong text-ink-500" />
+                <SoftBadge>{t('已公布')} {counts.released}</SoftBadge>
+                <SoftBadge tone="brand">{t('確定')} {counts.confirmed}</SoftBadge>
+                <SoftBadge tone="warn">{t('目安')} {counts.estimated}</SoftBadge>
               </span>
             )}
             <DataThrough date={q.data?.today} />
           </>
         }
       />
+
+      {q.error && q.data && (
+        <StaleStrip className="mt-4" onRetry={() => q.refresh()} refreshing={q.refreshing} />
+      )}
 
       {/* B1 周历 / 月历 */}
       <div className="mt-6">
@@ -309,15 +315,6 @@ export default function Earnings() {
         </aside>
       </div>
     </div>
-  );
-}
-
-function CountChip({ label, value, className }: { label: string; value: number; className: string }) {
-  return (
-    <span className={cn('inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-micro', className)}>
-      {label}
-      <span className="font-mono tnum">{value}</span>
-    </span>
   );
 }
 

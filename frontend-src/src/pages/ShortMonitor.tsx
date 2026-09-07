@@ -39,6 +39,9 @@ import type {
 } from '@/api/types';
 import { fmtDate, fmtDateShort, fmtPct, fmtPctLevel, fmtPrice, fmtScore, fmtShares } from '@/lib/format';
 import { explanationLine } from '@/lib/explainText';
+import SoftBadge from '@/components/shared/SoftBadge';
+import StaleStrip from '@/components/shared/StaleStrip';
+import StatusNotice from '@/components/shared/StatusNotice';
 import { t } from '@/i18n/core';
 import { cn } from '@/lib/utils';
 
@@ -149,26 +152,22 @@ export default function ShortMonitor() {
   return (
     <div className="space-y-6">
       <PageHeader
-        section="09"
+        section="08"
         eyebrow="SHORT MONITOR · POST-CLOSE"
         title={t('机构空卖行为监控')}
         description={t('公开披露的机构空卖持仓发生了什么变化，股价对这部分压力作出了什么反应')}
         meta={<DataThrough date={overview?.as_of_date} />}
       />
 
-      {/* 语义提示常驻。这一句不能因为版面紧张就删掉。 */}
-      <p className="flex items-start gap-2 text-caption text-ink-500">
-        <span className="mt-1.5 inline-block size-1.5 shrink-0 rounded-full bg-ink-300" aria-hidden />
+      <StatusNotice>
         {t('本页面展示达到公开披露条件的机构空卖持仓，不代表市场全部空头仓位。跌破公开门槛不代表仓位归零。')}
-      </p>
+      </StatusNotice>
 
       {validation?.status === 'failed' ? (
-        <section className="card-surface border-warn-200 bg-warn-50/60 p-4">
+        <section className="card-surface p-4">
           <p className="flex items-center gap-2">
-            <span className="eyebrow text-warn-700">{t('历史验证结果')}</span>
-            <span className="rounded-xs bg-warn-600/10 px-1.5 py-px font-mono text-micro text-warn-700">
-              {t('未通过')}
-            </span>
+            <span className="eyebrow">{t('历史验证结果')}</span>
+            <SoftBadge tone="warn">{t('未通过')}</SoftBadge>
           </p>
           <p className="mt-2 text-body-s text-ink-700">{t(validation.summary)}</p>
           {validation.run && (
@@ -184,10 +183,14 @@ export default function ShortMonitor() {
           )}
         </section>
       ) : unvalidated ? (
-        <p className="rounded-md border border-warn-200 bg-warn-50 px-3 py-2 text-caption text-warn-700">
+        <StatusNotice>
           {t('当前门槛与权重为初始参数，尚未通过历史验证，仅作研究排序使用。')}
-        </p>
+        </StatusNotice>
       ) : null}
+
+      {state === 'stale' && (
+        <StaleStrip onRetry={() => rankingQuery.refresh()} refreshing={rankingQuery.refreshing} />
+      )}
 
       {overview ? <OverviewCards overview={overview} onPickView={setView} /> : <OverviewSkeleton />}
 
@@ -811,10 +814,10 @@ function MiniScore({
 /** 状态徽章。点是分类色，**不是涨跌色** —— 详见文件头第 4 条。 */
 function ShortStateChip({ state, label }: { state: string; label?: string }) {
   return (
-    <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-pill border border-line bg-card px-2 py-0.5 text-micro text-ink-700">
+    <SoftBadge>
       <span className={cn('size-1.5 rounded-full', STATE_DOTS[state] ?? 'bg-ink-300')} aria-hidden />
       {t(label ?? STATE_LABELS[state] ?? state)}
-    </span>
+    </SoftBadge>
   );
 }
 
@@ -834,23 +837,14 @@ function FlagList({
   return (
     <span className={cn('inline-flex flex-wrap items-center gap-1', className)}>
       {shown.map((flag) => (
-        <span
-          key={flag}
-          className={cn(
-            'whitespace-nowrap rounded-xs px-1.5 py-0.5 text-micro',
-            RISK_FLAGS.has(flag) ? 'bg-warn-50 text-warn-700' : 'bg-paper-2 text-ink-500',
-          )}
-        >
+        <SoftBadge key={flag} tone={RISK_FLAGS.has(flag) ? 'warn' : 'neutral'}>
           {t(FLAG_LABELS[flag] ?? flag)}
-        </span>
+        </SoftBadge>
       ))}
       {rest.length > 0 && (
-        <span
-          className="whitespace-nowrap rounded-xs bg-paper-2 px-1 py-0.5 text-micro text-ink-400"
-          title={rest.map((flag) => t(FLAG_LABELS[flag] ?? flag)).join(' · ')}
-        >
+        <SoftBadge title={rest.map((flag) => t(FLAG_LABELS[flag] ?? flag)).join(' · ')}>
           +{rest.length}
-        </span>
+        </SoftBadge>
       )}
     </span>
   );

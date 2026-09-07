@@ -11,6 +11,9 @@ import EmptyState from '@/components/shared/EmptyState';
 import Segmented from '@/components/shared/Segmented';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import { SkeletonRows } from '@/components/shared/Skeleton';
+import SoftBadge from '@/components/shared/SoftBadge';
+import StaleStrip from '@/components/shared/StaleStrip';
+import CodeMark from '@/components/shared/CodeMark';
 import { t } from '@/i18n/core';
 import { explanationLines } from '@/lib/explainText';
 import { fmtDate, fmtJstDateTime, fmtRelativeShort } from '@/lib/format';
@@ -83,20 +86,39 @@ export default function News() {
 
       {tab === 'feed' && (
         <>
-          {/* 过滤行 */}
-          <div className="card-surface flex flex-wrap items-center gap-1.5 rounded-lg p-2.5">
-            <FilterChip active={category === null} onClick={() => setCategory(null)}>
-              {t('全部')}
-            </FilterChip>
-            {CATEGORY_FILTERS.map((item) => (
-              <FilterChip key={item} active={category === item} onClick={() => setCategory(category === item ? null : item)}>
-                {t(item)}
-              </FilterChip>
-            ))}
-            <span className="mx-1 h-4 w-px bg-line" />
-            <FilterChip active={onlySecurities} onClick={() => setOnlySecurities((v) => !v)}>
+          {feedState === 'stale' && (
+            <StaleStrip onRetry={() => feed.refresh()} refreshing={feed.refreshing} />
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="filter-group" role="group" aria-label={t('类别')}>
+              <button
+                type="button"
+                className="control-button"
+                aria-pressed={category === null}
+                onClick={() => setCategory(null)}
+              >
+                {t('全部')}
+              </button>
+              {CATEGORY_FILTERS.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  className="control-button"
+                  aria-pressed={category === item}
+                  onClick={() => setCategory(category === item ? null : item)}
+                >
+                  {t(item)}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="control-button"
+              aria-pressed={onlySecurities}
+              onClick={() => setOnlySecurities((v) => !v)}
+            >
               {t('仅看关联个股')}
-            </FilterChip>
+            </button>
             <span className="ml-auto text-caption text-ink-400">
               {t('共')} {feed.data?.items.length ?? '—'} {t('条')}
             </span>
@@ -152,67 +174,45 @@ function StatusStrip({ status }: { status: NewsStatus | null }) {
       <span>
         {t('数据源')} {feedsOk}/{status.feeds.length}
       </span>
-      <span
-        className={cn(
-          'rounded-pill px-2 py-0.5 text-micro font-medium',
-          status.ai.enabled ? 'bg-ai-50 text-ai-600' : 'bg-paper-2 text-ink-400',
-        )}
-      >
+      <SoftBadge tone={status.ai.enabled ? 'ai' : 'neutral'}>
         AI {status.ai.enabled ? t('已启用') : t('未启用')}
-      </span>
+      </SoftBadge>
     </span>
   );
 }
 
 /* ---------------- 信息流 ---------------- */
 
-function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={
-        active
-          ? 'rounded-pill bg-brand-600 px-2.5 py-1 text-caption font-medium text-white'
-          : 'rounded-pill border border-line bg-card px-2.5 py-1 text-caption text-ink-600 hover:bg-brand-50'
-      }
-    >
-      {children}
-    </button>
-  );
-}
-
 function ImportanceBadge({ value }: { value: number | null }) {
   if (value === null || value === undefined) {
-    return <span className="rounded-sm bg-paper-2 px-1.5 py-0.5 font-mono text-micro text-ink-400">—</span>;
+    return <SoftBadge>—</SoftBadge>;
   }
-  const tone = value >= 75 ? 'bg-warn-50 text-warn-700' : value >= 55 ? 'bg-brand-50 text-brand-700' : 'bg-paper-2 text-ink-500';
-  return <span className={`rounded-sm px-1.5 py-0.5 font-mono text-micro font-semibold tnum ${tone}`}>{Math.round(value)}</span>;
+  const tone = value >= 75 ? 'warn' : value >= 55 ? 'brand' : 'neutral';
+  return <SoftBadge tone={tone}>{Math.round(value)}</SoftBadge>;
 }
 
 function AnalysisStateChip({ state }: { state: NewsItem['analysis_state'] }) {
   if (state === 'completed' || !state) return null;
-  const map: Record<string, { label: string; tone: string }> = {
-    pending: { label: t('分析排队中'), tone: 'bg-brand-50 text-brand-700' },
-    failed: { label: t('分析失败'), tone: 'bg-down-50 text-down-700' },
-    disabled: { label: t('AI 未启用'), tone: 'bg-paper-2 text-ink-400' },
-    none: { label: t('未分析'), tone: 'bg-paper-2 text-ink-400' },
+  const map: Record<string, { label: string; tone: 'brand' | 'down' | 'neutral' }> = {
+    pending: { label: t('分析排队中'), tone: 'brand' },
+    failed: { label: t('分析失败'), tone: 'down' },
+    disabled: { label: t('AI 未启用'), tone: 'neutral' },
+    none: { label: t('未分析'), tone: 'neutral' },
   };
   const item = map[state];
   if (!item) return null;
-  return <span className={`rounded-pill px-2 py-0.5 text-micro ${item.tone}`}>{item.label}</span>;
+  return <SoftBadge tone={item.tone}>{item.label}</SoftBadge>;
 }
 
 function HotspotCard({ group }: { group: NewsHotspotGroup }) {
   return (
     <Link
       to={`/stock/${group.display_code}`}
-      className="card-surface card-hover flex min-w-[220px] max-w-[260px] shrink-0 flex-col gap-1 rounded-lg p-2.5"
+      className="card-surface card-glare card-hover flex min-w-[220px] max-w-[260px] shrink-0 flex-col gap-1 p-2.5"
     >
       <span className="flex items-center gap-1.5">
-        <span className="rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-caption font-semibold text-brand-700">
-          {group.display_code}
-        </span>
+        <CodeMark code={group.display_code} size={22} />
+        <span className="font-mono text-caption font-semibold text-brand-700">{group.display_code}</span>
         <span className="min-w-0 truncate text-caption text-ink-700">{group.name_ja ?? '—'}</span>
         <span className="ml-auto">
           <ImportanceBadge value={group.max_importance} />
@@ -222,7 +222,7 @@ function HotspotCard({ group }: { group: NewsHotspotGroup }) {
       <span className="flex items-center gap-1.5 text-micro text-ink-400">
         <span>{group.item_count} {t('条')}</span>
         {group.categories.slice(0, 2).map((cat) => (
-          <span key={cat} className="rounded-sm bg-paper-2 px-1 py-0.5">{t(cat)}</span>
+          <SoftBadge key={cat}>{t(cat)}</SoftBadge>
         ))}
       </span>
     </Link>
@@ -232,7 +232,7 @@ function HotspotCard({ group }: { group: NewsHotspotGroup }) {
 function NewsCard({ item }: { item: NewsItem }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <li className="card-surface rounded-lg p-3.5">
+    <li className="card-surface card-glare p-3.5">
       <div className="flex items-start gap-2.5">
         <ImportanceBadge value={item.importance} />
         <div className="min-w-0 flex-1">
@@ -276,7 +276,7 @@ function NewsCard({ item }: { item: NewsItem }) {
 
           <div className="mt-2 flex flex-wrap items-center gap-1.5 text-micro text-ink-400">
             {(item.categories ?? []).slice(0, 3).map((cat) => (
-              <span key={cat} className="rounded-sm border border-line bg-card px-1.5 py-0.5 text-ink-600">{t(cat)}</span>
+              <SoftBadge key={cat}>{t(cat)}</SoftBadge>
             ))}
             {item.securities.map((security) => (
               <Link
@@ -361,7 +361,7 @@ function StocksImpactPanel({ rows, loading }: { rows: NewsSecurityRow[]; loading
         render: (row) => (
           <span className="flex flex-wrap gap-1">
             {row.categories.map((cat) => (
-              <span key={cat} className="rounded-sm bg-paper-2 px-1.5 py-0.5 text-micro text-ink-600">{t(cat)}</span>
+              <SoftBadge key={cat}>{t(cat)}</SoftBadge>
             ))}
           </span>
         ),
@@ -408,7 +408,7 @@ function EconCalendarPanel({ events, note, loading }: { events: EconEvent[]; not
     <div className="space-y-3">
       {note && <p className="text-caption text-ink-400">{note}</p>}
       {Array.from(grouped.entries()).map(([date, dayEvents]) => (
-        <section key={date} className="card-surface rounded-lg p-3">
+        <section key={date} className="card-surface p-3">
           <h3 className="mb-2 flex items-baseline gap-2">
             <span className="font-mono text-body font-semibold tnum text-ink-900">{fmtDate(date)}</span>
             <span className="text-micro text-ink-400">{weekdayJa(date)}</span>
@@ -421,12 +421,12 @@ function EconCalendarPanel({ events, note, loading }: { events: EconEvent[]; not
                 </span>
                 <EconImportanceDot importance={event.importance} />
                 <span className="min-w-0 flex-1 text-body-s text-ink-800">{event.name_ja}</span>
-                <span className="rounded-sm bg-paper-2 px-1.5 py-0.5 text-micro text-ink-500">{t(event.category)}</span>
+                <SoftBadge>{t(event.category)}</SoftBadge>
                 <span className="text-micro text-ink-400">{event.organizer}</span>
                 {!event.confirmed && (
-                  <span className="rounded-sm bg-warn-50 px-1.5 py-0.5 text-micro text-warn-700" title={event.note ?? ''}>
+                  <SoftBadge tone="warn" title={event.note ?? ''}>
                     {t('目安')}
-                  </span>
+                  </SoftBadge>
                 )}
                 {event.source_url && (
                   <a href={event.source_url} target="_blank" rel="noreferrer" className="text-micro text-brand-700 hover:underline">

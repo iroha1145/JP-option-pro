@@ -23,6 +23,7 @@ import type {
   MarkPointComponentOption,
   TooltipComponentOption,
 } from 'echarts/components';
+import { directionColors } from './colorPreference.ts';
 
 echarts.use([
   LineChart, BarChart, CandlestickChart, PieChart,
@@ -49,20 +50,23 @@ export type ChartOption = ComposeOption<
 /** echarts.init 返回的实例类型（供交互层 convertFromPixel/zr 事件使用） */
 export type EChartsInstance = ReturnType<typeof echarts.init>;
 
-/* ---------- 调色（与 CSS 变量一致） ---------- */
+/* ---------- 调色（与 CSS 变量一致；up/down 随涨跌色彩习惯） ---------- */
 export const CH = {
-  ink400: '#8A94B0',
+  ink400: '#626F8B',
   ink300: '#B7BFD3',
-  lineChart: '#EDF0F4', // v8.1 随纸面降温
+  lineChart: '#EDF0F4',
   brand600: '#2E46E0',
   brand500: '#3B59F2',
   brand400: '#6B82FF',
-  /* 日本・中華圏の慣習: 上昇=赤 / 下落=緑（index.css と一致） */
-  up600: '#E5484D',
-  down600: '#0E9F6E',
+  get up600() {
+    return directionColors().up600;
+  },
+  get down600() {
+    return directionColors().down600;
+  },
   warn600: '#E8930C',
-  ai600: '#0B7285', // v8.1 弃 AI 紫 → 青瓷 teal（与 CSS 变量一致）
-} as const;
+  ai600: '#0B7285',
+};
 
 /* ---------- 通用配置 ---------- */
 /* 数据是读的：入场/更新动画统一 300ms cubicOut，range 切换不重复播长动画 */

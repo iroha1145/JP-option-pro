@@ -281,7 +281,7 @@ export default function Screener() {
     <div className="space-y-0">
       {/* B0 页头带 */}
       <PageHeader
-        section="04"
+        section="03"
         eyebrow="SCREENER · STRENGTH SCAN"
         title={t('选股扫描')}
         description={t('收盘后按日线全市场计算强度分，扫描读取当日快照。')}
