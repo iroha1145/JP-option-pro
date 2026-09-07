@@ -1701,4 +1701,6 @@ export const DICT: Record<string, [string, string]> = {
   添加失败: ['Add failed', '追加に失敗'],
   已加入: ['Added', '追加済み'],
   已在自选中: ['Already on watchlist', 'すでにウォッチリストにあります'],
+  搜索: ['Search', '検索'],
+  'RSI 14': ['RSI 14', 'RSI 14'],
 };
