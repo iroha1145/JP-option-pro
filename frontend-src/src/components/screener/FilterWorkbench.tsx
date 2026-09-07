@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import Icon from '@/components/icons';
 import Segmented from '@/components/shared/Segmented';
 import FilterButton from '@/components/shared/FilterButton';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import SelectionViewport from '@/components/shared/SelectionViewport';
 import SoftBadge from '@/components/shared/SoftBadge';
 import InfoHint from '@/components/shared/InfoHint';
@@ -54,7 +55,6 @@ function TierSegmented({
       onChange={onChange}
       scrollable
       ariaLabel={t('强度分档 · 计数基于已评分候选池')}
-      title={t('分档计数基于已评分候选池')}
       renderLabel={(option, active) => (
         <span className="flex items-center gap-1.5">
           {option.label}
@@ -381,16 +381,27 @@ export default function FilterWorkbench({
                 <div className="mobile-selection-rail flex flex-wrap gap-2">
                   {presetChips.map((preset) => {
                     const active = draft.presetId === preset.id;
-                    return (
+                    const button = (
                       <FilterButton
                         key={preset.id}
                         onClick={() => applyPreset(preset.id)}
-                        title={preset.description ? t(preset.description) : undefined}
                         active={active}
                       >
                         <Icon name="spark-ai" size={13} className={active ? 'text-brand-600' : 'text-ink-400'} />
                         {preset.name}
                       </FilterButton>
+                    );
+                    return preset.description ? (
+                      <PointerTooltip
+                        key={preset.id}
+                        passthrough
+                        label={t(preset.description)}
+                        content={<span className="text-micro leading-[16px] text-ink-600">{t(preset.description)}</span>}
+                      >
+                        {button}
+                      </PointerTooltip>
+                    ) : (
+                      button
                     );
                   })}
                 </div>

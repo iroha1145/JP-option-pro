@@ -11,6 +11,7 @@ import DataTable, { type Column } from '@/components/shared/DataTable';
 import Segmented from '@/components/shared/Segmented';
 import { SkeletonCard } from '@/components/shared/Skeleton';
 import InsightLineChart, { type InsightScrub } from '@/components/charts/InsightLineChart';
+import Sparkline from '@/components/charts/Sparkline';
 import { CodeCell, DataThrough } from '@/components/domain';
 import HeatMatrix, { HeatMatrixSkeleton, metricValue, type HeatMetric } from '@/components/sectors/HeatMatrix';
 import SectorMembersPanel from '@/components/sectors/SectorMembersPanel';
@@ -181,7 +182,7 @@ export default function Market() {
               <span className="flex flex-col">
                 <span className="eyebrow">{t('日経225 · 盘中')}</span>
                 <span className="mt-1 flex items-baseline gap-3">
-                  <span className="font-mono text-display-m tnum text-ink-900">
+                  <span className="font-mono text-data-l tnum text-ink-900">
                     {n225.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                   </span>
                   <ChangeBadge value={n225.change_pct} />
@@ -228,14 +229,14 @@ export default function Market() {
                   </span>
                   <span className="flex items-center gap-3">
                     <span className="w-[88px] shrink-0">
-                      <InsightLineChart
-                        data={index.sparkline}
-                        height={32}
-                        change={index.change_pct ?? 0}
-                        interactive={false}
-                        showLiveDot
-                        ariaLabel={`${index.name} ${t('趋势快照')}`}
-                      />
+                      {index.sparkline.length > 1 ? (
+                        <Sparkline
+                          data={index.sparkline}
+                          width={88}
+                          height={32}
+                          change={index.change_pct ?? 0}
+                        />
+                      ) : null}
                     </span>
                     <span className="flex flex-col items-end gap-0.5">
                       <ChangeBadge value={index.change_pct} size="sm" />

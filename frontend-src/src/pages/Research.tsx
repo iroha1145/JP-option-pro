@@ -88,17 +88,23 @@ export default function Research() {
       {state === 'loading' && <SkeletonCard />}
 
       {state === 'running' && (
-        <EmptyState
-          title={t('验证正在运行')}
-          description={t('结果尚未确定。完成后此页会显示分层收益与单调性结论。')}
-        />
+        <section className="card-surface p-5">
+          <p className="eyebrow">WALK-FORWARD</p>
+          <EmptyState
+            title={t('验证正在运行')}
+            description={t('结果尚未确定。完成后此页会显示分层收益与单调性结论。')}
+          />
+        </section>
       )}
 
       {state === 'empty' && (
-        <EmptyState
-          title={t('尚未运行历史验证')}
-          description={t('在服务器执行 python -m app.research 后，结果会显示在这里。')}
-        />
+        <section className="card-surface p-5">
+          <p className="eyebrow">WALK-FORWARD</p>
+          <EmptyState
+            title={t('尚未运行历史验证')}
+            description={t('在服务器执行 python -m app.research 后，结果会显示在这里。')}
+          />
+        </section>
       )}
 
       {state === 'error' && <EmptyState title={t('读取失败')} description={t('请稍后重试')} />}

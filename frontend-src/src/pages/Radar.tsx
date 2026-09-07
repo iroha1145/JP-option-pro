@@ -28,7 +28,7 @@ import SoftBadge from '@/components/shared/SoftBadge';
 import { RADAR_SCORE_HINTS } from '@/lib/indicatorHints';
 import { DUR_SECTION, EASE_PAPER } from '@/lib/motion';
 import { t } from '@/i18n/core';
-import { fmtDate, fmtPct, fmtPrice, fmtYenCompact } from '@/lib/format';
+import { fmtDate, fmtDateShort, fmtPct, fmtPrice, fmtYenCompact } from '@/lib/format';
 import type { RadarEvent, StockBar } from '@/api/types';
 import '@/components/radar.css';
 
@@ -179,13 +179,18 @@ export default function Radar() {
       ) : state === 'error' ? (
         <EmptyState variant="error" title={t('加载失败')} description={String(query.error?.message ?? '')} />
       ) : state === 'empty' ? (
-        <EmptyState title={t('暂无数据')} description={query.data?.note ?? ''} />
+        <EmptyState title={t('雷达仍在盯')} description={query.data?.note ?? t('新信号出现时会立刻出现在这里。')} />
       ) : (
         <>
           {state === 'stale' && (
             <StaleStrip onRetry={() => query.refresh()} refreshing={query.refreshing} />
           )}
-          {lead && <LeadBigCard event={lead} live={overlayRows[lead.event_id]} flash={flashes[lead.event_id]} />}
+          {lead && (
+            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(260px,5fr)]">
+              <LeadBigCard event={lead} live={overlayRows[lead.event_id]} flash={flashes[lead.event_id]} />
+              <HistoryRail events={events} />
+            </div>
+          )}
           {view === 'cards' ? (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {events
@@ -223,6 +228,62 @@ export default function Radar() {
         </>
       )}
     </div>
+  );
+}
+
+function HistoryRail({ events }: { events: RadarEvent[] }) {
+  const rows = useMemo(() => {
+    const items: {
+      key: string;
+      date: string;
+      code: string;
+      name: string | null | undefined;
+      from: string | null;
+      to: string;
+      reason: string;
+    }[] = [];
+    for (const event of events) {
+      for (const transition of event.transitions ?? []) {
+        items.push({
+          key: `${event.event_id}-${transition.date}-${transition.to}`,
+          date: transition.date,
+          code: event.display_code,
+          name: event.name_ja,
+          from: transition.from,
+          to: transition.to,
+          reason: transition.reason,
+        });
+      }
+    }
+    return items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 16);
+  }, [events]);
+
+  return (
+    <aside className="card-surface flex max-h-[560px] flex-col p-4">
+      <p className="eyebrow">{t('历史事件回溯')}</p>
+      <h3 className="mt-1 text-h3 text-ink-900">
+        {t('生命周期')} · {t('共')} {rows.length} {t('条')}
+      </h3>
+      {rows.length === 0 ? (
+        <p className="mt-3 text-caption text-ink-400">{t('暂无状态变更')}</p>
+      ) : (
+        <ol className="mt-3 min-h-0 flex-1 divide-y divide-line overflow-y-auto">
+          {rows.map((row) => (
+            <li key={row.key} className="px-1 py-2 transition-colors hover:bg-paper-2/70">
+              <p className="flex items-center gap-2">
+                <span className="w-10 shrink-0 font-mono text-micro text-ink-400 tnum">{fmtDateShort(row.date)}</span>
+                <span className="font-mono text-caption font-semibold text-ink-800">{row.code}</span>
+                <span className="min-w-0 truncate text-caption text-ink-500">{row.name ?? '—'}</span>
+              </p>
+              <p className="mt-0.5 text-micro text-ink-500">
+                {t(RADAR_STATE_LABELS[row.from ?? ''] ?? row.from ?? '—')} → {t(RADAR_STATE_LABELS[row.to] ?? row.to)}
+                {row.reason ? ` · ${t(row.reason)}` : ''}
+              </p>
+            </li>
+          ))}
+        </ol>
+      )}
+    </aside>
   );
 }
 
@@ -462,7 +523,7 @@ function EventCard({ event, onSelect, live, flash }: {
     <button
       type="button"
       onClick={onSelect}
-      className="radar-signal-card card-surface card-glare card-lift flex h-full flex-col gap-2 text-left"
+      className="radar-signal-card card-surface card-lift flex h-full flex-col gap-2 text-left"
     >
       <div className="flex items-center gap-2">
         <CodeCell displayCode={event.display_code} nameJa={event.name_ja} />

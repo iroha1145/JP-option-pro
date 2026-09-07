@@ -8,6 +8,8 @@
  * - マイナスは U+2212 を使う（ハイフンより判読しやすい）。
  */
 
+import { t } from '@/i18n/core';
+
 const MINUS = '−';
 
 export function fmtPrice(value: number | null | undefined, digits?: number): string {
@@ -113,6 +115,19 @@ export function fmtJstTime(iso: string | null | undefined): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '—';
   return JST_TIME_FMT.format(date);
+}
+
+/** 相対時刻の通常形（刚刚 / 5 分钟前 / 3 小时前 / 2 天前）。 */
+export function fmtRelative(iso: string | null | undefined, now: number = Date.now()): string {
+  if (!iso) return '—';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '—';
+  const min = Math.floor((now - then) / 60_000);
+  if (min < 1) return t('刚刚');
+  if (min < 60) return t('{n} 分钟前', { n: min });
+  const hours = Math.floor(min / 60);
+  if (hours < 24) return t('{n} 小时前', { n: hours });
+  return t('{n} 天前', { n: Math.floor(hours / 24) });
 }
 
 /** 相対時刻の短縮形（5分 / 3時間 / 2日）— 言語非依存の狭い列用。 */

@@ -24,9 +24,11 @@ import TickPrice from '@/components/shared/TickPrice';
 import SoftBadge from '@/components/shared/SoftBadge';
 import StaleStrip from '@/components/shared/StaleStrip';
 import CodeMark from '@/components/shared/CodeMark';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import { t } from '@/i18n/core';
 import { cn } from '@/lib/utils';
 import { fmtPrice, fmtYenCompact } from '@/lib/format';
+import { DUR_SECTION, EASE_PAPER } from '@/lib/motion';
 import { ApiError } from '@/api/client';
 import type { SearchResult, WatchlistItem } from '@/api/types';
 
@@ -85,9 +87,15 @@ export default function Watchlist() {
         title: t('行业'),
         render: (row) =>
           row.sector33_name ? (
-            <SoftBadge className="max-w-[7.5rem]" title={row.sector33_name}>
-              <span className="truncate">{row.sector33_name}</span>
-            </SoftBadge>
+            <PointerTooltip
+              passthrough
+              label={row.sector33_name}
+              content={<span className="text-micro leading-[16px] text-ink-600">{row.sector33_name}</span>}
+            >
+              <SoftBadge className="max-w-[7.5rem]">
+                <span className="truncate">{row.sector33_name}</span>
+              </SoftBadge>
+            </PointerTooltip>
           ) : (
             <span className="text-caption text-ink-400">—</span>
           ),
@@ -135,34 +143,45 @@ export default function Watchlist() {
         align: 'right',
         render: (row) => (
           <span className="flex items-center justify-end gap-1.5">
-            <button
-              type="button"
-              disabled={busy === row.canonical_code}
-              title={t('标记重点')}
-              className={cn(
-                'rounded-md border border-line px-2 py-0.5 text-micro shadow-btn hover:bg-brand-50',
-                row.marked_important ? 'text-warn-600' : 'text-ink-400',
-              )}
-              onClick={(event) => {
-                event.stopPropagation();
-                void doToggleStar(row);
-              }}
+            <PointerTooltip
+              passthrough
+              label={t('标记重点')}
+              content={<span className="text-micro leading-[16px] text-ink-600">{t('标记重点')}</span>}
             >
-              ★
-            </button>
-            <button
-              type="button"
-              disabled={busy === row.canonical_code}
-              title={t('从自选移除 {code}', { code: row.display_code })}
-              aria-label={t('从自选移除 {code}', { code: row.display_code })}
-              className="rounded-md border border-line px-2 py-0.5 text-micro text-down-700 shadow-btn hover:bg-down-50"
-              onClick={(event) => {
-                event.stopPropagation();
-                void doRemove(row.canonical_code);
-              }}
+              <button
+                type="button"
+                disabled={busy === row.canonical_code}
+                aria-label={t('标记重点')}
+                className={cn(
+                  'rounded-md border border-line px-2 py-0.5 text-micro shadow-btn hover:bg-brand-50',
+                  row.marked_important ? 'text-warn-600' : 'text-ink-400',
+                )}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void doToggleStar(row);
+                }}
+              >
+                ★
+              </button>
+            </PointerTooltip>
+            <PointerTooltip
+              passthrough
+              label={t('从自选移除 {code}', { code: row.display_code })}
+              content={<span className="text-micro leading-[16px] text-ink-600">{t('移出自选')}</span>}
             >
-              <Icon name="x" size={12} />
-            </button>
+              <button
+                type="button"
+                disabled={busy === row.canonical_code}
+                aria-label={t('从自选移除 {code}', { code: row.display_code })}
+                className="rounded-md border border-line px-2 py-0.5 text-micro text-down-700 shadow-btn hover:bg-down-50"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void doRemove(row.canonical_code);
+                }}
+              >
+                <Icon name="x" size={12} />
+              </button>
+            </PointerTooltip>
           </span>
         ),
       });
@@ -218,6 +237,27 @@ export default function Watchlist() {
 
       {query.error && query.data && (
         <StaleStrip onRetry={() => query.refresh()} refreshing={query.refreshing} />
+      )}
+
+      {items.length > 0 && (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <WatchStat label={t('只标的')} value={items.length} tone="flat" />
+          <WatchStat
+            label={t('上涨')}
+            value={items.filter((item) => (item.quote?.change_pct ?? 0) > 0).length}
+            tone="up"
+          />
+          <WatchStat
+            label={t('下跌')}
+            value={items.filter((item) => (item.quote?.change_pct ?? 0) < 0).length}
+            tone="down"
+          />
+          <WatchStat
+            label={t('重点标记')}
+            value={items.filter((item) => item.marked_important).length}
+            tone="flat"
+          />
+        </div>
       )}
 
       {anonymous ? (
@@ -367,6 +407,22 @@ function AddStockForm({ onAdded, onError }: { onAdded: () => void; onError: (mes
   );
 }
 
+function WatchStat({ label, value, tone }: { label: string; value: number; tone: 'up' | 'down' | 'flat' }) {
+  return (
+    <div className="card-surface rounded-[9px] px-3 py-2.5 text-center">
+      <p
+        className={cn(
+          'metric-value text-data-l tnum',
+          tone === 'up' ? 'text-up-700' : tone === 'down' ? 'text-down-700' : 'text-ink-800',
+        )}
+      >
+        {value}
+      </p>
+      <p className="mt-0.5 text-micro text-ink-400">{label}</p>
+    </div>
+  );
+}
+
 /* ---------------- 卡片（悬浮 × 删除；触屏常驻） ---------------- */
 
 function WatchCard({
@@ -386,13 +442,12 @@ function WatchCard({
     <motion.div
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: Math.min(index * 0.04, 0.4) }}
-      whileHover={{ y: -3, transition: { duration: 0.24, ease: 'easeOut' } }}
+      transition={{ duration: DUR_SECTION, ease: EASE_PAPER, delay: Math.min(index * 0.04, 0.4) }}
       className="group/card relative"
     >
       <Link
         to={`/stock/${item.display_code}`}
-        className="card-surface card-glare card-lift flex w-full flex-col p-4 text-left"
+        className="card-surface card-lift flex w-full flex-col p-4 text-left"
       >
         <span className="flex items-center gap-2.5">
           {item.marked_important && <span className="shrink-0 text-warn-600">★</span>}
@@ -402,9 +457,15 @@ function WatchCard({
           <span className="min-w-0 flex-1">
             <span className="block truncate text-body-s text-ink-800">{item.name_ja ?? '—'}</span>
             {item.sector33_name ? (
-              <SoftBadge className="mt-0.5 max-w-[8rem]" title={item.sector33_name}>
-                <span className="truncate">{item.sector33_name}</span>
-              </SoftBadge>
+              <PointerTooltip
+                passthrough
+                label={item.sector33_name}
+                content={<span className="text-micro leading-[16px] text-ink-600">{item.sector33_name}</span>}
+              >
+                <SoftBadge className="mt-0.5 max-w-[8rem]">
+                  <span className="truncate">{item.sector33_name}</span>
+                </SoftBadge>
+              </PointerTooltip>
             ) : (
               <span className="block truncate text-micro text-ink-400">—</span>
             )}
@@ -426,7 +487,6 @@ function WatchCard({
         <button
           type="button"
           aria-label={t('从自选移除 {code}', { code: item.display_code })}
-          title={t('移出自选')}
           onClick={(event) => {
             event.stopPropagation();
             onRemove();
@@ -440,7 +500,6 @@ function WatchCard({
         <button
           type="button"
           aria-label={t('标记重点')}
-          title={t('标记重点')}
           onClick={(event) => {
             event.stopPropagation();
             onToggleStar();

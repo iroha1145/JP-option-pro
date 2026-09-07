@@ -48,6 +48,7 @@ import SoftBadge from '@/components/shared/SoftBadge';
 import StaleStrip from '@/components/shared/StaleStrip';
 import StatusNotice from '@/components/shared/StatusNotice';
 import InfoHint from '@/components/shared/InfoHint';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import { SHORT_HINTS, shortScoreHint } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { cn } from '@/lib/utils';
@@ -803,7 +804,15 @@ function FactBlock({ title, facts }: { title: string; facts: Fact[] }) {
       <dl className="grid grid-cols-2 gap-1 sm:grid-cols-4">
         {facts.map((fact) => (
           <div key={fact.label} className="rounded-md bg-paper-2 px-1.5 py-1">
-            <dt className="truncate text-micro text-ink-400" title={fact.label}>{fact.label}</dt>
+            <dt className="truncate text-micro text-ink-400">
+              <PointerTooltip
+                passthrough
+                label={fact.label}
+                content={<span className="text-micro leading-[16px] text-ink-600">{fact.label}</span>}
+              >
+                <span className="truncate">{fact.label}</span>
+              </PointerTooltip>
+            </dt>
             <dd className={cn('font-mono text-body-s tnum', fact.muted ? 'text-ink-400' : 'text-ink-800')}>
               {fact.value}
             </dd>
@@ -888,9 +897,17 @@ function FlagList({
         </SoftBadge>
       ))}
       {rest.length > 0 && (
-        <SoftBadge title={rest.map((flag) => t(FLAG_LABELS[flag] ?? flag)).join(' · ')}>
-          +{rest.length}
-        </SoftBadge>
+        <PointerTooltip
+          passthrough
+          label={rest.map((flag) => t(FLAG_LABELS[flag] ?? flag)).join(' · ')}
+          content={
+            <span className="text-micro leading-[16px] text-ink-600">
+              {rest.map((flag) => t(FLAG_LABELS[flag] ?? flag)).join(' · ')}
+            </span>
+          }
+        >
+          <SoftBadge>+{rest.length}</SoftBadge>
+        </PointerTooltip>
       )}
     </span>
   );
@@ -913,16 +930,28 @@ function RelSigned({ value }: { value: number | null }) {
  *  在两个页面上是相反的颜色，比任何一种约定都糟。 */
 function ShortDelta({ value, className }: { value: number | null; className?: string }) {
   if (value == null) return <span className={cn('font-mono tnum text-ink-400', className)}>—</span>;
-  return (
+  const tip =
+    value > 0 ? t('公开空头增加（卖压增强）') : value < 0 ? t('公开空头减少（买方回补）') : null;
+  const node = (
     <span
       className={cn(
         'font-mono tnum',
         value > 0 ? 'text-down-600' : value < 0 ? 'text-up-600' : 'text-ink-400',
         className,
       )}
-      title={value > 0 ? t('公开空头增加（卖压增强）') : value < 0 ? t('公开空头减少（买方回补）') : undefined}
     >
       {fmtPct(value)}
     </span>
+  );
+  return tip ? (
+    <PointerTooltip
+      passthrough
+      label={tip}
+      content={<span className="text-micro leading-[16px] text-ink-600">{tip}</span>}
+    >
+      {node}
+    </PointerTooltip>
+  ) : (
+    node
   );
 }

@@ -1,8 +1,9 @@
 /** 新闻催化剂桌面 — 对齐美版信息设计：
  *  信息流（过滤+热点条+重要度+AI状态） / 个股影响 / 经济日历 / 数据源。 */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
+import { motion } from 'framer-motion';
 import { newsApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { remoteState } from '@/hooks/remoteState';
@@ -15,10 +16,12 @@ import SoftBadge from '@/components/shared/SoftBadge';
 import StaleStrip from '@/components/shared/StaleStrip';
 import CodeMark from '@/components/shared/CodeMark';
 import InfoHint from '@/components/shared/InfoHint';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import { NEWS_HINTS } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { explanationLines } from '@/lib/explainText';
-import { fmtDate, fmtJstDateTime, fmtRelativeShort } from '@/lib/format';
+import { fmtDate, fmtDateShort, fmtJstDateTime, fmtJstTime, fmtRelative } from '@/lib/format';
+import { DUR_SECTION, EASE_PAPER } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import type {
   EconEvent,
@@ -61,6 +64,8 @@ export default function News() {
         description={t('本页为日线数据，收盘后更新')}
         meta={<StatusStrip status={status.data ?? null} />}
       />
+
+      <StatusHero status={status.data ?? null} />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Segmented<Tab>
@@ -126,13 +131,15 @@ export default function News() {
             </span>
           </div>
 
-          {/* 热点条 */}
           {(hotspots.data?.groups.length ?? 0) > 0 && (
-            <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
-              {hotspots.data!.groups.map((group) => (
-                <HotspotCard key={group.canonical_code} group={group} />
-              ))}
-            </div>
+            <section aria-label={t('热点主题')}>
+              <p className="eyebrow mb-2">{t('热点主题')}</p>
+              <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
+                {hotspots.data!.groups.map((group) => (
+                  <HotspotCard key={group.canonical_code} group={group} />
+                ))}
+              </div>
+            </section>
           )}
 
           {feedState === 'loading' ? (
@@ -142,9 +149,9 @@ export default function News() {
           ) : feedState === 'empty' ? (
             <EmptyState title={t('暂无数据')} description={feed.data?.note_ja ?? ''} />
           ) : (
-            <ul className="space-y-2.5">
-              {feed.data!.items.map((item) => (
-                <NewsCard key={item.news_id} item={item} />
+            <ul className="card-surface divide-y divide-line overflow-hidden">
+              {feed.data!.items.map((item, index) => (
+                <NewsRow key={item.news_id} item={item} index={index} />
               ))}
             </ul>
           )}
@@ -183,6 +190,86 @@ function StatusStrip({ status }: { status: NewsStatus | null }) {
   );
 }
 
+function HeroCell({ label, index, children }: { label: string; index: number; children: ReactNode }) {
+  return (
+    <div
+      className={cn(
+        'min-w-0 border-line px-4 py-4 sm:px-5',
+        index >= 2 && 'border-t xl:border-t-0',
+        index % 2 === 1 && 'border-l',
+        index === 2 && 'xl:border-l',
+      )}
+    >
+      <p className="eyebrow">{label}</p>
+      <div className="mt-2">{children}</div>
+    </div>
+  );
+}
+
+function StatusHero({ status }: { status: NewsStatus | null }) {
+  const feedsOk = status?.feeds.filter((feed) => !feed.last_error_code && feed.last_fetched_at).length ?? 0;
+  const lastFetch = status?.feeds
+    .map((feed) => feed.last_fetched_at)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1);
+  const queued = status ? Object.values(status.ai.queue).reduce((sum, value) => sum + value, 0) : 0;
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: DUR_SECTION, ease: EASE_PAPER }}
+      aria-label={t('数据源')}
+      className="card-surface"
+    >
+      <div className="grid grid-cols-2 xl:grid-cols-4">
+        <HeroCell label={t('数据源')} index={0}>
+          <p className="font-mono text-data-m text-ink-900 tnum">
+            {status ? `${feedsOk}/${status.feeds.length}` : '—'}
+          </p>
+          <p className="mt-1 text-micro text-ink-400">
+            {t('上次采集')} {fmtRelative(lastFetch)}
+          </p>
+        </HeroCell>
+        <HeroCell label="AI" index={1}>
+          <SoftBadge tone={status?.ai.enabled ? 'ai' : 'neutral'} size="md">
+            {status?.ai.enabled ? t('已启用') : t('未启用')}
+          </SoftBadge>
+        </HeroCell>
+        <HeroCell label={t('分析队列')} index={2}>
+          <p className="font-mono text-data-m text-ink-900 tnum">{status ? queued : '—'}</p>
+        </HeroCell>
+        <HeroCell label={t('采集窗口')} index={3}>
+          <p className="font-mono text-data-m text-ink-900 tnum">
+            {status ? `${status.window_hours}h` : '—'}
+          </p>
+        </HeroCell>
+      </div>
+    </motion.section>
+  );
+}
+
+const JST_DAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' });
+
+function TimeCol({ iso }: { iso: string | null }) {
+  if (!iso) {
+    return (
+      <div className="flex w-11 shrink-0 flex-col items-center pt-0.5">
+        <span className="font-mono text-[11px] leading-[14px] text-ink-400 tnum">—</span>
+      </div>
+    );
+  }
+  const sameDay = JST_DAY.format(new Date(iso)) === JST_DAY.format(new Date());
+  return (
+    <div className="flex w-11 shrink-0 flex-col items-center pt-0.5">
+      <span className="font-mono text-[11px] leading-[14px] text-ink-400 tnum">
+        {sameDay ? fmtJstTime(iso) : fmtDateShort(iso.slice(0, 10))}
+      </span>
+      <span className="mt-1.5 hidden w-[2px] flex-1 rounded-full bg-line sm:block" aria-hidden="true" />
+    </div>
+  );
+}
+
 /* ---------------- 信息流 ---------------- */
 
 function ImportanceBadge({ value }: { value: number | null }) {
@@ -211,10 +298,11 @@ function AnalysisStateChip({ state }: { state: NewsItem['analysis_state'] }) {
 }
 
 function HotspotCard({ group }: { group: NewsHotspotGroup }) {
+  const heat = Math.max(0, Math.min(100, group.max_importance ?? 0));
   return (
     <Link
       to={`/stock/${group.display_code}`}
-      className="card-surface card-glare card-lift flex min-w-[220px] max-w-[260px] shrink-0 flex-col gap-1 p-2.5"
+      className="card-surface card-hover flex min-w-[220px] max-w-[260px] shrink-0 flex-col gap-1.5 p-3"
     >
       <span className="flex items-center gap-1.5">
         <CodeMark code={group.display_code} size={22} />
@@ -225,6 +313,9 @@ function HotspotCard({ group }: { group: NewsHotspotGroup }) {
         </span>
       </span>
       <span className="line-clamp-2 text-caption text-ink-600">{group.latest?.title ?? '—'}</span>
+      <span className="flex h-1 overflow-hidden rounded-pill bg-line" aria-label={`${t('热度')} ${heat}`}>
+        <span className="block h-full rounded-pill bg-warn-600" style={{ width: `${heat}%` }} />
+      </span>
       <span className="flex items-center gap-1.5 text-micro text-ink-400">
         <span>{group.item_count} {t('条')}</span>
         {group.categories.slice(0, 2).map((cat) => (
@@ -235,95 +326,115 @@ function HotspotCard({ group }: { group: NewsHotspotGroup }) {
   );
 }
 
-function NewsCard({ item }: { item: NewsItem }) {
+function NewsRow({ item, index }: { item: NewsItem; index: number }) {
   const [expanded, setExpanded] = useState(false);
+  const title = item.translated_title_ja ?? item.original_title ?? '—';
   return (
-    <li className="card-surface card-glare card-lift p-3.5">
-      <div className="flex items-start gap-2.5">
-        <ImportanceBadge value={item.importance} />
-        <div className="min-w-0 flex-1">
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            className="block w-full text-left"
-          >
-            <h3 className="text-body font-medium leading-snug text-ink-900">
-              {item.translated_title_ja ?? item.original_title ?? '—'}
-            </h3>
-          </button>
-          {item.translated_title_ja && item.original_title && item.translated_title_ja !== item.original_title && (
-            <p className="mt-0.5 truncate text-caption text-ink-400">{item.original_title}</p>
-          )}
-          {item.summary_ja && <p className="mt-1.5 text-body-s text-ink-700">{item.summary_ja}</p>}
+    <motion.li
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: EASE_PAPER, delay: Math.min(index * 0.03, 0.3) }}
+      className="group relative flex gap-3 px-4 py-[18px] transition-colors duration-fast hover:bg-paper-2/70 sm:px-5"
+    >
+      <TimeCol iso={item.published_at} />
+      <div className="min-w-0 flex-1">
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-micro text-ink-400">
+          <span className="font-medium text-ink-500">{item.source ?? '—'}</span>
+          <span aria-hidden="true">·</span>
+          <span className="font-mono tnum">{fmtRelative(item.published_at)}</span>
+          <span className="ml-auto">
+            <ImportanceBadge value={item.importance} />
+          </span>
+        </p>
+        <button type="button" onClick={() => setExpanded((value) => !value)} className="mt-1.5 block w-full text-left">
+          <h3 className="text-[15px] font-semibold leading-[22px] text-ink-900">
+            <span className="bg-[linear-gradient(currentColor,currentColor)] bg-[length:0%_1px] bg-left-bottom bg-no-repeat transition-[background-size,color] duration-200 group-hover:bg-[length:100%_1px] group-hover:text-brand-600">
+              {title}
+            </span>
+          </h3>
+        </button>
+        {item.translated_title_ja && item.original_title && item.translated_title_ja !== item.original_title && (
+          <p className="mt-0.5 truncate text-caption text-ink-400">{item.original_title}</p>
+        )}
+        {item.summary_ja && <p className="mt-1 line-clamp-2 text-body-s text-ink-500">{item.summary_ja}</p>}
 
-          {/* 中文影响分析（独立区域，不混入日语正文） */}
-          {item.analysis_zh && (
-            <div className="mt-2 rounded-md bg-ai-50 p-2.5 text-body-s text-ink-800">
-              <span className="mr-1.5 rounded-sm bg-ai-600 px-1 py-0.5 text-micro font-bold text-white">{t('中文分析')}</span>
-              {item.analysis_zh.headline && <strong className="mr-1">{item.analysis_zh.headline}</strong>}
-              {item.analysis_zh.impact}
-              {/* 受影响股票只列代码与理由，不显示涨跌方向（产品决定移除方向预测） */}
-              {(item.analysis_zh.affected?.length ?? 0) > 0 && (
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {item.analysis_zh.affected!.map((affected) => (
+        {item.analysis_zh && (
+          <div className="mt-2 rounded-md bg-ai-50 p-2.5 text-body-s text-ink-800">
+            <span className="mr-1.5 rounded-sm bg-ai-600 px-1 py-0.5 text-micro font-bold text-white">{t('中文分析')}</span>
+            {item.analysis_zh.headline && <strong className="mr-1">{item.analysis_zh.headline}</strong>}
+            {item.analysis_zh.impact}
+            {(item.analysis_zh.affected?.length ?? 0) > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {item.analysis_zh.affected!.map((affected) => {
+                  const code =
+                    affected.code.endsWith('0') && affected.code.length === 5
+                      ? affected.code.slice(0, 4)
+                      : affected.code;
+                  const chip = (
                     <Link
-                      key={affected.code}
-                      to={`/stock/${affected.code.endsWith('0') && affected.code.length === 5 ? affected.code.slice(0, 4) : affected.code}`}
-                      title={affected.reason_zh ?? undefined}
+                      to={`/stock/${code}`}
                       className="rounded-pill bg-paper-2 px-2 py-0.5 font-mono text-micro text-ink-600 hover:bg-brand-50 hover:text-brand-700"
                     >
-                      {affected.code.endsWith('0') && affected.code.length === 5 ? affected.code.slice(0, 4) : affected.code}
+                      {code}
                     </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-micro text-ink-400">
-            {(item.categories ?? []).slice(0, 3).map((cat) => (
-              <SoftBadge key={cat}>{t(cat)}</SoftBadge>
-            ))}
-            {item.securities.map((security) => (
-              <Link
-                key={security.canonical_code}
-                to={`/stock/${security.display_code}`}
-                className="rounded-sm bg-brand-50 px-1.5 py-0.5 font-mono text-brand-700 hover:underline"
-              >
-                {security.display_code}
-                {security.name_ja ? ` ${security.name_ja}` : ''}
-              </Link>
-            ))}
-            <AnalysisStateChip state={item.analysis_state} />
-            <span className="ml-auto flex items-center gap-2">
-              <span>{item.source}</span>
-              <span title={item.published_at ?? ''}>{fmtRelativeShort(item.published_at)}</span>
-              {item.source_url && (
-                <a href={item.source_url} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
-                  {t('原文')}
-                </a>
-              )}
-            </span>
+                  );
+                  return affected.reason_zh ? (
+                    <PointerTooltip
+                      key={affected.code}
+                      passthrough
+                      label={affected.reason_zh}
+                      content={<span className="text-micro leading-[16px] text-ink-600">{affected.reason_zh}</span>}
+                    >
+                      {chip}
+                    </PointerTooltip>
+                  ) : (
+                    <span key={affected.code}>{chip}</span>
+                  );
+                })}
+              </div>
+            )}
           </div>
+        )}
 
-          {expanded && (
-            <div className="mt-2 space-y-1.5 border-t border-line pt-2 text-caption text-ink-500">
-              {item.original_summary && <p className="text-ink-600">{item.original_summary}</p>}
-              {(item.importance_reason_items?.length ?? item.importance_reasons?.length ?? 0) > 0 && (
-                <p>
-                  {t('重要度依据')}:{' '}
-                  {explanationLines(item.importance_reason_items, item.importance_reasons).join(' · ')}
-                </p>
-              )}
-              <p>
-                {t('发布')}: {fmtJstDateTime(item.published_at)} · {t('语言')}: {item.source_language}
-                {item.market_relevance === 'market' && <span> · {t('市场级新闻')}</span>}
-              </p>
-            </div>
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-micro text-ink-400">
+          {(item.categories ?? []).slice(0, 3).map((cat) => (
+            <SoftBadge key={cat}>{t(cat)}</SoftBadge>
+          ))}
+          {item.securities.map((security) => (
+            <Link
+              key={security.canonical_code}
+              to={`/stock/${security.display_code}`}
+              className="rounded-sm bg-brand-50 px-1.5 py-0.5 font-mono text-brand-700 hover:underline"
+            >
+              {security.display_code}
+              {security.name_ja ? ` ${security.name_ja}` : ''}
+            </Link>
+          ))}
+          <AnalysisStateChip state={item.analysis_state} />
+          {item.source_url && (
+            <a href={item.source_url} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+              {t('原文')}
+            </a>
           )}
         </div>
+
+        {expanded && (
+          <div className="mt-2 space-y-1.5 border-t border-line pt-2 text-caption text-ink-500">
+            {item.original_summary && <p className="text-ink-600">{item.original_summary}</p>}
+            {(item.importance_reason_items?.length ?? item.importance_reasons?.length ?? 0) > 0 && (
+              <p>
+                {t('重要度依据')}:{' '}
+                {explanationLines(item.importance_reason_items, item.importance_reasons).join(' · ')}
+              </p>
+            )}
+            <p>
+              {t('发布')}: {fmtJstDateTime(item.published_at)} · {t('语言')}: {item.source_language}
+              {item.market_relevance === 'market' && <span> · {t('市场级新闻')}</span>}
+            </p>
+          </div>
+        )}
       </div>
-    </li>
+    </motion.li>
   );
 }
 
@@ -415,7 +526,7 @@ function EconCalendarPanel({ events, note, loading }: { events: EconEvent[]; not
     <div className="space-y-3">
       {note && <p className="text-caption text-ink-400">{note}</p>}
       {Array.from(grouped.entries()).map(([date, dayEvents]) => (
-        <section key={date} className="card-surface card-lift p-5">
+        <section key={date} className="card-surface p-5">
           <p className="eyebrow">ECON · JST</p>
           <h3 className="mb-2 mt-1 flex items-baseline gap-2">
             <span className="font-mono text-body font-semibold tnum text-ink-900">{fmtDate(date)}</span>
@@ -432,9 +543,17 @@ function EconCalendarPanel({ events, note, loading }: { events: EconEvent[]; not
                 <SoftBadge>{t(event.category)}</SoftBadge>
                 <span className="text-micro text-ink-400">{event.organizer}</span>
                 {!event.confirmed && (
-                  <SoftBadge tone="warn" title={event.note ?? ''}>
-                    {t('目安')}
-                  </SoftBadge>
+                  event.note ? (
+                    <PointerTooltip
+                      passthrough
+                      label={event.note}
+                      content={<span className="text-micro leading-[16px] text-ink-600">{event.note}</span>}
+                    >
+                      <SoftBadge tone="warn">{t('目安')}</SoftBadge>
+                    </PointerTooltip>
+                  ) : (
+                    <SoftBadge tone="warn">{t('目安')}</SoftBadge>
+                  )
                 )}
                 {event.source_url && (
                   <a href={event.source_url} target="_blank" rel="noreferrer" className="text-micro text-brand-700 hover:underline">

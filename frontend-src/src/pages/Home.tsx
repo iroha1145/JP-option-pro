@@ -1,10 +1,10 @@
 /** 首页：指数卡 → 广度/业种 → 雷达 → 决算 → 自选异动。 */
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { motion } from 'framer-motion';
 import { marketApi, radarApi, earningsApi, watchlistApi } from '@/api/modules';
-import type { IndexSummary } from '@/api/types';
+import type { EarningsRecentItem, IndexSummary, RadarEvent, WatchlistItem } from '@/api/types';
 import { ApiError } from '@/api/client';
 import { usePolling } from '@/hooks/usePolling';
 import { useNow } from '@/hooks/useNow';
@@ -13,19 +13,41 @@ import TickPrice from '@/components/shared/TickPrice';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
 import ChangeBadge from '@/components/shared/ChangeBadge';
-import { SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
+import { SkeletonBlock, SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
 import StaleStrip from '@/components/shared/StaleStrip';
 import SessionLED from '@/components/shared/SessionLED';
 import SectionCard from '@/components/shared/SectionCard';
-import SoftBadge from '@/components/shared/SoftBadge';
-import InsightLineChart, { type InsightScrub } from '@/components/charts/InsightLineChart';
-import { CodeCell, DataThrough, SignalChip, StateChip } from '@/components/domain';
+import StrengthBar from '@/components/shared/StrengthBar';
+import Sparkline from '@/components/charts/Sparkline';
+import CodeMark from '@/components/shared/CodeMark';
+import { CodeCell, DataThrough, SignalChip } from '@/components/domain';
 import { tokyoSession } from '@/lib/tokyoSession';
-import { t } from '@/i18n/core';
-import { fmtDate, fmtPct, fmtPrice, fmtTimeHHMMSS, fmtYenCompact } from '@/lib/format';
+import { localeTag, t } from '@/i18n/core';
+import { fmtPct, fmtPrice, fmtRelative, fmtTimeHHMMSS, fmtYenCompact } from '@/lib/format';
+import { jstToday } from '@/components/earnings/types';
+import { DUR_SECTION, EASE_PAPER } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
 const EMPTY_INDICES: IndexSummary[] = [];
+const MONTH_SHORT_FMT = new Intl.DateTimeFormat(localeTag(), { month: 'short' });
+
+function dateAnchorParts(iso: string): { day: number; monthShort: string } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!match) return null;
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!month || !day) return null;
+  return { day, monthShort: MONTH_SHORT_FMT.format(new Date(Number(match[1]), month - 1, 1)) };
+}
+
+function staggerDelay(index: number): number {
+  return Math.min(index * 0.04, 0.3);
+}
+
+function snapshotNumber(snapshot: RadarEvent['snapshot'], key: string): number | null {
+  const value = snapshot[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
 
 function RetryButton({ onClick, refreshing }: { onClick: () => void; refreshing: boolean }) {
   return (
@@ -44,6 +66,7 @@ function ListBody({
   isEmpty,
   emptyTitle,
   emptyDescription,
+  emptyExtra,
   rows = 6,
   skeleton,
   children,
@@ -55,6 +78,7 @@ function ListBody({
   isEmpty: boolean;
   emptyTitle: string;
   emptyDescription?: string;
+  emptyExtra?: ReactNode;
   rows?: number;
   skeleton?: ReactNode;
   children: ReactNode;
@@ -77,7 +101,14 @@ function ListBody({
       />
     );
   }
-  if (isEmpty) return <EmptyState title={emptyTitle} description={emptyDescription} />;
+  if (isEmpty) {
+    return (
+      <>
+        <EmptyState title={emptyTitle} description={emptyDescription} />
+        {emptyExtra}
+      </>
+    );
+  }
   return (
     <>
       {error && <StaleStrip onRetry={onRetry} refreshing={refreshing} className="mx-4 mb-1 mt-2 md:mx-5" />}
@@ -108,6 +139,48 @@ function MiniStat({ label, value, tone }: { label: string; value: number | null;
   );
 }
 
+function SignalGridSkeleton({ cards }: { cards: number }) {
+  return (
+    <div
+      className="grid grid-cols-1 gap-2.5 px-4 pb-4 pt-3 sm:grid-cols-2 md:px-5 md:pb-5"
+      aria-hidden="true"
+    >
+      {Array.from({ length: cards }, (_, index) => (
+        <div key={index} className="card-surface rounded-lg p-3">
+          <div className="flex items-center gap-2">
+            <SkeletonBlock className="size-6 rounded-sm" />
+            <SkeletonBlock className="h-3 w-12" />
+            <SkeletonBlock className="h-4 w-14 rounded-xs" />
+            <SkeletonBlock className="ml-auto h-3 w-8" />
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <SkeletonBlock className="h-3 w-24" />
+            <SkeletonBlock className="ml-auto h-3 w-12" />
+          </div>
+          <SkeletonBlock className="mt-2 h-1 w-full rounded-pill" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MoverGridSkeleton({ cards }: { cards: number }) {
+  return (
+    <div className="grid grid-cols-1 gap-2.5 px-4 pb-4 pt-3 sm:grid-cols-2 md:px-5 md:pb-5" aria-hidden="true">
+      {Array.from({ length: cards }, (_, index) => (
+        <div key={index} className="card-surface rounded-lg p-4">
+          <div className="flex items-center gap-2">
+            <SkeletonBlock className="h-3 w-10" />
+            <SkeletonBlock className="h-3 w-20" />
+            <SkeletonBlock className="ml-auto h-4 w-14" />
+          </div>
+          <SkeletonBlock className="mt-3 h-7 w-24" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Home() {
   const market = usePolling(() => marketApi.overview(), 120_000);
   const radar = usePolling(() => radarApi.current(), 120_000);
@@ -115,6 +188,7 @@ export default function Home() {
   const watchlist = usePolling(() => watchlistApi.list(), 120_000);
   const now = useNow(30_000);
   const session = tokyoSession(now);
+  const todayKey = jstToday();
 
   const events = useMemo(() => {
     const seen = new Set<string>();
@@ -161,9 +235,9 @@ export default function Home() {
 
       <section className="mt-8" aria-label={t('指数概览')}>
         {market.loading && !market.data ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <SkeletonCard key={i} className="h-44" />
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:[grid-template-columns:repeat(auto-fit,minmax(170px,1fr))]">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <SkeletonCard key={index} className="h-24" />
             ))}
           </div>
         ) : market.error && !market.data ? (
@@ -180,16 +254,21 @@ export default function Home() {
             {market.error && (
               <StaleStrip onRetry={() => market.refresh()} refreshing={market.refreshing} className="mb-3" />
             )}
-            <div className="stagger-in grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {(market.data?.indices ?? []).map((index) => (
-                <IndexInsightCard key={index.index_code} index={index} flash={indexFlashes[index.index_code]} />
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:[grid-template-columns:repeat(auto-fit,minmax(170px,1fr))]">
+              {indices.map((index, cardIndex) => (
+                <IndexInsightCard
+                  key={index.index_code}
+                  index={index}
+                  cardIndex={cardIndex}
+                  flash={indexFlashes[index.index_code]}
+                />
               ))}
             </div>
           </>
         )}
       </section>
 
-      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="mt-8 grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
         <SectionCard title={t('市场广度')} to="/market" className="lg:col-span-1">
           <ListBody
             loading={market.loading && !market.data}
@@ -241,41 +320,22 @@ export default function Home() {
             refreshing={radar.refreshing}
             onRetry={() => radar.refresh()}
             isEmpty={events.length === 0}
-            emptyTitle={t('暂无数据')}
-            emptyDescription={radar.data?.note ?? undefined}
+            emptyTitle={t('雷达仍在盯')}
+            emptyDescription={radar.data?.note ?? t('新信号出现时会立刻出现在这里。')}
+            emptyExtra={<SignalGridSkeleton cards={8} />}
+            skeleton={<SignalGridSkeleton cards={8} />}
             rows={8}
           >
             <div className="grid grid-cols-1 gap-2.5 px-4 pb-4 pt-3 sm:grid-cols-2 md:px-5 md:pb-5">
               {events.map((event, index) => (
-                <motion.div
-                  key={event.event_id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.36, delay: index * 0.045, ease: [0.16, 1, 0.3, 1] }}
-                >
-                  <Link
-                    to={`/stock/${event.display_code}`}
-                    className="card-surface card-lift flex items-start justify-between gap-3 p-3"
-                  >
-                    <CodeCell displayCode={event.display_code} nameJa={event.name_ja} />
-                    <span className="flex shrink-0 flex-col items-end gap-1">
-                      <span className="flex items-center gap-1.5">
-                        <SignalChip signal={event.signal_type} />
-                        <StateChip state={event.state} />
-                      </span>
-                      <span className="font-mono text-body-s tnum text-ink-900">
-                        {event.alert_priority !== null ? Math.round(event.alert_priority) : '—'}
-                      </span>
-                    </span>
-                  </Link>
-                </motion.div>
+                <RadarSignalCard key={event.event_id} event={event} index={index} />
               ))}
             </div>
           </ListBody>
         </SectionCard>
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="mt-8 grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
         <SectionCard title={t('最近决算')} to="/earnings">
           <ListBody
             loading={earnings.loading && !earnings.data}
@@ -285,19 +345,11 @@ export default function Home() {
             isEmpty={(earnings.data?.items.length ?? 0) === 0}
             emptyTitle={t('暂无数据')}
           >
-            <ul className="divide-y divide-line px-4 pb-2 md:px-5">
+            <div className="divide-y divide-line">
               {(earnings.data?.items ?? []).slice(0, 6).map((item) => (
-                <li key={`${item.canonical_code}-${item.disclosed_date}-${item.period_type}`} className="flex items-center gap-3 py-2.5">
-                  <CodeCell displayCode={item.display_code} nameJa={item.name_ja} to={`/stock/${item.display_code}`} />
-                  <span className="ml-auto flex items-center gap-2 text-caption text-ink-500">
-                    <span>{fmtDate(item.disclosed_date)}</span>
-                    <SoftBadge>{item.period_type ?? '—'}</SoftBadge>
-                    {item.forecast_direction === 'upward' && <span className="text-up-700">{t('上方修正')}</span>}
-                    {item.forecast_direction === 'downward' && <span className="text-down-700">{t('下方修正')}</span>}
-                  </span>
-                </li>
+                <EarningsAnchorRow key={`${item.canonical_code}-${item.disclosed_date}-${item.period_type}`} item={item} todayKey={todayKey} />
               ))}
-            </ul>
+            </div>
           </ListBody>
         </SectionCard>
 
@@ -310,28 +362,16 @@ export default function Home() {
             isEmpty={movers.length === 0}
             emptyTitle={t('暂无自选')}
             emptyDescription={t('在筛选器中添加')}
+            skeleton={<MoverGridSkeleton cards={6} />}
           >
             <div className="grid grid-cols-1 gap-2.5 px-4 pb-4 pt-3 sm:grid-cols-2 md:px-5 md:pb-5">
               {movers.map((item, index) => (
-                <motion.div
+                <WatchlistMoverCard
                   key={item.canonical_code}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.36, delay: index * 0.045, ease: [0.16, 1, 0.3, 1] }}
-                >
-                  <Link
-                    to={`/stock/${item.display_code}`}
-                    className="card-surface card-lift flex items-center justify-between gap-3 p-3"
-                  >
-                    <CodeCell displayCode={item.display_code} nameJa={item.name_ja} />
-                    <span className="flex shrink-0 flex-col items-end gap-1">
-                      <TickPrice flash={moverFlashes[item.canonical_code]} className="font-mono text-body-s text-ink-900">
-                        {fmtPrice(item.quote?.close)}
-                      </TickPrice>
-                      <ChangeBadge value={item.quote?.change_pct} size="sm" />
-                    </span>
-                  </Link>
-                </motion.div>
+                  item={item}
+                  index={index}
+                  flash={moverFlashes[item.canonical_code]}
+                />
               ))}
             </div>
           </ListBody>
@@ -341,48 +381,141 @@ export default function Home() {
   );
 }
 
-function IndexInsightCard({ index, flash }: { index: IndexSummary; flash?: 'up' | 'down' }) {
-  const [scrub, setScrub] = useState<InsightScrub | null>(null);
-  const value = scrub?.value ?? index.close;
-  const windowN = Math.max(index.sparkline.length, 1);
-  const badgeValue =
-    scrub && scrub.index > 0 && index.sparkline[scrub.index - 1]
-      ? scrub.value / index.sparkline[scrub.index - 1] - 1
-      : scrub
-        ? null
-        : index.change_pct;
-  const first = index.sparkline[0];
-  const lastValue = index.sparkline[index.sparkline.length - 1];
-  const windowReturn = first && lastValue != null && index.sparkline.length > 1 ? lastValue / first - 1 : null;
+function IndexInsightCard({
+  index,
+  cardIndex,
+  flash,
+}: {
+  index: IndexSummary;
+  cardIndex: number;
+  flash?: 'up' | 'down';
+}) {
+  const spark = index.sparkline.filter((value) => Number.isFinite(value));
+  const change = index.change_pct ?? 0;
   return (
-    <Link to={`/market?index=${encodeURIComponent(index.index_code)}`} className="card-surface card-glare card-hover flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between gap-2 px-3 pt-3">
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: DUR_SECTION, ease: EASE_PAPER, delay: Math.min(cardIndex * 0.045, 0.4) }}
+    >
+      <Link
+        to={`/market?index=${encodeURIComponent(index.index_code)}`}
+        className="card-surface card-hover card-glare flex flex-col gap-1 rounded-lg p-3"
+        aria-label={`${index.name} ${t('趋势快照')}`}
+      >
         <span className="truncate text-caption text-ink-500">{index.name}</span>
-        <SoftBadge>{t('快照')}</SoftBadge>
-      </div>
-      <div className="mt-2 border-t border-line px-2 pt-2">
-        <InsightLineChart
-          data={index.sparkline}
-          height={72}
-          change={index.change_pct ?? 0}
-          interactive
-          focusable={false}
-          showLiveDot
-          onScrub={setScrub}
-          ariaLabel={`${index.name} ${t('趋势快照')}`}
-        />
-      </div>
-      <div className="flex items-baseline justify-between gap-2 px-3 pb-3 pt-1">
-        <TickPrice flash={flash} className="metric-value text-data-xl text-ink-900">
-          {fmtPrice(value)}
+        <TickPrice flash={flash} className="metric-value text-data-l text-ink-900 tnum">
+          {fmtPrice(index.close)}
         </TickPrice>
-        <span className="flex items-center gap-1.5">
-          <ChangeBadge value={badgeValue} size="sm" />
-          <span className="text-micro text-ink-400">
-            {t('{n}日', { n: windowN })} {fmtPct(windowReturn)}
-          </span>
+        <span className="flex items-end justify-between gap-2">
+          <ChangeBadge value={index.change_pct} size="sm" />
+          {spark.length > 1 && <Sparkline data={spark} width={64} height={20} change={change} />}
         </span>
-      </div>
+      </Link>
+    </motion.div>
+  );
+}
+
+function RadarSignalCard({ event, index }: { event: RadarEvent; index: number }) {
+  const close = snapshotNumber(event.snapshot, 'close');
+  const ret5 = snapshotNumber(event.snapshot, 'return_5d');
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: DUR_SECTION, ease: EASE_PAPER, delay: staggerDelay(index) }}
+    >
+      <Link to={`/stock/${event.display_code}`} className="card-surface card-hover block rounded-lg p-3">
+        <div className="flex items-center gap-2">
+          <CodeMark code={event.display_code} size={24} />
+          <span className="shrink-0 font-mono text-caption font-semibold text-ink-800">{event.display_code}</span>
+          <span className="min-w-0 truncate">
+            <SignalChip signal={event.signal_type} />
+          </span>
+          <span className="ml-auto shrink-0 text-micro text-ink-400">
+            {fmtRelative(event.last_scanned_date || event.discovered_date)}
+          </span>
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <span className="min-w-0 flex-1 truncate text-caption text-ink-500">{event.name_ja ?? '—'}</span>
+          <TickPrice className="shrink-0 font-mono text-caption text-ink-800 tnum">{fmtPrice(close)}</TickPrice>
+          {ret5 !== null && (
+            <span className="flex shrink-0 items-center gap-1">
+              <span className="text-micro text-ink-400">{t('{n}日', { n: 5 })}</span>
+              <ChangeBadge value={ret5} size="sm" />
+            </span>
+          )}
+        </div>
+        <div className="mt-2">
+          <StrengthBar score={event.alert_priority} width={56} showScore />
+        </div>
+      </Link>
+    </motion.div>
+  );
+}
+
+function EarningsAnchorRow({ item, todayKey }: { item: EarningsRecentItem; todayKey: string }) {
+  const date = item.disclosed_date ?? '';
+  const anchor = dateAnchorParts(date);
+  const isToday = date.slice(0, 10) === todayKey;
+  return (
+    <Link
+      to={`/stock/${item.display_code}`}
+      className="flex items-center gap-3 px-4 py-2.5 transition-colors duration-fast hover:bg-paper-2/70 focus-visible:bg-paper-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400/60 md:px-5"
+    >
+      <span
+        className={cn(
+          'w-11 shrink-0 rounded-[9px] py-1.5 text-center',
+          isToday ? 'bg-brand-50' : 'bg-paper-2/80',
+        )}
+      >
+        <span className={cn('block font-mono text-body-s font-semibold tnum', isToday ? 'text-brand-700' : 'text-ink-900')}>
+          {anchor ? anchor.day : '—'}
+        </span>
+        <span className="block text-micro text-ink-400">{anchor?.monthShort ?? ''}</span>
+      </span>
+      <CodeCell displayCode={item.display_code} nameJa={item.name_ja} />
+      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+        {item.forecast_direction === 'upward' && <span className="text-micro text-up-700">{t('上方修正')}</span>}
+        {item.forecast_direction === 'downward' && <span className="text-micro text-down-700">{t('下方修正')}</span>}
+        <span className="rounded-md bg-paper-2 px-2 py-1 text-micro text-ink-600">{item.period_type ?? '—'}</span>
+      </span>
     </Link>
+  );
+}
+
+function WatchlistMoverCard({
+  item,
+  index,
+  flash,
+}: {
+  item: WatchlistItem;
+  index: number;
+  flash?: 'up' | 'down';
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: DUR_SECTION, ease: EASE_PAPER, delay: staggerDelay(index) }}
+    >
+      <Link to={`/stock/${item.display_code}`} className="card-surface card-hover block rounded-lg p-4">
+        <div className="flex items-center gap-2">
+          <CodeMark code={item.display_code} size={24} />
+          <span className="shrink-0 font-mono text-caption font-semibold text-ink-800">{item.display_code}</span>
+          <span className="min-w-0 flex-1 truncate text-caption text-ink-500">{item.name_ja ?? '—'}</span>
+          <span className="flex shrink-0 items-center gap-1.5">
+            <span className="text-micro text-ink-400">{t('当日')}</span>
+            <ChangeBadge value={item.quote?.change_pct} size="sm" />
+          </span>
+        </div>
+        <div className="mt-2 flex items-end justify-between gap-2">
+          <TickPrice flash={flash} className="metric-value text-data-l text-ink-900 tnum">
+            {fmtPrice(item.quote?.close)}
+          </TickPrice>
+          <span className="font-mono text-micro text-ink-400 tnum">{fmtYenCompact(item.quote?.turnover_value)}</span>
+        </div>
+      </Link>
+    </motion.div>
   );
 }
