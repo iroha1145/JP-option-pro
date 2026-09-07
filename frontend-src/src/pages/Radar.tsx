@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { motion } from 'framer-motion';
-import { quotesApi, radarApi, stocksApi, workerApi } from '@/api/modules';
+import { quotesApi, radarApi, stocksApi, watchlistApi, workerApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { useTickFlash } from '@/hooks/useTickFlash';
 import TickPrice from '@/components/shared/TickPrice';
@@ -19,7 +19,7 @@ import DataTable, { type Column } from '@/components/shared/DataTable';
 import Segmented from '@/components/shared/Segmented';
 import FilterButton from '@/components/shared/FilterButton';
 import SelectionViewport from '@/components/shared/SelectionViewport';
-import { SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
+import { SkeletonCard } from '@/components/shared/Skeleton';
 import ReactECharts from '@/components/charts/ReactECharts';
 import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart';
 import { CodeCell, DataThrough, RADAR_STATE_LABELS, ScoreBar, SignalChip, StateChip } from '@/components/domain';
@@ -32,6 +32,7 @@ import { useAccess } from '@/hooks/useAccess';
 import { useToast } from '@/hooks/useToast';
 import StaleStrip from '@/components/shared/StaleStrip';
 import SoftBadge from '@/components/shared/SoftBadge';
+import SourceNote from '@/components/shared/SourceNote';
 import { RADAR_SCORE_HINTS } from '@/lib/indicatorHints';
 import { DUR_SECTION, EASE_PAPER } from '@/lib/motion';
 import { t } from '@/i18n/core';
@@ -94,15 +95,24 @@ export default function Radar() {
   const overlayRows = overlay.data?.enabled ? overlay.data.rows : {};
   const [onlyAbovePivot, setOnlyAbovePivot] = useState(false);
   const [minScore, setMinScore] = useState(0);
+  const [onlyWatch, setOnlyWatch] = useState(false);
+  const watchQ = usePolling(() => watchlistApi.list(), 120_000);
+  const watchCodes = useMemo(
+    () => new Set((watchQ.data?.items ?? []).map((item) => item.canonical_code)),
+    [watchQ.data],
+  );
+  const watchFailed = Boolean(watchQ.error && !watchQ.data);
+  const watchFilterPending = onlyWatch && ((watchQ.loading && !watchQ.data) || watchFailed);
 
   const events = useMemo(() => {
     const all = query.data?.events ?? [];
     return all.filter((event) => {
       if (minScore > 0 && (event.alert_priority ?? -1) < minScore) return false;
       if (onlyAbovePivot && !overlayRows[event.event_id]?.above_pivot) return false;
+      if (onlyWatch && !watchFilterPending && !watchCodes.has(event.canonical_code)) return false;
       return true;
     });
-  }, [query.data, onlyAbovePivot, overlayRows, minScore]);
+  }, [query.data, onlyAbovePivot, overlayRows, minScore, onlyWatch, watchFilterPending, watchCodes]);
   const flashRows = useMemo(
     () =>
       events.map((event) => ({
@@ -124,7 +134,7 @@ export default function Radar() {
 
   useEffect(() => {
     setLeadId(null);
-  }, [group, minScore]);
+  }, [group, minScore, onlyWatch]);
 
   const restEvents = useMemo(
     () => events.filter((event) => event.event_id !== lead?.event_id),
@@ -225,14 +235,31 @@ export default function Radar() {
             </button>
           </PointerTooltip>
         )}
-        <Segmented<ViewMode>
-          options={[
-            { value: 'cards', label: t('卡片') },
-            { value: 'table', label: t('列表') },
-          ]}
-          value={view}
-          onChange={setView}
-        />
+        <span className="flex max-w-full flex-wrap items-center gap-1.5 sm:ml-auto">
+          <Segmented
+            options={[
+              { value: 'all', label: t('全部') },
+              { value: 'watchlist', label: t('只看自选') },
+            ]}
+            value={onlyWatch ? 'watchlist' : 'all'}
+            onChange={(value) => setOnlyWatch(value === 'watchlist')}
+            ariaLabel={t('查看范围')}
+            className="max-w-full"
+          />
+          {watchFilterPending && (
+            <span className="text-micro text-ink-400">
+              {watchFailed ? t('自选读取失败 · 暂显示全部') : t('自选加载中 · 暂显示全部')}
+            </span>
+          )}
+          <Segmented<ViewMode>
+            options={[
+              { value: 'cards', label: t('卡片') },
+              { value: 'table', label: t('列表') },
+            ]}
+            value={view}
+            onChange={setView}
+          />
+        </span>
       </div>
 
       <section aria-label={t('当日信号')}>
@@ -242,6 +269,7 @@ export default function Radar() {
             <h2 className="mt-1 text-h2 text-ink-900">{t('当日信号')}</h2>
             <p className="mt-1 text-caption text-ink-400">
               {t('{n} 个活跃', { n: events.length })}
+              {onlyWatch && !watchFilterPending ? t(' · 只看自选') : ''}
             </p>
           </div>
           {query.lastUpdatedAt && (
@@ -253,8 +281,15 @@ export default function Radar() {
 
       {state === 'loading' ? (
         <>
-          <SkeletonCard className="h-80" />
-          <SkeletonRows rows={6} />
+          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(260px,5fr)]">
+            <SkeletonCard className="h-[380px]" />
+            <SkeletonCard className="h-[420px]" />
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <SkeletonCard className="h-[220px]" />
+            <SkeletonCard className="h-[220px]" />
+            <SkeletonCard className="h-[220px]" />
+          </div>
         </>
       ) : state === 'error' ? (
         <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(260px,5fr)]">
@@ -297,9 +332,10 @@ export default function Radar() {
           )}
           {restEvents.length > 0 && (
             <div className="radar-section-heading mb-3 mt-6 flex flex-wrap items-baseline justify-between gap-2 pb-2">
-              <p className="eyebrow">
-                {t('其余信号')} · {restEvents.length}
+              <p className="text-body-s font-semibold text-ink-800">
+                {t('其余信号')} · <span className="font-mono tnum">{restEvents.length}</span>
               </p>
+              <p className="text-micro text-ink-400">{t('点击小卡设为首要信号 · 点击代码打开个股页')}</p>
             </div>
           )}
           {view === 'cards' ? (
@@ -332,6 +368,7 @@ export default function Radar() {
         </>
       )}
       </section>
+      <SourceNote className="mt-8" text={t('突破扫描结果 · 日线收盘后更新')} />
     </div>
   );
 }

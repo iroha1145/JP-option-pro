@@ -1950,4 +1950,25 @@ export const DICT: Record<string, [string, string]> = {
   刷新状态: ['Refresh status', '状態を更新'],
   上次扫描: ['Last scan', '前回スキャン'],
   '评分{label}': ['Score {label}', 'スコア{label}'],
+  '上涨 / 下跌': ['Advancers / decliners', '値上がり / 値下がり'],
+  平: ['unchanged', '変わらず'],
+  只看自选: ['Watchlist only', 'ウォッチのみ'],
+  查看范围: ['Scope', '表示範囲'],
+  '自选读取失败 · 暂显示全部': [
+    'Watchlist failed · showing all',
+    'ウォッチ読込失敗 · 全件を表示',
+  ],
+  '自选加载中 · 暂显示全部': [
+    'Watchlist loading · showing all',
+    'ウォッチ読込中 · 全件を表示',
+  ],
+  ' · 只看自选': [' · watchlist only', ' · ウォッチのみ'],
+  '点击小卡设为首要信号 · 点击代码打开个股页': [
+    'Click a card to promote the lead · click the code for the stock page',
+    '小カードで先頭信号に切替 · コードで銘柄ページへ',
+  ],
+  '突破扫描结果 · 日线收盘后更新': [
+    'Breakout scan · updates after the cash close',
+    'ブレイクアウト結果 · 日足引け後に更新',
+  ],
 };

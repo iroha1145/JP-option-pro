@@ -18,6 +18,7 @@ import StaleStrip from '@/components/shared/StaleStrip';
 import SessionLED from '@/components/shared/SessionLED';
 import SectionCard from '@/components/shared/SectionCard';
 import StrengthBar from '@/components/shared/StrengthBar';
+import AdvanceDeclineBar from '@/components/shared/AdvanceDeclineBar';
 import Sparkline from '@/components/charts/Sparkline';
 import CodeMark from '@/components/shared/CodeMark';
 import { CodeCell, DataThrough, SignalChip } from '@/components/domain';
@@ -107,28 +108,6 @@ function ListBody({
       {error && <StaleStrip onRetry={onRetry} refreshing={refreshing} className="mx-4 mb-1 mt-2 md:mx-5" />}
       {children}
     </>
-  );
-}
-
-function MiniStat({ label, value, tone }: { label: string; value: number | null; tone: 'up' | 'down' | 'flat' }) {
-  return (
-    <div className="rounded-[9px] bg-paper-2/70 py-2.5 text-center">
-      <p
-        className={cn(
-          'metric-value text-data-l tnum',
-          value === null
-            ? 'text-ink-400'
-            : tone === 'up'
-              ? 'text-up-700'
-              : tone === 'down'
-                ? 'text-down-700'
-                : 'text-ink-500',
-        )}
-      >
-        {value === null ? '—' : value}
-      </p>
-      <p className="mt-0.5 text-micro text-ink-400">{label}</p>
-    </div>
   );
 }
 
@@ -281,11 +260,11 @@ export default function Home() {
           >
             {market.data && (
               <div className="space-y-3 px-4 pb-4 md:px-5">
-                <div className="grid grid-cols-3 gap-2">
-                  <MiniStat label={t('上涨')} value={market.data.breadth.advancers} tone="up" />
-                  <MiniStat label={t('下跌')} value={market.data.breadth.decliners} tone="down" />
-                  <MiniStat label={t('平盘')} value={market.data.breadth.unchanged} tone="flat" />
-                </div>
+                <AdvanceDeclineBar
+                  advancers={market.data.breadth.advancers}
+                  decliners={market.data.breadth.decliners}
+                  unchanged={market.data.breadth.unchanged}
+                />
                 <div className="flex items-center justify-between border-t border-line pt-2 text-body-s">
                   <span className="text-ink-500">{t('年内新高')}</span>
                   <span className="font-mono tnum text-ink-900">{market.data.breadth.new_highs_252 ?? '—'}</span>

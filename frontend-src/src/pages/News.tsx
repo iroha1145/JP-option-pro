@@ -27,7 +27,7 @@ import SelectionViewport from '@/components/shared/SelectionViewport';
 import { NEWS_HINTS } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { explanationLines } from '@/lib/explainText';
-import { fmtDate, fmtDateShort, fmtJstDateTime, fmtJstTime, fmtRelative } from '@/lib/format';
+import { fmtDate, fmtDateShort, fmtJstDateTime, fmtJstTime, fmtRelative, fmtTimeHHMMSS } from '@/lib/format';
 import { DUR_SECTION, EASE_PAPER } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import type {
@@ -85,6 +85,11 @@ export default function News() {
         meta={
           <>
             <StatusStrip status={status.data ?? null} />
+            {status.lastUpdatedAt && (
+              <span className="font-mono text-caption text-ink-400 tnum">
+                {t('更新')} {fmtTimeHHMMSS(status.lastUpdatedAt)}
+              </span>
+            )}
             <ForceRefreshButton
               onClick={onRefreshNews}
               spinning={refreshingNews}

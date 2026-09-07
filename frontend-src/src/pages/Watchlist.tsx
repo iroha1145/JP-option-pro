@@ -20,6 +20,7 @@ import HorizontalScroller from '@/components/shared/HorizontalScroller';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
 import SessionLED from '@/components/shared/SessionLED';
 import MenuSelect from '@/components/shared/MenuSelect';
+import AdvanceDeclineBar from '@/components/shared/AdvanceDeclineBar';
 import { CodeCell, DataThrough } from '@/components/domain';
 import Icon from '@/components/icons';
 import { useAccess } from '@/hooks/useAccess';
@@ -103,6 +104,19 @@ export default function Watchlist() {
     () => sortWatchlist(query.data?.items ?? EMPTY_WATCHLIST, sortId),
     [query.data?.items, sortId],
   );
+  const breadth = useMemo(() => {
+    let advancers = 0;
+    let decliners = 0;
+    let unchanged = 0;
+    for (const item of items) {
+      const pct = item.quote?.change_pct;
+      if (pct == null || !Number.isFinite(pct)) continue;
+      if (pct > 0) advancers += 1;
+      else if (pct < 0) decliners += 1;
+      else unchanged += 1;
+    }
+    return { advancers, decliners, unchanged };
+  }, [items]);
   const flashes = useTickFlash(items, (row) => row.canonical_code, (row) => row.quote?.close ?? null);
   const maxItems = query.data?.max_items ?? null;
   const anonymous =
@@ -328,26 +342,23 @@ export default function Watchlist() {
             initial="hidden"
             animate="show"
             variants={{ hidden: {}, show: { transition: { staggerChildren: 0.045 } } }}
-            className="flex gap-3 sm:grid sm:grid-cols-4"
+            className="flex gap-3 sm:grid sm:grid-cols-3"
           >
             <motion.div variants={STAT_ENTER} className="min-w-[220px] snap-start sm:min-w-0">
               <StatCard label={t('只标的')} icon="list" value={items.length} />
             </motion.div>
             <motion.div variants={STAT_ENTER} className="min-w-[220px] snap-start sm:min-w-0">
-              <StatCard
-                label={t('上涨')}
-                icon="arrow-up-right"
-                value={items.filter((item) => (item.quote?.change_pct ?? 0) > 0).length}
-                sub={<span className="text-up-700">{t('当日')}</span>}
-              />
-            </motion.div>
-            <motion.div variants={STAT_ENTER} className="min-w-[220px] snap-start sm:min-w-0">
-              <StatCard
-                label={t('下跌')}
-                icon="arrow-down-right"
-                value={items.filter((item) => (item.quote?.change_pct ?? 0) < 0).length}
-                sub={<span className="text-down-700">{t('当日')}</span>}
-              />
+              <div className="card-surface card-lift p-5">
+                <div className="flex items-start justify-between">
+                  <p className="eyebrow">{t('上涨 / 下跌')}</p>
+                  <Icon name="candle" size={18} className="text-ink-400" />
+                </div>
+                <AdvanceDeclineBar
+                  advancers={breadth.advancers}
+                  decliners={breadth.decliners}
+                  unchanged={breadth.unchanged}
+                />
+              </div>
             </motion.div>
             <motion.div variants={STAT_ENTER} className="min-w-[220px] snap-start sm:min-w-0">
               <StatCard

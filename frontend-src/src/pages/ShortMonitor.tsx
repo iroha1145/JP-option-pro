@@ -43,7 +43,7 @@ import type {
   ShortMonitorRow,
   StockBar,
 } from '@/api/types';
-import { fmtDate, fmtDateShort, fmtPct, fmtPctLevel, fmtPrice, fmtScore, fmtShares } from '@/lib/format';
+import { fmtDate, fmtDateShort, fmtPct, fmtPctLevel, fmtPrice, fmtScore, fmtShares, fmtTimeHHMMSS } from '@/lib/format';
 import { explanationLine } from '@/lib/explainText';
 import SoftBadge from '@/components/shared/SoftBadge';
 import StaleStrip from '@/components/shared/StaleStrip';
@@ -176,6 +176,11 @@ export default function ShortMonitor() {
         meta={
           <>
             <DataThrough date={overview?.as_of_date} />
+            {overviewQuery.lastUpdatedAt && (
+              <span className="font-mono text-caption text-ink-400 tnum">
+                {t('更新')} {fmtTimeHHMMSS(overviewQuery.lastUpdatedAt)}
+              </span>
+            )}
             <ForceRefreshButton
               onClick={onRefreshMonitor}
               spinning={refreshingMonitor}
