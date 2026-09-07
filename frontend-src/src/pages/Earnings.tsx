@@ -329,7 +329,7 @@ function RecentPanel({ items, loading }: { items: EarningsRecentItem[]; loading:
     <section className="card-surface p-5" aria-label={t('最近决算')}>
       <p className="eyebrow">{t('最近决算 · 7 天')}</p>
       {shown.length === 0 ? (
-        <p className="mt-3 text-caption text-ink-400">{t('暂无数据')}</p>
+        <EmptyState size="compact" image="/empty-chart.svg" title={t('暂无数据')} className="mt-2" />
       ) : (
         <div className="mt-3 space-y-2.5">
           {shown.map((row) => (

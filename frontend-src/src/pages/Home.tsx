@@ -22,23 +22,13 @@ import Sparkline from '@/components/charts/Sparkline';
 import CodeMark from '@/components/shared/CodeMark';
 import { CodeCell, DataThrough, SignalChip } from '@/components/domain';
 import { tokyoSession } from '@/lib/tokyoSession';
-import { localeTag, t } from '@/i18n/core';
-import { fmtPct, fmtPrice, fmtRelative, fmtTimeHHMMSS, fmtYenCompact } from '@/lib/format';
+import { t } from '@/i18n/core';
+import { dateAnchorParts, fmtPct, fmtPrice, fmtRelative, fmtTimeHHMMSS, fmtYenCompact } from '@/lib/format';
 import { jstToday } from '@/components/earnings/types';
 import { DUR_SECTION, EASE_PAPER } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
 const EMPTY_INDICES: IndexSummary[] = [];
-const MONTH_SHORT_FMT = new Intl.DateTimeFormat(localeTag(), { month: 'short' });
-
-function dateAnchorParts(iso: string): { day: number; monthShort: string } | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  if (!match) return null;
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  if (!month || !day) return null;
-  return { day, monthShort: MONTH_SHORT_FMT.format(new Date(Number(match[1]), month - 1, 1)) };
-}
 
 function staggerDelay(index: number): number {
   return Math.min(index * 0.04, 0.3);
@@ -247,6 +237,7 @@ export default function Home() {
           <div className="card-surface">
             <EmptyState
               variant="error"
+              image="/empty-chart.svg"
               title={market.error.code === 503 ? t('数据暂不可用') : t('加载失败')}
               description={market.error.message}
               action={<RetryButton onClick={() => market.refresh()} refreshing={market.refreshing} />}

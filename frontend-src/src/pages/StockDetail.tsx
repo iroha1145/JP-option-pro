@@ -33,7 +33,9 @@ import Icon from '@/components/icons';
 import { RADAR_SCORE_HINTS, STRUCTURE_HINTS, TECHNICAL_HINTS, type ScoreHint } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { quoteSourceLabel } from '@/lib/quoteSource';
-import { fmtDate, fmtDateShort, fmtPct, fmtPrice, fmtShares, fmtTimeJst, fmtYenCompact } from '@/lib/format';
+import { dateAnchorParts, fmtDate, fmtDateShort, fmtPct, fmtPrice, fmtShares, fmtTimeJst, fmtYenCompact } from '@/lib/format';
+import { jstToday } from '@/components/earnings/types';
+import { cn } from '@/lib/utils';
 import type {
   FinancialSummaryView,
   IntradayChart,
@@ -94,6 +96,7 @@ export default function StockDetail() {
     return [{ key: code, price: liveQuote?.price ?? overview.data?.quote.close ?? null }];
   }, [overview.data, liveQuote]);
   const headerFlashes = useTickFlash(headerQuote, (row) => row.key, (row) => row.price);
+  const todayKey = jstToday();
 
   const goBack = () => {
     const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
@@ -314,7 +317,7 @@ export default function StockDetail() {
             <p className="eyebrow">BREAKOUT RADAR</p>
             <h2 className="mb-2 mt-1 text-h3 text-ink-900">{t('突破雷达')}</h2>
             {data.radar_events.length === 0 ? (
-              <p className="text-caption text-ink-400">{t('暂无相关雷达事件')}</p>
+              <PanelEmpty image="/empty-radar.svg" title={t('暂无相关雷达事件')} />
             ) : (
               <ul className="space-y-1.5">
                 {data.radar_events.slice(0, 3).map((event) => (
@@ -380,22 +383,47 @@ export default function StockDetail() {
           <p className="eyebrow">EARNINGS SCHEDULE</p>
           <h2 className="mb-3 mt-1 text-h3 text-ink-900">{t('发表预定')}</h2>
           {data.earnings.length === 0 ? (
-            <p className="text-body-s text-ink-400">{t('暂无数据')}</p>
+            <PanelEmpty title={t('暂无数据')} />
           ) : (
-            <ul className="divide-y divide-line">
+            <ul>
               {data.earnings.slice(0, 4).map((item, index) => (
-                <li key={index} className="flex items-center justify-between py-1.5 text-body-s">
-                  <span className="text-ink-700">{String(item.fiscal_quarter ?? '—')}</span>
-                  <span className="font-mono tnum text-ink-900">
-                    {item.announcement_date ? fmtDate(String(item.announcement_date)) : t('未定')}
-                  </span>
-                </li>
+                <EarningsScheduleRow key={index} item={item} todayKey={todayKey} />
               ))}
             </ul>
           )}
         </section>
       </div>
     </div>
+  );
+}
+
+function PanelEmpty({ title, image = '/empty-chart.svg' }: { title: string; image?: string }) {
+  return <EmptyState size="compact" image={image} title={title} />;
+}
+
+function EarningsScheduleRow({ item, todayKey }: { item: Record<string, unknown>; todayKey: string }) {
+  const date = item.announcement_date ? String(item.announcement_date) : '';
+  const quarter = item.fiscal_quarter ? String(item.fiscal_quarter) : '—';
+  const anchor = dateAnchorParts(date);
+  const isToday = date.slice(0, 10) === todayKey;
+  return (
+    <li className="flex min-h-[60px] items-center gap-3 px-1 py-[14px] transition-colors duration-fast hover:bg-paper-2/70">
+      <span
+        className={cn(
+          'w-11 shrink-0 rounded-[9px] py-1.5 text-center',
+          isToday ? 'bg-brand-50' : 'bg-paper-2/80',
+        )}
+      >
+        <span className={cn('block font-mono text-body-s font-semibold tnum', isToday ? 'text-brand-700' : 'text-ink-900')}>
+          {anchor ? anchor.day : '—'}
+        </span>
+        <span className="block text-micro text-ink-400">{anchor?.monthShort ?? ''}</span>
+      </span>
+      <span className="min-w-0 flex-1 truncate text-body-s text-ink-700">{quarter}</span>
+      <span className="shrink-0 font-mono text-caption tnum text-ink-500">
+        {date ? fmtDate(date) : t('未定')}
+      </span>
+    </li>
   );
 }
 
@@ -670,7 +698,7 @@ function cnTick(direction: 'up' | 'down' | 'flat'): string {
 /* ---------------- 技术结构面板（美版算法输出） ---------------- */
 
 function StructurePanel({ technical }: { technical: TechnicalStructure | null }) {
-  if (!technical) return <p className="text-body-s text-ink-400">{t('暂无数据')}</p>;
+  if (!technical) return <PanelEmpty title={t('暂无数据')} />;
   const pa = technical.price_action;
   const vpm = technical.vol_price;
   const base = technical.base;
@@ -753,7 +781,7 @@ function StructurePanel({ technical }: { technical: TechnicalStructure | null })
 }
 
 function IndicatorGrid({ technical }: { technical: TechnicalStructure | null }) {
-  if (!technical) return <p className="text-caption text-ink-400">{t('暂无数据')}</p>;
+  if (!technical) return <PanelEmpty title={t('暂无数据')} />;
   const tech = technical.technicals;
   return (
     <dl className="grid grid-cols-3 gap-1.5">
@@ -841,14 +869,14 @@ function FinancialTable({ summaries }: { summaries: FinancialSummaryView[] }) {
       ),
     },
   ];
-  if (summaries.length === 0) return <p className="text-body-s text-ink-400">{t('暂无数据')}</p>;
+  if (summaries.length === 0) return <PanelEmpty title={t('暂无数据')} />;
   return (
     <DataTable columns={columns} rows={summaries} rowKey={(row) => `${row.disclosed_date}-${row.disclosure_number}`} rowHeight={44} />
   );
 }
 
 function MarginPanel({ rows }: { rows: MarginInterestRow[] }) {
-  if (rows.length === 0) return <p className="text-caption text-ink-400">{t('暂无数据')}</p>;
+  if (rows.length === 0) return <PanelEmpty title={t('暂无数据')} />;
   const latest = rows[rows.length - 1];
   const ratio =
     latest.long_total !== null && latest.short_total !== null && latest.short_total > 0
@@ -875,7 +903,7 @@ function ShortPositionsPanel({
   rows: ShortPositionRow[];
   summary: ShortInterestSummary | null;
 }) {
-  if (rows.length === 0) return <p className="text-body-s text-ink-400">{t('暂无数据')}</p>;
+  if (rows.length === 0) return <PanelEmpty title={t('暂无数据')} />;
 
   const changes = summary?.changes ?? [];
   const KIND_LABEL: Record<string, string> = {
@@ -946,60 +974,46 @@ function ShortPositionsPanel({
           </p>
           {/* 1 行 2 段。横に 5 列並べると「義務消失」が折り返して行の高さが
               暴れるので、名前・区分・日付を上段、水準・株数・変化を下段に置く。 */}
-          <ul className="divide-y divide-line">
+          <ul>
             {changes.map((row, index) => (
-              <li key={index} className="py-1.5 text-body-s">
-                <div className="flex items-baseline gap-2">
-                  <span className="min-w-0 flex-1 truncate text-ink-700">{row.holder_name ?? '—'}</span>
-                  <span
-                    className={`shrink-0 whitespace-nowrap text-micro ${
-                      KIND_TONE[row.kind] ?? 'text-ink-400'
-                    }`}
-                  >
-                    {t(KIND_LABEL[row.kind] ?? '')}
+              <li
+                key={index}
+                className="flex min-h-[60px] items-center gap-3 px-1 py-[14px] transition-colors duration-fast hover:bg-paper-2/70"
+              >
+                <div className="flex w-11 shrink-0 flex-col items-center self-stretch pt-0.5">
+                  <span className="font-mono text-[11px] leading-[14px] text-ink-400 tnum">
+                    {fmtDateShort(row.calculated_date)}
                   </span>
-                  <PointerTooltip
-                    passthrough
-                    label={fmtDate(row.calculated_date)}
-                    width={140}
-                    contentClassName="p-2"
-                    content={<span className="text-micro text-ink-600">{fmtDate(row.calculated_date)}</span>}
-                  >
-                    <span className="shrink-0 whitespace-nowrap font-mono text-micro tnum text-ink-400">
-                      {fmtDateShort(row.calculated_date)}
-                    </span>
-                  </PointerTooltip>
+                  <span className="mt-1.5 hidden w-[2px] flex-1 rounded-full bg-line sm:block" aria-hidden="true" />
                 </div>
-                <div className="flex items-baseline gap-2 font-mono tnum">
-                  {/* 水準（符号なし）と変化（符号あり）を分けて出す。 */}
-                  <span className="shrink-0 text-ink-900">
-                    {row.ratio != null ? `${(row.ratio * 100).toFixed(2)}%` : '—'}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-micro text-ink-400">
-                    {row.shares != null ? `${fmtShares(row.shares)}${t('株')}` : ''}
-                  </span>
-                  <span
-                    className={`shrink-0 whitespace-nowrap text-micro ${
-                      row.delta == null
-                        ? 'text-ink-400'
-                        : row.delta > 0
-                          ? 'text-up-600'
-                          : row.delta < 0
-                            ? 'text-down-600'
-                            : 'text-ink-400'
-                    }`}
-                  >
-                    {row.delta != null
-                      ? `${row.delta > 0 ? '+' : row.delta < 0 ? '−' : '±'}${Math.abs(row.delta * 100).toFixed(2)}%`
-                      : '—'}
-                  </span>
-                </div>
+                <span className="min-w-0 flex-1 truncate text-body-s text-ink-700">{row.holder_name ?? '—'}</span>
+                <span className={`shrink-0 whitespace-nowrap text-micro ${KIND_TONE[row.kind] ?? 'text-ink-400'}`}>
+                  {t(KIND_LABEL[row.kind] ?? '')}
+                </span>
+                <span className="shrink-0 font-mono text-caption tnum text-ink-900">
+                  {row.ratio != null ? `${(row.ratio * 100).toFixed(2)}%` : '—'}
+                </span>
+                <span
+                  className={`hidden shrink-0 whitespace-nowrap font-mono text-micro tnum sm:inline ${
+                    row.delta == null
+                      ? 'text-ink-400'
+                      : row.delta > 0
+                        ? 'text-up-600'
+                        : row.delta < 0
+                          ? 'text-down-600'
+                          : 'text-ink-400'
+                  }`}
+                >
+                  {row.delta != null
+                    ? `${row.delta > 0 ? '+' : row.delta < 0 ? '−' : '±'}${Math.abs(row.delta * 100).toFixed(2)}%`
+                    : '—'}
+                </span>
               </li>
             ))}
           </ul>
         </div>
       ) : (
-        <p className="text-micro text-ink-400">{t('2周内没有新的残高报告')}</p>
+        <PanelEmpty title={t('2周内没有新的残高报告')} />
       )}
     </div>
   );

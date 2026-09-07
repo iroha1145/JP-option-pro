@@ -14,7 +14,7 @@ import EmptyState from '@/components/shared/EmptyState';
 import ChangeBadge from '@/components/shared/ChangeBadge';
 import Segmented from '@/components/shared/Segmented';
 import DataTable, { type Column } from '@/components/shared/DataTable';
-import { SkeletonRows } from '@/components/shared/Skeleton';
+import { SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
 import { CodeCell, DataThrough } from '@/components/domain';
 import Icon from '@/components/icons';
 import { useAccess } from '@/hooks/useAccess';
@@ -276,34 +276,50 @@ export default function Watchlist() {
             }
           />
         </section>
-      ) : query.loading && !query.data ? (
-        <SkeletonRows rows={8} />
-      ) : query.error && !query.data ? (
-        <section className="card-surface">
-          <EmptyState variant="error" image="/empty-chart.svg" title={t('加载失败')} description={String(query.error?.message ?? '')} />
-        </section>
-      ) : items.length === 0 ? (
-        <section className="card-surface">
-          <EmptyState
-            image="/empty-watchlist.svg"
-            title={t('清单还是空的')}
-            description={canManageWatchlist ? t('在上方搜索代码或公司名，加入第一只自选') : t('在筛选器中添加')}
-          />
-        </section>
-      ) : view === 'table' ? (
-        <DataTable columns={columns} rows={items} rowKey={(row) => row.canonical_code} rowHeight={44} />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {items.map((item, index) => (
-            <WatchCard
-              key={item.canonical_code}
-              item={item}
-              index={index}
-              flash={flashes[item.canonical_code]}
-              onRemove={canManageWatchlist ? () => void doRemove(item.canonical_code) : undefined}
-              onToggleStar={canManageWatchlist ? () => void doToggleStar(item) : undefined}
-            />
-          ))}
+        <div className="min-h-[70vh]">
+          <SkeletonReveal
+            loading={query.loading && !query.data}
+            skeleton={
+              <section className="card-surface">
+                <SkeletonRows rows={8} />
+              </section>
+            }
+          >
+            {query.error && !query.data ? (
+              <section className="card-surface">
+                <EmptyState
+                  variant="error"
+                  image="/empty-chart.svg"
+                  title={t('加载失败')}
+                  description={String(query.error?.message ?? '')}
+                />
+              </section>
+            ) : items.length === 0 ? (
+              <section className="card-surface">
+                <EmptyState
+                  image="/empty-watchlist.svg"
+                  title={t('清单还是空的')}
+                  description={canManageWatchlist ? t('在上方搜索代码或公司名，加入第一只自选') : t('在筛选器中添加')}
+                />
+              </section>
+            ) : view === 'table' ? (
+              <DataTable columns={columns} rows={items} rowKey={(row) => row.canonical_code} rowHeight={44} />
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {items.map((item, index) => (
+                  <WatchCard
+                    key={item.canonical_code}
+                    item={item}
+                    index={index}
+                    flash={flashes[item.canonical_code]}
+                    onRemove={canManageWatchlist ? () => void doRemove(item.canonical_code) : undefined}
+                    onToggleStar={canManageWatchlist ? () => void doToggleStar(item) : undefined}
+                  />
+                ))}
+              </div>
+            )}
+          </SkeletonReveal>
         </div>
       )}
     </div>

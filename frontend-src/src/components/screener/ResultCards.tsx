@@ -106,15 +106,33 @@ export default function ResultCards({
                   </TickPrice>
                 </span>
               </span>
-              <span className="relative mt-2.5 h-[3px] w-full rounded-pill bg-line" role="presentation" aria-hidden="true">
+              <span
+                className="strength-track relative mt-2.5 h-1 w-full rounded-pill bg-paper"
+                role="presentation"
+                aria-hidden="true"
+                data-strength-band={strength?.band}
+              >
                 {strength && (
-                  <motion.span
-                    className={cn('block h-full origin-left rounded-pill', strength.barClass)}
-                    initial={{ scaleX: 0 }}
-                    animate={{ scaleX: 1 }}
-                    transition={{ duration: 0.7, ease: EASE_PAPER, delay: 0.15 + index * 0.03 }}
-                    style={{ width: `${width}%` }}
-                  />
+                  <>
+                    <motion.span
+                      className={cn('block h-full origin-left rounded-pill', strength.barClass)}
+                      initial={{ scaleX: 0 }}
+                      animate={{ scaleX: 1 }}
+                      transition={{ duration: 0.7, ease: EASE_PAPER, delay: 0.15 + index * 0.03 }}
+                      style={{ width: `${width}%` }}
+                    />
+                    <motion.span
+                      className={cn(
+                        'absolute size-2 rounded-full border-2 border-card shadow-sh-1',
+                        strength.barClass,
+                      )}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.26, ease: EASE_PAPER, delay: 0.72 + index * 0.03 }}
+                      style={{ left: `calc(${width}% - 4px)`, top: 'calc(50% - 4px)' }}
+                      aria-hidden="true"
+                    />
+                  </>
                 )}
               </span>
               <span className="mt-3 flex items-center justify-between border-t border-line pt-3">

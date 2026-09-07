@@ -8,7 +8,7 @@
  * - マイナスは U+2212 を使う（ハイフンより判読しやすい）。
  */
 
-import { t } from '@/i18n/core';
+import { localeTag, t } from '@/i18n/core';
 
 const MINUS = '−';
 
@@ -84,6 +84,22 @@ export function fmtDateShort(isoDate: string | null | undefined): string {
 export function fmtDate(isoDate: string | null | undefined): string {
   if (!isoDate) return '—';
   return isoDate.slice(0, 10);
+}
+
+/** 电报行日期锚：日数字 + 本地化短月。ISO 日历日原样拆，不做 TZ 换算。 */
+export function dateAnchorParts(iso: string | null | undefined): { day: number; monthShort: string } | null {
+  if (!iso) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!match) return null;
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!month || !day) return null;
+  return {
+    day,
+    monthShort: new Intl.DateTimeFormat(localeTag(), { month: 'short' }).format(
+      new Date(Number(match[1]), month - 1, 1),
+    ),
+  };
 }
 
 const JST_TIME_FMT = new Intl.DateTimeFormat('ja-JP', {

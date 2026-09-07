@@ -207,7 +207,7 @@ export default function Research() {
 
           <section className="card-surface card-lift p-5 text-caption text-ink-600">
             <p className="eyebrow">POINT-IN-TIME LIMITS</p>
-            <h3 className="mb-1 mt-1 font-semibold text-ink-800">{t('点时限制')}</h3>
+            <h3 className="mb-1 mt-1 text-h3 text-ink-900">{t('点时限制')}</h3>
             <ul className="list-disc space-y-1 pl-5">
               {(report.point_in_time_limits ?? []).map((limit) => (
                 <li key={limit}>{t(limit)}</li>

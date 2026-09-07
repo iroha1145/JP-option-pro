@@ -40,7 +40,7 @@ export function ScoreCell({ score, index }: { score: number | null; index: numbe
         {score.toFixed(1)}
       </span>
       <span
-        className="h-1 w-16 overflow-hidden rounded-pill bg-line"
+        className="strength-track h-1 w-16 overflow-hidden rounded-pill bg-paper"
         role="progressbar"
         aria-valuemin={0}
         aria-valuemax={100}
