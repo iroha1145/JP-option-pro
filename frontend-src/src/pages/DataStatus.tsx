@@ -199,7 +199,7 @@ export default function DataStatus() {
                   key={action.type}
                   type="button"
                   disabled={pendingAction !== null}
-                  className="control-button inline-flex items-center gap-1.5"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-line bg-card px-3 py-1.5 text-caption text-ink-600 shadow-btn transition-colors hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
                   onClick={async () => {
                     if (pendingAction) return;
                     setPendingAction(action.type);
@@ -244,7 +244,7 @@ export default function DataStatus() {
               <p className="eyebrow">WORKER</p>
               <h2 className="mb-2 mt-1 flex items-center gap-2 text-h3 text-ink-900">
                 Worker
-                <SoftBadge tone={query.data.worker.healthy ? 'up' : 'down'}>
+                <SoftBadge tone={query.data.worker.healthy ? 'brand' : 'warn'}>
                   {query.data.worker.healthy ? 'healthy' : 'degraded'}
                 </SoftBadge>
               </h2>

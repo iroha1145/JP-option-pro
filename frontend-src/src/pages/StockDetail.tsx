@@ -223,7 +223,7 @@ export default function StockDetail() {
               {security.scale_category && <SoftBadge>{security.scale_category}</SoftBadge>}
               {security.margin_name && <SoftBadge>{security.margin_name}</SoftBadge>}
               {security.active === 0 && (
-                <SoftBadge tone="down">
+                <SoftBadge tone="warn">
                   {t('上場廃止')} {security.delisted_date ?? ''}
                 </SoftBadge>
               )}

@@ -105,6 +105,18 @@ test('顶栏与 Dock 共用 useColorMode，不再各自 useState', async () => {
   assert.doesNotMatch(dock, /setLocalColorMode|getColorMode\(\)/);
 });
 
+test('健康态 SoftBadge 不借用涨跌 up/down', async () => {
+  const news = codeOf(await source('pages/News.tsx'));
+  const data = codeOf(await source('pages/DataStatus.tsx'));
+  const detail = codeOf(await source('pages/StockDetail.tsx'));
+  assert.match(news, /tone: 'warn',\s*label: t\('异常'\)/);
+  assert.match(news, /failed: \{ label: t\('分析失败'\), tone: 'warn' \}/);
+  assert.match(data, /worker\.healthy \? 'brand' : 'warn'/);
+  assert.match(detail, /SoftBadge tone="warn"/);
+  assert.doesNotMatch(news, /tone: 'up',\s*label: t\('正常'\)/);
+  assert.doesNotMatch(data, /worker\.healthy \? 'up' : 'down'/);
+});
+
 test('渲染期读涨跌习惯的 .tsx 必须订阅 useColorMode', async () => {
   const { readdir } = await import('node:fs/promises');
   const READS_GLOBAL = /\bCH\.(up600|down600)\b|\bheat(Tone|Color)\s*\(/;

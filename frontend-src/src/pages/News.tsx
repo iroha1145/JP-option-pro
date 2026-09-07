@@ -302,7 +302,7 @@ function StatusHero({ status, loading }: { status: NewsStatus | null; loading: b
             </div>
           ) : (
             <>
-              <p className="flex items-center gap-2 font-mono text-data-m text-ink-900 tnum">
+              <p className="flex items-center gap-2 metric-value text-data-m text-ink-900 tnum">
                 <StatusLed tone={sourceTone} pulse={sourceTone === 'brand'} />
                 {status ? `${feedsOk}/${status.feeds.length}` : '—'}
               </p>
@@ -330,14 +330,14 @@ function StatusHero({ status, loading }: { status: NewsStatus | null; loading: b
           {loading ? (
             <SkeletonBlock className="h-5 w-16" />
           ) : (
-            <p className="font-mono text-data-m text-ink-900 tnum">{status ? queued : '—'}</p>
+            <p className="metric-value text-data-m text-ink-900 tnum">{status ? queued : '—'}</p>
           )}
         </HeroCell>
         <HeroCell label={t('采集窗口')} index={3}>
           {loading ? (
             <SkeletonBlock className="h-5 w-14" />
           ) : (
-            <p className="font-mono text-data-m text-ink-900 tnum">
+            <p className="metric-value text-data-m text-ink-900 tnum">
               {status ? `${status.window_hours}h` : '—'}
             </p>
           )}
@@ -425,9 +425,9 @@ function ImportanceBadge({ value }: { value: number | null }) {
 
 function AnalysisStateChip({ state }: { state: NewsItem['analysis_state'] }) {
   if (state === 'completed' || !state) return null;
-  const map: Record<string, { label: string; tone: 'brand' | 'down' | 'neutral' }> = {
+  const map: Record<string, { label: string; tone: 'brand' | 'warn' | 'neutral' }> = {
     pending: { label: t('分析排队中'), tone: 'brand' },
-    failed: { label: t('分析失败'), tone: 'down' },
+    failed: { label: t('分析失败'), tone: 'warn' },
     disabled: { label: t('AI 未启用'), tone: 'neutral' },
     none: { label: t('未分析'), tone: 'neutral' },
   };
@@ -849,9 +849,9 @@ function feedHost(url: string): string {
   }
 }
 
-function feedHealth(feed: NewsFeedState): { tone: 'up' | 'down' | 'neutral'; label: string } {
-  if (feed.last_error_code) return { tone: 'down', label: t('异常') };
-  if (feed.last_fetched_at) return { tone: 'up', label: t('正常') };
+function feedHealth(feed: NewsFeedState): { tone: 'brand' | 'warn' | 'neutral'; label: string } {
+  if (feed.last_error_code) return { tone: 'warn', label: t('异常') };
+  if (feed.last_fetched_at) return { tone: 'brand', label: t('正常') };
   return { tone: 'neutral', label: t('未采集') };
 }
 
@@ -901,7 +901,7 @@ function SourcesPanel({ status, loading }: { status: NewsStatus | null; loading:
                   <span
                     className={cn(
                       'inline-block size-1.5 rounded-full',
-                      health.tone === 'up' ? 'bg-ai-600' : health.tone === 'down' ? 'bg-down-600' : 'bg-ink-300',
+                      health.tone === 'brand' ? 'bg-brand-600' : health.tone === 'warn' ? 'bg-warn-600' : 'bg-ink-300',
                     )}
                     aria-hidden
                   />
@@ -910,7 +910,7 @@ function SourcesPanel({ status, loading }: { status: NewsStatus | null; loading:
               </div>
               <div className="mt-4 grid grid-cols-2 gap-2 text-center">
                 <div>
-                  <p className="font-mono text-data-l text-ink-900 tnum">{feed.items_seen.toLocaleString('ja-JP')}</p>
+                  <p className="metric-value text-data-l text-ink-900 tnum">{feed.items_seen.toLocaleString('ja-JP')}</p>
                   <p className="mt-0.5 text-micro text-ink-400">{t('累计')}</p>
                 </div>
                 <div>

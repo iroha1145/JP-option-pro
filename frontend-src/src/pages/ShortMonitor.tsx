@@ -712,7 +712,7 @@ function StockCard({ row, onSelect }: { row: ShortMonitorRow; onSelect: () => vo
   // 公式ルール口径が新鮮な合計より大きいときだけ差が意味を持つ
   const inScope = row.reported_in_scope_ratio;
   return (
-    <button type="button" onClick={onSelect} className="card-surface card-lift flex w-full flex-col gap-2.5 rounded-lg p-4 text-left">
+    <button type="button" onClick={onSelect} className="card-surface card-lift flex w-full flex-col gap-2.5 p-4 text-left">
       <div className="contents">
       <div className="flex items-baseline gap-2">
         <CodeCell displayCode={row.display_code} nameJa={row.name} />
@@ -721,7 +721,7 @@ function StockCard({ row, onSelect }: { row: ShortMonitorRow; onSelect: () => vo
             {t('行为分')}
             <InfoHint hint={SHORT_HINTS.behavior} size={11} className="ml-0.5" />
           </span>
-          <span className="font-mono text-data-l tnum text-ink-900">{fmtScore(row.behavior_score)}</span>
+          <span className="metric-value text-data-l tnum text-ink-900">{fmtScore(row.behavior_score)}</span>
         </span>
       </div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-micro text-ink-400">
