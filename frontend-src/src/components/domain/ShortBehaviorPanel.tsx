@@ -11,6 +11,7 @@ import type { ShortMonitorDetail, ShortMonitorEvent, ShortMonitorHolder } from '
 import { fmtDate, fmtDateShort, fmtPct, fmtPctLevel, fmtShares } from '@/lib/format';
 import { explanationLine } from '@/lib/explainText';
 import InfoHint from '@/components/shared/InfoHint';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import { SHORT_HINTS, type ScoreHint } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 
@@ -244,9 +245,17 @@ function EventRow({ event }: { event: ShortMonitorEvent }) {
           {event.short_shares != null ? `${fmtShares(event.short_shares)}${t('株')}` : ''}
         </span>
         {/* 仓位日期与公开日期都要出。市场只有在公开后才可能知道。 */}
-        <span className="shrink-0 whitespace-nowrap" title={t('仓位日期 → 公开日期')}>
-          {fmtDate(event.position_date)} → {fmtDate(event.published_date)}
-        </span>
+        <PointerTooltip
+          passthrough
+          label={t('仓位日期 → 公开日期')}
+          width={180}
+          contentClassName="p-2"
+          content={<span className="text-micro text-ink-600">{t('仓位日期 → 公开日期')}</span>}
+        >
+          <span className="shrink-0 whitespace-nowrap">
+            {fmtDate(event.position_date)} → {fmtDate(event.published_date)}
+          </span>
+        </PointerTooltip>
       </div>
       {event.event_type === 'below_threshold' && (
         <p className="text-micro text-ink-400">

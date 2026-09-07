@@ -251,6 +251,7 @@ export default function Earnings() {
                 filteredByDay={selectedDay !== null}
                 featuredFilteredEmpty={listMode === 'featured' && listState.allCount > 0 && listState.featuredCount === 0}
                 onShowAll={() => onListModeChange('all')}
+                onNextWeek={() => onWeekChange(1)}
               />
 
               {listState.visibleItems.length < listState.listItems.length && (

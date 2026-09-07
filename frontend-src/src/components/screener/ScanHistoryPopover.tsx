@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { fmtJstTime } from '@/lib/format';
 import Icon from '@/components/icons';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import type { ScanHistoryEntry } from './types';
 import { t } from '@/i18n/core';
 
@@ -65,9 +66,15 @@ export default function ScanHistoryPopover({ history }: { history: ScanHistoryEn
                     <span className="font-mono text-caption text-ink-800 tnum">
                       {fmtJstTime(new Date(entry.at).toISOString())}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-micro text-ink-500" title={entry.summary}>
-                      {entry.summary}
-                    </span>
+                    <PointerTooltip
+                      passthrough
+                      label={entry.summary}
+                      width={240}
+                      contentClassName="p-2.5"
+                      content={<span className="block text-micro leading-[16px] text-ink-600">{entry.summary}</span>}
+                    >
+                      <span className="min-w-0 flex-1 truncate text-micro text-ink-500">{entry.summary}</span>
+                    </PointerTooltip>
                     <span className="shrink-0 rounded-xs bg-brand-50 px-1.5 py-px font-mono text-micro text-brand-700 tnum">
                       {entry.count} {t('只')}
                     </span>

@@ -530,6 +530,11 @@ export const DICT: Record<string, [string, string]> = {
   '切到「全部公司」查看全市场日历。': ['Switch to "All companies" for the full calendar.', '「全企業」に切り替えると全市場が見られます。'],
   '选中的日期没有决算安排，切换日格试试。': ['Nothing scheduled on that date — pick another day.', 'その日の決算はありません。別の日を選んでください。'],
   查看全部公司: ['View all companies', '全企業を見る'],
+  查看下周: ['View next week', '来週を見る'],
+  '选中的日期没有决算安排，切换日格或查看下周。': [
+    'Nothing scheduled on that date — switch days or check next week.',
+    'その日の決算はありません。日付を変えるか、来週を確認してください。',
+  ],
   日历数据不可用: ['Calendar unavailable', 'カレンダーを取得できません'],
   稍后刷新再试: ['Retry later', '後で再試行してください'],
   '最近决算 · 7 天': ['Recent earnings · 7d', '直近決算 · 7日'],
@@ -1873,4 +1878,16 @@ export const DICT: Record<string, [string, string]> = {
     'State changes are grouped by Tokyo calendar day.',
     '状態遷移は東京の暦日でまとめます。',
   ],
+  评分套组: ['Score set', 'スコアセット'],
+  价格标尺数据不足: ['Price scale needs more levels', '価格スケールのデータ不足'],
+  '— 价位数据不足': ['— Not enough price levels', '— 価格データ不足'],
+  失效: ['Invalidation', '失効'],
+  触发: ['Trigger', 'トリガー'],
+  目标: ['Target', '目標'],
+  现价: ['Last', '現値'],
+  '价格标尺：失效 {invalid}，触发 {trigger}，目标 {target}，现价 {current}': [
+    'Price scale: invalidation {invalid}, trigger {trigger}, target {target}, last {current}',
+    '価格スケール：失効 {invalid}、トリガー {trigger}、目標 {target}、現値 {current}',
+  ],
+  'vs 昨收': ['vs prev close', '前日比'],
 };

@@ -26,7 +26,6 @@ function TapeItem({
     <button
       type="button"
       onClick={() => onOpen(q.index_code)}
-      title={t('查看市场 · {code}', { code: q.name })}
       aria-label={
         tone === 'flat'
           ? t('查看大盘强弱，{code} 最新价 {price}，{flat}', { code: q.name, price: fmtPrice(q.close), flat: t('持平') })

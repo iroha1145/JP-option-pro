@@ -11,6 +11,7 @@ import { fmtPrice, fmtYenCompact } from '@/lib/format';
 import EmptyState from '@/components/shared/EmptyState';
 import ChangeBadge from '@/components/shared/ChangeBadge';
 import PointerTooltip from '@/components/shared/PointerTooltip';
+import Icon from '@/components/icons';
 import type { EarningsUpcomingItem } from '@/api/types';
 import { daysUntil, fmtMDCN, relativeDayCN, statusMeta, weekdayCN } from './types';
 import { t } from '@/i18n/core';
@@ -164,6 +165,7 @@ interface EarningsListProps {
   filteredByDay: boolean;
   featuredFilteredEmpty?: boolean;
   onShowAll?: () => void;
+  onNextWeek?: () => void;
 }
 
 /* 実績列は 3 値（前期→予想→実績）を持つので、旧配分（198px 実測）では
@@ -171,7 +173,7 @@ interface EarningsListProps {
 const GRID =
   'md:grid-cols-[minmax(150px,1.1fr)_minmax(108px,0.7fr)_minmax(210px,1.8fr)_100px_88px_56px] 2xl:grid-cols-[minmax(170px,1.1fr)_minmax(118px,0.7fr)_minmax(232px,1.8fr)_110px_96px_60px]';
 
-export default function EarningsList({ items, filteredByDay, featuredFilteredEmpty = false, onShowAll }: EarningsListProps) {
+export default function EarningsList({ items, filteredByDay, featuredFilteredEmpty = false, onShowAll, onNextWeek }: EarningsListProps) {
   const navigate = useNavigate();
 
   if (items.length === 0) {
@@ -187,7 +189,9 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
           description={
             featuredFilteredEmpty
               ? t('切到「全部公司」查看全市场日历。')
-              : t('选中的日期没有决算安排，切换日格试试。')
+              : filteredByDay
+                ? t('选中的日期没有决算安排，切换日格或查看下周。')
+                : t('选中的日期没有决算安排，切换日格试试。')
           }
           action={
             featuredFilteredEmpty && onShowAll ? (
@@ -197,6 +201,16 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                 className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white transition-[filter] hover:brightness-105"
               >
                 {t('查看全部公司')}
+                <Icon name="chevron-right" size={13} />
+              </button>
+            ) : filteredByDay && onNextWeek ? (
+              <button
+                type="button"
+                onClick={onNextWeek}
+                className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white transition-[filter] hover:brightness-105"
+              >
+                {t('查看下周')}
+                <Icon name="chevron-right" size={13} />
               </button>
             ) : undefined
           }

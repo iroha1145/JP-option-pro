@@ -22,6 +22,7 @@ import { pushRecent, readRecent } from '@/lib/recentTickers';
 import Icon, { type IconName } from '@/components/icons';
 import CodeMark from '@/components/shared/CodeMark';
 import SoftBadge from '@/components/shared/SoftBadge';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import { NAV_ITEMS } from '@/components/Navbar';
 import { t } from '@/i18n/core';
 
@@ -459,9 +460,17 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
                       <span className="ml-auto flex min-w-0 max-w-[58%] items-center gap-1.5">
                         {e.hint && <span className="min-w-0 truncate text-micro text-ink-400">{e.hint}</span>}
                         {e.sector && (
-                          <SoftBadge className="max-w-[7rem] shrink-0" title={e.sector}>
-                            <span className="truncate">{e.sector}</span>
-                          </SoftBadge>
+                          <PointerTooltip
+                            passthrough
+                            label={e.sector}
+                            width={180}
+                            contentClassName="p-2"
+                            content={<span className="text-micro text-ink-600">{e.sector}</span>}
+                          >
+                            <SoftBadge className="max-w-[7rem] shrink-0">
+                              <span className="truncate">{e.sector}</span>
+                            </SoftBadge>
+                          </PointerTooltip>
                         )}
                       </span>
                     )}

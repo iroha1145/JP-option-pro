@@ -6,7 +6,7 @@ import { remoteState } from '@/hooks/remoteState';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
 import DataTable, { type Column } from '@/components/shared/DataTable';
-import { SkeletonRows } from '@/components/shared/Skeleton';
+import { SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
 import SoftBadge from '@/components/shared/SoftBadge';
 import StaleStrip from '@/components/shared/StaleStrip';
 import StatCard from '@/components/shared/StatCard';
@@ -108,7 +108,16 @@ export default function DataStatus() {
       />
 
       {state === 'loading' ? (
-        <SkeletonRows rows={10} />
+        <div className="space-y-4" aria-busy="true">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {Array.from({ length: 4 }, (_, i) => (
+              <SkeletonCard key={i} className="h-24" />
+            ))}
+          </div>
+          <section className="card-surface">
+            <SkeletonRows rows={10} />
+          </section>
+        </div>
       ) : state === 'error' ? (
         <section className="card-surface">
           <EmptyState variant="error" image="/empty-chart.svg" title={t('加载失败')} description={String(query.error?.message ?? '')} />

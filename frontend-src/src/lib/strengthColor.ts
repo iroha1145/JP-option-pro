@@ -5,3 +5,10 @@ export function strengthBarClass(score: number): string {
   if (score >= 50) return 'bg-brand-400';
   return 'bg-ink-300';
 }
+
+/** 追高 / 拥挤等风险分：越高越危险，反向着色。 */
+export function riskBarClass(score: number): string {
+  if (score >= 70) return 'bg-down-600';
+  if (score >= 50) return 'bg-warn-600';
+  return 'bg-ink-300';
+}

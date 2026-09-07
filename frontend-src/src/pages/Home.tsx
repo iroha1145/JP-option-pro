@@ -67,6 +67,7 @@ function ListBody({
   emptyTitle,
   emptyDescription,
   emptyExtra,
+  emptyImage,
   rows = 6,
   skeleton,
   children,
@@ -79,6 +80,7 @@ function ListBody({
   emptyTitle: string;
   emptyDescription?: string;
   emptyExtra?: ReactNode;
+  emptyImage?: string;
   rows?: number;
   skeleton?: ReactNode;
   children: ReactNode;
@@ -95,6 +97,7 @@ function ListBody({
     return (
       <EmptyState
         variant="error"
+        image={emptyImage}
         title={error.code === 503 ? t('数据暂不可用') : t('加载失败')}
         description={error.message}
         action={<RetryButton onClick={onRetry} refreshing={refreshing} />}
@@ -104,7 +107,7 @@ function ListBody({
   if (isEmpty) {
     return (
       <>
-        <EmptyState title={emptyTitle} description={emptyDescription} />
+        <EmptyState image={emptyImage} title={emptyTitle} description={emptyDescription} />
         {emptyExtra}
       </>
     );
@@ -277,6 +280,7 @@ export default function Home() {
             onRetry={() => market.refresh()}
             isEmpty={!market.data}
             emptyTitle={t('暂无数据')}
+            emptyImage="/empty-chart.svg"
             rows={6}
           >
             {market.data && (
@@ -322,6 +326,7 @@ export default function Home() {
             isEmpty={events.length === 0}
             emptyTitle={t('雷达仍在盯')}
             emptyDescription={radar.data?.note ?? t('新信号出现时会立刻出现在这里。')}
+            emptyImage="/empty-radar.svg"
             emptyExtra={<SignalGridSkeleton cards={8} />}
             skeleton={<SignalGridSkeleton cards={8} />}
             rows={8}
@@ -344,6 +349,7 @@ export default function Home() {
             onRetry={() => earnings.refresh()}
             isEmpty={(earnings.data?.items.length ?? 0) === 0}
             emptyTitle={t('暂无数据')}
+            emptyImage="/empty-chart.svg"
           >
             <div className="divide-y divide-line">
               {(earnings.data?.items ?? []).slice(0, 6).map((item) => (
@@ -362,6 +368,7 @@ export default function Home() {
             isEmpty={movers.length === 0}
             emptyTitle={t('暂无自选')}
             emptyDescription={t('在筛选器中添加')}
+            emptyImage="/empty-watchlist.svg"
             skeleton={<MoverGridSkeleton cards={6} />}
           >
             <div className="grid grid-cols-1 gap-2.5 px-4 pb-4 pt-3 sm:grid-cols-2 md:px-5 md:pb-5">

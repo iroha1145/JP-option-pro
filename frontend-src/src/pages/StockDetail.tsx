@@ -5,6 +5,7 @@
  *  K线叠加: 基底阻力带 markArea + 枢轴/失效位 markLine + 摆动点。 */
 
 import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router';
 import { stocksApi, watchlistApi, workerApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
@@ -23,6 +24,7 @@ import ShortBehaviorPanel from '@/components/domain/ShortBehaviorPanel';
 import StockChart, { type ChartInterval, type ChartRange, type PriceMode } from '@/components/detail/StockChart';
 import { CH, baseGrid, categoryAxis, glassTooltip, insightLineSeries, valueAxis } from '@/lib/chart';
 import { DataThrough, ScoreBar, SignalChip, StateChip } from '@/components/domain';
+import StrengthBar from '@/components/shared/StrengthBar';
 import { useAccess } from '@/hooks/useAccess';
 import { useToast } from '@/hooks/useToast';
 import SoftBadge from '@/components/shared/SoftBadge';
@@ -167,67 +169,89 @@ export default function StockDetail() {
         <span className="eyebrow">STOCK · {security.display_code}</span>
       </div>
 
-      {/* ヘッダー */}
-      <header className="border-b border-line pb-3">
+      {/* ヘッダー：代码主读 + 名称次读，对齐美站 PriceHeader 节奏；不搬 Logo / 实时伪装。 */}
+      <motion.header
+        className="border-b border-line pb-3"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.48, ease: [0.16, 1, 0.3, 1] }}
+      >
         <div className="flex flex-wrap items-center gap-3">
-          <CodeMark code={security.display_code} size={36} />
-          <span className="font-mono text-h3 font-bold text-brand-700">{security.display_code}</span>
-          <h1 className="font-display text-display-m text-ink-900">{security.name_ja ?? security.name_en ?? '—'}</h1>
-          {security.active === 0 && (
-            <SoftBadge tone="down">
-              {t('上場廃止')} {security.delisted_date ?? ''}
-            </SoftBadge>
+          <CodeMark code={security.display_code} size={40} />
+          <div className="min-w-0">
+            <h1 className="flex flex-wrap items-baseline gap-x-2.5">
+              <span className="font-display text-[22px] leading-[28px] font-bold text-ink-900">
+                {security.display_code}
+              </span>
+              <span className="text-body-s text-ink-500">{security.name_ja ?? security.name_en ?? '—'}</span>
+            </h1>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              {security.sector33_name && <SoftBadge>{security.sector33_name}</SoftBadge>}
+              {security.market_name && <SoftBadge>{security.market_name}</SoftBadge>}
+              {security.scale_category && <SoftBadge>{security.scale_category}</SoftBadge>}
+              {security.margin_name && <SoftBadge>{security.margin_name}</SoftBadge>}
+              {security.active === 0 && (
+                <SoftBadge tone="down">
+                  {t('上場廃止')} {security.delisted_date ?? ''}
+                </SoftBadge>
+              )}
+            </div>
+          </div>
+          {data.radar_events[0] && (
+            <div className="ml-auto text-right">
+              <p className="eyebrow">
+                {t('告警优先级')}
+                <InfoHint hint={STRUCTURE_HINTS.优先级} side="bottom" align="end" size={12} className="ml-1" />
+              </p>
+              <StrengthBar score={data.radar_events[0].alert_priority} width={72} className="mt-1.5" />
+            </div>
           )}
         </div>
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-ink-500">
-          <span>{security.market_name ?? '—'}</span>
-          <span>{security.sector33_name ?? '—'}</span>
-          {security.scale_category && <span>{security.scale_category}</span>}
-          {security.margin_name && <span>{security.margin_name}</span>}
-        </div>
-        <div className="mt-2 flex flex-wrap items-end gap-4">
+        <div className="mt-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
           {liveQuote ? (
-            <>
+            <div className="min-w-0">
               {/* 遅延気配を主表示にするが、必ず「遅延・非公式」と併記する。
                   公式の確定終値は隣に小さく残し、どちらの数字かを曖昧にしない。 */}
-              <span className="flex flex-col">
-                <span className="flex items-baseline gap-2">
-                  <TickPrice
-                    flash={headerFlashes[security.canonical_code]}
-                    className="font-mono text-display-l text-ink-900"
-                  >
-                    {fmtPrice(liveQuote.price)}
-                  </TickPrice>
-                  <ChangeBadge value={liveQuote.change_pct} />
-                </span>
-                <span className="mt-0.5 flex items-center gap-1 text-micro text-warn-700">
-                  <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
-                  {quoteSourceLabel(live.data).text}
-                  {liveQuote.as_of_epoch ? ` · ${fmtTimeJst(liveQuote.as_of_epoch)}` : ''}
-                </span>
+              <span className="flex items-baseline gap-2">
+                <TickPrice
+                  flash={headerFlashes[security.canonical_code]}
+                  className="font-mono text-display-l text-ink-900"
+                >
+                  {fmtPrice(liveQuote.price)}
+                </TickPrice>
+                <ChangeBadge value={liveQuote.change_pct} />
+                <span className="text-micro text-ink-400">{t('vs 昨收')}</span>
               </span>
-              <span className="flex flex-col text-caption text-ink-400">
-                <span className="font-mono tnum text-ink-600">{fmtPrice(data.quote.close)}</span>
-                <span>{t('官方终值')} {data.quote.trade_date ?? ''}</span>
+              <span className="mt-0.5 flex items-center gap-1 text-micro text-warn-700">
+                <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
+                {quoteSourceLabel(live.data).text}
+                {liveQuote.as_of_epoch ? ` · ${fmtTimeJst(liveQuote.as_of_epoch)}` : ''}
               </span>
-            </>
+              <span className="mt-1 block font-mono text-micro tnum text-ink-400">
+                {t('官方终值')} {fmtPrice(data.quote.close)} {data.quote.trade_date ?? ''}
+              </span>
+            </div>
           ) : (
-            <>
-              <TickPrice
-                flash={headerFlashes[security.canonical_code]}
-                className="font-mono text-display-l text-ink-900"
-              >
-                {fmtPrice(data.quote.close)}
-              </TickPrice>
-              <ChangeBadge value={data.quote.change_pct} />
-            </>
+            <div className="min-w-0">
+              <span className="flex items-baseline gap-2">
+                <TickPrice
+                  flash={headerFlashes[security.canonical_code]}
+                  className="font-mono text-display-l text-ink-900"
+                >
+                  {fmtPrice(data.quote.close)}
+                </TickPrice>
+                <ChangeBadge value={data.quote.change_pct} />
+                <span className="text-micro text-ink-400">{t('vs 昨收')}</span>
+              </span>
+            </div>
           )}
-          <span className="text-body-s text-ink-500">
-            {t('成交额')} <span className="font-mono tnum">{fmtYenCompact(data.quote.turnover_value)}</span>
-          </span>
-          <DataThrough date={data.quote.trade_date} className="ml-auto" />
+          <p className="pb-1.5 text-right font-mono text-micro text-ink-500 tnum">
+            {t('成交额')} {fmtYenCompact(data.quote.turnover_value)}
+            {data.quote.volume != null ? ` · ${fmtShares(data.quote.volume)}${t('株')}` : ''}
+          </p>
         </div>
-      </header>
+        <DataThrough date={data.quote.trade_date} className="mt-2" />
+      </motion.header>
 
       {/* 行1: K線 + 右侧紧凑栏 */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
@@ -474,7 +498,6 @@ function IntradayPane({
           type="button"
           onClick={onFetch}
           className="rounded-md border border-line px-3 py-1.5 text-caption text-ink-500 hover:bg-brand-50"
-          title={t('重新检测订阅状态')}
         >
           {t('重新检测订阅状态')}
         </button>
@@ -622,7 +645,6 @@ function TickPane({
           type="button"
           onClick={onFetch}
           className="rounded-md border border-line px-3 py-1.5 text-caption text-ink-500 hover:bg-brand-50"
-          title={t('重新检测订阅状态')}
         >
           {t('重新检测订阅状态')}
         </button>
@@ -936,12 +958,17 @@ function ShortPositionsPanel({
                   >
                     {t(KIND_LABEL[row.kind] ?? '')}
                   </span>
-                  <span
-                    className="shrink-0 whitespace-nowrap font-mono text-micro tnum text-ink-400"
-                    title={fmtDate(row.calculated_date)}
+                  <PointerTooltip
+                    passthrough
+                    label={fmtDate(row.calculated_date)}
+                    width={140}
+                    contentClassName="p-2"
+                    content={<span className="text-micro text-ink-600">{fmtDate(row.calculated_date)}</span>}
                   >
-                    {fmtDateShort(row.calculated_date)}
-                  </span>
+                    <span className="shrink-0 whitespace-nowrap font-mono text-micro tnum text-ink-400">
+                      {fmtDateShort(row.calculated_date)}
+                    </span>
+                  </PointerTooltip>
                 </div>
                 <div className="flex items-baseline gap-2 font-mono tnum">
                   {/* 水準（符号なし）と変化（符号あり）を分けて出す。 */}

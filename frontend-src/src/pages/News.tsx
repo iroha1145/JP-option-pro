@@ -542,45 +542,65 @@ function EconCalendarPanel({ events, note, loading }: { events: EconEvent[]; not
     <div className="space-y-3">
       {note && <p className="text-caption text-ink-400">{note}</p>}
       {Array.from(grouped.entries()).map(([date, dayEvents]) => (
-        <section key={date} className="card-surface p-5">
-          <p className="eyebrow">ECON · JST</p>
-          <h3 className="mb-2 mt-1 flex items-baseline gap-2">
-            <span className="font-mono text-body font-semibold tnum text-ink-900">{fmtDate(date)}</span>
-            <span className="text-micro text-ink-400">{weekdayJa(date)}</span>
-          </h3>
-          <ul className="divide-y divide-line">
+        <section key={date} className="card-surface overflow-hidden">
+          <div className="flex items-baseline gap-2 border-b border-line px-4 py-3 sm:px-5">
+            <p className="eyebrow">ECON · JST</p>
+            <h3 className="flex items-baseline gap-2">
+              <span className="font-mono text-body font-semibold tnum text-ink-900">{fmtDate(date)}</span>
+              <span className="text-micro text-ink-400">{weekdayJa(date)}</span>
+            </h3>
+          </div>
+          <ul>
             {dayEvents.map((event, index) => (
-              <li key={index} className="flex flex-wrap items-center gap-2 py-1.5">
-                <span className="w-12 shrink-0 font-mono text-caption tnum text-ink-500">
-                  {event.time_jst || '—'}
-                </span>
-                <EconImportanceDot importance={event.importance} />
-                <span className="min-w-0 flex-1 text-body-s text-ink-800">{event.name_ja}</span>
-                <SoftBadge>{t(event.category)}</SoftBadge>
-                <span className="text-micro text-ink-400">{event.organizer}</span>
-                {!event.confirmed && (
-                  event.note ? (
-                    <PointerTooltip
-                      passthrough
-                      label={event.note}
-                      content={<span className="text-micro leading-[16px] text-ink-600">{event.note}</span>}
-                    >
-                      <SoftBadge tone="warn">{t('目安')}</SoftBadge>
-                    </PointerTooltip>
-                  ) : (
-                    <SoftBadge tone="warn">{t('目安')}</SoftBadge>
-                  )
-                )}
-                {event.source_url && (
-                  <a href={event.source_url} target="_blank" rel="noreferrer" className="text-micro text-brand-700 hover:underline">
-                    {t('出处')}
-                  </a>
-                )}
+              <li
+                key={index}
+                className="group relative flex min-h-[60px] gap-3 px-4 py-[18px] transition-colors duration-fast hover:bg-paper-2/70 sm:px-5"
+              >
+                <TimeColClock time={event.time_jst} />
+                <div className="min-w-0 flex-1">
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-micro text-ink-400">
+                    <EconImportanceDot importance={event.importance} />
+                    <span className="font-medium text-ink-500">{event.organizer}</span>
+                    <SoftBadge>{t(event.category)}</SoftBadge>
+                    {!event.confirmed && (
+                      event.note ? (
+                        <PointerTooltip
+                          passthrough
+                          label={event.note}
+                          content={<span className="text-micro leading-[16px] text-ink-600">{event.note}</span>}
+                        >
+                          <SoftBadge tone="warn">{t('目安')}</SoftBadge>
+                        </PointerTooltip>
+                      ) : (
+                        <SoftBadge tone="warn">{t('目安')}</SoftBadge>
+                      )
+                    )}
+                    {event.source_url && (
+                      <a href={event.source_url} target="_blank" rel="noreferrer" className="ml-auto text-brand-700 hover:underline">
+                        {t('出处')}
+                      </a>
+                    )}
+                  </p>
+                  <h3 className="mt-1.5 text-[15px] font-semibold leading-[22px] text-ink-900">
+                    <span className="bg-[linear-gradient(currentColor,currentColor)] bg-[length:0%_1px] bg-left-bottom bg-no-repeat transition-[background-size,color] duration-200 group-hover:bg-[length:100%_1px] group-hover:text-brand-600">
+                      {event.name_ja}
+                    </span>
+                  </h3>
+                </div>
               </li>
             ))}
           </ul>
         </section>
       ))}
+    </div>
+  );
+}
+
+function TimeColClock({ time }: { time: string }) {
+  return (
+    <div className="flex w-11 shrink-0 flex-col items-center pt-0.5">
+      <span className="font-mono text-[11px] leading-[14px] text-ink-400 tnum">{time || '—'}</span>
+      <span className="mt-1.5 hidden w-[2px] flex-1 rounded-full bg-line sm:block" aria-hidden="true" />
     </div>
   );
 }

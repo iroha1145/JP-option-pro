@@ -495,7 +495,7 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
           </p>
 
           {events.length > 0 && (
-            <ul className="mt-3 divide-y divide-line border-t border-line">
+            <ul className="mt-3 border-t border-line">
               {events.slice(0, 4).map((event) => (
                 <EventLine key={event.event_id} event={event} />
               ))}
@@ -642,10 +642,15 @@ function LeadChart({ bars, events, code }: { bars: StockBar[]; events: ShortMoni
 function EventLine({ event }: { event: ShortMonitorEvent }) {
   const delta = event.ratio_delta;
   return (
-    <li className="flex items-baseline gap-2 py-1 text-caption">
-      <span className="font-mono text-micro tnum text-ink-400">{fmtDateShort(event.effective_trade_date)}</span>
-      <span className="min-w-0 flex-1 truncate text-ink-600">{event.institution}</span>
-      <span className="shrink-0 font-mono tnum text-ink-500">{fmtPctLevel(event.short_ratio)}</span>
+    <li className="flex min-h-[60px] items-center gap-3 px-1 py-[14px] transition-colors duration-fast hover:bg-paper-2/70">
+      <div className="flex w-11 shrink-0 flex-col items-center pt-0.5">
+        <span className="font-mono text-[11px] leading-[14px] text-ink-400 tnum">
+          {fmtDateShort(event.effective_trade_date)}
+        </span>
+        <span className="mt-1.5 hidden w-[2px] flex-1 rounded-full bg-line sm:block" aria-hidden="true" />
+      </div>
+      <span className="min-w-0 flex-1 truncate text-body-s text-ink-700">{event.institution}</span>
+      <span className="shrink-0 font-mono text-caption tnum text-ink-500">{fmtPctLevel(event.short_ratio)}</span>
       <ShortDelta value={delta} className="w-16 shrink-0 text-right" />
     </li>
   );

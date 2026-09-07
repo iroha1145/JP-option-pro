@@ -21,6 +21,9 @@ import { SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
 import ReactECharts from '@/components/charts/ReactECharts';
 import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart';
 import { CodeCell, DataThrough, RADAR_STATE_LABELS, ScoreBar, SignalChip, StateChip } from '@/components/domain';
+import StrengthBar from '@/components/shared/StrengthBar';
+import PriceScale from '@/components/radar/PriceScale';
+import ScoreBarsMini from '@/components/radar/ScoreBarsMini';
 import { useAccess } from '@/hooks/useAccess';
 import { useToast } from '@/hooks/useToast';
 import StaleStrip from '@/components/shared/StaleStrip';
@@ -465,6 +468,14 @@ function LeadBigCard({
           />
         </div>
       </div>
+      <PriceScale
+        className="mt-3"
+        large
+        invalidation={invalidation}
+        trigger={event.trigger_price ?? event.pivot_price}
+        current={live?.live_price ?? (event.snapshot.close as number | null)}
+        flash={flash}
+      />
 
       <div className="mt-4 grid grid-cols-1 gap-4 border-t border-line pt-3 lg:grid-cols-[minmax(0,1fr)_220px]">
         <section aria-label={t('分项评分')}>
@@ -585,20 +596,30 @@ function EventCard({ event, onSelect, live, flash }: {
   live?: { live_price: number; pivot_distance_pct?: number; above_pivot?: boolean };
   flash?: 'up' | 'down';
 }) {
-  const quality = event.scores?.breakout_quality?.score ?? null;
   const structure = event.structure ?? null;
   /* 遅延気配なので必ず「遅延」と分かる見た目にする。スコアは夜間のまま。 */
   const above = live?.above_pivot === true;
+  const current = live?.live_price ?? (event.snapshot.close as number | null);
   return (
-    <button type="button" onClick={onSelect} className="block h-full w-full text-left">
-      <div className="radar-signal-card card-surface card-lift flex h-full flex-col gap-2">
+    <article
+      onClick={onSelect}
+      onKeyDown={(eventKey) => {
+        if (eventKey.key === 'Enter' || eventKey.key === ' ') {
+          eventKey.preventDefault();
+          onSelect();
+        }
+      }}
+      tabIndex={0}
+      className="block h-full w-full cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
+    >
+      <div className="radar-signal-card card-surface card-lift flex h-full flex-col">
       <div className="flex items-center gap-2">
         <CodeCell displayCode={event.display_code} nameJa={event.name_ja} />
         <span className="ml-auto font-mono text-data-l tnum text-ink-900">
           {event.alert_priority !== null ? Math.round(event.alert_priority) : '—'}
         </span>
       </div>
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
         <SignalChip signal={event.signal_type} />
         <StateChip state={event.state} />
         {structure?.setup_label && <Tag tone="ai">{t(structure.setup_label)}</Tag>}
@@ -609,7 +630,7 @@ function EventCard({ event, onSelect, live, flash }: {
           </SoftBadge>
         )}
       </div>
-      <div className="grid grid-cols-3 gap-1 text-caption">
+      <div className="mt-3 grid grid-cols-3 gap-1 text-caption">
         {live ? (
           <CardFact
             label={t('盘中价')}
@@ -633,14 +654,30 @@ function EventCard({ event, onSelect, live, flash }: {
         <CardFact label={t('枢轴价')} value={fmtPrice(event.pivot_price)} />
         <CardFact label={t('成交额')} value={fmtYenCompact(event.snapshot.turnover_today as number | null)} />
       </div>
-      <div className="flex items-center gap-2 text-micro text-ink-400">
-        <span>{t('综合质量')} {quality !== null ? Math.round(quality) : '—'}</span>
-        <span>·</span>
-        <span>{t('距52周高点')} {fmtPct(event.snapshot.pct_from_high_252 as number | null)}</span>
-        <span className="ml-auto">{fmtDate(event.discovered_date)}</span>
+      <PriceScale
+        className="mt-2"
+        invalidation={structure?.base?.invalidation_price}
+        trigger={event.trigger_price ?? event.pivot_price}
+        current={current}
+        flash={flash}
+      />
+      <details
+        className="radar-disclosure mt-3"
+        onClick={(click) => click.stopPropagation()}
+        onKeyDown={(key) => key.stopPropagation()}
+      >
+        <summary>
+          <span>{t('评分套组')}</span>
+          <Icon name="chevron-down" size={14} className="radar-disclosure-arrow" />
+        </summary>
+        <ScoreBarsMini event={event} className="pb-3 pt-1" />
+      </details>
+      <div className="radar-card-footer mt-auto flex items-center justify-between gap-3 pt-3">
+        <StrengthBar score={event.scores?.relative_strength?.score ?? event.alert_priority} width={64} />
+        <span className="font-mono text-micro text-ink-400 tnum">{fmtDate(event.discovered_date)}</span>
       </div>
       </div>
-    </button>
+    </article>
   );
 }
 
