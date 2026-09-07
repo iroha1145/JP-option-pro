@@ -1,1 +1,0 @@
-import{j as c,c as i}from"./index-B_ugxnLd.js";function a({flash:n,className:o,children:t}){return c.jsx("span",{"data-tick-price":n??"none",className:i("tick-flash inline-block rounded-xs px-1 font-mono tnum",n==="up"&&"tick-flash-up",n==="down"&&"tick-flash-down",o),children:t})}export{a as T};
