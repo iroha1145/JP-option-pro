@@ -30,7 +30,7 @@ import { useToast } from '@/hooks/useToast';
 import SoftBadge from '@/components/shared/SoftBadge';
 import CodeMark from '@/components/shared/CodeMark';
 import Icon from '@/components/icons';
-import { STRUCTURE_HINTS, TECHNICAL_HINTS, type ScoreHint } from '@/lib/indicatorHints';
+import { RADAR_SCORE_HINTS, STRUCTURE_HINTS, TECHNICAL_HINTS, type ScoreHint } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { quoteSourceLabel } from '@/lib/quoteSource';
 import { fmtDate, fmtDateShort, fmtPct, fmtPrice, fmtShares, fmtTimeJst, fmtYenCompact } from '@/lib/format';
@@ -201,7 +201,7 @@ export default function StockDetail() {
             <div className="ml-auto text-right">
               <p className="eyebrow">
                 {t('告警优先级')}
-                <InfoHint hint={STRUCTURE_HINTS.优先级} side="bottom" align="end" size={12} className="ml-1" />
+                <InfoHint hint={RADAR_SCORE_HINTS.优先级} side="bottom" align="end" size={12} className="ml-1" />
               </p>
               <StrengthBar score={data.radar_events[0].alert_priority} width={72} className="mt-1.5" />
             </div>
