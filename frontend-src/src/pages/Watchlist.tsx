@@ -355,9 +355,9 @@ export default function Watchlist() {
               <StatCard label={t('只标的')} icon="list" value={items.length} />
             </motion.div>
             <motion.div variants={STAT_ENTER} className="min-w-[220px] snap-start sm:min-w-0">
-              <div className="card-surface card-lift p-5">
+              <div className="card-surface metric-card p-5">
                 <div className="flex items-start justify-between">
-                  <p className="eyebrow">{t('上涨 / 下跌')}</p>
+                  <p className="text-caption font-medium text-ink-500">{t('上涨 / 下跌')}</p>
                   <Icon name="candle" size={18} className="text-ink-400" />
                 </div>
                 <AdvanceDeclineBar

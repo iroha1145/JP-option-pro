@@ -9,7 +9,7 @@ import EmptyState from '@/components/shared/EmptyState';
 import ChangeBadge from '@/components/shared/ChangeBadge';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import Segmented from '@/components/shared/Segmented';
-import { SkeletonCard } from '@/components/shared/Skeleton';
+import { SkeletonCard, SkeletonReveal } from '@/components/shared/Skeleton';
 import InsightLineChart, { type InsightScrub } from '@/components/charts/InsightLineChart';
 import Sparkline from '@/components/charts/Sparkline';
 import { CodeCell, DataThrough } from '@/components/domain';
@@ -236,7 +236,7 @@ export default function Market() {
                 label: index.name.replace('東証', '').replace('市場指数', ''),
               }))}
               bars={series.data?.bars ?? []}
-              loading={series.loading && !series.data}
+              loading={series.loading}
               changePct={
                 market.data?.indices.find((index) => index.index_code === indexCode)?.change_pct ?? null
               }
@@ -427,26 +427,30 @@ function IndexTrendPanel({
           <h3 className="min-w-0 truncate text-h3 text-ink-900">{name}</h3>
           <Segmented options={options} value={indexCode} onChange={onIndexChange} />
         </div>
-        {loading ? (
-          <SkeletonCard className="h-64" />
-        ) : points.length === 0 ? (
-          <EmptyState image="/empty-chart.svg" title={t('暂无数据')} />
-        ) : (
-          <InsightLineChart
-            key={seriesCode}
-            data={points}
-            height={228}
-            change={changePct ?? 0}
-            interactive
-            showLiveDot
-            showCursorValue
-            showGrid
-            showAxis
-            formatValue={(value) => fmtPrice(value)}
-            onScrub={setScrub}
-            ariaLabel={`${name} ${t('趋势快照')}`}
-          />
-        )}
+        <SkeletonReveal
+          loading={loading}
+          className="min-h-64"
+          skeleton={<SkeletonCard className="h-64 w-full" />}
+        >
+          {points.length === 0 ? (
+            <EmptyState image="/empty-chart.svg" title={t('暂无数据')} />
+          ) : (
+            <InsightLineChart
+              key={seriesCode}
+              data={points}
+              height={228}
+              change={changePct ?? 0}
+              interactive
+              showLiveDot
+              showCursorValue
+              showGrid
+              showAxis
+              formatValue={(value) => fmtPrice(value)}
+              onScrub={setScrub}
+              ariaLabel={`${name} ${t('趋势快照')}`}
+            />
+          )}
+        </SkeletonReveal>
       </div>
       <div className="flex items-baseline justify-between gap-3 px-4 pb-4 pt-2">
         <div>

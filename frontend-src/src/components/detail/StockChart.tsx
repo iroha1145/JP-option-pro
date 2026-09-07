@@ -2,13 +2,15 @@
  *  不搬绘图工具、回撤尺、智能画线、副图图层、期权或公司 Logo。 */
 
 import { useMemo, useState, type ReactNode } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import EmptyState from '@/components/shared/EmptyState';
 import InfoHint from '@/components/shared/InfoHint';
 import Segmented from '@/components/shared/Segmented';
-import { SkeletonCard } from '@/components/shared/Skeleton';
+import { SkeletonBlock } from '@/components/shared/Skeleton';
 import ReactECharts from '@/components/charts/ReactECharts';
 import { STRUCTURE_HINTS } from '@/lib/indicatorHints';
 import { CH, baseGrid, categoryAxis, glassTooltip, insightLineColor, insightLineSeries, valueAxis, type ChartOption } from '@/lib/chart';
+import { DUR_FAST, DUR_UI, EASE_PAPER } from '@/lib/motion';
 import { useColorMode } from '@/hooks/useColorMode';
 import { t } from '@/i18n/core';
 import type { StockBar, TechnicalStructure } from '@/api/types';
@@ -304,19 +306,47 @@ export default function StockChart({
       {daily && (
         <OverlayLegend style={style} overlays={overlays} showOverlays={priceMode === 'adjusted'} />
       )}
-      <div className="mt-3">
+      <div className="relative mt-3" style={daily ? { height: 420 } : undefined}>
         {daily ? (
-          option ? (
-            <ReactECharts
-              className="h-[420px] w-full"
-              option={option}
-              ariaLabel={`${displayCode} chart`}
-            />
-          ) : barsLoading ? (
-            <SkeletonCard className="h-[420px]" />
-          ) : (
-            <EmptyState image="/empty-chart.svg" title={t('暂无数据')} />
-          )
+          <AnimatePresence mode="wait">
+            {barsLoading ? (
+              <motion.div
+                key="skeleton"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0, transition: { duration: DUR_FAST } }}
+                className="absolute inset-0 flex flex-col gap-2"
+                aria-hidden="true"
+              >
+                <SkeletonBlock className="h-[62%] w-full rounded-md border border-line-chart" />
+                <SkeletonBlock className="h-[18%] w-full rounded-md border border-line-chart" />
+              </motion.div>
+            ) : !option ? (
+              <motion.div
+                key="empty"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0, transition: { duration: DUR_FAST } }}
+                className="absolute inset-0 overflow-auto"
+              >
+                <EmptyState image="/empty-chart.svg" title={t('暂无数据')} className="py-6" />
+              </motion.div>
+            ) : (
+              <motion.div
+                key={`${range}-${style}-${priceMode}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1, transition: { duration: DUR_UI, ease: EASE_PAPER } }}
+                exit={{ opacity: 0, transition: { duration: DUR_FAST } }}
+                className="absolute inset-0"
+              >
+                <ReactECharts
+                  className="h-full w-full"
+                  option={option}
+                  ariaLabel={`${displayCode} chart`}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         ) : (
           children
         )}

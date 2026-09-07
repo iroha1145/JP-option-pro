@@ -154,9 +154,9 @@ export default function Research() {
                 icon="wallet-gauge"
               />
             ) : (
-              <div className="card-surface card-lift p-5">
-                <p className="eyebrow">{t('上位10%−下位10%')}</p>
-                <p className="mt-2 font-mono text-data-xl text-ink-900 tnum">—</p>
+              <div className="card-surface metric-card p-5">
+                <p className="text-caption font-medium text-ink-500">{t('上位10%−下位10%')}</p>
+                <p className="metric-value mt-3 text-data-xl text-ink-900">—</p>
               </div>
             )}
           </section>

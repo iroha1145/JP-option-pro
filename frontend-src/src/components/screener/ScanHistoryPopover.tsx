@@ -8,6 +8,7 @@ import EmptyState from '@/components/shared/EmptyState';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import SoftBadge from '@/components/shared/SoftBadge';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { isTopFocusScope } from '@/lib/focusScope';
 import type { ScanHistoryEntry } from './types';
 import { t } from '@/i18n/core';
 
@@ -16,8 +17,8 @@ const SPRING_POP = { type: 'spring', stiffness: 520, damping: 32 } as const;
 export default function ScanHistoryPopover({ history }: { history: ScanHistoryEntry[] }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
-  useFocusTrap(ref, open);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(popoverRef, open);
 
   useEffect(() => {
     if (!open) return;
@@ -25,7 +26,18 @@ export default function ScanHistoryPopover({ history }: { history: ScanHistoryEn
       if (!ref.current?.contains(event.target as Node)) setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (
+        event.key !== 'Escape'
+        || event.defaultPrevented
+        || event.isComposing
+        || event.keyCode === 229
+        || !isTopFocusScope(popoverRef.current)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
     document.addEventListener('keydown', onKey);
@@ -53,6 +65,7 @@ export default function ScanHistoryPopover({ history }: { history: ScanHistoryEn
       <AnimatePresence>
         {open && (
           <motion.div
+            ref={popoverRef}
             role="dialog"
             aria-label={t('最近扫描记录')}
             initial={{ opacity: 0, scale: 0.96, y: -4 }}
