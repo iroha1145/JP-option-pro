@@ -1,9 +1,8 @@
 /**
  * B1 筛选工作台 — 对标美版 FilterWorkbench。
- * 行1 分档 Segmented（数量徽标=已评分候选池）+ 预设策略 chips
- * 行2 周期 / 偏好 / Top N
- * 行3 33业种多选（折叠 +N）· 价格区间（円）· 成交额下限 · 开始扫描
- * 与美版不同：全部条件都在服务端对完整已评分池生效，无「仅前N名内筛选」问题。
+ * 常驻：分档 / 周期 / 偏好 / 返回数量 / 扫描
+ * 更多筛选：预设、33 业种、价格（円）、成交额下限；折叠时仍展示当前约束
+ * 手机走 pill-on-track（.mobile-selection-rail / shared Segmented）
  */
 import { useState } from 'react';
 import { motion } from 'framer-motion';
@@ -11,6 +10,9 @@ import type { StrengthProfilesMeta } from '@/api/types';
 import { cn } from '@/lib/utils';
 import Icon from '@/components/icons';
 import Segmented from '@/components/shared/Segmented';
+import FilterButton from '@/components/shared/FilterButton';
+import SelectionViewport from '@/components/shared/SelectionViewport';
+import SoftBadge from '@/components/shared/SoftBadge';
 import InfoHint from '@/components/shared/InfoHint';
 import { STRENGTH_HINTS, type ScoreHint } from '@/lib/indicatorHints';
 import {
@@ -26,8 +28,7 @@ import {
 import { t } from '@/i18n/core';
 
 const EASE_PAPER = [0.16, 1, 0.3, 1] as [number, number, number, number];
-const SPRING_POP = { type: 'spring', stiffness: 520, damping: 32 } as const;
-const SECTOR_COLLAPSE_AT = 8;
+const SECTOR_COLLAPSE_AT = 6;
 
 const TIER_OPTIONS: { value: TierFilter; label: string }[] = [
   { value: 'all', label: t('全部') },
@@ -47,49 +48,28 @@ function TierSegmented({
   onChange: (v: TierFilter) => void;
 }) {
   return (
-    <div
-      role="tablist"
-      aria-label={t('强度分档 · 计数基于已评分候选池')}
-      className="no-scrollbar inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-md border border-line bg-card-warm p-0.5"
-    >
-      {TIER_OPTIONS.map((option) => {
-        const active = value === option.value;
-        return (
-          <button
-            key={option.value}
-            role="tab"
-            aria-selected={active}
-            type="button"
-            onClick={() => onChange(option.value)}
-            className={cn(
-              'relative shrink-0 whitespace-nowrap rounded-[6px] px-2.5 py-1 text-caption font-medium transition-colors',
-              active ? 'text-ink-800' : 'text-ink-400 hover:text-ink-600',
-            )}
-          >
-            {active && (
-              <motion.span
-                layoutId="jp-tier-thumb"
-                className="absolute inset-0 rounded-[6px] bg-card shadow-sh-1"
-                transition={{ duration: 0.26, ease: EASE_PAPER }}
-                aria-hidden="true"
-              />
-            )}
-            <span className="relative z-10 flex items-baseline gap-1">
-              {option.label}
-              <span className={cn('font-mono text-[11px] leading-[14px] tnum', active ? 'text-brand-600' : 'text-ink-300')}>
-                {counts ? counts[option.value] : '—'}
-              </span>
-            </span>
-          </button>
-        );
-      })}
-    </div>
+    <Segmented<TierFilter>
+      options={TIER_OPTIONS}
+      value={value}
+      onChange={onChange}
+      scrollable
+      ariaLabel={t('强度分档 · 计数基于已评分候选池')}
+      title={t('分档计数基于已评分候选池')}
+      renderLabel={(option, active) => (
+        <span className="flex items-center gap-1.5">
+          {option.label}
+          <span className={cn('min-w-4 rounded-[5px] px-1 py-px font-mono text-[11px] leading-[14px] tnum', active ? 'bg-paper-2 text-ink-600' : 'text-ink-400')}>
+            {counts ? counts[option.value] : '—'}
+          </span>
+        </span>
+      )}
+    />
   );
 }
 
 function FieldLabel({ children, hint }: { children: string; hint?: ScoreHint }) {
   return (
-    <p className="mb-1.5 flex items-center gap-0.5 text-micro font-medium uppercase tracking-[0.08em] text-ink-400">
+    <p className="mb-2 flex items-center gap-0.5 text-caption font-medium text-ink-500">
       {children}
       {hint && <InfoHint hint={hint} side="bottom" size={11} />}
     </p>
@@ -113,7 +93,7 @@ function SelectField({
         aria-label={ariaLabel}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="h-8 appearance-none rounded-md border border-line bg-card pl-2.5 pr-7 font-mono text-caption text-ink-600 tnum transition-colors hover:border-line-strong"
+        className="menu-select-trigger h-9 appearance-none rounded-md border border-line-strong bg-card pl-2.5 pr-7 font-mono text-caption text-ink-600 tnum transition-colors hover:bg-paper-2"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -158,7 +138,7 @@ function PriceInput({
           const number = Number(raw);
           onCommit(raw === '' || !Number.isFinite(number) ? null : number);
         }}
-        className="h-8 w-[88px] rounded-md border border-line bg-card pl-6 pr-2 font-mono text-caption text-ink-800 tnum placeholder:text-ink-300 hover:border-line-strong"
+        className="screener-price-input h-8 w-[88px] rounded-[9px] border border-line/70 bg-paper-2/50 pl-6 pr-2 font-mono text-caption text-ink-800 tnum placeholder:text-ink-300 hover:border-line-strong focus-visible:border-brand-400"
       />
     </div>
   );
@@ -177,7 +157,7 @@ export function ScanButton({
   onScan: () => void;
   className?: string;
 }) {
-  const base = 'inset 0 1px 0 rgba(255,255,255,.16), 0 1px 2px rgba(16,24,40,.18), 0 4px 12px -4px rgba(16,24,40,.34)';
+  const base = 'inset 0 1px 0 rgba(255,255,255,.12), 0 1px 2px rgba(16,24,40,.12), 0 3px 7px -4px rgba(16,24,40,.24)';
   return (
     <motion.button
       type="button"
@@ -190,7 +170,7 @@ export function ScanButton({
       }
       transition={dirty && !scanning ? { duration: 1.2, repeat: 2 } : { duration: 0.16 }}
       className={cn(
-        'relative h-10 min-w-[168px] overflow-hidden rounded-md bg-brand-600 px-4 text-white transition-[filter] duration-fast',
+        'scan-trigger relative h-9 min-w-[168px] overflow-hidden rounded-[9px] bg-brand-600 px-4 text-white shadow-btn-hi transition-[filter] duration-fast',
         scanning ? 'cursor-wait' : 'hover:brightness-105',
         className,
       )}
@@ -290,6 +270,29 @@ export default function FilterWorkbench({
     ...(meta?.presets ?? []).map((preset) => ({ id: preset.id, name: preset.name, description: preset.description })),
   ];
 
+  const selectedPreset = presetChips.find((preset) => preset.id === draft.presetId);
+  const selectedSectors = draft.sectors.map((id) => sectorOptions.find((sector) => sector.id === id)?.name ?? id);
+  const priceSummary =
+    draft.priceMin !== null && draft.priceMax !== null
+      ? `${t('价格区间')} ¥${draft.priceMin} – ¥${draft.priceMax}`
+      : draft.priceMin !== null
+        ? `${t('价格区间')} ≥ ¥${draft.priceMin}`
+        : draft.priceMax !== null
+          ? `${t('价格区间')} ≤ ¥${draft.priceMax}`
+          : null;
+  const volumeSummary =
+    draft.minTurnover > 0
+      ? `${t('成交额下限')} ${TURNOVER_OPTIONS.find((option) => option.value === draft.minTurnover)?.label ?? draft.minTurnover}`
+      : null;
+  const advancedSummary = [
+    selectedPreset?.name,
+    selectedSectors.length > 0
+      ? `${selectedSectors.slice(0, 2).join(' / ')}${selectedSectors.length > 2 ? ` +${selectedSectors.length - 2}` : ''}`
+      : null,
+    priceSummary,
+    volumeSummary,
+  ].filter((value): value is string => Boolean(value));
+
   return (
     <motion.section
       initial="hidden"
@@ -297,9 +300,9 @@ export default function FilterWorkbench({
       variants={{ show: { transition: { staggerChildren: 0.06 } } }}
       className="card-surface p-4 sm:p-5"
       aria-label={t('筛选工作台')}
+      data-testid="screener-filter-workbench"
     >
-      {/* 行 1 · 分档与预设 */}
-      <motion.div variants={row} className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-3">
+      <motion.div variants={row} className="flex min-w-0 flex-wrap items-end gap-x-5 gap-y-4">
         <div className="w-full min-w-0 sm:w-auto">
           <FieldLabel hint={STRENGTH_HINTS.tierCounts}>{t('强度分档')}</FieldLabel>
           <TierSegmented
@@ -308,65 +311,22 @@ export default function FilterWorkbench({
             onChange={(tier) => patch({ tier, presetId: null })}
           />
         </div>
-        <div className="hidden h-9 w-px bg-line sm:block" aria-hidden="true" />
-        <div className="w-full min-w-0 sm:w-auto sm:flex-1">
-          <FieldLabel>{t('预设策略')}</FieldLabel>
-          {metaFailed ? (
-            <p className="flex h-8 items-center text-caption text-ink-400">{t('预设暂不可用 · 使用默认条件')}</p>
-          ) : presetChips.length === 0 ? (
-            <div className="flex gap-2" aria-hidden="true">
-              {Array.from({ length: 3 }, (_, i) => (
-                <span key={i} className="skeleton-shimmer h-8 w-20 rounded-pill" />
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {presetChips.map((preset) => {
-                const active = draft.presetId === preset.id;
-                return (
-                  <motion.button
-                    key={preset.id}
-                    type="button"
-                    onClick={() => applyPreset(preset.id)}
-                    animate={{ scale: active ? 1.04 : 1 }}
-                    transition={SPRING_POP}
-                    title={preset.description ? t(preset.description) : undefined}
-                    aria-pressed={active}
-                    className={cn(
-                      'flex h-8 items-center gap-1.5 rounded-pill border px-3 text-caption transition-colors duration-fast',
-                      active
-                        ? 'border-brand-400 bg-brand-100 text-brand-700'
-                        : 'border-line bg-card text-ink-500 hover:border-brand-400/60 hover:text-brand-600',
-                    )}
-                  >
-                    <Icon name="spark-ai" size={13} className={active ? 'text-brand-600' : 'text-ink-300'} />
-                    {preset.name}
-                  </motion.button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </motion.div>
-
-      <div className="my-4 h-px bg-line" aria-hidden="true" />
-
-      {/* 行 2 · 周期 / 偏好 / Top N */}
-      <motion.div variants={row} className="flex flex-wrap items-end gap-x-6 gap-y-3">
-        <div>
+        <div className="w-full min-w-0 sm:w-auto">
           <FieldLabel hint={STRENGTH_HINTS.timeframe}>{t('周期')}</FieldLabel>
           <Segmented<Timeframe>
             options={(['short', 'mid', 'long', 'all'] as const).map((value) => ({ value, label: TIMEFRAME_CN[value] }))}
             value={draft.timeframe}
             onChange={(timeframe) => patch({ timeframe })}
+            ariaLabel={t('周期')}
           />
         </div>
-        <div>
+        <div className="min-w-0">
           <FieldLabel hint={STRENGTH_HINTS.profile}>{t('偏好')}</FieldLabel>
           <Segmented<ProfilePref>
             options={(['conservative', 'balanced', 'aggressive'] as const).map((value) => ({ value, label: PROFILE_CN[value] }))}
             value={draft.profile}
             onChange={(profile) => patch({ profile, presetId: null })}
+            ariaLabel={t('偏好')}
           />
         </div>
         <div>
@@ -378,83 +338,131 @@ export default function FilterWorkbench({
             options={TOPN_OPTIONS}
           />
         </div>
+        <ScanButton
+          scanning={scanning}
+          dirty={dirty}
+          universeCount={universeCount}
+          onScan={onScan}
+          className="w-full sm:ml-auto sm:w-auto"
+        />
       </motion.div>
 
-      <div className="my-4 h-px bg-line" aria-hidden="true" />
+      <details className="group/filters mt-5 border-t border-line/70 pt-3" data-testid="screener-advanced-filters">
+        <summary className="disclosure-trigger flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-2 rounded-lg py-1 text-caption text-ink-500 outline-none transition-colors hover:text-ink-800 focus-visible:ring-2 focus-visible:ring-brand-400/40 [&::-webkit-details-marker]:hidden">
+          <span className="inline-flex shrink-0 items-center gap-2 font-medium text-ink-700">
+            <Icon name="filter-funnel" size={14} className="text-ink-400" />
+            {t('更多筛选')}
+            <Icon name="chevron-down" size={13} className="text-ink-400 transition-transform group-open/filters:rotate-180" />
+          </span>
+          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-micro text-ink-500">
+            {advancedSummary.length > 0 ? (
+              advancedSummary.map((label, index) => <SoftBadge key={index}>{label}</SoftBadge>)
+            ) : (
+              <span>
+                {t('预设策略')} · {t('业种（多选）')} · {t('价格区间')} · {t('成交额下限')}
+              </span>
+            )}
+          </span>
+        </summary>
 
-      {/* 行 3 · 33业种 / 价格 / 成交额 / 扫描钮 */}
-      <motion.div variants={row} className="flex flex-wrap items-end gap-x-3 gap-y-3 sm:gap-x-6">
-        <div className="w-full min-w-0 flex-none sm:w-auto sm:flex-1">
-          <FieldLabel>{t('业种（多选）')}</FieldLabel>
-          {sectorOptions.length === 0 ? (
-            <div className="flex flex-wrap gap-2" aria-hidden="true">
-              {Array.from({ length: 5 }, (_, i) => (
-                <span key={i} className="skeleton-shimmer h-7 w-16 rounded-xs" />
-              ))}
+        <div className="space-y-4 pt-4">
+          <div className="min-w-0">
+            <FieldLabel>{t('预设策略')}</FieldLabel>
+            {metaFailed ? (
+              <p className="flex h-8 items-center text-caption text-ink-400">{t('预设暂不可用 · 使用默认条件')}</p>
+            ) : presetChips.length === 0 ? (
+              <div className="flex gap-2" aria-hidden="true">
+                {Array.from({ length: 3 }, (_, i) => (
+                  <span key={i} className="skeleton-shimmer h-8 w-20 rounded-md" />
+                ))}
+              </div>
+            ) : (
+              <SelectionViewport>
+                <div className="mobile-selection-rail flex flex-wrap gap-2">
+                  {presetChips.map((preset) => {
+                    const active = draft.presetId === preset.id;
+                    return (
+                      <FilterButton
+                        key={preset.id}
+                        onClick={() => applyPreset(preset.id)}
+                        title={preset.description ? t(preset.description) : undefined}
+                        active={active}
+                      >
+                        <Icon name="spark-ai" size={13} className={active ? 'text-brand-600' : 'text-ink-400'} />
+                        {preset.name}
+                      </FilterButton>
+                    );
+                  })}
+                </div>
+              </SelectionViewport>
+            )}
+          </div>
+
+          <div data-screener-field="sectors" className="min-w-0">
+            <FieldLabel>{t('业种（多选）')}</FieldLabel>
+            {sectorOptions.length === 0 ? (
+              <div className="flex flex-wrap gap-2" aria-hidden="true">
+                {Array.from({ length: 5 }, (_, i) => (
+                  <span key={i} className="skeleton-shimmer h-7 w-16 rounded-md" />
+                ))}
+              </div>
+            ) : (
+              <SelectionViewport>
+                <div className="mobile-selection-rail flex flex-wrap items-center gap-1.5">
+                  {visibleSectors.map((sector) => (
+                    <FilterButton
+                      key={sector.id}
+                      onClick={() => toggleSector(sector.id)}
+                      active={draft.sectors.includes(sector.id)}
+                      className="shrink-0"
+                    >
+                      {sector.name}
+                    </FilterButton>
+                  ))}
+                  {hiddenCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllSectors(true)}
+                      className="flex h-8 shrink-0 items-center whitespace-nowrap rounded-lg bg-paper-2 px-2.5 font-mono text-caption text-ink-500 tnum transition-colors hover:bg-paper hover:text-ink-800"
+                    >
+                      +{hiddenCount}
+                    </button>
+                  )}
+                  {showAllSectors && sectorOptions.length > SECTOR_COLLAPSE_AT && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllSectors(false)}
+                      className="flex h-8 shrink-0 items-center whitespace-nowrap rounded-lg px-2 text-caption text-ink-400 transition-colors hover:text-ink-600"
+                    >
+                      {t('收起')}
+                    </button>
+                  )}
+                </div>
+              </SelectionViewport>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-end gap-x-6 gap-y-4 border-t border-line/60 pt-4">
+            <div data-screener-field="price">
+              <FieldLabel>{t('价格区间')}</FieldLabel>
+              <div className="flex items-center gap-1.5">
+                <PriceInput value={draft.priceMin} placeholder={t('最低')} ariaLabel={t('最低价格')} onCommit={(priceMin) => patch({ priceMin })} />
+                <span className="text-ink-300" aria-hidden="true">–</span>
+                <PriceInput value={draft.priceMax} placeholder={t('最高')} ariaLabel={t('最高价格')} onCommit={(priceMax) => patch({ priceMax })} />
+              </div>
             </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-1.5">
-              {visibleSectors.map((sector) => {
-                const active = draft.sectors.includes(sector.id);
-                return (
-                  <motion.button
-                    key={sector.id}
-                    type="button"
-                    onClick={() => toggleSector(sector.id)}
-                    animate={{ scale: active ? 1.04 : 1 }}
-                    transition={SPRING_POP}
-                    aria-pressed={active}
-                    className={cn(
-                      'flex h-7 shrink-0 items-center whitespace-nowrap rounded-xs border px-2 text-caption transition-colors duration-fast',
-                      active
-                        ? 'border-brand-400 bg-brand-100 text-brand-700'
-                        : 'border-line bg-card text-ink-500 hover:border-brand-400/60 hover:text-brand-600',
-                    )}
-                  >
-                    {sector.name}
-                  </motion.button>
-                );
-              })}
-              {hiddenCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllSectors(true)}
-                  className="flex h-7 shrink-0 items-center whitespace-nowrap rounded-xs border border-dashed border-line-strong px-2 font-mono text-caption text-ink-400 tnum transition-colors hover:text-brand-600"
-                >
-                  +{hiddenCount}
-                </button>
-              )}
-              {showAllSectors && sectorOptions.length > SECTOR_COLLAPSE_AT && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllSectors(false)}
-                  className="flex h-7 shrink-0 items-center whitespace-nowrap rounded-xs px-1.5 text-caption text-ink-400 transition-colors hover:text-ink-600"
-                >
-                  {t('收起')}
-                </button>
-              )}
+            <div data-screener-field="dollar-volume">
+              <FieldLabel hint={STRENGTH_HINTS.avgTurnover}>{t('成交额下限')}</FieldLabel>
+              <SelectField
+                ariaLabel={t('成交额下限')}
+                value={draft.minTurnover}
+                onChange={(minTurnover) => patch({ minTurnover })}
+                options={TURNOVER_OPTIONS}
+              />
             </div>
-          )}
-        </div>
-        <div>
-          <FieldLabel>{t('价格区间')}</FieldLabel>
-          <div className="flex items-center gap-1.5">
-            <PriceInput value={draft.priceMin} placeholder={t('最低')} ariaLabel={t('最低价格')} onCommit={(priceMin) => patch({ priceMin })} />
-            <span className="text-ink-300" aria-hidden="true">–</span>
-            <PriceInput value={draft.priceMax} placeholder={t('最高')} ariaLabel={t('最高价格')} onCommit={(priceMax) => patch({ priceMax })} />
           </div>
         </div>
-        <div>
-          <FieldLabel hint={STRENGTH_HINTS.avgTurnover}>{t('成交额下限')}</FieldLabel>
-          <SelectField
-            ariaLabel={t('成交额下限')}
-            value={draft.minTurnover}
-            onChange={(minTurnover) => patch({ minTurnover })}
-            options={TURNOVER_OPTIONS}
-          />
-        </div>
-        <ScanButton scanning={scanning} dirty={dirty} universeCount={universeCount} onScan={onScan} className="ml-auto" />
-      </motion.div>
+      </details>
     </motion.section>
   );
 }

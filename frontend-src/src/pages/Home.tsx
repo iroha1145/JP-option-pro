@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
+import { motion } from 'framer-motion';
 import { marketApi, radarApi, earningsApi, watchlistApi } from '@/api/modules';
 import type { IndexSummary } from '@/api/types';
 import { ApiError } from '@/api/client';
@@ -237,24 +238,32 @@ export default function Home() {
             emptyDescription={radar.data?.note ?? undefined}
             rows={8}
           >
-            <ul className="divide-y divide-line px-4 pb-2 md:px-5">
-              {events.map((event) => (
-                <li key={event.event_id} className="flex items-center gap-3 py-2.5">
-                  <CodeCell
-                    displayCode={event.display_code}
-                    nameJa={event.name_ja}
+            <div className="grid grid-cols-1 gap-2.5 px-4 pb-4 pt-3 sm:grid-cols-2 md:px-5 md:pb-5">
+              {events.map((event, index) => (
+                <motion.div
+                  key={event.event_id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.36, delay: index * 0.045, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <Link
                     to={`/stock/${event.display_code}`}
-                  />
-                  <span className="ml-auto flex shrink-0 items-center gap-2">
-                    <SignalChip signal={event.signal_type} />
-                    <StateChip state={event.state} />
-                    <span className="w-10 text-right font-mono text-body-s tnum text-ink-900">
-                      {event.alert_priority !== null ? Math.round(event.alert_priority) : '—'}
+                    className="card-surface card-lift flex items-start justify-between gap-3 p-3"
+                  >
+                    <CodeCell displayCode={event.display_code} nameJa={event.name_ja} />
+                    <span className="flex shrink-0 flex-col items-end gap-1">
+                      <span className="flex items-center gap-1.5">
+                        <SignalChip signal={event.signal_type} />
+                        <StateChip state={event.state} />
+                      </span>
+                      <span className="font-mono text-body-s tnum text-ink-900">
+                        {event.alert_priority !== null ? Math.round(event.alert_priority) : '—'}
+                      </span>
                     </span>
-                  </span>
-                </li>
+                  </Link>
+                </motion.div>
               ))}
-            </ul>
+            </div>
           </ListBody>
         </SectionCard>
       </div>
@@ -295,17 +304,27 @@ export default function Home() {
             emptyTitle={t('暂无自选')}
             emptyDescription={t('在筛选器中添加')}
           >
-            <ul className="divide-y divide-line px-4 pb-2 md:px-5">
-              {movers.map((item) => (
-                <li key={item.canonical_code} className="flex items-center gap-3 py-2.5">
-                  <CodeCell displayCode={item.display_code} nameJa={item.name_ja} to={`/stock/${item.display_code}`} />
-                  <span className="ml-auto flex items-center gap-3">
-                    <span className="font-mono text-body-s tnum text-ink-900">{fmtPrice(item.quote?.close)}</span>
-                    <ChangeBadge value={item.quote?.change_pct} size="sm" />
-                  </span>
-                </li>
+            <div className="grid grid-cols-1 gap-2.5 px-4 pb-4 pt-3 sm:grid-cols-2 md:px-5 md:pb-5">
+              {movers.map((item, index) => (
+                <motion.div
+                  key={item.canonical_code}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.36, delay: index * 0.045, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <Link
+                    to={`/stock/${item.display_code}`}
+                    className="card-surface card-lift flex items-center justify-between gap-3 p-3"
+                  >
+                    <CodeCell displayCode={item.display_code} nameJa={item.name_ja} />
+                    <span className="flex shrink-0 flex-col items-end gap-1">
+                      <span className="font-mono text-body-s tnum text-ink-900">{fmtPrice(item.quote?.close)}</span>
+                      <ChangeBadge value={item.quote?.change_pct} size="sm" />
+                    </span>
+                  </Link>
+                </motion.div>
               ))}
-            </ul>
+            </div>
           </ListBody>
         </SectionCard>
       </div>

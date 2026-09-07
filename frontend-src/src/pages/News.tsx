@@ -214,7 +214,7 @@ function HotspotCard({ group }: { group: NewsHotspotGroup }) {
   return (
     <Link
       to={`/stock/${group.display_code}`}
-      className="card-surface card-glare card-hover flex min-w-[220px] max-w-[260px] shrink-0 flex-col gap-1 p-2.5"
+      className="card-surface card-glare card-lift flex min-w-[220px] max-w-[260px] shrink-0 flex-col gap-1 p-2.5"
     >
       <span className="flex items-center gap-1.5">
         <CodeMark code={group.display_code} size={22} />

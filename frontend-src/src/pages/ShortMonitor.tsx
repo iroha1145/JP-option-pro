@@ -633,7 +633,7 @@ function StockCard({ row, onSelect }: { row: ShortMonitorRow; onSelect: () => vo
     <button
       type="button"
       onClick={onSelect}
-      className="card-surface card-hover flex flex-col gap-2.5 rounded-lg p-4 text-left"
+      className="card-surface card-lift flex flex-col gap-2.5 rounded-lg p-4 text-left"
     >
       <div className="flex items-baseline gap-2">
         <CodeCell displayCode={row.display_code} nameJa={row.name} />

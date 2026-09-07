@@ -370,7 +370,7 @@ function EventCard({ event, onSelect, live }: {
     <button
       type="button"
       onClick={onSelect}
-      className="card-surface card-glare card-hover flex flex-col gap-2 p-3 text-left"
+      className="card-surface card-glare card-lift flex flex-col gap-2 p-3 text-left"
     >
       <div className="flex items-center gap-2">
         <CodeCell displayCode={event.display_code} nameJa={event.name_ja} />

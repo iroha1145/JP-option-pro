@@ -373,7 +373,7 @@ function WatchCard({
     >
       <Link
         to={`/stock/${item.display_code}`}
-        className="card-surface card-glare card-hover flex w-full flex-col p-4 text-left"
+        className="card-surface card-glare card-lift flex w-full flex-col p-4 text-left"
       >
         <span className="flex items-center gap-2.5">
           {item.marked_important && <span className="shrink-0 text-warn-600">★</span>}

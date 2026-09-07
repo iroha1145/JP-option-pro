@@ -253,6 +253,7 @@ export const DICT: Record<string, [string, string]> = {
   '分档计数基于已评分候选池': ['Tier counts cover the scored pool', 'ティア件数は評価済み母集団基準'],
   '强度分档 · 计数基于已评分候选池': ['Strength tier · counts cover the scored pool', '強度ティア · 件数は評価済み母集団基準'],
   预设策略: ['Presets', 'プリセット'],
+  更多筛选: ['More filters', 'さらに絞る'],
   '预设暂不可用 · 使用默认条件': ['Presets unavailable · using defaults', 'プリセット取得不可 · 既定条件を使用'],
   周期: ['Timeframe', '期間'],
   偏好: ['Profile', '選好'],
