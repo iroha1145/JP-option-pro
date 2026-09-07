@@ -440,7 +440,7 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: DUR_SECTION, ease: EASE_PAPER }}
-      className="radar-lead-card card-surface card-lift overflow-hidden p-5"
+      className="radar-lead-card card-surface overflow-hidden p-5"
     >
       <div className="grid grid-cols-1 lg:grid-cols-3">
         {/* 左 2/3：标题 + 事实 + K 线（机构事件标在图上） */}

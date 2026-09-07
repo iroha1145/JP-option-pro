@@ -67,7 +67,8 @@ export default function ResultCards({
               delay: page === 1 ? Math.min(index * 0.03, 0.3) : 0,
               layout: { duration: 0.32, ease: EASE_PAPER },
             }}
-            className="card-surface card-lift overflow-hidden"
+            whileHover={{ y: -3, transition: { duration: 0.24, ease: 'easeOut' } }}
+            className="card-surface overflow-hidden transition-shadow duration-240 ease-out hover:shadow-sh-2"
           >
             <button type="button" onClick={() => onToggle(row.canonical_code)} aria-expanded={isOpen} className="flex w-full flex-col p-4 text-left">
               <span className="flex items-center gap-2.5">
@@ -114,11 +115,8 @@ export default function ResultCards({
               >
                 {strength && (
                   <>
-                    <motion.span
+                    <span
                       className={cn('block h-full origin-left rounded-pill', strength.barClass)}
-                      initial={{ scaleX: 0 }}
-                      animate={{ scaleX: 1 }}
-                      transition={{ duration: 0.7, ease: EASE_PAPER, delay: 0.15 + index * 0.03 }}
                       style={{ width: `${width}%` }}
                     />
                     <motion.span

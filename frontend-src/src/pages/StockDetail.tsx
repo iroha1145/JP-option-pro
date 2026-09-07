@@ -301,6 +301,7 @@ export default function StockDetail() {
           bars={chart.data?.bars}
           barsLoading={chart.loading}
           overlays={technical?.chart_overlays}
+          onRetry={() => chart.refresh({ force: true })}
         >
           {interval === 'tick' ? (
             <TickPane

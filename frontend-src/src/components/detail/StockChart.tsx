@@ -103,6 +103,7 @@ export default function StockChart({
   bars,
   barsLoading,
   overlays,
+  onRetry,
   children,
 }: {
   displayCode: string;
@@ -115,6 +116,7 @@ export default function StockChart({
   bars?: StockBar[];
   barsLoading: boolean;
   overlays?: TechnicalStructure['chart_overlays'] | null;
+  onRetry?: () => void;
   children?: ReactNode;
 }) {
   const [style, setStyle] = useState<ChartStyle>('candle');
@@ -329,7 +331,22 @@ export default function StockChart({
                 exit={{ opacity: 0, transition: { duration: DUR_FAST } }}
                 className="absolute inset-0 overflow-auto"
               >
-                <EmptyState image="/empty-chart.svg" title={t('暂无数据')} className="py-6" />
+                <EmptyState
+                  image="/empty-chart.svg"
+                  title={t('K 线暂不可用')}
+                  description={t('{code} · {range}数据暂不可用，其他周期仍可切换', {
+                    code: displayCode,
+                    range: range.toUpperCase(),
+                  })}
+                  action={
+                    onRetry ? (
+                      <button type="button" onClick={onRetry} className="btn-primary">
+                        {t('重试')}
+                      </button>
+                    ) : undefined
+                  }
+                  className="py-6"
+                />
               </motion.div>
             ) : (
               <motion.div

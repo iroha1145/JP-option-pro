@@ -256,7 +256,7 @@ function StatusHero({ status }: { status: NewsStatus | null }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: DUR_SECTION, ease: EASE_PAPER }}
       aria-label={t('数据源')}
-      className="card-surface card-lift"
+      className="card-surface"
     >
       <div className="grid grid-cols-2 xl:grid-cols-4">
         <HeroCell label={t('数据源')} index={0}>

@@ -406,7 +406,7 @@ function LeadBigCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: DUR_SECTION, ease: EASE_PAPER }}
       aria-label={t('{code} 首要信号大卡', { code: event.display_code })}
-      className={cn('radar-lead-card card-surface card-lift p-5', locate && 'bk-locate')}
+      className={cn('radar-lead-card card-surface p-5', locate && 'bk-locate')}
     >
       <div className="flex flex-wrap items-center gap-1.5">
         <SignalChip signal={event.signal_type} />

@@ -559,7 +559,7 @@ export default function Screener() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, transition: { duration: 0.16 } }}
                 transition={{ duration: 0.48, ease: EASE_PAPER }}
-                className="card-surface card-lift p-5"
+                className="card-surface p-5"
               >
                 <p className="eyebrow">{t('无命中引导')}</p>
                 <p className="mt-2.5 text-body-s text-ink-500">{t('当前条件过严，没有标的进入结果集。')}</p>

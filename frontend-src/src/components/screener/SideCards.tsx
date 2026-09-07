@@ -59,7 +59,7 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
         </p>
       )}
       <div className="mt-4 grid grid-cols-[max-content_minmax(0,1fr)_max-content] gap-y-3">
-        {REGIME_DIMS.map((dim, index) => {
+        {REGIME_DIMS.map((dim) => {
           const value = regime.dims[dim.key];
           const hint = REGIME_DIM_HINTS[dim.key];
           return (
@@ -89,12 +89,8 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
               >
                 <span className="strength-track relative h-1.5 w-full overflow-hidden rounded-pill bg-paper" role="presentation">
                   {value !== null && (
-                    <motion.span
+                    <span
                       className="block h-full origin-left rounded-pill bg-brand-500"
-                      initial={{ scaleX: 0 }}
-                      whileInView={{ scaleX: 1 }}
-                      viewport={{ once: true, amount: 0.4 }}
-                      transition={{ duration: 0.7, ease: EASE_PAPER, delay: index * 0.045 }}
                       style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
                     />
                   )}
@@ -146,7 +142,7 @@ export function TierHistogram({
     <div className="card-surface card-lift p-5">
       <p className="eyebrow">{t('强度剖面 · 分档命中')}</p>
       <div className="mt-4 flex h-28 items-end gap-2.5">
-        {TIERS.map((tier, index) => {
+        {TIERS.map((tier) => {
           const hit = hits?.[tier] ?? 0;
           const refN = ref?.[tier] ?? 0;
           const selectable = tier !== 'D';
@@ -169,27 +165,18 @@ export function TierHistogram({
             >
               <span className="font-mono text-[10px] leading-none text-ink-400 tnum">{hit}</span>
               {ref !== null && (
-                <motion.span
+                <span
                   className="w-full max-w-[26px] rounded-t-[3px] border border-ink-300/60"
-                  initial={{ scaleY: 0 }}
-                  whileInView={{ scaleY: 1 }}
-                  viewport={{ once: true, amount: 0.3 }}
-                  transition={{ duration: 0.7, ease: EASE_PAPER, delay: index * 0.05 }}
                   style={{
                     height: `${Math.max(4, (refN / maxRef) * 72)}px`,
-                    transformOrigin: 'bottom',
                     backgroundImage: 'repeating-linear-gradient(45deg, rgba(138,148,176,.45) 0 1.2px, transparent 1.2px 4px)',
                   }}
                   aria-hidden="true"
                 />
               )}
-              <motion.span
+              <span
                 className={cn('-mt-1 w-full max-w-[26px] rounded-t-[3px]', active ? 'bg-brand-600' : 'bg-brand-600/85')}
-                initial={{ scaleY: 0 }}
-                whileInView={{ scaleY: 1 }}
-                viewport={{ once: true, amount: 0.3 }}
-                transition={{ duration: 0.7, ease: EASE_PAPER, delay: 0.08 + index * 0.05 }}
-                style={{ height: `${Math.max(hit > 0 ? 5 : 2, (hit / maxHit) * 56)}px`, transformOrigin: 'bottom' }}
+                style={{ height: `${Math.max(hit > 0 ? 5 : 2, (hit / maxHit) * 56)}px` }}
                 aria-hidden="true"
               />
             </motion.button>
@@ -277,19 +264,15 @@ export function MethodCard({
             ) : (
               <>
                 <div className="mt-4 grid grid-cols-[max-content_minmax(0,1fr)_max-content] gap-y-2.5">
-                  {FAMILY_META.map(({ key, label }, index) => {
+                  {FAMILY_META.map(({ key, label }) => {
                     const weight = meta?.family_weights[key] ?? null;
                     return (
                       <div key={key} className="col-span-3 grid grid-cols-subgrid items-center gap-x-2.5">
                         <span className="text-caption text-ink-500">{label}</span>
                         <span className="strength-track h-1.5 overflow-hidden rounded-pill bg-paper" role="presentation">
                           {weight !== null && (
-                            <motion.span
+                            <span
                               className="block h-full origin-left rounded-pill bg-brand-500"
-                              initial={{ scaleX: 0 }}
-                              whileInView={{ scaleX: 1 }}
-                              viewport={{ once: true, amount: 0.4 }}
-                              transition={{ duration: 0.7, ease: EASE_PAPER, delay: index * 0.05 }}
                               style={{ width: `${weight * 100 * 4}%` }}
                             />
                           )}

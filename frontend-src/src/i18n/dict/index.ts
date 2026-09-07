@@ -24,6 +24,11 @@ export const DICT: Record<string, [string, string]> = {
   加载失败: ['Failed to load', '読み込みに失敗しました'],
   重试: ['Retry', '再試行'],
   暂无数据: ['No data', 'データなし'],
+  'K 线暂不可用': ['Candles unavailable', 'ローソク足は利用できません'],
+  '{code} · {range}数据暂不可用，其他周期仍可切换': [
+    '{code} · {range} data unavailable; other ranges still work',
+    '{code} · {range} のデータはありません。他の期間は切り替えできます',
+  ],
   数据已过期: ['Data is stale', 'データが古い可能性があります'],
   '正在确认最新数据…': ['Confirming latest data…', '最新データを確認中…'],
   上涨: ['Advancers', '値上がり'],

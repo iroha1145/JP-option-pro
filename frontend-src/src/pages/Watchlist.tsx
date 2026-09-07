@@ -14,7 +14,7 @@ import EmptyState from '@/components/shared/EmptyState';
 import ChangeBadge from '@/components/shared/ChangeBadge';
 import Segmented from '@/components/shared/Segmented';
 import DataTable, { type Column } from '@/components/shared/DataTable';
-import { SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
+import { SkeletonCard, SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
 import StatCard from '@/components/shared/StatCard';
 import HorizontalScroller from '@/components/shared/HorizontalScroller';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
@@ -343,6 +343,16 @@ export default function Watchlist() {
         <StaleStrip onRetry={() => query.refresh()} refreshing={query.refreshing} />
       )}
 
+      {query.loading && !query.data && (
+        <HorizontalScroller className="-mx-1 sm:mx-0" scrollerClassName="px-1 sm:px-0" label={t('自选统计')}>
+          <div className="flex gap-3 sm:grid sm:grid-cols-3">
+            <SkeletonCard className="min-w-[220px] sm:min-w-0" />
+            <SkeletonCard className="min-w-[220px] sm:min-w-0" />
+            <SkeletonCard className="min-w-[220px] sm:min-w-0" />
+          </div>
+        </HorizontalScroller>
+      )}
+
       {items.length > 0 && (
         <HorizontalScroller className="-mx-1 sm:mx-0" scrollerClassName="px-1 sm:px-0" label={t('自选统计')}>
           <motion.div
@@ -411,6 +421,11 @@ export default function Watchlist() {
                   image="/empty-chart.svg"
                   title={t('加载失败')}
                   description={String(query.error?.message ?? '')}
+                  action={
+                    <button type="button" onClick={() => query.refresh({ force: true })} className="btn-primary">
+                      {t('重试')}
+                    </button>
+                  }
                 />
               </section>
             ) : items.length === 0 ? (
@@ -422,13 +437,30 @@ export default function Watchlist() {
                 />
               </section>
             ) : view === 'table' ? (
-              <DataTable
-                columns={columns}
-                rows={items}
-                rowKey={(row) => row.canonical_code}
-                rowHeight={44}
-                onRowClick={(row) => navigate(`/stock/${row.display_code}`)}
-              />
+              <>
+                <div className="hidden md:block">
+                  <DataTable
+                    columns={columns}
+                    rows={items}
+                    rowKey={(row) => row.canonical_code}
+                    rowHeight={44}
+                    onRowClick={(row) => navigate(`/stock/${row.display_code}`)}
+                  />
+                </div>
+                <div className="grid grid-cols-1 gap-4 md:hidden">
+                  {items.map((item, index) => (
+                    <WatchCard
+                      key={item.canonical_code}
+                      item={item}
+                      index={index}
+                      flash={flashes[item.canonical_code]}
+                      animateIn={index < 9}
+                      onRemove={canManageWatchlist ? () => void doRemove(item.canonical_code) : undefined}
+                      onToggleStar={canManageWatchlist ? () => void doToggleStar(item) : undefined}
+                    />
+                  ))}
+                </div>
+              </>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {items.map((item, index) => (
@@ -492,6 +524,18 @@ function AddStockForm({ onAdded, onError }: { onAdded: () => void; onError: (mes
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
 
   const add = async (code: string) => {
     if (!code || saving) return;
@@ -587,7 +631,7 @@ function WatchCard({
     >
       <Link
         to={`/stock/${item.display_code}`}
-        className="card-surface card-lift flex w-full flex-col p-4 text-left"
+        className="card-surface card-lift flex w-full flex-col p-4 pr-24 text-left"
       >
         <span className="flex items-center gap-2.5">
           {item.marked_important && <span className="shrink-0 text-warn-600">★</span>}
@@ -631,7 +675,7 @@ function WatchCard({
             event.stopPropagation();
             onRemove();
           }}
-          className="pointer-events-none absolute right-2 top-2 z-10 inline-flex size-6 cursor-pointer items-center justify-center rounded-xs text-ink-300 opacity-0 outline-none transition-[opacity,color] duration-fast hover:bg-paper-2 hover:text-down-700 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/card:pointer-events-auto group-hover/card:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:text-ink-400"
+          className="pointer-events-none absolute right-1 top-1 z-10 inline-flex size-11 cursor-pointer items-center justify-center rounded-xs text-ink-300 opacity-0 outline-none transition-[opacity,color] duration-fast hover:bg-paper-2 hover:text-down-700 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/card:pointer-events-auto group-hover/card:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:text-ink-400"
         >
           <Icon name="x" size={13} />
         </button>
@@ -645,7 +689,7 @@ function WatchCard({
             onToggleStar();
           }}
           className={cn(
-            'pointer-events-none absolute right-9 top-2 z-10 inline-flex size-6 cursor-pointer items-center justify-center rounded-xs opacity-0 outline-none transition-[opacity,color] duration-fast hover:bg-paper-2 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/card:pointer-events-auto group-hover/card:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100',
+            'pointer-events-none absolute right-12 top-1 z-10 inline-flex size-11 cursor-pointer items-center justify-center rounded-xs opacity-0 outline-none transition-[opacity,color] duration-fast hover:bg-paper-2 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/card:pointer-events-auto group-hover/card:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100',
             item.marked_important ? 'text-warn-600' : 'text-ink-300 hover:text-warn-600',
           )}
         >

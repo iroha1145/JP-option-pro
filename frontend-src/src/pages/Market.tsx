@@ -1,6 +1,7 @@
 /** 日本市场页：指数走势 + 全部33业种强弱 + 广度与空卖。 */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { marketApi, stocksApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { remoteState } from '@/hooks/remoteState';
@@ -339,22 +340,42 @@ export default function Market() {
 
             {sectorsSorted.length === 0 ? (
               <HeatMatrixSkeleton />
-            ) : sectorView === 'heat' ? (
-              <HeatMatrix
-                sectors={sectorsSorted}
-                metric={heatMetric}
-                selectedCode={selectedSector}
-                onSelect={setSelectedSector}
-              />
             ) : (
-              <DataTable
-                columns={sectorColumns}
-                rows={sectorsSorted}
-                rowKey={(row) => row.sector33_code}
-                rowHeight={44}
-                defaultSort={{ key: heatMetric === 'r1' ? 'r1' : 'r20', desc: true }}
-                onRowClick={(row) => setSelectedSector(row.sector33_code)}
-              />
+              <AnimatePresence mode="wait">
+                {sectorView === 'heat' ? (
+                  <motion.div
+                    key="heat"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <HeatMatrix
+                      sectors={sectorsSorted}
+                      metric={heatMetric}
+                      selectedCode={selectedSector}
+                      onSelect={setSelectedSector}
+                    />
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="list"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <DataTable
+                      columns={sectorColumns}
+                      rows={sectorsSorted}
+                      rowKey={(row) => row.sector33_code}
+                      rowHeight={44}
+                      defaultSort={{ key: heatMetric === 'r1' ? 'r1' : 'r20', desc: true }}
+                      onRowClick={(row) => setSelectedSector(row.sector33_code)}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             )}
           </section>
 

@@ -157,10 +157,13 @@ function HeatTile({
         {/* 底端细条＝业种内上涨股占比（中位数看不出「普涨」还是「被少数拉起」） */}
         {share !== null && (
           <span
-            className={cn('absolute inset-x-0 bottom-0 h-[3px] overflow-hidden', barTrack)}
+            className={cn('absolute inset-x-0 bottom-0 h-[3px] overflow-hidden rounded-b-md', barTrack)}
             aria-hidden="true"
           >
-            <span className={cn('block h-full', barFill)} style={{ width: `${Math.max(2, share * 100)}%` }} />
+            <span
+              className={cn('block h-full origin-left animate-grow-bar', barFill)}
+              style={{ width: `${Math.max(2, share * 100)}%`, animationDelay: `${index * 40 + 120}ms` }}
+            />
           </span>
         )}
       </motion.button>
