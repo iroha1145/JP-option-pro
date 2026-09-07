@@ -25,7 +25,7 @@ import Segmented from '@/components/shared/Segmented';
 import EmptyState from '@/components/shared/EmptyState';
 import StatCard from '@/components/shared/StatCard';
 import PriorityRing from '@/components/shared/PriorityRing';
-import { SkeletonBlock, SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
+import { SkeletonBlock, SkeletonCard, SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
 import { CodeCell, DataThrough } from '@/components/domain';
 import ReactECharts from '@/components/charts/ReactECharts';
 import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart';
@@ -172,7 +172,7 @@ export default function ShortMonitor() {
       </StatusNotice>
 
       {validation?.status === 'failed' ? (
-        <section className="card-surface p-4">
+        <section className="card-surface card-lift p-4">
           <p className="flex items-center gap-2">
             <span className="eyebrow">{t('历史验证结果')}</span>
             <SoftBadge tone="warn">{t('未通过')}</SoftBadge>
@@ -224,12 +224,7 @@ export default function ShortMonitor() {
       </div>
       <p className="-mt-3 text-micro text-ink-400">{t(activeView.hint)}</p>
 
-      {state === 'loading' ? (
-        <>
-          <SkeletonCard className="h-80" />
-          <SkeletonRows rows={6} />
-        </>
-      ) : state === 'error' ? (
+      {state === 'error' ? (
         <div className="card-surface">
           <EmptyState
             variant="error"
@@ -238,51 +233,63 @@ export default function ShortMonitor() {
             description={String(rankingQuery.error?.message ?? '')}
           />
         </div>
-      ) : state === 'empty' ? (
-        <div className="card-surface">
-          <EmptyState
-            image="/empty-scan.svg"
-            title={t('该视图当前没有符合条件的股票')}
-            description={minConfidence > 0 ? t('可以把最低数据置信度放宽到「不限」再看一次') : undefined}
-          />
-        </div>
       ) : (
-        <>
-          {lead && <LeadCard key={lead.canonical_code} row={lead} />}
-          {/* 2 列。1 枚に全項目を載せるので、3 列に詰めると数字が折り返す。 */}
-          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-            {rows
-              .filter((row) => row.canonical_code !== lead?.canonical_code)
-              .map((row) => (
-                <StockCard
-                  key={row.canonical_code}
-                  row={row}
-                  onSelect={() => {
-                    setLeadCode(row.canonical_code);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                />
-              ))}
-          </div>
-          <div className="space-y-1 text-micro text-ink-400">
-            <p>
-              {t('机构数后的 +N? 是实际持仓不可见的机构家数（跌破门槛，或未跌破但报告长期停止），均不计入合计')}
-            </p>
-            {/* 同一页上「空头变化」和「相对收益」用同一组红绿，含义却不同 ——
-                不写清楚，+0.71% 是绿、+11.94% 是红这件事就只能靠猜。 */}
-            <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="inline-flex items-center gap-1 text-down-600">
-                <span className="inline-block size-1.5 rounded-full bg-down-600" aria-hidden />
-                {t('公开空头增加（卖压增强）')}
-              </span>
-              <span className="inline-flex items-center gap-1 text-up-600">
-                <span className="inline-block size-1.5 rounded-full bg-up-600" aria-hidden />
-                {t('公开空头减少（买方回补）')}
-              </span>
-              <span>{t('空头变化按对股价的方向着色；相对收益仍是红涨绿跌')}</span>
-            </p>
-          </div>
-        </>
+        <SkeletonReveal
+          loading={state === 'loading'}
+          skeleton={
+            <>
+              <SkeletonCard className="h-80" />
+              <SkeletonRows rows={6} />
+            </>
+          }
+        >
+          {state === 'empty' ? (
+            <div className="card-surface">
+              <EmptyState
+                image="/empty-scan.svg"
+                title={t('该视图当前没有符合条件的股票')}
+                description={minConfidence > 0 ? t('可以把最低数据置信度放宽到「不限」再看一次') : undefined}
+              />
+            </div>
+          ) : (
+            <>
+              {lead && <LeadCard key={lead.canonical_code} row={lead} />}
+              {/* 2 列。1 枚に全項目を載せるので、3 列に詰めると数字が折り返す。 */}
+              <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+                {rows
+                  .filter((row) => row.canonical_code !== lead?.canonical_code)
+                  .map((row) => (
+                    <StockCard
+                      key={row.canonical_code}
+                      row={row}
+                      onSelect={() => {
+                        setLeadCode(row.canonical_code);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                    />
+                  ))}
+              </div>
+              <div className="space-y-1 text-micro text-ink-400">
+                <p>
+                  {t('机构数后的 +N? 是实际持仓不可见的机构家数（跌破门槛，或未跌破但报告长期停止），均不计入合计')}
+                </p>
+                {/* 同一页上「空头变化」和「相对收益」用同一组红绿，含义却不同 ——
+                    不写清楚，+0.71% 是绿、+11.94% 是红这件事就只能靠猜。 */}
+                <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="inline-flex items-center gap-1 text-down-600">
+                    <span className="inline-block size-1.5 rounded-full bg-down-600" aria-hidden />
+                    {t('公开空头增加（卖压增强）')}
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-up-600">
+                    <span className="inline-block size-1.5 rounded-full bg-up-600" aria-hidden />
+                    {t('公开空头减少（买方回补）')}
+                  </span>
+                  <span>{t('空头变化按对股价的方向着色；相对收益仍是红涨绿跌')}</span>
+                </p>
+              </div>
+            </>
+          )}
+        </SkeletonReveal>
       )}
     </div>
   );
@@ -348,7 +355,7 @@ function StateDistribution({
 }) {
   const max = Math.max(1, ...HEADLINE_STATES.map((item) => states[item.state] ?? 0));
   return (
-    <div className="card-surface col-span-2 p-5 xl:col-span-1">
+    <div className="card-surface card-lift col-span-2 p-5 xl:col-span-1">
       <p className="eyebrow">{t('状态分布')}</p>
       <ul className="mt-3 space-y-1.5">
         {HEADLINE_STATES.map((item) => {
@@ -406,7 +413,7 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: DUR_SECTION, ease: EASE_PAPER }}
-      className="radar-lead-card card-surface overflow-hidden p-5"
+      className="radar-lead-card card-surface card-lift overflow-hidden p-5"
     >
       <div className="grid grid-cols-1 lg:grid-cols-3">
         {/* 左 2/3：标题 + 事实 + K 线（机构事件标在图上） */}

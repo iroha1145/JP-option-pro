@@ -133,3 +133,7 @@
 @media (prefers-reduced-motion: reduce) {
   .bk-locate { animation: none; }
 }
+.bk-rail-scroll { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+.bk-rail-scroll::-webkit-scrollbar { width: 5px; }
+.bk-rail-scroll::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 999px; }
+.bk-rail-scroll::-webkit-scrollbar-track { background: transparent; }

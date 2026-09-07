@@ -64,7 +64,7 @@ export default function WeekScrubber({
         <button
           type="button"
           onClick={() => onWeekChange(-1)}
-          className="flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-500 transition-colors duration-fast hover:border-brand-400 hover:text-brand-600"
+          className="flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-500 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600"
           aria-label={t('上一周')}
         >
           <Icon name="chevron-right" size={14} className="rotate-180" />
@@ -76,7 +76,7 @@ export default function WeekScrubber({
         <button
           type="button"
           onClick={() => onWeekChange(1)}
-          className="flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-500 transition-colors duration-fast hover:border-brand-400 hover:text-brand-600"
+          className="flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-500 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600"
           aria-label={t('下一周')}
         >
           <Icon name="chevron-right" size={14} />

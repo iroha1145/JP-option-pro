@@ -21,6 +21,7 @@ import {
 import { pushRecent, readRecent } from '@/lib/recentTickers';
 import Icon, { type IconName } from '@/components/icons';
 import CodeMark from '@/components/shared/CodeMark';
+import DotsLoader from '@/components/shared/DotsLoader';
 import SoftBadge from '@/components/shared/SoftBadge';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import { NAV_ITEMS } from '@/components/Navbar';
@@ -370,7 +371,7 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
               aria-label={t('搜索股票或功能')}
             />
             {searching ? (
-              <span className="size-4 animate-spin rounded-full border-2 border-brand-100 border-t-brand-600" aria-label={t('搜索中')} />
+              <DotsLoader label={t('搜索中')} />
             ) : query ? (
               <button
                 type="button"
@@ -407,7 +408,7 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
             </span>
             {searching && flat.length === 0 && (
               <div className="flex flex-col items-center py-10 text-center" role="status">
-                <span className="size-5 animate-spin rounded-full border-2 border-brand-100 border-t-brand-600" aria-hidden="true" />
+                <DotsLoader />
                 <p className="mt-3 text-body-s text-ink-400">{t('正在搜索股票目录…')}</p>
               </div>
             )}

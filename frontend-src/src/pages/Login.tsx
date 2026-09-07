@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { DUR_SECTION } from '@/lib/motion';
 import { useCatalogShake } from '@/lib/transitions';
 import Icon from '@/components/icons';
+import DotsLoader from '@/components/shared/DotsLoader';
 import SelectionViewport from '@/components/shared/SelectionViewport';
 import type { IconName } from '@/components/icons';
 import { t } from '@/i18n/core';
@@ -301,7 +302,7 @@ export default function Login() {
   if (loading) {
     return (
       <div className="dot-grid-dense flex min-h-[100dvh] items-center justify-center bg-paper">
-        <div className="size-8 animate-spin rounded-full border-2 border-brand-100 border-t-brand-600" aria-label={t("加载中")} />
+        <DotsLoader label={t('加载中')} />
       </div>
     );
   }

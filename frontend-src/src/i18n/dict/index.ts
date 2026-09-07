@@ -1894,4 +1894,9 @@ export const DICT: Record<string, [string, string]> = {
   正常: ['OK', '正常'],
   异常: ['Error', '異常'],
   未采集: ['Not fetched', '未取得'],
+  '点击行打开事件或个股': ['Click a row to open the event or stock', '行をクリックしてイベントまたは銘柄を開く'],
+  加载更多: ['Load more', 'さらに読み込む'],
+  '剩 {n} 条': ['{n} left', '残り {n} 件'],
+  '已加载全部 {n} 条': ['Loaded all {n}', '全 {n} 件を表示中'],
+  '{code} {from} → {to}，打开': ['{code} {from} → {to}, open', '{code} {from} → {to}を開く'],
 };

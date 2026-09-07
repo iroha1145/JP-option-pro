@@ -13,7 +13,7 @@ import type { SectorStrength } from '@/api/types';
 
 export type HeatMetric = 'r1' | 'r20';
 
-const GRID_CLASS = 'grid grid-cols-2 gap-2.5 md:grid-cols-4 md:gap-3 xl:grid-cols-6';
+const GRID_CLASS = 'stagger-in grid grid-cols-2 gap-2.5 md:grid-cols-4 md:gap-3 xl:grid-cols-6';
 
 export function metricValue(sector: SectorStrength, metric: HeatMetric): number | null {
   return metric === 'r1' ? sector.median_return_1d : sector.median_return_20d;
@@ -161,7 +161,7 @@ export default function HeatMatrix({
   return (
     <div className={GRID_CLASS} role="list" aria-label={t('板块透视')}>
       {sectors.map((sector) => (
-        <span key={sector.sector33_code} role="listitem" className="contents">
+        <span key={sector.sector33_code} role="listitem" className="min-w-0">
           <HeatTile
             sector={sector}
             metric={metric}

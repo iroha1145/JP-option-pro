@@ -109,7 +109,7 @@ export default function MonthCalendar({ items, selectedDay, onSelectDay }: Month
           type="button"
           onClick={() => goMonth(-1)}
           disabled={cursor <= minMonth}
-          className="flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-500 transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-500 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line disabled:hover:text-ink-500"
           aria-label={t('上个月')}
         >
           <Icon name="chevron-right" size={14} className="rotate-180" />
@@ -119,7 +119,7 @@ export default function MonthCalendar({ items, selectedDay, onSelectDay }: Month
           <button
             type="button"
             onClick={goToday}
-            className="rounded-sm border border-line bg-card px-2 py-1 text-caption text-ink-500 transition-colors duration-fast hover:border-brand-400 hover:text-brand-600"
+            className="rounded-sm border border-line bg-card px-2 py-1 text-caption text-ink-500 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600"
           >
             {t('今天')}
           </button>
@@ -128,7 +128,7 @@ export default function MonthCalendar({ items, selectedDay, onSelectDay }: Month
           type="button"
           onClick={() => goMonth(1)}
           disabled={cursor >= maxMonth}
-          className="flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-500 transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-500 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line disabled:hover:text-ink-500"
           aria-label={t('下个月')}
         >
           <Icon name="chevron-right" size={14} />

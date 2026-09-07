@@ -13,7 +13,7 @@ import TickPrice from '@/components/shared/TickPrice';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
 import ChangeBadge from '@/components/shared/ChangeBadge';
-import { SkeletonBlock, SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
+import { SkeletonBlock, SkeletonCard, SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
 import StaleStrip from '@/components/shared/StaleStrip';
 import SessionLED from '@/components/shared/SessionLED';
 import SectionCard from '@/components/shared/SectionCard';
@@ -227,39 +227,44 @@ export default function Home() {
       />
 
       <section className="mt-8" aria-label={t('指数概览')}>
-        {market.loading && !market.data ? (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:[grid-template-columns:repeat(auto-fit,minmax(170px,1fr))]">
-            {Array.from({ length: 6 }).map((_, index) => (
-              <SkeletonCard key={index} className="h-24" />
-            ))}
-          </div>
-        ) : market.error && !market.data ? (
-          <div className="card-surface">
-            <EmptyState
-              variant="error"
-              image="/empty-chart.svg"
-              title={market.error.code === 503 ? t('数据暂不可用') : t('加载失败')}
-              description={market.error.message}
-              action={<RetryButton onClick={() => market.refresh()} refreshing={market.refreshing} />}
-            />
-          </div>
-        ) : (
-          <>
-            {market.error && (
-              <StaleStrip onRetry={() => market.refresh()} refreshing={market.refreshing} className="mb-3" />
-            )}
+        <SkeletonReveal
+          loading={market.loading && !market.data}
+          skeleton={
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:[grid-template-columns:repeat(auto-fit,minmax(170px,1fr))]">
-              {indices.map((index, cardIndex) => (
-                <IndexInsightCard
-                  key={index.index_code}
-                  index={index}
-                  cardIndex={cardIndex}
-                  flash={indexFlashes[index.index_code]}
-                />
+              {Array.from({ length: 6 }).map((_, index) => (
+                <SkeletonCard key={index} className="h-24" />
               ))}
             </div>
-          </>
-        )}
+          }
+        >
+          {market.error && !market.data ? (
+            <div className="card-surface">
+              <EmptyState
+                variant="error"
+                image="/empty-chart.svg"
+                title={market.error.code === 503 ? t('数据暂不可用') : t('加载失败')}
+                description={market.error.message}
+                action={<RetryButton onClick={() => market.refresh()} refreshing={market.refreshing} />}
+              />
+            </div>
+          ) : (
+            <>
+              {market.error && (
+                <StaleStrip onRetry={() => market.refresh()} refreshing={market.refreshing} className="mb-3" />
+              )}
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:[grid-template-columns:repeat(auto-fit,minmax(170px,1fr))]">
+                {indices.map((index, cardIndex) => (
+                  <IndexInsightCard
+                    key={index.index_code}
+                    index={index}
+                    cardIndex={cardIndex}
+                    flash={indexFlashes[index.index_code]}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </SkeletonReveal>
       </section>
 
       <div className="mt-8 grid grid-cols-1 items-start gap-6 lg:grid-cols-3">

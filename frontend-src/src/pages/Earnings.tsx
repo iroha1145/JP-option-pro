@@ -15,7 +15,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
 import Segmented from '@/components/shared/Segmented';
 import SourceNote from '@/components/shared/SourceNote';
-import { SkeletonBlock, SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
+import { SkeletonBlock, SkeletonCard, SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
 import { DataThrough } from '@/components/domain';
 import Icon from '@/components/icons';
 import WeekScrubber from '@/components/earnings/WeekScrubber';
@@ -214,11 +214,15 @@ export default function Earnings() {
       {/* B2 列表（8 列）· B3 右栏（4 列） */}
       <div className="mt-6 grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-12" aria-label={t('决算主体')}>
         <div className="min-w-0 space-y-4 xl:col-span-8">
-          {loading ? (
-            <div className="card-surface">
-              <SkeletonRows rows={8} />
-            </div>
-          ) : error503 ? null : (
+          {error503 ? null : (
+            <SkeletonReveal
+              loading={loading}
+              skeleton={
+                <div className="card-surface">
+                  <SkeletonRows rows={8} />
+                </div>
+              }
+            >
             <>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <Segmented
@@ -301,6 +305,7 @@ export default function Earnings() {
                 </div>
               )}
             </>
+            </SkeletonReveal>
           )}
         </div>
 

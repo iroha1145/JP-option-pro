@@ -22,6 +22,7 @@ import ReactECharts from '@/components/charts/ReactECharts';
 import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart';
 import { CodeCell, DataThrough, RADAR_STATE_LABELS, ScoreBar, SignalChip, StateChip } from '@/components/domain';
 import StrengthBar from '@/components/shared/StrengthBar';
+import HistoryRail from '@/components/radar/HistoryRail';
 import PriceScale from '@/components/radar/PriceScale';
 import ScoreBarsMini from '@/components/radar/ScoreBarsMini';
 import { useAccess } from '@/hooks/useAccess';
@@ -31,7 +32,7 @@ import SoftBadge from '@/components/shared/SoftBadge';
 import { RADAR_SCORE_HINTS } from '@/lib/indicatorHints';
 import { DUR_SECTION, EASE_PAPER } from '@/lib/motion';
 import { t } from '@/i18n/core';
-import { fmtDate, fmtDateShort, fmtPct, fmtPrice, fmtYenCompact } from '@/lib/format';
+import { fmtDate, fmtPct, fmtPrice, fmtYenCompact } from '@/lib/format';
 import type { RadarEvent, StockBar } from '@/api/types';
 import '@/components/radar.css';
 
@@ -206,7 +207,7 @@ export default function Radar() {
               description={String(query.error?.message ?? '')}
             />
           </div>
-          <HistoryRail events={[]} />
+          <HistoryRail events={[]} filterKey={`${group}:${onlyAbovePivot}`} onPromoteLead={promoteLead} />
         </div>
       ) : state === 'empty' ? (
         <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(260px,5fr)]">
@@ -217,7 +218,7 @@ export default function Radar() {
               description={query.data?.note ?? t('新信号出现时会立刻出现在这里。')}
             />
           </div>
-          <HistoryRail events={events} />
+          <HistoryRail events={events} filterKey={`${group}:${onlyAbovePivot}`} onPromoteLead={promoteLead} />
         </div>
       ) : (
         <>
@@ -232,7 +233,7 @@ export default function Radar() {
                 flash={flashes[lead.event_id]}
                 locate={locateId === lead.event_id}
               />
-              <HistoryRail events={events} />
+              <HistoryRail events={events} filterKey={`${group}:${onlyAbovePivot}`} onPromoteLead={promoteLead} />
             </div>
           )}
           {view === 'cards' ? (
@@ -266,113 +267,6 @@ export default function Radar() {
         </>
       )}
     </div>
-  );
-}
-
-const WEEKDAYS = [t('周日'), t('周一'), t('周二'), t('周三'), t('周四'), t('周五'), t('周六')];
-
-function historyDayLabel(isoDate: string): string {
-  const key = isoDate.slice(0, 10);
-  const parsed = new Date(`${key}T12:00:00Z`);
-  if (Number.isNaN(parsed.getTime())) return key;
-  const week = WEEKDAYS[parsed.getUTCDay()] ?? '';
-  return `${parsed.getUTCMonth() + 1} 月 ${parsed.getUTCDate()} 日 ${week}`;
-}
-
-function HistoryRail({ events }: { events: RadarEvent[] }) {
-  const rows = useMemo(() => {
-    const items: {
-      key: string;
-      date: string;
-      code: string;
-      name: string | null | undefined;
-      from: string | null;
-      to: string;
-      reason: string;
-    }[] = [];
-    for (const event of events) {
-      for (const transition of event.transitions ?? []) {
-        items.push({
-          key: `${event.event_id}-${transition.date}-${transition.to}`,
-          date: transition.date,
-          code: event.display_code,
-          name: event.name_ja,
-          from: transition.from,
-          to: transition.to,
-          reason: transition.reason,
-        });
-      }
-    }
-    return items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 24);
-  }, [events]);
-
-  const groups = useMemo(() => {
-    const map = new Map<string, typeof rows>();
-    for (const row of rows) {
-      const key = row.date.slice(0, 10);
-      const list = map.get(key) ?? [];
-      list.push(row);
-      map.set(key, list);
-    }
-    return [...map.entries()];
-  }, [rows]);
-
-  return (
-    <aside className="radar-history card-surface flex max-h-[560px] flex-col overflow-hidden">
-      <div className="border-b border-line px-4 py-3">
-        <p className="eyebrow">{t('历史事件回溯')}</p>
-        <h3 className="mt-1 text-h3 text-ink-900">
-          {t('生命周期')} · {t('共')} {rows.length} {t('条')}
-        </h3>
-        <p className="mt-0.5 text-micro text-ink-400">{t('按时间倒序')} · {t('状态变更会按东京日历日归组。')}</p>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {rows.length === 0 ? (
-          <EmptyState
-            image="/empty-radar.svg"
-            title={t('暂无匹配的历史事件')}
-            description={t('暂无状态变更')}
-            className="py-8"
-          />
-        ) : (
-          groups.map(([day, items]) => (
-            <div key={day}>
-              <div className="radar-history-date flex items-baseline justify-between px-4 py-2">
-                <p className="text-[12px] font-medium leading-[18px] text-ink-500">{historyDayLabel(day)}</p>
-                <span className="font-mono text-micro text-ink-400 tnum">
-                  {items.length} {t('条')}
-                </span>
-              </div>
-              <ul className="radar-history-list divide-y divide-line">
-                {items.map((row) => (
-                  <li key={row.key}>
-                    <div className="radar-history-row flex min-h-[60px] items-center gap-2.5 px-4 py-2 transition-colors duration-fast hover:bg-paper-2">
-                      <span className="w-10 shrink-0 font-mono text-caption text-ink-400 tnum">
-                        {fmtDateShort(row.date)}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-baseline gap-1.5">
-                          <span className="shrink-0 font-mono text-body-s font-semibold text-ink-800">{row.code}</span>
-                          <span className="truncate text-micro text-ink-400">{row.name ?? '—'}</span>
-                        </span>
-                        <span className="mt-0.5 flex items-center gap-1.5 text-micro leading-[14px] text-ink-400">
-                          <span className="truncate">
-                            {t(RADAR_STATE_LABELS[row.from ?? ''] ?? row.from ?? '—')} → {t(RADAR_STATE_LABELS[row.to] ?? row.to)}
-                          </span>
-                          <span className="radar-chip radar-chip-neutral radar-history-state shrink-0">
-                            {t(RADAR_STATE_LABELS[row.to] ?? row.to)}
-                          </span>
-                        </span>
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))
-        )}
-      </div>
-    </aside>
   );
 }
 
