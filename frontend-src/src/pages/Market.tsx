@@ -180,7 +180,7 @@ export default function Market() {
             <StaleStrip onRetry={() => market.refresh()} refreshing={market.refreshing} />
           )}
           {n225 && (
-            <section className="card-surface flex flex-wrap items-end justify-between gap-3 rounded-lg p-4">
+            <section className="card-surface card-lift flex flex-wrap items-end justify-between gap-3 rounded-lg p-4">
               <span className="flex flex-col">
                 <span className="eyebrow">{t('日経225 · 盘中')}</span>
                 <span className="mt-1 flex items-baseline gap-3">
@@ -256,7 +256,7 @@ export default function Market() {
           </div>
 
           {/* 板块透视：热力砖（当日/近20日/今日领涨同砖）+ 列表视图 */}
-          <section className="card-surface rounded-lg p-4">
+          <section className="card-surface card-lift rounded-lg p-4">
             <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="eyebrow">{t('SECTOR MATRIX · 33 業種')}</p>
@@ -386,14 +386,17 @@ function IndexTrendPanel({
   }, [scrub, points, changePct]);
 
   return (
-    <section className="card-surface flex flex-col overflow-hidden rounded-xl p-0 lg:col-span-2">
+    <section className="card-surface card-lift flex flex-col overflow-hidden rounded-xl p-0 lg:col-span-2">
       <header className="flex items-center justify-between gap-3 px-4 pt-3">
-        <h2 className="text-body text-ink-500">{t('趋势快照')}</h2>
+        <div className="min-w-0">
+          <p className="eyebrow">INDEX TREND · DAILY</p>
+          <h2 className="mt-0.5 text-h3 text-ink-900">{t('趋势快照')}</h2>
+        </div>
         <span className="rounded-full bg-paper-2 px-2.5 py-0.5 text-micro text-ink-500">{t('快照')}</span>
       </header>
       <div className="mt-3 border-t border-line px-4 pt-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="min-w-0 truncate text-body-s text-ink-700">{name}</h3>
+          <h3 className="min-w-0 truncate text-h3 text-ink-900">{name}</h3>
           <Segmented options={options} value={indexCode} onChange={onIndexChange} />
         </div>
         {loading ? (

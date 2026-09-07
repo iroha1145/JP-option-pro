@@ -517,7 +517,12 @@ export default function Screener() {
           ) : (
             <div className="card-surface p-5">
               <p className="eyebrow">{t('市场形态 · MARKET REGIME')}</p>
-              <p className="mt-3 text-body-s text-ink-500">{t('数据暂不可用 · 稍后刷新再试')}</p>
+              <EmptyState
+                size="compact"
+                image="/empty-chart.svg"
+                title={t('数据暂不可用')}
+                description={t('稍后刷新再试')}
+              />
             </div>
           )}
           <TierHistogram

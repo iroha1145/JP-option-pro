@@ -85,7 +85,13 @@ export default function Research() {
         description={t('走步验证：分数是否真的具有排序能力')}
       />
 
-      {state === 'loading' && <SkeletonCard />}
+      {state === 'loading' && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }, (_, index) => (
+            <SkeletonCard key={index} />
+          ))}
+        </div>
+      )}
 
       {state === 'running' && (
         <section className="card-surface p-5">

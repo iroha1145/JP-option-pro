@@ -11,7 +11,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
 import Segmented from '@/components/shared/Segmented';
 import DataTable, { type Column } from '@/components/shared/DataTable';
-import { SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
+import { SkeletonBlock, SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
 import SoftBadge from '@/components/shared/SoftBadge';
 import StaleStrip from '@/components/shared/StaleStrip';
 import CodeMark from '@/components/shared/CodeMark';
@@ -144,7 +144,9 @@ export default function News() {
           )}
 
           {feedState === 'loading' ? (
-            <SkeletonRows rows={8} />
+            <section className="card-surface overflow-hidden">
+              <FeedSkeleton rows={8} />
+            </section>
           ) : feedState === 'error' ? (
             <section className="card-surface">
               <EmptyState variant="error" image="/empty-news.svg" title={t('加载失败')} description={String(feed.error?.message ?? '')} />
@@ -154,7 +156,7 @@ export default function News() {
               <EmptyState image="/empty-news.svg" title={t('暂无数据')} description={feed.data?.note_ja ?? ''} />
             </section>
           ) : (
-            <ul className="card-surface divide-y divide-line overflow-hidden">
+            <ul className="card-surface overflow-hidden">
               {feed.data!.items.map((item, index) => (
                 <NewsRow key={item.news_id} item={item} index={index} />
               ))}
@@ -251,6 +253,33 @@ function StatusHero({ status }: { status: NewsStatus | null }) {
         </HeroCell>
       </div>
     </motion.section>
+  );
+}
+
+function FeedSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="t-skel" data-state="loading" aria-hidden="true">
+      <div className="t-skel-skeleton is-pulsing">
+        {Array.from({ length: rows }, (_, index) => (
+          <div key={index} className="flex min-h-[60px] gap-3 px-4 py-[18px] sm:px-5">
+            <div className="flex w-11 shrink-0 flex-col items-center">
+              <SkeletonBlock className="h-3 w-8" />
+              <SkeletonBlock className="mt-1.5 hidden w-[2px] flex-1 sm:block" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <SkeletonBlock className="h-2.5 w-28" />
+              <SkeletonBlock className="mt-2 h-4 w-3/4" />
+              <SkeletonBlock className="mt-2 h-3 w-full" />
+              <div className="mt-2.5 flex gap-2">
+                <SkeletonBlock className="h-4 w-10" />
+                <SkeletonBlock className="h-4 w-14" />
+                <SkeletonBlock className="h-4 w-16" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -525,7 +554,13 @@ function StocksImpactPanel({ rows, loading }: { rows: NewsSecurityRow[]; loading
 /* ---------------- 经济日历 ---------------- */
 
 function EconCalendarPanel({ events, note, loading }: { events: EconEvent[]; note?: string; loading: boolean }) {
-  if (loading && events.length === 0) return <SkeletonRows rows={8} />;
+  if (loading && events.length === 0) {
+    return (
+      <section className="card-surface overflow-hidden">
+        <FeedSkeleton rows={8} />
+      </section>
+    );
+  }
   if (events.length === 0) {
     return (
       <section className="card-surface">

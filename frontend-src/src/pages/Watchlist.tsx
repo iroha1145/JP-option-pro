@@ -15,6 +15,7 @@ import ChangeBadge from '@/components/shared/ChangeBadge';
 import Segmented from '@/components/shared/Segmented';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import { SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
+import StatCard from '@/components/shared/StatCard';
 import { CodeCell, DataThrough } from '@/components/domain';
 import Icon from '@/components/icons';
 import { useAccess } from '@/hooks/useAccess';
@@ -240,22 +241,27 @@ export default function Watchlist() {
       )}
 
       {items.length > 0 && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <WatchStat label={t('只标的')} value={items.length} tone="flat" />
-          <WatchStat
+        <div className="no-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 sm:grid sm:grid-cols-4 sm:overflow-visible">
+          <StatCard className="min-w-[220px] snap-start sm:min-w-0" label={t('只标的')} icon="list" value={items.length} />
+          <StatCard
+            className="min-w-[220px] snap-start sm:min-w-0"
             label={t('上涨')}
+            icon="arrow-up-right"
             value={items.filter((item) => (item.quote?.change_pct ?? 0) > 0).length}
-            tone="up"
+            sub={<span className="text-up-700">{t('当日')}</span>}
           />
-          <WatchStat
+          <StatCard
+            className="min-w-[220px] snap-start sm:min-w-0"
             label={t('下跌')}
+            icon="arrow-down-right"
             value={items.filter((item) => (item.quote?.change_pct ?? 0) < 0).length}
-            tone="down"
+            sub={<span className="text-down-700">{t('当日')}</span>}
           />
-          <WatchStat
+          <StatCard
+            className="min-w-[220px] snap-start sm:min-w-0"
             label={t('重点标记')}
+            icon="flag"
             value={items.filter((item) => item.marked_important).length}
-            tone="flat"
           />
         </div>
       )}
@@ -427,22 +433,6 @@ function AddStockForm({ onAdded, onError }: { onAdded: () => void; onError: (mes
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function WatchStat({ label, value, tone }: { label: string; value: number; tone: 'up' | 'down' | 'flat' }) {
-  return (
-    <div className="card-surface rounded-[9px] px-3 py-2.5 text-center">
-      <p
-        className={cn(
-          'metric-value text-data-l tnum',
-          tone === 'up' ? 'text-up-700' : tone === 'down' ? 'text-down-700' : 'text-ink-800',
-        )}
-      >
-        {value}
-      </p>
-      <p className="mt-0.5 text-micro text-ink-400">{label}</p>
     </div>
   );
 }

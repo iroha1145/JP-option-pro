@@ -86,7 +86,7 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
                   </>
                 }
               >
-                <span className="relative h-1.5 w-full overflow-hidden rounded-pill bg-line" role="presentation">
+                <span className="strength-track relative h-1.5 w-full overflow-hidden rounded-pill bg-paper" role="presentation">
                   {value !== null && (
                     <motion.span
                       className="block h-full origin-left rounded-pill bg-brand-500"
@@ -277,7 +277,7 @@ export function MethodCard({
                     return (
                       <div key={key} className="col-span-3 grid grid-cols-subgrid items-center gap-x-2.5">
                         <span className="text-caption text-ink-500">{label}</span>
-                        <span className="h-1.5 overflow-hidden rounded-pill bg-line" role="presentation">
+                        <span className="strength-track h-1.5 overflow-hidden rounded-pill bg-paper" role="presentation">
                           {weight !== null && (
                             <motion.span
                               className="block h-full origin-left rounded-pill bg-brand-500"

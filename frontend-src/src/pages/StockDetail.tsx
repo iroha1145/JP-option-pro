@@ -121,7 +121,15 @@ export default function StockDetail() {
           {backButton}
           <span className="eyebrow">STOCK · {code}</span>
         </div>
-        <SkeletonCard className="h-96" />
+        <SkeletonCard className="h-24" />
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+          <SkeletonCard className="h-96 xl:col-span-8" />
+          <div className="grid content-start gap-4 xl:col-span-4">
+            <SkeletonCard className="h-32" />
+            <SkeletonCard className="h-32" />
+            <SkeletonCard className="h-32" />
+          </div>
+        </div>
       </div>
     );
   }

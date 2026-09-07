@@ -60,7 +60,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
                   {label}
                   {FAMILY_HINTS[key] && <InfoHint hint={FAMILY_HINTS[key]} side="bottom" size={11} className="ml-0.5" />}
                 </span>
-                <span className="h-1.5 overflow-hidden rounded-pill bg-line" role="presentation">
+                <span className="strength-track h-1.5 overflow-hidden rounded-pill bg-paper" role="presentation">
                   {value !== null && (
                     <motion.span
                       className={cn('block h-full origin-left rounded-pill', barClass(value))}
