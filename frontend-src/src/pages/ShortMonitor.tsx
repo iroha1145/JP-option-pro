@@ -197,7 +197,7 @@ export default function ShortMonitor() {
       </StatusNotice>
 
       {validation?.status === 'failed' ? (
-        <section className="card-surface card-lift p-4">
+        <section className="card-surface p-4">
           <p className="flex items-center gap-2">
             <span className="eyebrow">{t('历史验证结果')}</span>
             <SoftBadge tone="warn">{t('未通过')}</SoftBadge>
@@ -387,7 +387,7 @@ function StateDistribution({
 }) {
   const max = Math.max(1, ...HEADLINE_STATES.map((item) => states[item.state] ?? 0));
   return (
-    <div className="card-surface card-lift col-span-2 p-5 xl:col-span-1">
+    <div className="card-surface col-span-2 p-5 xl:col-span-1">
       <p className="eyebrow">{t('状态分布')}</p>
       <ul className="mt-3 space-y-1.5">
         {HEADLINE_STATES.map((item) => {
@@ -709,8 +709,8 @@ function StockCard({ row, onSelect }: { row: ShortMonitorRow; onSelect: () => vo
   // 公式ルール口径が新鮮な合計より大きいときだけ差が意味を持つ
   const inScope = row.reported_in_scope_ratio;
   return (
-    <button type="button" onClick={onSelect} className="block w-full text-left">
-      <div className="card-surface card-lift flex flex-col gap-2.5 rounded-lg p-4">
+    <button type="button" onClick={onSelect} className="card-surface card-lift flex w-full flex-col gap-2.5 rounded-lg p-4 text-left">
+      <div className="contents">
       <div className="flex items-baseline gap-2">
         <CodeCell displayCode={row.display_code} nameJa={row.name} />
         <span className="ml-auto flex shrink-0 items-baseline gap-1.5">

@@ -93,7 +93,7 @@ export default function Research() {
       )}
 
       {state === 'running' && (
-        <section className="card-surface card-lift p-5">
+        <section className="card-surface p-5">
           <p className="eyebrow">WALK-FORWARD</p>
           <h3 className="mt-1 text-h3 text-ink-900">{t('历史验证')}</h3>
           <EmptyState
@@ -105,7 +105,7 @@ export default function Research() {
       )}
 
       {state === 'empty' && (
-        <section className="card-surface card-lift p-5">
+        <section className="card-surface p-5">
           <p className="eyebrow">WALK-FORWARD</p>
           <h3 className="mt-1 text-h3 text-ink-900">{t('历史验证')}</h3>
           <EmptyState
@@ -117,7 +117,7 @@ export default function Research() {
       )}
 
       {state === 'error' && (
-        <section className="card-surface card-lift p-5">
+        <section className="card-surface p-5">
           <p className="eyebrow">WALK-FORWARD</p>
           <h3 className="mt-1 text-h3 text-ink-900">{t('历史验证')}</h3>
           <EmptyState
@@ -135,7 +135,7 @@ export default function Research() {
 
       {state === 'done' && report && (
         <div className="space-y-4">
-          <section className="card-surface card-lift p-5">
+          <section className="card-surface p-5">
             <p className="eyebrow">{t('验证结论')}</p>
             <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <SoftBadge tone={meta.tone} size="md">{t(meta.label)}</SoftBadge>
@@ -170,7 +170,7 @@ export default function Research() {
           </section>
 
           {(report.windows ?? []).map((window) => (
-            <section key={`${window.test[0]}-${window.test[1]}`} className="card-surface card-lift p-5">
+            <section key={`${window.test[0]}-${window.test[1]}`} className="card-surface p-5">
               <p className="eyebrow">WINDOW · {window.test[0]} — {window.test[1]}</p>
               <header className="mb-2 mt-1 flex flex-wrap items-baseline justify-between gap-2">
                 <span className="font-mono text-caption text-ink-700">
@@ -222,7 +222,7 @@ export default function Research() {
             </section>
           ))}
 
-          <section className="card-surface card-lift p-5 text-caption text-ink-600">
+          <section className="card-surface p-5 text-caption text-ink-600">
             <p className="eyebrow">POINT-IN-TIME LIMITS</p>
             <h3 className="mb-1 mt-1 text-h3 text-ink-900">{t('点时限制')}</h3>
             <ul className="list-disc space-y-1 pl-5">

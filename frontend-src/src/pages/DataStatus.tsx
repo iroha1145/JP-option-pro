@@ -192,7 +192,7 @@ export default function DataStatus() {
           </section>
 
           {isOwner && (
-            <div className="card-surface card-lift flex flex-wrap items-center gap-2 p-5">
+            <div className="card-surface flex flex-wrap items-center gap-2 p-5">
               <p className="eyebrow w-full">{t('手动刷新')}</p>
               {MANUAL_ACTIONS.map((action) => (
                 <button
@@ -225,13 +225,13 @@ export default function DataStatus() {
             </div>
           )}
 
-          <section className="card-surface card-lift p-5">
+          <section className="card-surface p-5">
             <p className="eyebrow">DATASETS · J-QUANTS</p>
             <h2 className="mb-3 mt-1 text-h3 text-ink-900">{t('数据集')}</h2>
             <DataTable columns={columns} rows={query.data.datasets} rowKey={(row) => row.key} rowHeight={56} />
           </section>
 
-          <section className="card-surface card-lift p-5">
+          <section className="card-surface p-5">
             <p className="eyebrow">INTRADAY</p>
             <h2 className="mb-2 mt-1 text-h3 text-ink-900">
               {query.data.intraday.enabled ? t('盘中数据') : t('盘中数据未接入')}
@@ -240,7 +240,7 @@ export default function DataStatus() {
           </section>
 
           {query.data.worker && (
-            <section className="card-surface card-lift p-5">
+            <section className="card-surface p-5">
               <p className="eyebrow">WORKER</p>
               <h2 className="mb-2 mt-1 flex items-center gap-2 text-h3 text-ink-900">
                 Worker
