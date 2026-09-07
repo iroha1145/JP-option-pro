@@ -130,9 +130,7 @@ export function StatusChip({ item }: { item: EarningsUpcomingItem }) {
   const meta = statusMeta(item.status);
   return (
     <span className="flex flex-wrap items-center gap-1">
-      <span className="whitespace-nowrap rounded-sm bg-paper-2 px-1.5 py-0.5 text-micro text-ink-600">
-        {item.quarter_label ?? '—'}
-      </span>
+      <SoftBadge>{item.quarter_label ?? '—'}</SoftBadge>
       {item.status === 'estimated' ? (
         <PointerTooltip
           label={t('前年同期开示日推导的目安，以公司正式公告为准')}
@@ -149,13 +147,9 @@ export function StatusChip({ item }: { item: EarningsUpcomingItem }) {
           </span>
         </PointerTooltip>
       ) : (
-        <span className={cn('whitespace-nowrap rounded-sm px-1.5 py-0.5 text-micro', meta.chipClass)}>
-          {meta.label}
-        </span>
+        <SoftBadge tone={item.status === 'confirmed' ? 'brand' : 'neutral'}>{meta.label}</SoftBadge>
       )}
-      {item.actual?.is_revision && (
-        <span className="whitespace-nowrap rounded-sm bg-warn-50 px-1.5 py-0.5 text-micro text-warn-700">{t('业绩预想修正')}</span>
-      )}
+      {item.actual?.is_revision && <SoftBadge tone="warn">{t('业绩预想修正')}</SoftBadge>}
     </span>
   );
 }

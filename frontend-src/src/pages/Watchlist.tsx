@@ -592,7 +592,11 @@ function AddStockForm({ onAdded, onError }: { onAdded: () => void; onError: (mes
               <CodeMark code={result.display_code} size={22} />
               <span className="font-mono text-caption font-semibold text-brand-700">{result.display_code}</span>
               <span className="min-w-0 flex-1 truncate text-caption text-ink-700">{result.name_ja ?? result.name_en ?? '—'}</span>
-              <span className="shrink-0 text-micro text-ink-400">{result.sector33_name ?? ''}</span>
+              {result.sector33_name ? (
+                <SoftBadge className="max-w-[7.5rem]" title={result.sector33_name}>
+                  <span className="truncate">{result.sector33_name}</span>
+                </SoftBadge>
+              ) : null}
             </button>
           ))}
         </div>

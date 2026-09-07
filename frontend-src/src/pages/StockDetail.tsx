@@ -893,9 +893,9 @@ function FinancialTable({ summaries }: { summaries: FinancialSummaryView[] }) {
       key: 'period', title: t('决算种别'),
       render: (row) => (
         <span className="flex items-center gap-1">
-          <span className="rounded-sm bg-paper-2 px-1.5 py-0.5 text-micro text-ink-600">
+          <SoftBadge>
             {row.fiscal_year_end?.slice(0, 7) ?? '—'} {row.period_type ?? ''}
-          </span>
+          </SoftBadge>
           <span className="text-micro text-ink-400">{row.is_consolidated ? t('连结') : t('单体')}</span>
         </span>
       ),
