@@ -177,9 +177,28 @@ export default function Radar() {
           <SkeletonRows rows={6} />
         </>
       ) : state === 'error' ? (
-        <EmptyState variant="error" title={t('加载失败')} description={String(query.error?.message ?? '')} />
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(260px,5fr)]">
+          <div className="card-surface">
+            <EmptyState
+              variant="error"
+              image="/empty-radar.svg"
+              title={t('加载失败')}
+              description={String(query.error?.message ?? '')}
+            />
+          </div>
+          <HistoryRail events={[]} />
+        </div>
       ) : state === 'empty' ? (
-        <EmptyState title={t('雷达仍在盯')} description={query.data?.note ?? t('新信号出现时会立刻出现在这里。')} />
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(260px,5fr)]">
+          <div className="card-surface">
+            <EmptyState
+              image="/empty-radar.svg"
+              title={t('雷达仍在盯')}
+              description={query.data?.note ?? t('新信号出现时会立刻出现在这里。')}
+            />
+          </div>
+          <HistoryRail events={events} />
+        </div>
       ) : (
         <>
           {state === 'stale' && (
@@ -231,6 +250,16 @@ export default function Radar() {
   );
 }
 
+const WEEKDAYS = [t('周日'), t('周一'), t('周二'), t('周三'), t('周四'), t('周五'), t('周六')];
+
+function historyDayLabel(isoDate: string): string {
+  const key = isoDate.slice(0, 10);
+  const parsed = new Date(`${key}T12:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return key;
+  const week = WEEKDAYS[parsed.getUTCDay()] ?? '';
+  return `${parsed.getUTCMonth() + 1} 月 ${parsed.getUTCDate()} 日 ${week}`;
+}
+
 function HistoryRail({ events }: { events: RadarEvent[] }) {
   const rows = useMemo(() => {
     const items: {
@@ -255,34 +284,75 @@ function HistoryRail({ events }: { events: RadarEvent[] }) {
         });
       }
     }
-    return items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 16);
+    return items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 24);
   }, [events]);
 
+  const groups = useMemo(() => {
+    const map = new Map<string, typeof rows>();
+    for (const row of rows) {
+      const key = row.date.slice(0, 10);
+      const list = map.get(key) ?? [];
+      list.push(row);
+      map.set(key, list);
+    }
+    return [...map.entries()];
+  }, [rows]);
+
   return (
-    <aside className="card-surface flex max-h-[560px] flex-col p-4">
-      <p className="eyebrow">{t('历史事件回溯')}</p>
-      <h3 className="mt-1 text-h3 text-ink-900">
-        {t('生命周期')} · {t('共')} {rows.length} {t('条')}
-      </h3>
-      {rows.length === 0 ? (
-        <p className="mt-3 text-caption text-ink-400">{t('暂无状态变更')}</p>
-      ) : (
-        <ol className="mt-3 min-h-0 flex-1 divide-y divide-line overflow-y-auto">
-          {rows.map((row) => (
-            <li key={row.key} className="px-1 py-2 transition-colors hover:bg-paper-2/70">
-              <p className="flex items-center gap-2">
-                <span className="w-10 shrink-0 font-mono text-micro text-ink-400 tnum">{fmtDateShort(row.date)}</span>
-                <span className="font-mono text-caption font-semibold text-ink-800">{row.code}</span>
-                <span className="min-w-0 truncate text-caption text-ink-500">{row.name ?? '—'}</span>
-              </p>
-              <p className="mt-0.5 text-micro text-ink-500">
-                {t(RADAR_STATE_LABELS[row.from ?? ''] ?? row.from ?? '—')} → {t(RADAR_STATE_LABELS[row.to] ?? row.to)}
-                {row.reason ? ` · ${t(row.reason)}` : ''}
-              </p>
-            </li>
-          ))}
-        </ol>
-      )}
+    <aside className="radar-history card-surface flex max-h-[560px] flex-col overflow-hidden">
+      <div className="border-b border-line px-4 py-3">
+        <p className="eyebrow">{t('历史事件回溯')}</p>
+        <h3 className="mt-1 text-h3 text-ink-900">
+          {t('生命周期')} · {t('共')} {rows.length} {t('条')}
+        </h3>
+        <p className="mt-0.5 text-micro text-ink-400">{t('按时间倒序')} · {t('状态变更会按东京日历日归组。')}</p>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {rows.length === 0 ? (
+          <EmptyState
+            image="/empty-radar.svg"
+            title={t('暂无匹配的历史事件')}
+            description={t('暂无状态变更')}
+            className="py-8"
+          />
+        ) : (
+          groups.map(([day, items]) => (
+            <div key={day}>
+              <div className="radar-history-date flex items-baseline justify-between px-4 py-2">
+                <p className="text-[12px] font-medium leading-[18px] text-ink-500">{historyDayLabel(day)}</p>
+                <span className="font-mono text-micro text-ink-400 tnum">
+                  {items.length} {t('条')}
+                </span>
+              </div>
+              <ul className="radar-history-list divide-y divide-line">
+                {items.map((row) => (
+                  <li key={row.key}>
+                    <div className="radar-history-row flex min-h-[60px] items-center gap-2.5 px-4 py-2 transition-colors duration-fast hover:bg-paper-2">
+                      <span className="w-10 shrink-0 font-mono text-caption text-ink-400 tnum">
+                        {fmtDateShort(row.date)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-baseline gap-1.5">
+                          <span className="shrink-0 font-mono text-body-s font-semibold text-ink-800">{row.code}</span>
+                          <span className="truncate text-micro text-ink-400">{row.name ?? '—'}</span>
+                        </span>
+                        <span className="mt-0.5 flex items-center gap-1.5 text-micro leading-[14px] text-ink-400">
+                          <span className="truncate">
+                            {t(RADAR_STATE_LABELS[row.from ?? ''] ?? row.from ?? '—')} → {t(RADAR_STATE_LABELS[row.to] ?? row.to)}
+                          </span>
+                          <span className="radar-chip radar-chip-neutral radar-history-state shrink-0">
+                            {t(RADAR_STATE_LABELS[row.to] ?? row.to)}
+                          </span>
+                        </span>
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))
+        )}
+      </div>
     </aside>
   );
 }
@@ -520,11 +590,8 @@ function EventCard({ event, onSelect, live, flash }: {
   /* 遅延気配なので必ず「遅延」と分かる見た目にする。スコアは夜間のまま。 */
   const above = live?.above_pivot === true;
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className="radar-signal-card card-surface card-lift flex h-full flex-col gap-2 text-left"
-    >
+    <button type="button" onClick={onSelect} className="block h-full w-full text-left">
+      <div className="radar-signal-card card-surface card-lift flex h-full flex-col gap-2">
       <div className="flex items-center gap-2">
         <CodeCell displayCode={event.display_code} nameJa={event.name_ja} />
         <span className="ml-auto font-mono text-data-l tnum text-ink-900">
@@ -571,6 +638,7 @@ function EventCard({ event, onSelect, live, flash }: {
         <span>·</span>
         <span>{t('距52周高点')} {fmtPct(event.snapshot.pct_from_high_252 as number | null)}</span>
         <span className="ml-auto">{fmtDate(event.discovered_date)}</span>
+      </div>
       </div>
     </button>
   );

@@ -1867,4 +1867,10 @@ export const DICT: Record<string, [string, string]> = {
   上次采集: ['Last fetch', '前回取得'],
   热点主题: ['Hot themes', 'ホットテーマ'],
   热度: ['Heat', '熱度'],
+  按时间倒序: ['Newest first', '新しい順'],
+  暂无匹配的历史事件: ['No matching history yet', '一致する履歴はまだありません'],
+  '状态变更会按东京日历日归组。': [
+    'State changes are grouped by Tokyo calendar day.',
+    '状態遷移は東京の暦日でまとめます。',
+  ],
 };

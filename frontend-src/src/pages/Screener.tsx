@@ -381,6 +381,7 @@ export default function Screener() {
               <div className="card-surface">
                 <EmptyState
                   variant="error"
+                  image="/empty-scan.svg"
                   title={scanError?.code === 503 ? t('扫描数据不可用') : t('扫描失败')}
                   description={scanError?.code === 503 ? t('收盘后批处理完成前暂无强度快照') : scanError?.message}
                   action={
@@ -397,6 +398,7 @@ export default function Screener() {
             ) : sorted.length === 0 ? (
               <div className="card-surface">
                 <EmptyState
+                  image="/empty-scan.svg"
                   title={t('当前条件无命中')}
                   description={t('尝试放宽条件，或移除部分过滤器')}
                   action={

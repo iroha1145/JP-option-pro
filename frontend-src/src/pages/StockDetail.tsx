@@ -127,11 +127,14 @@ export default function StockDetail() {
           {backButton}
           <span className="eyebrow">STOCK · {code}</span>
         </div>
-        <EmptyState
-          variant="error"
-          title={t('加载失败')}
-          description={String(overview.error?.message ?? '')}
-        />
+        <section className="card-surface">
+          <EmptyState
+            variant="error"
+            image="/empty-chart.svg"
+            title={t('加载失败')}
+            description={String(overview.error?.message ?? '')}
+          />
+        </section>
       </div>
     );
   }

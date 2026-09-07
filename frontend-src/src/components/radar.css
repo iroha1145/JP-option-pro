@@ -22,9 +22,16 @@
   background: var(--warn-50);
   color: color-mix(in srgb, var(--warn-600) 75%, var(--ink-800));
 }
-.radar-lead-card, .radar-signal-card {
+.radar-lead-card, .radar-signal-card, .radar-history {
   border-color: color-mix(in srgb, var(--line) 86%, transparent);
 }
+.radar-signal-card { padding: 18px; }
+.radar-history-date { background: color-mix(in srgb, var(--paper) 62%, var(--card)); }
+.radar-history-list { padding-inline: 7px; }
+.radar-history-list > li { border-color: color-mix(in srgb, var(--line) 60%, transparent); }
+.radar-history-row { border-radius: 7px; padding-inline: 9px; }
+.radar-history-state { min-height: 20px; padding: 1px 6px; font-size: 10px; line-height: 16px; }
+.radar-history-state > span { width: 4px; height: 4px; }
 .radar-bar-track { background: color-mix(in srgb, var(--line) 64%, var(--card)); }
 .radar-reference-invalid { color: var(--down-600); }
 .radar-reference-trigger { color: var(--brand-600); }

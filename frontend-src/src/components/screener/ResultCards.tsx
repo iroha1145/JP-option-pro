@@ -67,8 +67,7 @@ export default function ResultCards({
               delay: page === 1 ? Math.min(index * 0.03, 0.3) : 0,
               layout: { duration: 0.32, ease: EASE_PAPER },
             }}
-            whileHover={{ y: -3, transition: { duration: 0.24, ease: 'easeOut' } }}
-            className="card-surface overflow-hidden transition-shadow duration-fast hover:shadow-sh-2"
+            className="card-surface card-lift overflow-hidden"
           >
             <button type="button" onClick={() => onToggle(row.canonical_code)} aria-expanded={isOpen} className="flex w-full flex-col p-4 text-left">
               <span className="flex items-center gap-2.5">

@@ -145,9 +145,13 @@ export default function News() {
           {feedState === 'loading' ? (
             <SkeletonRows rows={8} />
           ) : feedState === 'error' ? (
-            <EmptyState variant="error" title={t('加载失败')} description={String(feed.error?.message ?? '')} />
+            <section className="card-surface">
+              <EmptyState variant="error" image="/empty-news.svg" title={t('加载失败')} description={String(feed.error?.message ?? '')} />
+            </section>
           ) : feedState === 'empty' ? (
-            <EmptyState title={t('暂无数据')} description={feed.data?.note_ja ?? ''} />
+            <section className="card-surface">
+              <EmptyState image="/empty-news.svg" title={t('暂无数据')} description={feed.data?.note_ja ?? ''} />
+            </section>
           ) : (
             <ul className="card-surface divide-y divide-line overflow-hidden">
               {feed.data!.items.map((item, index) => (
@@ -507,7 +511,13 @@ function StocksImpactPanel({ rows, loading }: { rows: NewsSecurityRow[]; loading
     [],
   );
   if (loading && rows.length === 0) return <SkeletonRows rows={8} />;
-  if (rows.length === 0) return <EmptyState title={t('暂无数据')} />;
+  if (rows.length === 0) {
+    return (
+      <section className="card-surface">
+        <EmptyState image="/empty-news.svg" title={t('暂无数据')} />
+      </section>
+    );
+  }
   return <DataTable columns={columns} rows={rows} rowKey={(row) => row.canonical_code} rowHeight={44} />;
 }
 
@@ -515,7 +525,13 @@ function StocksImpactPanel({ rows, loading }: { rows: NewsSecurityRow[]; loading
 
 function EconCalendarPanel({ events, note, loading }: { events: EconEvent[]; note?: string; loading: boolean }) {
   if (loading && events.length === 0) return <SkeletonRows rows={8} />;
-  if (events.length === 0) return <EmptyState title={t('暂无数据')} />;
+  if (events.length === 0) {
+    return (
+      <section className="card-surface">
+        <EmptyState image="/empty-news.svg" title={t('暂无数据')} />
+      </section>
+    );
+  }
   const grouped = new Map<string, EconEvent[]>();
   for (const event of events) {
     const list = grouped.get(event.date) ?? [];
@@ -592,7 +608,13 @@ function weekdayJa(isoDate: string): string {
 
 function SourcesPanel({ status, loading }: { status: NewsStatus | null; loading: boolean }) {
   if (loading && !status) return <SkeletonRows rows={5} />;
-  if (!status) return <EmptyState title={t('暂无数据')} />;
+  if (!status) {
+    return (
+      <section className="card-surface">
+        <EmptyState image="/empty-news.svg" title={t('暂无数据')} />
+      </section>
+    );
+  }
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <section className="card-surface card-lift p-5">

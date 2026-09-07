@@ -261,27 +261,35 @@ export default function Watchlist() {
       )}
 
       {anonymous ? (
-        <EmptyState
-          title={t('登录后可以把自选股保存在账号里')}
-          description={t('账号与美股版通用，换设备也还在')}
-          action={
-            <Link
-              to="/login"
-              className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white transition-[filter] hover:brightness-105"
-            >
-              {t('去登录 / 注册')}
-            </Link>
-          }
-        />
+        <section className="card-surface">
+          <EmptyState
+            image="/empty-watchlist.svg"
+            title={t('登录后可以把自选股保存在账号里')}
+            description={t('账号与美股版通用，换设备也还在')}
+            action={
+              <Link
+                to="/login"
+                className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white transition-[filter] hover:brightness-105"
+              >
+                {t('去登录 / 注册')}
+              </Link>
+            }
+          />
+        </section>
       ) : query.loading && !query.data ? (
         <SkeletonRows rows={8} />
       ) : query.error && !query.data ? (
-        <EmptyState variant="error" title={t('加载失败')} description={String(query.error?.message ?? '')} />
+        <section className="card-surface">
+          <EmptyState variant="error" image="/empty-chart.svg" title={t('加载失败')} description={String(query.error?.message ?? '')} />
+        </section>
       ) : items.length === 0 ? (
-        <EmptyState
-          title={t('清单还是空的')}
-          description={canManageWatchlist ? t('在上方搜索代码或公司名，加入第一只自选') : t('在筛选器中添加')}
-        />
+        <section className="card-surface">
+          <EmptyState
+            image="/empty-watchlist.svg"
+            title={t('清单还是空的')}
+            description={canManageWatchlist ? t('在上方搜索代码或公司名，加入第一只自选') : t('在筛选器中添加')}
+          />
+        </section>
       ) : view === 'table' ? (
         <DataTable columns={columns} rows={items} rowKey={(row) => row.canonical_code} rowHeight={44} />
       ) : (

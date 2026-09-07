@@ -110,7 +110,9 @@ export default function DataStatus() {
       {state === 'loading' ? (
         <SkeletonRows rows={10} />
       ) : state === 'error' ? (
-        <EmptyState variant="error" title={t('加载失败')} description={String(query.error?.message ?? '')} />
+        <section className="card-surface">
+          <EmptyState variant="error" image="/empty-chart.svg" title={t('加载失败')} description={String(query.error?.message ?? '')} />
+        </section>
       ) : query.data ? (
         <>
           {state === 'stale' && (

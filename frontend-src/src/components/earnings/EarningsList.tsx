@@ -178,6 +178,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
     return (
       <section className="card-surface" aria-label={t('决算列表')}>
         <EmptyState
+          image="/empty-chart.svg"
           title={
             featuredFilteredEmpty
               ? filteredByDay ? t('当日没有重点公司决算') : t('当前范围内没有重点公司决算')

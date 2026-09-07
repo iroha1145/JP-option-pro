@@ -171,7 +171,9 @@ export default function Market() {
       />
 
       {state === 'error' ? (
-        <EmptyState variant="error" title={t('加载失败')} description={String(market.error?.message ?? '')} />
+        <div className="card-surface">
+          <EmptyState variant="error" image="/empty-chart.svg" title={t('加载失败')} description={String(market.error?.message ?? '')} />
+        </div>
       ) : (
         <>
           {state === 'stale' && (
@@ -219,7 +221,7 @@ export default function Market() {
                   key={index.index_code}
                   type="button"
                   onClick={() => setIndexCode(index.index_code)}
-                  className={`card-surface card-glare card-hover flex w-full items-center justify-between px-3 py-2 text-left ${
+                  className={`card-surface card-lift flex w-full items-center justify-between px-3 py-2 text-left ${
                     index.index_code === indexCode ? 'ring-1 ring-brand-400' : ''
                   }`}
                 >
@@ -397,7 +399,7 @@ function IndexTrendPanel({
         {loading ? (
           <SkeletonCard className="h-64" />
         ) : points.length === 0 ? (
-          <EmptyState title={t('暂无数据')} />
+          <EmptyState image="/empty-chart.svg" title={t('暂无数据')} />
         ) : (
           <InsightLineChart
             key={seriesCode}

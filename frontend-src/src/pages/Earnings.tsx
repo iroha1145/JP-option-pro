@@ -148,6 +148,7 @@ export default function Earnings() {
           <section className="card-surface" aria-label={t('日历数据不可用')}>
             <EmptyState
               variant="error"
+              image="/empty-chart.svg"
               title={t('日历数据不可用')}
               description={q.error?.message || t('稍后刷新再试')}
               action={

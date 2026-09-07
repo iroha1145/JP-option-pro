@@ -233,6 +233,7 @@ export default function ShortMonitor() {
         <div className="card-surface">
           <EmptyState
             variant="error"
+            image="/empty-chart.svg"
             title={t('读取失败')}
             description={String(rankingQuery.error?.message ?? '')}
           />
@@ -240,6 +241,7 @@ export default function ShortMonitor() {
       ) : state === 'empty' ? (
         <div className="card-surface">
           <EmptyState
+            image="/empty-scan.svg"
             title={t('该视图当前没有符合条件的股票')}
             description={minConfidence > 0 ? t('可以把最低数据置信度放宽到「不限」再看一次') : undefined}
           />
@@ -660,11 +662,8 @@ function StockCard({ row, onSelect }: { row: ShortMonitorRow; onSelect: () => vo
   // 公式ルール口径が新鮮な合計より大きいときだけ差が意味を持つ
   const inScope = row.reported_in_scope_ratio;
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className="card-surface card-lift flex flex-col gap-2.5 rounded-lg p-4 text-left"
-    >
+    <button type="button" onClick={onSelect} className="block w-full text-left">
+      <div className="card-surface card-lift flex flex-col gap-2.5 rounded-lg p-4">
       <div className="flex items-baseline gap-2">
         <CodeCell displayCode={row.display_code} nameJa={row.name} />
         <span className="ml-auto flex shrink-0 items-baseline gap-1.5">
@@ -785,6 +784,7 @@ function StockCard({ row, onSelect }: { row: ShortMonitorRow; onSelect: () => vo
           {t('监视优先级')} <span className="text-ink-700">{fmtScore(row.monitor_priority)}</span>
         </span>
         <span className="ml-auto">{fmtDate(row.as_of_date)}</span>
+      </div>
       </div>
     </button>
   );
