@@ -11,5 +11,8 @@
       "command": "cd frontend-src && exec npm run dev"
     }
   ],
-  "ports": [2100, 3100]
+  "ports": [
+    { "name": "backend", "port": 2100 },
+    { "name": "frontend", "port": 3100 }
+  ]
 }
