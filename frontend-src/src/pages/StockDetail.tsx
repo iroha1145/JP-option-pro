@@ -23,6 +23,7 @@ import InfoHint from '@/components/shared/InfoHint';
 import TickAnalyticsPanel from '@/components/charts/TickAnalyticsPanel';
 import ShortBehaviorPanel from '@/components/domain/ShortBehaviorPanel';
 import StockChart, { type ChartInterval, type ChartRange, type PriceMode } from '@/components/detail/StockChart';
+import KeyStats from '@/components/detail/KeyStats';
 import { CH, baseGrid, categoryAxis, glassTooltip, insightLineSeries, valueAxis } from '@/lib/chart';
 import { DataThrough, ScoreBar, SignalChip, StateChip } from '@/components/domain';
 import StrengthBar from '@/components/shared/StrengthBar';
@@ -126,6 +127,7 @@ export default function StockDetail() {
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
           <SkeletonCard className="h-96 xl:col-span-8" />
           <div className="grid content-start gap-4 xl:col-span-4">
+            <SkeletonCard className="h-48" />
             <SkeletonCard className="h-32" />
             <SkeletonCard className="h-32" />
             <SkeletonCard className="h-32" />
@@ -212,19 +214,27 @@ export default function StockDetail() {
             <div className="min-w-0">
               {/* 遅延気配を主表示にするが、必ず「遅延・非公式」と併記する。
                   公式の確定終値は隣に小さく残し、どちらの数字かを曖昧にしない。 */}
-              <InsightValue
-                size="xl"
-                value={
-                  <TickPrice
-                    flash={headerFlashes[security.canonical_code]}
-                    className="font-mono"
-                  >
-                    {fmtPrice(liveQuote.price)}
-                  </TickPrice>
-                }
-                changePct={liveQuote.change_pct}
-                basis={t('vs 昨收')}
-              />
+              <div
+                className={cn(
+                  'tick-flash rounded-xs',
+                  headerFlashes[security.canonical_code] === 'up' && 'tick-flash-up',
+                  headerFlashes[security.canonical_code] === 'down' && 'tick-flash-down',
+                )}
+              >
+                <InsightValue
+                  size="xl"
+                  value={
+                    <TickPrice
+                      flash={headerFlashes[security.canonical_code]}
+                      className="font-mono"
+                    >
+                      {fmtPrice(liveQuote.price)}
+                    </TickPrice>
+                  }
+                  changePct={liveQuote.change_pct}
+                  basis={t('vs 昨收')}
+                />
+              </div>
               <span className="mt-0.5 flex items-center gap-1 text-micro text-warn-700">
                 <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
                 {quoteSourceLabel(live.data).text}
@@ -236,19 +246,27 @@ export default function StockDetail() {
             </div>
           ) : (
             <div className="min-w-0">
-              <InsightValue
-                size="xl"
-                value={
-                  <TickPrice
-                    flash={headerFlashes[security.canonical_code]}
-                    className="font-mono"
-                  >
-                    {fmtPrice(data.quote.close)}
-                  </TickPrice>
-                }
-                changePct={data.quote.change_pct}
-                basis={t('vs 昨收')}
-              />
+              <div
+                className={cn(
+                  'tick-flash rounded-xs',
+                  headerFlashes[security.canonical_code] === 'up' && 'tick-flash-up',
+                  headerFlashes[security.canonical_code] === 'down' && 'tick-flash-down',
+                )}
+              >
+                <InsightValue
+                  size="xl"
+                  value={
+                    <TickPrice
+                      flash={headerFlashes[security.canonical_code]}
+                      className="font-mono"
+                    >
+                      {fmtPrice(data.quote.close)}
+                    </TickPrice>
+                  }
+                  changePct={data.quote.change_pct}
+                  basis={t('vs 昨收')}
+                />
+              </div>
             </div>
           )}
           <p className="pb-1.5 text-right font-mono text-micro text-ink-500 tnum">
@@ -315,10 +333,11 @@ export default function StockDetail() {
         </StockChart>
 
         <div className="grid content-start gap-4 xl:col-span-4">
+          <KeyStats code={code} quote={data.quote} />
           {/* 雷达 */}
           <section className="card-surface p-5">
             <p className="eyebrow">BREAKOUT RADAR</p>
-            <h2 className="mb-2 mt-1 text-h3 text-ink-900">{t('突破雷达')}</h2>
+            <h3 className="mb-2 mt-1 text-h3 text-ink-900">{t('突破雷达')}</h3>
             {data.radar_events.length === 0 ? (
               <PanelEmpty image="/empty-radar.svg" title={t('暂无相关雷达事件')} />
             ) : (
@@ -339,14 +358,14 @@ export default function StockDetail() {
           {/* 信用交易 */}
           <section className="card-surface p-5">
             <p className="eyebrow">MARGIN</p>
-            <h2 className="mb-2 mt-1 text-h3 text-ink-900">{t('信用交易')}</h2>
+            <h3 className="mb-2 mt-1 text-h3 text-ink-900">{t('信用交易')}</h3>
             <MarginPanel rows={data.margin_interest} />
           </section>
 
           {/* 技术指标 */}
           <section className="card-surface p-5">
             <p className="eyebrow">TECHNICALS</p>
-            <h2 className="mb-2 mt-1 text-h3 text-ink-900">{t('技术指标')}</h2>
+            <h3 className="mb-2 mt-1 text-h3 text-ink-900">{t('技术指标')}</h3>
             <IndicatorGrid technical={technical} />
           </section>
         </div>

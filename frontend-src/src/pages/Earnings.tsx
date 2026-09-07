@@ -6,7 +6,7 @@
  * B3 右栏：未来 35 天密度条 + 直近決算摘要 + 覆盖口径卡
  * 数据三态：released（实绩）/ confirmed（官方確定）/ estimated（目安，前年同期推导）。
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Link } from 'react-router';
 import { earningsApi } from '@/api/modules';
@@ -32,6 +32,8 @@ import {
 import SoftBadge from '@/components/shared/SoftBadge';
 import StaleStrip from '@/components/shared/StaleStrip';
 import PointerTooltip from '@/components/shared/PointerTooltip';
+import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
+import { useToast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
 import { fmtYenCompact } from '@/lib/format';
 import { t } from '@/i18n/core';
@@ -43,6 +45,10 @@ const EASE_PAPER = [0.16, 1, 0.3, 1] as [number, number, number, number];
 export default function Earnings() {
   const q = usePolling(() => earningsApi.upcoming(), 1_800_000);
   const recentQ = usePolling(() => earningsApi.recent(7), 1_800_000);
+  const toast = useToast();
+  const [flashSignal, setFlashSignal] = useState(0);
+  const [pendingFlash, setPendingFlash] = useState(false);
+  const sawRefreshing = useRef(false);
 
   const [monday, setMonday] = useState(() => weekStartMonday(jstToday()));
   const [weekDir, setWeekDir] = useState(0);
@@ -76,6 +82,30 @@ export default function Earnings() {
     },
     [monday],
   );
+
+  const onForceRefresh = useCallback(() => {
+    if (q.refreshing) return;
+    q.refresh({ force: true });
+    recentQ.refresh({ force: true });
+    setPendingFlash(true);
+  }, [q, recentQ]);
+
+  useEffect(() => {
+    if (!pendingFlash) return;
+    if (q.refreshing) {
+      sawRefreshing.current = true;
+      return;
+    }
+    if (!sawRefreshing.current) return;
+    sawRefreshing.current = false;
+    setPendingFlash(false);
+    if (q.error && !q.data) {
+      toast.error(t('刷新失败'), q.error.message);
+      return;
+    }
+    setFlashSignal((value) => value + 1);
+    toast.success(t('日历已更新'));
+  }, [pendingFlash, q.data, q.error, q.refreshing, toast]);
 
   const onJumpDay = useCallback(
     (date: string) => {
@@ -118,6 +148,12 @@ export default function Earnings() {
               </span>
             )}
             <DataThrough date={q.data?.today} />
+            <ForceRefreshButton
+              onClick={onForceRefresh}
+              spinning={q.refreshing || pendingFlash}
+              label={t('刷新日历')}
+              title={t('刷新日历')}
+            />
           </>
         }
       />
@@ -192,6 +228,7 @@ export default function Earnings() {
                     onWeekChange={onWeekChange}
                     selectedDay={selectedDay}
                     onSelectDay={onSelectDay}
+                    flashSignal={flashSignal}
                   />
                 </motion.div>
               ) : (

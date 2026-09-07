@@ -4,8 +4,8 @@
  * 卡片：右上角悬浮 ×（触屏常驻）；表格：行内 ★/×。
  * 主体：owner 或访客账号（账号与美股版通用）；匿名显示登录引导。
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router';
 import { motion } from 'framer-motion';
 import { stocksApi, watchlistApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
@@ -17,6 +17,7 @@ import DataTable, { type Column } from '@/components/shared/DataTable';
 import { SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
 import StatCard from '@/components/shared/StatCard';
 import HorizontalScroller from '@/components/shared/HorizontalScroller';
+import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
 import { CodeCell, DataThrough } from '@/components/domain';
 import Icon from '@/components/icons';
 import { useAccess } from '@/hooks/useAccess';
@@ -36,12 +37,36 @@ import type { SearchResult, WatchlistItem } from '@/api/types';
 
 const EMPTY_WATCHLIST: WatchlistItem[] = [];
 
+const STAT_ENTER = {
+  hidden: { opacity: 0, y: 10 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE_PAPER } },
+};
+
 export default function Watchlist() {
   const { canManageWatchlist, accountUsername, isOwner } = useAccess();
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const query = usePolling(() => watchlistApi.list(), 120_000);
+  const refreshWatchlist = query.refresh;
   const [view, setView] = useState<'cards' | 'table'>('cards');
   const [busy, setBusy] = useState<string | null>(null);
+
+  const onForceRefresh = useCallback(() => {
+    refreshWatchlist({ force: true });
+  }, [refreshWatchlist]);
+
+  useEffect(() => {
+    if (searchParams.get('force') !== '1') return;
+    onForceRefresh();
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('force');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [onForceRefresh, searchParams, setSearchParams]);
 
   const items = query.data?.items ?? EMPTY_WATCHLIST;
   const flashes = useTickFlash(items, (row) => row.canonical_code, (row) => row.quote?.close ?? null);
@@ -208,6 +233,11 @@ export default function Watchlist() {
               </SoftBadge>
             )}
             <DataThrough date={items.find((item) => item.quote?.trade_date)?.quote?.trade_date} />
+            <ForceRefreshButton
+              onClick={onForceRefresh}
+              spinning={query.refreshing}
+              title={t('重新获取自选行情')}
+            />
           </>
         }
       />
@@ -243,29 +273,39 @@ export default function Watchlist() {
 
       {items.length > 0 && (
         <HorizontalScroller className="-mx-1 sm:mx-0" scrollerClassName="px-1 sm:px-0" label={t('自选统计')}>
-          <div className="flex gap-3 sm:grid sm:grid-cols-4">
-            <StatCard className="min-w-[220px] snap-start sm:min-w-0" label={t('只标的')} icon="list" value={items.length} />
-            <StatCard
-              className="min-w-[220px] snap-start sm:min-w-0"
-              label={t('上涨')}
-              icon="arrow-up-right"
-              value={items.filter((item) => (item.quote?.change_pct ?? 0) > 0).length}
-              sub={<span className="text-up-700">{t('当日')}</span>}
-            />
-            <StatCard
-              className="min-w-[220px] snap-start sm:min-w-0"
-              label={t('下跌')}
-              icon="arrow-down-right"
-              value={items.filter((item) => (item.quote?.change_pct ?? 0) < 0).length}
-              sub={<span className="text-down-700">{t('当日')}</span>}
-            />
-            <StatCard
-              className="min-w-[220px] snap-start sm:min-w-0"
-              label={t('重点标记')}
-              icon="flag"
-              value={items.filter((item) => item.marked_important).length}
-            />
-          </div>
+          <motion.div
+            initial="hidden"
+            animate="show"
+            variants={{ hidden: {}, show: { transition: { staggerChildren: 0.045 } } }}
+            className="flex gap-3 sm:grid sm:grid-cols-4"
+          >
+            <motion.div variants={STAT_ENTER} className="min-w-[220px] snap-start sm:min-w-0">
+              <StatCard label={t('只标的')} icon="list" value={items.length} />
+            </motion.div>
+            <motion.div variants={STAT_ENTER} className="min-w-[220px] snap-start sm:min-w-0">
+              <StatCard
+                label={t('上涨')}
+                icon="arrow-up-right"
+                value={items.filter((item) => (item.quote?.change_pct ?? 0) > 0).length}
+                sub={<span className="text-up-700">{t('当日')}</span>}
+              />
+            </motion.div>
+            <motion.div variants={STAT_ENTER} className="min-w-[220px] snap-start sm:min-w-0">
+              <StatCard
+                label={t('下跌')}
+                icon="arrow-down-right"
+                value={items.filter((item) => (item.quote?.change_pct ?? 0) < 0).length}
+                sub={<span className="text-down-700">{t('当日')}</span>}
+              />
+            </motion.div>
+            <motion.div variants={STAT_ENTER} className="min-w-[220px] snap-start sm:min-w-0">
+              <StatCard
+                label={t('重点标记')}
+                icon="flag"
+                value={items.filter((item) => item.marked_important).length}
+              />
+            </motion.div>
+          </motion.div>
         </HorizontalScroller>
       )}
 

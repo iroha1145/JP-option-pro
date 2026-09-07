@@ -22,6 +22,7 @@ import { Link } from 'react-router';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/shared/PageHeader';
 import Segmented from '@/components/shared/Segmented';
+import MenuSelect from '@/components/shared/MenuSelect';
 import EmptyState from '@/components/shared/EmptyState';
 import StatCard from '@/components/shared/StatCard';
 import PriorityRing from '@/components/shared/PriorityRing';
@@ -210,16 +211,17 @@ export default function ShortMonitor() {
         />
         <label className="ml-auto flex items-center gap-1.5 text-caption text-ink-400">
           {t('最低数据置信度')}
-          <select
+          <MenuSelect<number>
             value={minConfidence}
-            onChange={(e) => setMinConfidence(Number(e.target.value))}
-            className="rounded-md border border-line bg-card px-2 py-1 font-mono text-caption tnum text-ink-800"
-          >
-            <option value={0}>{t('不限')}</option>
-            <option value={0.35}>0.35</option>
-            <option value={0.6}>0.60</option>
-            <option value={0.8}>0.80</option>
-          </select>
+            onChange={setMinConfidence}
+            ariaLabel={t('最低数据置信度')}
+            options={[
+              { value: 0, label: t('不限') },
+              { value: 0.35, label: '0.35' },
+              { value: 0.6, label: '0.60' },
+              { value: 0.8, label: '0.80' },
+            ]}
+          />
         </label>
       </div>
       <p className="-mt-3 text-micro text-ink-400">{t(activeView.hint)}</p>

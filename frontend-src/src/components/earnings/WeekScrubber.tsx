@@ -3,7 +3,7 @@
  * 周一→周日 7 日格 · 每日件数 + 前 3 个代码 chips（確定=实心点 / 目安=空心点 / 已公布=灰点）
  * 点击日格过滤当天；点击 chip 跳个股页；‹ › 周切换整带 slide。
  */
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate } from 'react-router';
 import { cn } from '@/lib/utils';
@@ -21,6 +21,7 @@ interface WeekScrubberProps {
   onWeekChange: (dir: -1 | 1) => void;
   selectedDay: string | null;
   onSelectDay: (date: string | null) => void;
+  flashSignal?: number;
 }
 
 const MAX_CHIPS = 3;
@@ -32,10 +33,22 @@ export default function WeekScrubber({
   onWeekChange,
   selectedDay,
   onSelectDay,
+  flashSignal = 0,
 }: WeekScrubberProps) {
   const navigate = useNavigate();
   const days = useMemo(() => weekDays(monday), [monday]);
   const today = jstToday();
+  const [flashing, setFlashing] = useState(false);
+  const [prevFlashSignal, setPrevFlashSignal] = useState(flashSignal);
+  if (flashSignal !== prevFlashSignal) {
+    setPrevFlashSignal(flashSignal);
+    if (flashSignal > 0) setFlashing(true);
+  }
+  useEffect(() => {
+    if (!flashing) return;
+    const timer = window.setTimeout(() => setFlashing(false), 700);
+    return () => window.clearTimeout(timer);
+  }, [flashing]);
 
   const byDate = useMemo(() => {
     const map = new Map<string, EarningsUpcomingItem[]>();
@@ -125,6 +138,8 @@ export default function WeekScrubber({
                   className={cn(
                     'flex min-h-[148px] w-[86px] shrink-0 cursor-pointer snap-start flex-col border-r border-line px-2 py-2.5 text-left transition-colors duration-fast last:border-r-0 sm:w-auto sm:min-w-0',
                     isSelected ? 'bg-brand-50' : 'hover:bg-paper-2',
+                    'tick-flash',
+                    flashing && dayItems.length > 0 && 'tick-flash-up',
                   )}
                 >
                   <div className="flex items-center justify-between">

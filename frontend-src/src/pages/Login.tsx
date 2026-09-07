@@ -369,7 +369,10 @@ export default function Login() {
           </motion.div>
 
           <h1 className="mt-10 font-display text-display-l text-ink-900 lg:text-display-xl">
-            <span className="marker"><CharStagger text={t('把市场讲给你听。')} delayBase={0.1} /></span>
+            <CharStagger text={t('把')} delayBase={0.1} />
+            <span className="marker"><CharStagger text={t('市场')} delayBase={0.13} /></span>
+            <br />
+            <CharStagger text={t('讲给你听。')} className="text-brand-600" delayBase={0.22} />
           </h1>
 
           <motion.p
