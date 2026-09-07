@@ -1856,6 +1856,7 @@ export const DICT: Record<string, [string, string]> = {
   打开研究页: ['Open research', 'リサーチを開く'],
   '{code} K线图': ['{code} chart', '{code} チャート'],
   '{code} 首要信号大卡': ['{code} lead signal card', '{code} 最優先シグナルカード'],
+  '{code} 雷达信号卡': ['{code} radar signal card', '{code} レーダーシグナルカード'],
   '日线 · 最多 30 个交易日': ['Daily · last 30 sessions', '日足 · 最大 30 営業日'],
   验证结论: ['Verdict', '検証結論'],
   运行正常: ['Healthy', '正常'],

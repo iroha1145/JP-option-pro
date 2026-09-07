@@ -102,7 +102,7 @@ export default function News() {
         }
       />
 
-      <StatusHero status={status.data ?? null} />
+      <StatusHero status={status.data ?? null} loading={status.loading && !status.data} />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Segmented<Tab>
@@ -252,7 +252,28 @@ function HeroCell({ label, index, children }: { label: string; index: number; ch
   );
 }
 
-function StatusHero({ status }: { status: NewsStatus | null }) {
+function StatusLed({
+  tone,
+  pulse = false,
+}: {
+  tone: 'up' | 'down' | 'warn' | 'muted';
+  pulse?: boolean;
+}) {
+  const bg = {
+    up: 'bg-up-600',
+    down: 'bg-down-600',
+    warn: 'bg-warn-600',
+    muted: 'bg-ink-400',
+  }[tone];
+  return (
+    <span
+      className={cn('inline-block size-2 shrink-0 rounded-full', bg, pulse && 'animate-led-pulse')}
+      aria-hidden="true"
+    />
+  );
+}
+
+function StatusHero({ status, loading }: { status: NewsStatus | null; loading: boolean }) {
   const feedsOk = status?.feeds.filter((feed) => !feed.last_error_code && feed.last_fetched_at).length ?? 0;
   const lastFetch = status?.feeds
     .map((feed) => feed.last_fetched_at)
@@ -260,6 +281,13 @@ function StatusHero({ status }: { status: NewsStatus | null }) {
     .sort()
     .at(-1);
   const queued = status ? Object.values(status.ai.queue).reduce((sum, value) => sum + value, 0) : 0;
+  const sourceTone: 'up' | 'down' | 'warn' | 'muted' = !status
+    ? 'muted'
+    : feedsOk === status.feeds.length && status.feeds.length > 0
+      ? 'up'
+      : feedsOk > 0
+        ? 'warn'
+        : 'down';
   return (
     <motion.section
       initial={{ opacity: 0, y: 14 }}
@@ -270,30 +298,52 @@ function StatusHero({ status }: { status: NewsStatus | null }) {
     >
       <div className="grid grid-cols-2 xl:grid-cols-4">
         <HeroCell label={t('数据源')} index={0}>
-          <p className="font-mono text-data-m text-ink-900 tnum">
-            {status ? `${feedsOk}/${status.feeds.length}` : '—'}
-          </p>
-          <p className="mt-1 text-micro text-ink-400">
-            {t('上次采集')} {fmtRelative(lastFetch)}
-          </p>
+          {loading ? (
+            <div className="space-y-2">
+              <SkeletonBlock className="h-5 w-24 max-w-full" />
+              <SkeletonBlock className="h-2.5 w-16" />
+            </div>
+          ) : (
+            <>
+              <p className="flex items-center gap-2 font-mono text-data-m text-ink-900 tnum">
+                <StatusLed tone={sourceTone} pulse={sourceTone === 'up'} />
+                {status ? `${feedsOk}/${status.feeds.length}` : '—'}
+              </p>
+              <p className="mt-1 text-micro text-ink-400">
+                {t('上次采集')} {fmtRelative(lastFetch)}
+              </p>
+            </>
+          )}
         </HeroCell>
         <HeroCell label="AI" index={1}>
-          <SoftBadge tone={status?.ai.enabled ? 'ai' : 'neutral'} size="md">
-            {status?.ai.enabled || queued > 0 ? (
-              <PulseDot className="bg-ai-600" size={7} />
-            ) : (
-              <AnalysisIcon size={14} />
-            )}
-            <span>{status?.ai.enabled ? t('已启用') : t('未启用')}</span>
-          </SoftBadge>
+          {loading ? (
+            <SkeletonBlock className="h-5 w-28 max-w-full" />
+          ) : (
+            <SoftBadge tone={status?.ai.enabled ? 'ai' : 'neutral'} size="md">
+              {status?.ai.enabled || queued > 0 ? (
+                <PulseDot className="bg-ai-600" size={7} />
+              ) : (
+                <AnalysisIcon size={14} />
+              )}
+              <span>{status?.ai.enabled ? t('已启用') : t('未启用')}</span>
+            </SoftBadge>
+          )}
         </HeroCell>
         <HeroCell label={t('分析队列')} index={2}>
-          <p className="font-mono text-data-m text-ink-900 tnum">{status ? queued : '—'}</p>
+          {loading ? (
+            <SkeletonBlock className="h-5 w-16" />
+          ) : (
+            <p className="font-mono text-data-m text-ink-900 tnum">{status ? queued : '—'}</p>
+          )}
         </HeroCell>
         <HeroCell label={t('采集窗口')} index={3}>
-          <p className="font-mono text-data-m text-ink-900 tnum">
-            {status ? `${status.window_hours}h` : '—'}
-          </p>
+          {loading ? (
+            <SkeletonBlock className="h-5 w-14" />
+          ) : (
+            <p className="font-mono text-data-m text-ink-900 tnum">
+              {status ? `${status.window_hours}h` : '—'}
+            </p>
+          )}
         </HeroCell>
       </div>
       <details className="group border-t border-line px-4 py-1 sm:px-5">
@@ -433,8 +483,8 @@ function HotspotStrip({
       ) : (
         <HorizontalScroller className="mt-1" scrollerClassName="pb-1" label={t('热点主题带，可横向滚动')}>
           <div className="flex gap-2">
-            {groups.map((group) => (
-              <HotspotCard key={group.canonical_code} group={group} />
+            {groups.map((group, index) => (
+              <HotspotCard key={group.canonical_code} group={group} index={index} />
             ))}
           </div>
         </HorizontalScroller>
@@ -443,12 +493,17 @@ function HotspotStrip({
   );
 }
 
-function HotspotCard({ group }: { group: NewsHotspotGroup }) {
+function HotspotCard({ group, index }: { group: NewsHotspotGroup; index: number }) {
   const heat = Math.max(0, Math.min(100, group.max_importance ?? 0));
   return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.2, delay: Math.min(index * 0.05, 0.4) }}
+    >
     <Link
       to={`/stock/${group.display_code}`}
-      className="card-surface card-lift flex min-w-[220px] max-w-[260px] shrink-0 flex-col gap-1.5 p-3"
+      className="card-surface card-hover flex min-w-[220px] max-w-[260px] shrink-0 flex-col gap-1.5 p-3"
     >
       <span className="flex items-center gap-1.5">
         <CodeMark code={group.display_code} size={22} />
@@ -469,12 +524,14 @@ function HotspotCard({ group }: { group: NewsHotspotGroup }) {
         ))}
       </span>
     </Link>
+    </motion.div>
   );
 }
 
 function NewsRow({ item, index }: { item: NewsItem; index: number }) {
   const [expanded, setExpanded] = useState(false);
   const title = item.translated_title_ja ?? item.original_title ?? '—';
+  const toggle = () => setExpanded((value) => !value);
   return (
     <motion.li
       initial={{ opacity: 0, y: 14 }}
@@ -482,8 +539,23 @@ function NewsRow({ item, index }: { item: NewsItem; index: number }) {
       transition={{ duration: 0.4, ease: EASE_PAPER, delay: Math.min(index * 0.03, 0.3) }}
       className="group relative flex gap-3 px-4 py-[18px] transition-colors duration-fast hover:bg-paper-2/70 sm:px-5"
     >
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={expanded}
+        aria-label={title}
+        className="absolute inset-0 z-0 focus-visible:bg-paper-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400/60"
+      />
       <TimeCol iso={item.published_at} />
-      <div className="min-w-0 flex-1">
+      <div
+        className="relative z-10 min-w-0 flex-1 cursor-pointer"
+        onClick={(event) => {
+          const target = event.target as Element;
+          if (target.closest('button, a, [role="button"], input, select, textarea')) return;
+          if (window.getSelection()?.toString()) return;
+          toggle();
+        }}
+      >
         <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-micro text-ink-400">
           <span className="font-medium text-ink-500">{item.source ?? '—'}</span>
           <span aria-hidden="true">·</span>
@@ -492,13 +564,11 @@ function NewsRow({ item, index }: { item: NewsItem; index: number }) {
             <ImportanceBadge value={item.importance} />
           </span>
         </p>
-        <button type="button" onClick={() => setExpanded((value) => !value)} className="mt-1.5 block w-full text-left">
-          <h3 className="text-[15px] font-semibold leading-[22px] text-ink-900">
-            <span className="bg-[linear-gradient(currentColor,currentColor)] bg-[length:0%_1px] bg-left-bottom bg-no-repeat transition-[background-size,color] duration-200 group-hover:bg-[length:100%_1px] group-hover:text-brand-600">
-              {title}
-            </span>
-          </h3>
-        </button>
+        <h3 className="mt-1.5 text-[15px] font-semibold leading-[22px] text-ink-900">
+          <span className="bg-[linear-gradient(currentColor,currentColor)] bg-[length:0%_1px] bg-left-bottom bg-no-repeat transition-[background-size,color] duration-200 group-hover:bg-[length:100%_1px] group-hover:text-brand-600">
+            {title}
+          </span>
+        </h3>
         {item.translated_title_ja && item.original_title && item.translated_title_ja !== item.original_title && (
           <p className="mt-0.5 truncate text-caption text-ink-400">{item.original_title}</p>
         )}

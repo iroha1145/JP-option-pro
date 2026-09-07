@@ -626,18 +626,22 @@ function EventCard({ event, onSelect, live, flash }: {
   const above = live?.above_pivot === true;
   const current = live?.live_price ?? (event.snapshot.close as number | null);
   return (
-    <article
-      onClick={onSelect}
-      onKeyDown={(eventKey) => {
-        if (eventKey.key === 'Enter' || eventKey.key === ' ') {
-          eventKey.preventDefault();
+    <article className="relative h-full w-full">
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-label={t('{code} 雷达信号卡', { code: event.display_code })}
+        className="absolute inset-0 z-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
+      />
+      <div
+        className="radar-signal-card card-surface card-lift relative z-10 flex h-full cursor-pointer flex-col"
+        onClick={(click) => {
+          const target = click.target as Element;
+          if (target.closest('button, a, summary, [role="button"]')) return;
+          if (window.getSelection()?.toString()) return;
           onSelect();
-        }
-      }}
-      tabIndex={0}
-      className="block h-full w-full cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
-    >
-      <div className="radar-signal-card card-surface card-lift flex h-full flex-col">
+        }}
+      >
       <div className="flex items-center gap-2">
         <CodeCell displayCode={event.display_code} nameJa={event.name_ja} />
         <span className="ml-auto font-mono text-data-l tnum text-ink-900">
@@ -686,11 +690,7 @@ function EventCard({ event, onSelect, live, flash }: {
         current={current}
         flash={flash}
       />
-      <details
-        className="radar-disclosure mt-3"
-        onClick={(click) => click.stopPropagation()}
-        onKeyDown={(key) => key.stopPropagation()}
-      >
+      <details className="radar-disclosure mt-3">
         <summary>
           <span>{t('评分套组')}</span>
           <Icon name="chevron-down" size={14} className="radar-disclosure-arrow" />

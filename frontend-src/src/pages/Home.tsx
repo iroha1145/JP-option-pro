@@ -57,7 +57,6 @@ function ListBody({
   isEmpty,
   emptyTitle,
   emptyDescription,
-  emptyExtra,
   emptyImage,
   rows = 6,
   skeleton,
@@ -70,7 +69,6 @@ function ListBody({
   isEmpty: boolean;
   emptyTitle: string;
   emptyDescription?: string;
-  emptyExtra?: ReactNode;
   emptyImage?: string;
   rows?: number;
   skeleton?: ReactNode;
@@ -96,12 +94,7 @@ function ListBody({
     );
   }
   if (isEmpty) {
-    return (
-      <>
-        <EmptyState image={emptyImage} title={emptyTitle} description={emptyDescription} />
-        {emptyExtra}
-      </>
-    );
+    return <EmptyState image={emptyImage} title={emptyTitle} description={emptyDescription} />;
   }
   return (
     <>
@@ -302,7 +295,6 @@ export default function Home() {
             emptyTitle={t('雷达仍在盯')}
             emptyDescription={radar.data?.note ?? t('新信号出现时会立刻出现在这里。')}
             emptyImage="/empty-radar.svg"
-            emptyExtra={<SignalGridSkeleton cards={8} />}
             skeleton={<SignalGridSkeleton cards={8} />}
             rows={8}
           >

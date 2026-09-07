@@ -7,6 +7,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router';
+import { useNow } from '@/hooks/useNow';
+import SessionLED from '@/components/shared/SessionLED';
+import { tokyoSession } from '@/lib/tokyoSession';
 import { stocksApi, workerApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { useTickFlash } from '@/hooks/useTickFlash';
@@ -97,6 +100,11 @@ export default function StockDetail() {
   const { isOwner } = useAccess();
   const toast = useToast();
   const [fetchNote, setFetchNote] = useState<string | null>(null);
+  const now = useNow(30_000);
+  const session = tokyoSession(now);
+  const watchlistToggle = code ? (
+    <WatchlistToggle canonicalCode={code} displayCode={code} />
+  ) : null;
 
   const state = remoteState(overview);
   const liveQuote = live.data?.enabled ? (live.data.quotes[Object.keys(live.data.quotes)[0]] ?? null) : null;
@@ -129,7 +137,10 @@ export default function StockDetail() {
     return (
       <div className="space-y-5" aria-busy="true">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          {backButton}
+          <div className="flex flex-wrap items-center gap-2">
+            {backButton}
+            {watchlistToggle}
+          </div>
           <span className="eyebrow">STOCK · {code}</span>
         </div>
         <SkeletonCard className="h-24" />
@@ -149,7 +160,10 @@ export default function StockDetail() {
     return (
       <div>
         <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
-          {backButton}
+          <div className="flex flex-wrap items-center gap-2">
+            {backButton}
+            {watchlistToggle}
+          </div>
           <span className="eyebrow">STOCK · {code}</span>
         </div>
         <section className="card-surface">
@@ -202,6 +216,7 @@ export default function StockDetail() {
               <span className="text-body-s text-ink-500">{security.name_ja ?? security.name_en ?? '—'}</span>
             </h1>
             <div className="mt-1 flex flex-wrap items-center gap-2">
+              <SessionLED session={session} />
               {security.sector33_name && <SoftBadge>{security.sector33_name}</SoftBadge>}
               {security.market_name && <SoftBadge>{security.market_name}</SoftBadge>}
               {security.scale_category && <SoftBadge>{security.scale_category}</SoftBadge>}

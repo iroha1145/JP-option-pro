@@ -44,7 +44,6 @@ export default function App() {
                   <Route path="/data-status" element={<DataStatus />} />
                   <Route path="/research" element={<Research />} />
                   <Route path="/stock/:code" element={<StockDetail />} />
-                  <Route path="/home" element={<Home />} />
                   <Route path="*" element={<NotFound />} />
                 </Route>
               </Routes>
