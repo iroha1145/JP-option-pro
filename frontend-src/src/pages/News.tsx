@@ -256,12 +256,11 @@ function StatusLed({
   tone,
   pulse = false,
 }: {
-  tone: 'up' | 'down' | 'warn' | 'muted';
+  tone: 'brand' | 'warn' | 'muted';
   pulse?: boolean;
 }) {
   const bg = {
-    up: 'bg-up-600',
-    down: 'bg-down-600',
+    brand: 'bg-brand-600',
     warn: 'bg-warn-600',
     muted: 'bg-ink-400',
   }[tone];
@@ -281,13 +280,11 @@ function StatusHero({ status, loading }: { status: NewsStatus | null; loading: b
     .sort()
     .at(-1);
   const queued = status ? Object.values(status.ai.queue).reduce((sum, value) => sum + value, 0) : 0;
-  const sourceTone: 'up' | 'down' | 'warn' | 'muted' = !status
+  const sourceTone: 'brand' | 'warn' | 'muted' = !status
     ? 'muted'
     : feedsOk === status.feeds.length && status.feeds.length > 0
-      ? 'up'
-      : feedsOk > 0
-        ? 'warn'
-        : 'down';
+      ? 'brand'
+      : 'warn';
   return (
     <motion.section
       initial={{ opacity: 0, y: 14 }}
@@ -306,7 +303,7 @@ function StatusHero({ status, loading }: { status: NewsStatus | null; loading: b
           ) : (
             <>
               <p className="flex items-center gap-2 font-mono text-data-m text-ink-900 tnum">
-                <StatusLed tone={sourceTone} pulse={sourceTone === 'up'} />
+                <StatusLed tone={sourceTone} pulse={sourceTone === 'brand'} />
                 {status ? `${feedsOk}/${status.feeds.length}` : '—'}
               </p>
               <p className="mt-1 text-micro text-ink-400">
