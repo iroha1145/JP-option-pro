@@ -19,10 +19,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
+import { motion } from 'framer-motion';
 import PageHeader from '@/components/shared/PageHeader';
 import Segmented from '@/components/shared/Segmented';
 import EmptyState from '@/components/shared/EmptyState';
 import StatCard from '@/components/shared/StatCard';
+import PriorityRing from '@/components/shared/PriorityRing';
 import { SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
 import { CodeCell, DataThrough } from '@/components/domain';
 import ReactECharts from '@/components/charts/ReactECharts';
@@ -30,6 +32,9 @@ import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart
 import { shortMonitorApi, stocksApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { remoteState } from '@/hooks/remoteState';
+import { DUR_SECTION, EASE_PAPER } from '@/lib/motion';
+import Icon from '@/components/icons';
+import '@/components/radar.css';
 import type {
   ShortMonitorDetail,
   ShortMonitorEvent,
@@ -394,32 +399,62 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
   const invisible = row.below_threshold_count + (row.stale_reporting_count ?? 0);
 
   return (
-    <section className="card-surface overflow-hidden rounded-xl">
+    <motion.article
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: DUR_SECTION, ease: EASE_PAPER }}
+      className="radar-lead-card card-surface overflow-hidden p-5"
+    >
       <div className="grid grid-cols-1 lg:grid-cols-3">
         {/* 左 2/3：标题 + 事实 + K 线（机构事件标在图上） */}
-        <div className="border-line p-4 lg:col-span-2 lg:border-r">
-          <header className="mb-2 flex flex-wrap items-center gap-2">
-            <CodeCell displayCode={row.display_code} nameJa={row.name} to={`/stock/${row.display_code}`} />
+        <div className="border-line lg:col-span-2 lg:border-r lg:pr-5">
+          <div className="mb-2 flex flex-wrap items-center gap-1.5">
             <ShortStateChip state={row.primary_state} />
-            <span className="ml-auto flex items-baseline gap-1.5">
-              <span className="text-micro text-ink-400">
-                {t('行为分')}
-                <InfoHint hint={SHORT_HINTS.behavior} side="top" align="end" size={11} className="ml-0.5" />
-              </span>
-              <span className="font-mono text-display-m tnum text-ink-900">{fmtScore(row.behavior_score)}</span>
-            </span>
-          </header>
-          <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-caption text-ink-500">
-            <span>
+            <span className="radar-chip radar-chip-neutral">
               {row.sector33_name ?? '—'} · {row.market_name ?? '—'}
             </span>
-            <span>
-              {t('收盘')} <span className="font-mono tnum text-ink-800">{fmtPrice(row.close)}</span>
+            <span className="radar-chip radar-chip-brand ml-auto">
+              <Icon name="flag" size={12} />
+              {t('首要监视')}
             </span>
-            <span>
-              {t('公开可见空头')}{' '}
-              <span className="font-mono tnum text-ink-800">{fmtPctLevel(row.visible_short_ratio)}</span>
-            </span>
+          </div>
+          <h3 className="font-display text-display-m text-ink-900">
+            {row.name ?? '—'}{' '}
+            <Link
+              to={`/stock/${row.display_code}`}
+              className="text-brand-600 underline-offset-4 transition-colors hover:text-brand-700 hover:underline"
+            >
+              {row.display_code}
+            </Link>
+          </h3>
+          <div className="mt-3 flex flex-col gap-2.5 sm:flex-row sm:items-stretch">
+            <div className="grid flex-1 grid-cols-1 gap-2.5 sm:grid-cols-3">
+              <div className="radar-value-cell px-3 py-2.5">
+                <p className="text-micro text-ink-400">{t('收盘')}</p>
+                <p className="mt-0.5 font-mono text-data-l text-ink-900 tnum">{fmtPrice(row.close)}</p>
+              </div>
+              <div className="radar-value-cell px-3 py-2.5">
+                <p className="text-micro text-ink-400">{t('公开可见空头')}</p>
+                <p className="mt-0.5 font-mono text-data-l text-ink-900 tnum">{fmtPctLevel(row.visible_short_ratio)}</p>
+              </div>
+              <div className="radar-value-cell px-3 py-2.5">
+                <p className="text-micro text-ink-400">{t('机构数')}</p>
+                <p className="mt-0.5 font-mono text-data-l text-ink-900 tnum">
+                  {row.visible_institution_count}
+                  {invisible > 0 && <span className="text-ink-400"> +{invisible}?</span>}
+                </p>
+              </div>
+            </div>
+            <div className="radar-value-cell radar-priority-cell flex flex-col items-center justify-center px-3 py-1.5">
+              <PriorityRing
+                score={row.behavior_score}
+                label={t('行为分')}
+                hint={SHORT_HINTS.behavior}
+                emptyLabel={t('行为分数据不足')}
+              />
+            </div>
+          </div>
+          <div className="mb-3 mt-3 flex flex-wrap gap-x-4 gap-y-1 text-caption text-ink-500">
             {row.reported_in_scope_ratio != null &&
               row.reported_in_scope_ratio - (row.visible_short_ratio ?? 0) > 0.0005 && (
                 <span className="inline-flex items-center gap-0.5">
@@ -431,13 +466,6 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
                   </span>
                 </span>
               )}
-            <span>
-              {t('机构数')}{' '}
-              <span className="font-mono tnum text-ink-800">
-                {row.visible_institution_count}
-                {invisible > 0 && <span className="text-ink-400"> +{invisible}?</span>}
-              </span>
-            </span>
             <span>
               {t('公开可见回补天数')}{' '}
               <span className="font-mono tnum text-ink-800">
@@ -509,13 +537,14 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
 
           <Link
             to={`/stock/${row.display_code}`}
-            className="mt-auto rounded-md border border-line py-1.5 text-center text-body-s text-brand-700 hover:bg-brand-50"
+            className="mt-auto flex items-center justify-center gap-1.5 rounded-md bg-brand-600 px-3.5 py-2 text-caption font-medium text-white shadow-btn-hi transition-[transform,background-color] duration-fast hover:bg-brand-700 active:scale-[0.98]"
           >
-            {t('个股研究')} →
+            {t('打开研究页')}
+            <Icon name="arrow-up-right" size={13} />
           </Link>
         </div>
       </div>
-    </section>
+    </motion.article>
   );
 }
 

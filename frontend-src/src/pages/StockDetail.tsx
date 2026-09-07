@@ -5,7 +5,7 @@
  *  K线叠加: 基底阻力带 markArea + 枢轴/失效位 markLine + 摆动点。 */
 
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import { stocksApi, watchlistApi, workerApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { useTickFlash } from '@/hooks/useTickFlash';
@@ -14,19 +14,20 @@ import PointerTooltip from '@/components/shared/PointerTooltip';
 import { remoteState } from '@/hooks/remoteState';
 import EmptyState from '@/components/shared/EmptyState';
 import ChangeBadge from '@/components/shared/ChangeBadge';
-import Segmented from '@/components/shared/Segmented';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import { SkeletonCard } from '@/components/shared/Skeleton';
 import ReactECharts from '@/components/charts/ReactECharts';
 import InfoHint from '@/components/shared/InfoHint';
 import TickAnalyticsPanel from '@/components/charts/TickAnalyticsPanel';
 import ShortBehaviorPanel from '@/components/domain/ShortBehaviorPanel';
+import StockChart, { type ChartInterval, type ChartRange, type PriceMode } from '@/components/detail/StockChart';
 import { CH, baseGrid, categoryAxis, glassTooltip, insightLineSeries, valueAxis } from '@/lib/chart';
 import { DataThrough, ScoreBar, SignalChip, StateChip } from '@/components/domain';
 import { useAccess } from '@/hooks/useAccess';
 import { useToast } from '@/hooks/useToast';
 import SoftBadge from '@/components/shared/SoftBadge';
 import CodeMark from '@/components/shared/CodeMark';
+import Icon from '@/components/icons';
 import { STRUCTURE_HINTS, TECHNICAL_HINTS, type ScoreHint } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { quoteSourceLabel } from '@/lib/quoteSource';
@@ -41,14 +42,11 @@ import type {
   TickView,
 } from '@/api/types';
 
-type Range = '3m' | '6m' | '1y' | '3y' | '10y';
-type PriceMode = 'adjusted' | 'raw';
-type Interval = '1d' | '60m' | '5m' | '1m' | 'tick';
-
 export default function StockDetail() {
   const { code = '' } = useParams();
-  const [range, setRange] = useState<Range>('6m');
-  const [interval, setInterval] = useState<Interval>('1d');
+  const navigate = useNavigate();
+  const [range, setRange] = useState<ChartRange>('6m');
+  const [interval, setInterval] = useState<ChartInterval>('1d');
   const [priceMode, setPriceMode] = useState<PriceMode>('adjusted');
   const overview = usePolling(() => stocksApi.overview(code), null, [code]);
   const chart = usePolling(() => stocksApi.chart(code, range), null, [code, range]);
@@ -95,120 +93,46 @@ export default function StockDetail() {
   }, [overview.data, liveQuote]);
   const headerFlashes = useTickFlash(headerQuote, (row) => row.key, (row) => row.price);
 
-  const chartOption = useMemo(() => {
-    const bars = chart.data?.bars ?? [];
-    if (bars.length === 0) return null;
-    const pick = (
-      bar: (typeof bars)[number],
-      adj: 'adj_open' | 'adj_high' | 'adj_low' | 'adj_close',
-      raw: 'open' | 'high' | 'low' | 'close',
-    ) => (priceMode === 'adjusted' ? (bar[adj] ?? bar[raw]) : bar[raw]);
-    const dates = bars.map((bar) => bar.trade_date);
-    const shortDates = dates.map((date) => date.slice(2));
-    const candles = bars.map((bar) => [
-      pick(bar, 'adj_open', 'open'),
-      pick(bar, 'adj_close', 'close'),
-      pick(bar, 'adj_low', 'low'),
-      pick(bar, 'adj_high', 'high'),
-    ]);
-    const turnover = bars.map((bar) => bar.turnover_value);
-
-    const overlays = technical?.chart_overlays;
-    const markLines: Record<string, unknown>[] = [];
-    const markPoints: ({ name: string } & Record<string, unknown>)[] = [];
-    if (priceMode === 'adjusted' && overlays) {
-      if (overlays.invalidation_price != null) {
-        markLines.push({
-          yAxis: overlays.invalidation_price,
-          lineStyle: { color: CH.down600, type: 'dotted', width: 1 },
-          label: { formatter: t('失效位'), position: 'insideEndBottom', color: CH.down600, fontSize: 10 },
-        });
-      }
-      const markSwing = (points: { trade_date: string; price: number | null }[], isHigh: boolean) => {
-        for (const point of points.slice(-3)) {
-          const index = dates.indexOf(point.trade_date);
-          if (index >= 0 && point.price != null) {
-            markPoints.push({
-              name: isHigh ? 'swing-high' : 'swing-low',
-              coord: [index, point.price],
-              symbol: 'triangle',
-              symbolRotate: isHigh ? 180 : 0,
-              symbolSize: 8,
-              itemStyle: { color: isHigh ? CH.warn600 : CH.ai600 },
-              label: { show: false },
-            });
-          }
-        }
-      };
-      markSwing(overlays.swing_highs ?? [], true);
-      markSwing(overlays.swing_lows ?? [], false);
-    }
-
-    return {
-      grid: [
-        baseGrid({ top: 8, bottom: '24%', left: 4, right: 48 }),
-        baseGrid({ top: '80%', bottom: 2, left: 4, right: 48 }),
-      ],
-      tooltip: glassTooltip({ trigger: 'axis' }),
-      xAxis: [
-        { ...categoryAxis(shortDates), gridIndex: 0 },
-        { ...categoryAxis(shortDates), gridIndex: 1, axisLabel: { show: false } },
-      ],
-      yAxis: [
-        { ...valueAxis({ scale: true, position: 'right' }), gridIndex: 0 },
-        { ...valueAxis(), gridIndex: 1, axisLabel: { show: false }, splitLine: { show: false } },
-      ],
-      series: [
-        {
-          type: 'candlestick' as const,
-          data: candles,
-          xAxisIndex: 0,
-          yAxisIndex: 0,
-          itemStyle: {
-            color: CH.up600, color0: CH.down600,
-            borderColor: CH.up600, borderColor0: CH.down600,
-          },
-          markLine: { symbol: 'none', animation: false, data: markLines },
-          markPoint: { animation: false, data: markPoints },
-          ...(priceMode === 'adjusted'
-          && overlays?.resistance_high != null
-          && overlays?.resistance_low != null
-            ? {
-                markArea: {
-                  silent: true,
-                  itemStyle: { color: CH.brand400, opacity: 0.08 },
-                  data: [
-                    [{ yAxis: overlays.resistance_low }, { yAxis: overlays.resistance_high }] as [
-                      { yAxis: number },
-                      { yAxis: number },
-                    ],
-                  ],
-                },
-              }
-            : {}),
-        },
-        {
-          type: 'bar' as const,
-          data: turnover,
-          xAxisIndex: 1,
-          yAxisIndex: 1,
-          itemStyle: { color: CH.brand400, opacity: 0.4 },
-        },
-      ],
-    };
-  }, [chart.data, priceMode, technical]);
+  const goBack = () => {
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (idx > 0) navigate(-1);
+    else navigate('/watchlist', { replace: true });
+  };
+  const backButton = (
+    <button
+      type="button"
+      onClick={goBack}
+      className="inline-flex items-center gap-1.5 rounded-md border border-line-strong bg-card px-3 py-1.5 text-caption font-medium text-ink-600 shadow-btn transition-colors duration-fast hover:bg-paper-2 hover:text-ink-800"
+    >
+      <Icon name="chevron-right" size={14} className="rotate-180" />
+      {t('返回')}
+    </button>
+  );
 
   if (state === 'loading') {
-    return <SkeletonCard className="mt-6 h-96" />;
+    return (
+      <div className="space-y-5" aria-busy="true">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {backButton}
+          <span className="eyebrow">STOCK · {code}</span>
+        </div>
+        <SkeletonCard className="h-96" />
+      </div>
+    );
   }
   if (state === 'error' || !overview.data) {
     return (
-      <EmptyState
-        variant="error"
-        title={t('加载失败')}
-        description={String(overview.error?.message ?? '')}
-        className="mt-12"
-      />
+      <div>
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
+          {backButton}
+          <span className="eyebrow">STOCK · {code}</span>
+        </div>
+        <EmptyState
+          variant="error"
+          title={t('加载失败')}
+          description={String(overview.error?.message ?? '')}
+        />
+      </div>
     );
   }
 
@@ -217,21 +141,13 @@ export default function StockDetail() {
 
   return (
     <div className="space-y-5">
-      {/* ヘッダー */}
-      <header className="border-b border-line pb-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <CodeMark code={security.display_code} size={36} />
-          <span className="font-mono text-h3 font-bold text-brand-700">{security.display_code}</span>
-          <h1 className="font-display text-display-m text-ink-900">{security.name_ja ?? security.name_en ?? '—'}</h1>
-          {security.active === 0 && (
-            <SoftBadge tone="down">
-              {t('上場廃止')} {security.delisted_date ?? ''}
-            </SoftBadge>
-          )}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {backButton}
           {isOwner && (
             <button
               type="button"
-              className="control-button ml-auto"
+              className="control-button"
               onClick={async () => {
                 try {
                   const result = await watchlistApi.add(security.canonical_code);
@@ -243,6 +159,21 @@ export default function StockDetail() {
             >
               + {t('加入自选')}
             </button>
+          )}
+        </div>
+        <span className="eyebrow">STOCK · {security.display_code}</span>
+      </div>
+
+      {/* ヘッダー */}
+      <header className="border-b border-line pb-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <CodeMark code={security.display_code} size={36} />
+          <span className="font-mono text-h3 font-bold text-brand-700">{security.display_code}</span>
+          <h1 className="font-display text-display-m text-ink-900">{security.name_ja ?? security.name_en ?? '—'}</h1>
+          {security.active === 0 && (
+            <SoftBadge tone="down">
+              {t('上場廃止')} {security.delisted_date ?? ''}
+            </SoftBadge>
           )}
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-ink-500">
@@ -297,54 +228,19 @@ export default function StockDetail() {
 
       {/* 行1: K線 + 右侧紧凑栏 */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <section className="card-surface rounded-lg p-3 xl:col-span-8">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <span className="flex flex-wrap items-center gap-2">
-              <Segmented<Interval>
-                options={[
-                  { value: '1d', label: t('日K') },
-                  { value: '60m', label: t('60分') },
-                  { value: '5m', label: t('5分') },
-                  { value: '1m', label: t('1分') },
-                  { value: 'tick', label: t('逐笔') },
-                ]}
-                value={interval}
-                onChange={setInterval}
-              />
-              {interval === '1d' && (
-                <Segmented<Range>
-                  options={(['3m', '6m', '1y', '3y', '10y'] as Range[]).map((value) => ({ value, label: value.toUpperCase() }))}
-                  value={range}
-                  onChange={setRange}
-                />
-              )}
-            </span>
-            <span className="flex items-center gap-2">
-              <span className="flex items-center gap-1 text-caption text-ink-400">
-                {t('图例')}
-                <InfoHint hint={STRUCTURE_HINTS.chart_overlays} align="end" />
-              </span>
-              {interval === '1d' && (
-                <Segmented<PriceMode>
-                  options={[
-                    { value: 'adjusted', label: t('复权') },
-                    { value: 'raw', label: t('不复权') },
-                  ]}
-                  value={priceMode}
-                  onChange={setPriceMode}
-                />
-              )}
-            </span>
-          </div>
-          {interval === '1d' ? (
-            chartOption ? (
-              <ReactECharts className="h-72 w-full" option={chartOption} ariaLabel={`${security.display_code} chart`} />
-            ) : chart.loading ? (
-              <SkeletonCard className="h-72" />
-            ) : (
-              <EmptyState title={t('暂无数据')} />
-            )
-          ) : interval === 'tick' ? (
+        <StockChart
+          displayCode={security.display_code}
+          interval={interval}
+          onInterval={setInterval}
+          range={range}
+          onRange={setRange}
+          priceMode={priceMode}
+          onPriceMode={setPriceMode}
+          bars={chart.data?.bars}
+          barsLoading={chart.loading}
+          overlays={technical?.chart_overlays}
+        >
+          {interval === 'tick' ? (
             <TickPane
               data={ticks.data ?? null}
               loading={ticks.loading}
@@ -383,12 +279,13 @@ export default function StockDetail() {
               onRefresh={() => intraday.refresh({ force: true })}
             />
           )}
-        </section>
+        </StockChart>
 
         <div className="grid content-start gap-4 xl:col-span-4">
           {/* 雷达 */}
-          <section className="card-surface rounded-lg p-3">
-            <h2 className="mb-2 text-body font-medium text-ink-900">{t('突破雷达')}</h2>
+          <section className="card-surface p-5">
+            <p className="eyebrow">BREAKOUT RADAR</p>
+            <h2 className="mb-2 mt-1 text-body font-medium text-ink-900">{t('突破雷达')}</h2>
             {data.radar_events.length === 0 ? (
               <p className="text-caption text-ink-400">{t('暂无相关雷达事件')}</p>
             ) : (
@@ -407,14 +304,16 @@ export default function StockDetail() {
           </section>
 
           {/* 信用交易 */}
-          <section className="card-surface rounded-lg p-3">
-            <h2 className="mb-2 text-body font-medium text-ink-900">{t('信用交易')}</h2>
+          <section className="card-surface p-5">
+            <p className="eyebrow">MARGIN</p>
+            <h2 className="mb-2 mt-1 text-body font-medium text-ink-900">{t('信用交易')}</h2>
             <MarginPanel rows={data.margin_interest} />
           </section>
 
           {/* 技术指标 */}
-          <section className="card-surface rounded-lg p-3">
-            <h2 className="mb-2 text-body font-medium text-ink-900">{t('技术指标')}</h2>
+          <section className="card-surface p-5">
+            <p className="eyebrow">TECHNICALS</p>
+            <h2 className="mb-2 mt-1 text-body font-medium text-ink-900">{t('技术指标')}</h2>
             <IndicatorGrid technical={technical} />
           </section>
         </div>
@@ -422,32 +321,37 @@ export default function StockDetail() {
 
       {/* 行2: 决算时间线 + 技术结构 */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <section className="card-surface rounded-lg p-4 xl:col-span-7">
-          <h2 className="mb-3 text-h3 text-ink-900">{t('决算时间线')}</h2>
+        <section className="card-surface p-5 xl:col-span-7">
+          <p className="eyebrow">EARNINGS TIMELINE</p>
+          <h2 className="mb-3 mt-1 text-h3 text-ink-900">{t('决算时间线')}</h2>
           <div className="max-h-[360px] overflow-y-auto">
             <FinancialTable summaries={data.financials.summaries} />
           </div>
         </section>
-        <section className="card-surface rounded-lg p-4 xl:col-span-5">
-          <h2 className="mb-3 text-h3 text-ink-900">{t('K线结构分析')}</h2>
+        <section className="card-surface p-5 xl:col-span-5">
+          <p className="eyebrow">CHART STRUCTURE</p>
+          <h2 className="mb-3 mt-1 text-h3 text-ink-900">{t('K线结构分析')}</h2>
           <StructurePanel technical={technical} />
         </section>
       </div>
 
       {/* 机构空卖行为：报告本身在下面的「空卖残高报告」，这里是行为分析 */}
-      <section className="card-surface rounded-lg p-4">
-        <h2 className="mb-3 text-h3 text-ink-900">{t('机构空卖行为')}</h2>
+      <section className="card-surface p-5">
+        <p className="eyebrow">SHORT BEHAVIOR</p>
+        <h2 className="mb-3 mt-1 text-h3 text-ink-900">{t('机构空卖行为')}</h2>
         <ShortBehaviorPanel code={security.canonical_code} />
       </section>
 
       {/* 行3: 空卖 + 发表预定 */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <section className="card-surface rounded-lg p-4">
-          <h2 className="mb-3 text-h3 text-ink-900">{t('空卖残高报告')}</h2>
+        <section className="card-surface p-5">
+          <p className="eyebrow">SHORT INTEREST</p>
+          <h2 className="mb-3 mt-1 text-h3 text-ink-900">{t('空卖残高报告')}</h2>
           <ShortPositionsPanel rows={data.short_positions} summary={data.short_interest} />
         </section>
-        <section className="card-surface rounded-lg p-4">
-          <h2 className="mb-3 text-h3 text-ink-900">{t('发表预定')}</h2>
+        <section className="card-surface p-5">
+          <p className="eyebrow">EARNINGS SCHEDULE</p>
+          <h2 className="mb-3 mt-1 text-h3 text-ink-900">{t('发表预定')}</h2>
           {data.earnings.length === 0 ? (
             <p className="text-body-s text-ink-400">{t('暂无数据')}</p>
           ) : (
@@ -527,11 +431,11 @@ function IntradayPane({
     };
   }, [data]);
 
-  if (loading && !data) return <SkeletonCard className="h-72" />;
+  if (loading && !data) return <SkeletonCard className="h-[360px]" />;
   if (data && data.available && option) {
     return (
       <div>
-        <ReactECharts className="h-72 w-full" option={option} ariaLabel="intraday chart" />
+        <ReactECharts className="h-[360px] w-full" option={option} ariaLabel="intraday chart" />
         <p className="mt-1 text-right text-micro text-ink-400">
           {t('分钟数据为未复权原始价')} · {(data.days ?? []).length} {t('个交易日')} ·{' '}
           {t('数据截至')} {data.data_through ?? '—'}
@@ -542,7 +446,7 @@ function IntradayPane({
   const planBlocked = data?.reason === 'plan_not_included';
   const empty = data?.reason === 'empty';
   return (
-    <div className="flex h-72 flex-col items-center justify-center gap-3 rounded-md bg-paper-2">
+    <div className="flex h-[360px] flex-col items-center justify-center gap-3 rounded-md bg-paper-2">
       <p className="max-w-md px-6 text-center text-body-s text-ink-600">
         {planBlocked
           ? t('分钟线需要 J-Quants 分足加购（当前订阅未包含）')
@@ -640,13 +544,13 @@ function TickPane({
     };
   }, [data]);
 
-  if (loading && !data) return <SkeletonCard className="h-72" />;
+  if (loading && !data) return <SkeletonCard className="h-[360px]" />;
   if (data && data.available && option) {
     return (
       <div className="space-y-3">
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_232px]">
         <div className="min-w-0">
-          <ReactECharts className="h-72 w-full" option={option} ariaLabel="tick chart" />
+          <ReactECharts className="h-[360px] w-full" option={option} ariaLabel="tick chart" />
           <p className="mt-1 text-right text-micro text-ink-400">
             {data.trade_date} · {data.tick_count.toLocaleString()} {t('笔')} ·{' '}
             {t('约 {n} 秒/点', { n: data.bucket_seconds ?? 1 })}
@@ -690,7 +594,7 @@ function TickPane({
   const fetching = data?.reason === 'fetching';
   const empty = data?.reason === 'empty';
   return (
-    <div className="flex h-72 flex-col items-center justify-center gap-3 rounded-md bg-paper-2">
+    <div className="flex h-[360px] flex-col items-center justify-center gap-3 rounded-md bg-paper-2">
       <p className="max-w-md px-6 text-center text-body-s text-ink-600">
         {planBlocked
           ? t('逐笔需要 J-Quants Tick 加购（刚购买时，API 侧生效可能有延迟）')

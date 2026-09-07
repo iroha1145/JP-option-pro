@@ -3,11 +3,14 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
+import { motion } from 'framer-motion';
 import { quotesApi, radarApi, stocksApi, workerApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { useTickFlash } from '@/hooks/useTickFlash';
 import TickPrice from '@/components/shared/TickPrice';
 import PointerTooltip from '@/components/shared/PointerTooltip';
+import PriorityRing from '@/components/shared/PriorityRing';
+import Icon from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { remoteState } from '@/hooks/remoteState';
 import PageHeader from '@/components/shared/PageHeader';
@@ -22,11 +25,12 @@ import { useAccess } from '@/hooks/useAccess';
 import { useToast } from '@/hooks/useToast';
 import StaleStrip from '@/components/shared/StaleStrip';
 import SoftBadge from '@/components/shared/SoftBadge';
-import InfoHint from '@/components/shared/InfoHint';
 import { RADAR_SCORE_HINTS } from '@/lib/indicatorHints';
+import { DUR_SECTION, EASE_PAPER } from '@/lib/motion';
 import { t } from '@/i18n/core';
 import { fmtDate, fmtPct, fmtPrice, fmtYenCompact } from '@/lib/format';
 import type { RadarEvent, StockBar } from '@/api/types';
+import '@/components/radar.css';
 
 type StateGroup = 'active' | 'confirmed' | 'watching' | 'closed' | 'all';
 type ViewMode = 'cards' | 'table';
@@ -186,17 +190,23 @@ export default function Radar() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {events
                 .filter((event) => event.event_id !== lead?.event_id)
-                .map((event) => (
-                  <EventCard
+                .map((event, index) => (
+                  <motion.div
                     key={event.event_id}
-                    event={event}
-                    live={overlayRows[event.event_id]}
-                    flash={flashes[event.event_id]}
-                    onSelect={() => {
-                      setLeadId(event.event_id);
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                  />
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, ease: EASE_PAPER, delay: index * 0.04 }}
+                  >
+                    <EventCard
+                      event={event}
+                      live={overlayRows[event.event_id]}
+                      flash={flashes[event.event_id]}
+                      onSelect={() => {
+                        setLeadId(event.event_id);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                    />
+                  </motion.div>
                 ))}
             </div>
           ) : (
@@ -234,65 +244,100 @@ function LeadBigCard({
   );
   const scores = event.scores ?? {};
   const structure = event.structure ?? null;
+  const invalidation = structure?.base?.invalidation_price ?? null;
 
   return (
-    <section className="card-surface overflow-hidden rounded-xl">
-      <div className="grid grid-cols-1 gap-0 lg:grid-cols-3">
-        {/* 左 2/3: ヘッダー + K線 */}
-        <div className="border-line p-4 lg:col-span-2 lg:border-r">
-          <header className="mb-2 flex flex-wrap items-center gap-2">
-            <CodeCell displayCode={event.display_code} nameJa={event.name_ja} to={`/stock/${event.display_code}`} />
-            <SignalChip signal={event.signal_type} />
-            <StateChip state={event.state} />
-            <span className="ml-auto flex items-baseline gap-1.5">
-              <span className="text-micro text-ink-400">
-                {t('优先级')}
-                <InfoHint hint={RADAR_SCORE_HINTS.优先级} side="top" align="end" size={11} className="ml-0.5" />
-              </span>
-              <span className="font-mono text-display-m tnum text-ink-900">
-                {event.alert_priority !== null ? Math.round(event.alert_priority) : '—'}
-              </span>
-            </span>
-          </header>
-          <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-caption text-ink-500">
-            <span>{event.sector33_name ?? '—'} · {event.market_name ?? '—'}</span>
-            <span>{t('发现日')} {fmtDate(event.discovered_date)}</span>
-            <span>
-              {t('枢轴价')} <span className="font-mono tnum text-ink-800">{fmtPrice(event.pivot_price)}</span>
-            </span>
-            <span>
-              {live ? t('盘中价') : t('收盘')}{' '}
-              <TickPrice flash={flash} className="font-mono text-ink-800">
+    <motion.article
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: DUR_SECTION, ease: EASE_PAPER }}
+      aria-label={t('{code} 首要信号大卡', { code: event.display_code })}
+      className="radar-lead-card card-surface p-5"
+    >
+      <div className="flex flex-wrap items-center gap-1.5">
+        <SignalChip signal={event.signal_type} />
+        <StateChip state={event.state} />
+        <span className="radar-chip radar-chip-neutral">
+          {event.sector33_name ?? '—'} · {event.market_name ?? '—'}
+        </span>
+        <span className="font-mono text-micro text-ink-400 tnum">{t('发现日')} {fmtDate(event.discovered_date)}</span>
+        <span className="radar-chip radar-chip-brand ml-auto">
+          <Icon name="radar" size={12} />
+          {t('首要信号')}
+        </span>
+      </div>
+
+      <h3 className="mt-2.5 font-display text-display-m text-ink-900">
+        {event.name_ja ?? '—'}{' '}
+        <Link
+          to={`/stock/${event.display_code}`}
+          className="text-brand-600 underline-offset-4 transition-colors hover:text-brand-700 hover:underline"
+        >
+          {event.display_code}
+        </Link>
+      </h3>
+
+      <div className="mt-3">
+        <p className="mb-1 text-micro text-ink-400">{t('日线 · 最多 30 个交易日')}</p>
+        {chart.data && chart.data.bars.length > 0 ? (
+          <div className="radar-mini-chart overflow-hidden rounded-md">
+            <LeadChart bars={chart.data.bars.slice(-30)} event={event} />
+          </div>
+        ) : (
+          <SkeletonCard className="h-[180px]" />
+        )}
+      </div>
+
+      {structure && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {structure.structure_label && <Tag tone="brand">{t(structure.structure_label)}</Tag>}
+          {structure.setup_label && <Tag tone="ai">{t(structure.setup_label)}</Tag>}
+          {(structure.pattern_labels ?? []).map((label) => (
+            <Tag key={label} tone="neutral">{t(label)}</Tag>
+          ))}
+          {structure.spring && <Tag tone="up">{t('Spring 假跌破回收')}</Tag>}
+          {structure.upthrust && <Tag tone="down">{t('Upthrust 假突破')}</Tag>}
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-col gap-2.5 sm:flex-row sm:items-stretch">
+        <div className="grid flex-1 grid-cols-1 gap-2.5 sm:grid-cols-3">
+          <div className="radar-value-cell px-3 py-2.5">
+            <p className="text-micro text-ink-400">{live ? t('盘中价') : t('当前价')}</p>
+            <p className="mt-0.5">
+              <TickPrice flash={flash} className="font-mono text-data-l text-ink-900">
                 {fmtPrice(live?.live_price ?? (event.snapshot.close as number | null))}
               </TickPrice>
-            </span>
-            <span>
-              {t('成交额')} <span className="font-mono tnum text-ink-800">{fmtYenCompact(event.snapshot.turnover_today as number | null)}</span>
-            </span>
+            </p>
           </div>
-          {chart.data && chart.data.bars.length > 0 ? (
-            <LeadChart bars={chart.data.bars} event={event} />
-          ) : (
-            <SkeletonCard className="h-64" />
-          )}
-          {/* 構造タグ行（価格行動 + 量価一致） */}
-          {structure && (
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              {structure.structure_label && (
-                <Tag tone="brand">{t(structure.structure_label)}</Tag>
-              )}
-              {structure.setup_label && <Tag tone="ai">{t(structure.setup_label)}</Tag>}
-              {(structure.pattern_labels ?? []).map((label) => (
-                <Tag key={label} tone="neutral">{t(label)}</Tag>
-              ))}
-              {structure.spring && <Tag tone="up">{t('Spring 假跌破回收')}</Tag>}
-              {structure.upthrust && <Tag tone="down">{t('Upthrust 假突破')}</Tag>}
-            </div>
-          )}
+          <div className="radar-value-cell px-3 py-2.5">
+            <p className="flex items-center gap-1 text-micro text-ink-400">
+              <span className="radar-reference-glyph radar-reference-trigger" aria-hidden />
+              {t('突破枢轴')}
+            </p>
+            <p className="mt-0.5 font-mono text-data-l text-ink-900 tnum">{fmtPrice(event.pivot_price)}</p>
+          </div>
+          <div className="radar-value-cell px-3 py-2.5">
+            <p className="flex items-center gap-1 text-micro text-ink-400">
+              <span className="radar-reference-glyph radar-reference-invalid" aria-hidden />
+              {t('失效位置')}
+            </p>
+            <p className="mt-0.5 font-mono text-data-l text-ink-900 tnum">{fmtPrice(invalidation)}</p>
+          </div>
         </div>
+        <div className="radar-value-cell radar-priority-cell flex flex-col items-center justify-center gap-1.5 px-3 py-1.5">
+          <PriorityRing
+            score={event.alert_priority}
+            label={t('告警优先级')}
+            hint={RADAR_SCORE_HINTS.优先级}
+            emptyLabel={t('告警优先级数据不足')}
+          />
+        </div>
+      </div>
 
-        {/* 右 1/3: スコア + ライフサイクル */}
-        <div className="flex flex-col gap-3 p-4">
+      <div className="mt-4 grid grid-cols-1 gap-4 border-t border-line pt-3 lg:grid-cols-[minmax(0,1fr)_220px]">
+        <section aria-label={t('分项评分')}>
+          <p className="eyebrow mb-2">{t('分项评分')}</p>
           <div className="space-y-1.5">
             <ScoreBar label="综合质量" score={scores.breakout_quality?.score ?? null} />
             <ScoreBar label="趋势质量" score={scores.trend_quality?.score ?? null} />
@@ -306,9 +351,11 @@ function LeadBigCard({
             <ScoreBar label="追高风险" score={scores.chase_risk ?? null} />
             <ScoreBar label="拥挤度" score={scores.crowding_risk ?? null} />
           </div>
+        </section>
+        <div className="flex flex-col gap-3">
           {event.transitions && event.transitions.length > 0 && (
-            <div className="border-t border-line pt-2.5">
-              <h3 className="mb-1.5 text-caption font-medium text-ink-500">{t('生命周期')}</h3>
+            <div>
+              <p className="eyebrow mb-1.5">{t('生命周期')}</p>
               <ol className="space-y-1 text-caption text-ink-600">
                 {event.transitions.slice(-5).map((transition, index) => (
                   <li key={index} className="flex items-center gap-2">
@@ -319,15 +366,19 @@ function LeadBigCard({
               </ol>
             </div>
           )}
+          <p className="text-caption text-ink-500">
+            {t('成交额')} <span className="font-mono tnum text-ink-800">{fmtYenCompact(event.snapshot.turnover_today as number | null)}</span>
+          </p>
           <Link
             to={`/stock/${event.display_code}`}
-            className="mt-auto rounded-md border border-line py-1.5 text-center text-body-s text-brand-700 hover:bg-brand-50"
+            className="mt-auto flex items-center justify-center gap-1.5 rounded-md bg-brand-600 px-3.5 py-2 text-caption font-medium text-white shadow-btn-hi transition-[transform,background-color] duration-fast hover:bg-brand-700 active:scale-[0.98]"
           >
-            {t('个股研究')} →
+            {t('打开研究页')}
+            <Icon name="arrow-up-right" size={13} />
           </Link>
         </div>
       </div>
-    </section>
+    </motion.article>
   );
 }
 
@@ -392,7 +443,7 @@ function LeadChart({ bars, event }: { bars: StockBar[]; event: RadarEvent }) {
       ],
     };
   }, [bars, event]);
-  return <ReactECharts className="h-64 w-full" option={option} ariaLabel={`${event.display_code} lead chart`} />;
+  return <ReactECharts className="h-[180px] w-full" option={option} ariaLabel={`${event.display_code} lead chart`} />;
 }
 
 /* ---------------- イベントカード ---------------- */
@@ -411,7 +462,7 @@ function EventCard({ event, onSelect, live, flash }: {
     <button
       type="button"
       onClick={onSelect}
-      className="card-surface card-glare card-lift flex flex-col gap-2 p-3 text-left"
+      className="radar-signal-card card-surface card-glare card-lift flex h-full flex-col gap-2 text-left"
     >
       <div className="flex items-center gap-2">
         <CodeCell displayCode={event.display_code} nameJa={event.name_ja} />

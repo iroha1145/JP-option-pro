@@ -1,0 +1,48 @@
+/* 突破雷达 / 空卖 Lead 卡共享皮肤（option-pro radar.css 的纸面块，不含美东/宏观影子）。 */
+.radar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+.radar-chip-brand { background: var(--brand-50); color: var(--brand-600); }
+.radar-chip-up { background: var(--up-50); color: var(--up-700); }
+.radar-chip-down { background: var(--down-50); color: var(--down-700); }
+.radar-chip-neutral { background: var(--paper); color: var(--ink-500); }
+.radar-chip-volume {
+  background: var(--warn-50);
+  color: color-mix(in srgb, var(--warn-600) 75%, var(--ink-800));
+}
+.radar-lead-card, .radar-signal-card {
+  border-color: color-mix(in srgb, var(--line) 86%, transparent);
+}
+.radar-bar-track { background: color-mix(in srgb, var(--line) 64%, var(--card)); }
+.radar-reference-invalid { color: var(--down-600); }
+.radar-reference-trigger { color: var(--brand-600); }
+.radar-reference-glyph {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .7;
+}
+.radar-value-cell {
+  min-width: 0;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--paper) 70%, var(--card));
+}
+.radar-mini-chart { background: color-mix(in srgb, var(--paper) 46%, var(--card)); }
+@media (max-width: 639px) {
+  .radar-priority-cell { flex-direction: row; gap: 14px; padding-block: 10px; }
+}

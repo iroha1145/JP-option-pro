@@ -238,7 +238,7 @@ function HotspotCard({ group }: { group: NewsHotspotGroup }) {
 function NewsCard({ item }: { item: NewsItem }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <li className="card-surface card-glare p-3.5">
+    <li className="card-surface card-glare card-lift p-3.5">
       <div className="flex items-start gap-2.5">
         <ImportanceBadge value={item.importance} />
         <div className="min-w-0 flex-1">
@@ -415,8 +415,9 @@ function EconCalendarPanel({ events, note, loading }: { events: EconEvent[]; not
     <div className="space-y-3">
       {note && <p className="text-caption text-ink-400">{note}</p>}
       {Array.from(grouped.entries()).map(([date, dayEvents]) => (
-        <section key={date} className="card-surface p-3">
-          <h3 className="mb-2 flex items-baseline gap-2">
+        <section key={date} className="card-surface card-lift p-5">
+          <p className="eyebrow">ECON · JST</p>
+          <h3 className="mb-2 mt-1 flex items-baseline gap-2">
             <span className="font-mono text-body font-semibold tnum text-ink-900">{fmtDate(date)}</span>
             <span className="text-micro text-ink-400">{weekdayJa(date)}</span>
           </h3>
@@ -475,8 +476,9 @@ function SourcesPanel({ status, loading }: { status: NewsStatus | null; loading:
   if (!status) return <EmptyState title={t('暂无数据')} />;
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <section className="card-surface rounded-lg p-4">
-        <h3 className="mb-2 text-h3 text-ink-900">RSS {t('数据源')}</h3>
+      <section className="card-surface card-lift p-5">
+        <p className="eyebrow">RSS FEEDS</p>
+        <h3 className="mb-2 mt-1 text-h3 text-ink-900">RSS {t('数据源')}</h3>
         <ul className="divide-y divide-line">
           {status.feeds.map((feed) => (
             <li key={feed.feed_url} className="py-2">
@@ -502,8 +504,9 @@ function SourcesPanel({ status, loading }: { status: NewsStatus | null; loading:
         </p>
       </section>
 
-      <section className="card-surface rounded-lg p-4">
-        <h3 className="mb-2 text-h3 text-ink-900">AI {t('管道')}</h3>
+      <section className="card-surface card-lift p-5">
+        <p className="eyebrow">AI PIPELINE</p>
+        <h3 className="mb-2 mt-1 text-h3 text-ink-900">AI {t('管道')}</h3>
         <dl className="space-y-1.5 text-body-s">
           <div className="flex justify-between">
             <dt className="text-ink-500">{t('状态')}</dt>

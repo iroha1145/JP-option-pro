@@ -9,6 +9,7 @@ import DataTable, { type Column } from '@/components/shared/DataTable';
 import { SkeletonRows } from '@/components/shared/Skeleton';
 import SoftBadge from '@/components/shared/SoftBadge';
 import StaleStrip from '@/components/shared/StaleStrip';
+import StatCard from '@/components/shared/StatCard';
 import { useAccess } from '@/hooks/useAccess';
 import { useToast } from '@/hooks/useToast';
 import { t } from '@/i18n/core';
@@ -115,9 +116,39 @@ export default function DataStatus() {
           {state === 'stale' && (
             <StaleStrip onRetry={() => query.refresh()} refreshing={query.refreshing} />
           )}
+          <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <StatCard
+              label={t('数据集')}
+              value={query.data.datasets.length}
+              icon="layers"
+            />
+            <StatCard
+              label={t('新鲜')}
+              value={query.data.datasets.filter((row) => row.freshness === 'fresh').length}
+              icon="check"
+            />
+            <StatCard
+              label={t('过期')}
+              value={query.data.datasets.filter((row) => row.freshness === 'stale' || row.freshness === 'error').length}
+              icon="bell"
+            />
+            <StatCard
+              label="Worker"
+              value={Object.keys(query.data.worker?.tasks ?? {}).length}
+              icon="refresh"
+              sub={
+                query.data.worker
+                  ? query.data.worker.healthy
+                    ? t('运行正常')
+                    : t('已降级')
+                  : t('暂无数据')
+              }
+            />
+          </section>
+
           {isOwner && (
-            <div className="card-surface flex flex-wrap items-center gap-2 p-3">
-              <span className="text-caption text-ink-400">{t('手动刷新')}:</span>
+            <div className="card-surface card-lift flex flex-wrap items-center gap-2 p-5">
+              <p className="eyebrow w-full">{t('手动刷新')}</p>
               {MANUAL_ACTIONS.map((action) => (
                 <button
                   key={action.type}
@@ -138,18 +169,24 @@ export default function DataStatus() {
             </div>
           )}
 
-          <DataTable columns={columns} rows={query.data.datasets} rowKey={(row) => row.key} rowHeight={56} />
+          <section className="card-surface card-lift p-5">
+            <p className="eyebrow">DATASETS · J-QUANTS</p>
+            <h2 className="mb-3 mt-1 text-h3 text-ink-900">{t('数据集')}</h2>
+            <DataTable columns={columns} rows={query.data.datasets} rowKey={(row) => row.key} rowHeight={56} />
+          </section>
 
-          <section className="card-surface p-4">
-            <h2 className="mb-2 text-h3 text-ink-900">
+          <section className="card-surface card-lift p-5">
+            <p className="eyebrow">INTRADAY</p>
+            <h2 className="mb-2 mt-1 text-h3 text-ink-900">
               {query.data.intraday.enabled ? t('盘中数据') : t('盘中数据未接入')}
             </h2>
             <p className="text-body-s text-ink-500">{query.data.intraday.note_ja ?? ''}</p>
           </section>
 
           {query.data.worker && (
-            <section className="card-surface p-4">
-              <h2 className="mb-2 flex items-center gap-2 text-h3 text-ink-900">
+            <section className="card-surface card-lift p-5">
+              <p className="eyebrow">WORKER</p>
+              <h2 className="mb-2 mt-1 flex items-center gap-2 text-h3 text-ink-900">
                 Worker
                 <SoftBadge tone={query.data.worker.healthy ? 'up' : 'down'}>
                   {query.data.worker.healthy ? 'healthy' : 'degraded'}

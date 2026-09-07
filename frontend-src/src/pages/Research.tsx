@@ -18,6 +18,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
 import SoftBadge, { type BadgeTone } from '@/components/shared/SoftBadge';
 import { SkeletonCard } from '@/components/shared/Skeleton';
+import StatCard from '@/components/shared/StatCard';
 import { t } from '@/i18n/core';
 
 const VERDICT_TEXT: Record<string, { label: string; tone: BadgeTone; note: string }> = {
@@ -104,8 +105,9 @@ export default function Research() {
 
       {state === 'done' && report && (
         <div className="space-y-4">
-          <section className="card-surface p-4">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <section className="card-surface card-lift p-5">
+            <p className="eyebrow">{t('验证结论')}</p>
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <SoftBadge tone={meta.tone} size="md">{t(meta.label)}</SoftBadge>
               <span className="text-caption text-ink-500">
                 {t('{ok}/{n} 个窗口单调', {
@@ -118,28 +120,29 @@ export default function Research() {
           </section>
 
           <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            {[
-              { label: t('信号样本'), value: (report.signals ?? 0).toLocaleString('ja-JP') },
-              { label: t('评估日'), value: String(report.evaluation_dates ?? 0) },
-              { label: t('验证窗口'), value: String(report.summary?.windows ?? 0) },
-              {
-                label: t('上位10%−下位10%'),
-                value:
-                  report.summary?.median_top_bottom_spread != null
-                    ? pct(report.summary.median_top_bottom_spread)
-                    : '—',
-              },
-            ].map((item) => (
-              <div key={item.label} className="card-surface px-3 py-2">
-                <div className="text-micro text-ink-400">{item.label}</div>
-                <div className="font-mono text-data-m text-ink-900 tnum">{item.value}</div>
+            <StatCard label={t('信号样本')} value={report.signals ?? 0} icon="crosshair" />
+            <StatCard label={t('评估日')} value={report.evaluation_dates ?? 0} icon="calendar-spark" />
+            <StatCard label={t('验证窗口')} value={report.summary?.windows ?? 0} icon="layers" />
+            {report.summary?.median_top_bottom_spread != null ? (
+              <StatCard
+                label={t('上位10%−下位10%')}
+                value={report.summary.median_top_bottom_spread * 100}
+                digits={2}
+                suffix="%"
+                icon="wallet-gauge"
+              />
+            ) : (
+              <div className="card-surface card-lift p-5">
+                <p className="eyebrow">{t('上位10%−下位10%')}</p>
+                <p className="mt-2 font-mono text-data-xl text-ink-900 tnum">—</p>
               </div>
-            ))}
+            )}
           </section>
 
           {(report.windows ?? []).map((window) => (
-            <section key={`${window.test[0]}-${window.test[1]}`} className="card-surface p-4">
-              <header className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+            <section key={`${window.test[0]}-${window.test[1]}`} className="card-surface card-lift p-5">
+              <p className="eyebrow">WINDOW · {window.test[0]} — {window.test[1]}</p>
+              <header className="mb-2 mt-1 flex flex-wrap items-baseline justify-between gap-2">
                 <span className="font-mono text-caption text-ink-700">
                   {window.test[0]} — {window.test[1]}
                 </span>
@@ -189,8 +192,9 @@ export default function Research() {
             </section>
           ))}
 
-          <section className="card-surface bg-ink-50 p-4 text-caption text-ink-600">
-            <h3 className="mb-1 font-semibold text-ink-800">{t('点时限制')}</h3>
+          <section className="card-surface card-lift p-5 text-caption text-ink-600">
+            <p className="eyebrow">POINT-IN-TIME LIMITS</p>
+            <h3 className="mb-1 mt-1 font-semibold text-ink-800">{t('点时限制')}</h3>
             <ul className="list-disc space-y-1 pl-5">
               {(report.point_in_time_limits ?? []).map((limit) => (
                 <li key={limit}>{t(limit)}</li>
