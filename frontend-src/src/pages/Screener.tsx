@@ -360,9 +360,9 @@ export default function Screener() {
                   </span>
                 )}
                 {response && (response.matched_count ?? 0) > rows.length && (
-                  <span className="rounded-xs bg-paper-2 px-1.5 py-px text-micro text-ink-500">
+                  <SoftBadge tone="warn">
                     {t('显示强度前 {n} 名（条件命中共 {m} 只）', { n: rows.length, m: response.matched_count })}
-                  </span>
+                  </SoftBadge>
                 )}
                 {chips.map((chip) => (
                   <SoftBadge key={chip.key} className="gap-1">
@@ -435,7 +435,7 @@ export default function Screener() {
               <>
                 {scanState === 'error' && (
                   <p className="mb-2 flex items-center gap-2 text-caption text-ink-400">
-                    <span className="rounded-xs bg-warn-50 px-1.5 py-px font-mono text-micro text-warn-600">{t('已过期')}</span>
+                    <SoftBadge tone="warn">{t('已过期')}</SoftBadge>
                     {t('本次扫描失败，显示上次成功结果')}
                   </p>
                 )}

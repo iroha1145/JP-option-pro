@@ -254,10 +254,7 @@ export default function StockDetail() {
                 <InsightValue
                   size="xl"
                   value={
-                    <TickPrice
-                      flash={headerFlashes[security.canonical_code]}
-                      className="font-mono"
-                    >
+                    <TickPrice flash={headerFlashes[security.canonical_code]}>
                       {fmtPrice(liveQuote.price)}
                     </TickPrice>
                   }
@@ -287,10 +284,7 @@ export default function StockDetail() {
                 <InsightValue
                   size="xl"
                   value={
-                    <TickPrice
-                      flash={headerFlashes[security.canonical_code]}
-                      className="font-mono"
-                    >
+                    <TickPrice flash={headerFlashes[security.canonical_code]}>
                       {fmtPrice(data.quote.close)}
                     </TickPrice>
                   }

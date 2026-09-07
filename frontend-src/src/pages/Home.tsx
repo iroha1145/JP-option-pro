@@ -260,16 +260,16 @@ export default function Home() {
                 />
                 <div className="flex items-center justify-between border-t border-line pt-2 text-body-s">
                   <span className="text-ink-500">{t('年内新高')}</span>
-                  <span className="font-mono tnum text-ink-900">{market.data.breadth.new_highs_252 ?? '—'}</span>
+                  <span className="metric-value tnum text-ink-900">{market.data.breadth.new_highs_252 ?? '—'}</span>
                 </div>
                 <div className="flex items-center justify-between text-body-s">
                   <span className="text-ink-500">{t('成交额')}</span>
-                  <span className="font-mono tnum text-ink-900">{fmtYenCompact(market.data.breadth.total_turnover_value)}</span>
+                  <span className="metric-value tnum text-ink-900">{fmtYenCompact(market.data.breadth.total_turnover_value)}</span>
                 </div>
                 {market.data.short_selling ? (
                   <div className="flex items-center justify-between text-body-s">
                     <span className="text-ink-500">{t('市场空卖占比')}</span>
-                    <span className="font-mono tnum text-ink-900">{fmtPct(market.data.short_selling.market_short_ratio)}</span>
+                    <span className="metric-value tnum text-ink-900">{fmtPct(market.data.short_selling.market_short_ratio)}</span>
                   </div>
                 ) : null}
                 <ol className="space-y-1 border-t border-line pt-2">

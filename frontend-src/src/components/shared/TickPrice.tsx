@@ -15,7 +15,7 @@ export default function TickPrice({
     <span
       data-tick-price={flash ?? 'none'}
       className={cn(
-        'tick-flash inline-block rounded-xs px-1 font-mono tnum',
+        'tick-flash inline-block rounded-xs px-1 tnum',
         flash === 'up' && 'tick-flash-up',
         flash === 'down' && 'tick-flash-down',
         className,
