@@ -7,69 +7,7 @@ import { cn } from '@/lib/utils';
 import { fmtPrice } from '@/lib/format';
 import ChangeBadge from '@/components/shared/ChangeBadge';
 import SoftBadge from '@/components/shared/SoftBadge';
-import Icon from '@/components/icons';
-import { toneOf, type Tone } from '@/lib/insightTone';
-
-const TONE_TEXT: Record<Tone, string> = {
-  up: 'text-up-600',
-  down: 'text-down-600',
-  flat: 'text-ink-400',
-};
-
-export function InsightCard({
-  title,
-  tone = 'flat',
-  badge,
-  className,
-  children,
-}: {
-  title: string;
-  tone?: Tone;
-  badge?: string;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className={cn('card-surface p-4', className)}>
-      <header className="flex items-center gap-2">
-        {tone !== 'flat' && (
-          <Icon
-            name={tone === 'up' ? 'arrow-up-right' : 'arrow-down-right'}
-            size={15}
-            className={cn('shrink-0', TONE_TEXT[tone])}
-          />
-        )}
-        <h3 className="min-w-0 truncate text-body-s font-semibold text-ink-900">{title}</h3>
-        {badge && <SoftBadge className="ml-auto shrink-0">{badge}</SoftBadge>}
-      </header>
-      <div className="mt-2.5">{children}</div>
-    </section>
-  );
-}
-
-export function InsightFrame({
-  label,
-  action,
-  className,
-  children,
-}: {
-  label?: string;
-  action?: ReactNode;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className={cn('insight-frame rounded-lg border border-line bg-card-warm p-2', className)}>
-      {(label || action) && (
-        <div className="mb-1 flex min-h-6 items-center gap-2 px-1">
-          {label && <span className="min-w-0 truncate text-micro text-ink-400">{label}</span>}
-          {action && <div className="ml-auto shrink-0">{action}</div>}
-        </div>
-      )}
-      {children}
-    </div>
-  );
-}
+import { toneOf } from '@/lib/insightTone';
 
 export function InsightValue({
   value,
