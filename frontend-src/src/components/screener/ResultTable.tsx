@@ -210,7 +210,7 @@ export default function ResultTable({
               className={cn(
                 'flex size-7 items-center justify-center rounded-sm border font-mono text-caption tnum transition-colors duration-fast',
                 p === page
-                  ? 'border-brand-600 bg-brand-600 text-white'
+                  ? 'border-brand-600 bg-brand-600 text-white shadow-chip'
                   : 'border-line text-ink-500 hover:border-brand-400 hover:text-brand-600',
               )}
             >
@@ -265,7 +265,7 @@ function PageButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
-      className="flex size-7 items-center justify-center rounded-sm border border-line text-ink-500 transition-colors hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
+      className="flex size-7 items-center justify-center rounded-sm border border-line text-ink-500 shadow-btn transition-colors hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
     >
       {children}
     </button>

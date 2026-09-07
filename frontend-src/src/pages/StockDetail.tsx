@@ -574,7 +574,7 @@ function IntradayPane({
         <button
           type="button"
           onClick={onFetch}
-          className="rounded-md bg-brand-600 px-3 py-1.5 text-body-s font-medium text-white"
+          className="rounded-md bg-brand-600 px-3 py-1.5 text-body-s font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105"
         >
           {t('取得最近5个交易日的分钟数据')}
         </button>
@@ -721,7 +721,7 @@ function TickPane({
         <button
           type="button"
           onClick={onFetch}
-          className="rounded-md bg-brand-600 px-3 py-1.5 text-body-s font-medium text-white"
+          className="rounded-md bg-brand-600 px-3 py-1.5 text-body-s font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105"
         >
           {t('取得最近交易日的逐笔数据')}
         </button>

@@ -21,7 +21,7 @@ export default function StrengthBar({
   const valid = typeof score === 'number' && Number.isFinite(score);
   return (
     <span className={cn('inline-flex items-center gap-2', className)} aria-label={valid ? t('强度分 {score}', { score }) : t('强度分缺失')}>
-      <span className="strength-track h-1 overflow-hidden rounded-pill" style={{ width }} role="presentation">
+      <span className="strength-track h-1 overflow-hidden rounded-pill bg-line" style={{ width }} role="presentation">
         {valid && (
           <span
             className={cn('strength-fill block h-full origin-left rounded-pill animate-grow-bar', strengthBarClass(score))}

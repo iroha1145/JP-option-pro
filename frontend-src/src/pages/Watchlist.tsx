@@ -397,7 +397,7 @@ export default function Watchlist() {
             action={
               <Link
                 to="/login"
-                className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white transition-[filter] hover:brightness-105"
+                className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105"
               >
                 {t('去登录 / 注册')}
               </Link>

@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate } from 'react-router';
 import { cn } from '@/lib/utils';
+import { DUR_SECTION } from '@/lib/motion';
 import Icon from '@/components/icons';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import type { EarningsUpcomingItem } from '@/api/types';
@@ -181,7 +182,7 @@ export default function MonthCalendar({ items, selectedDay, onSelectDay }: Month
                 }}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.48, ease: EASE_PAPER, delay: enteredRef.current ? 0 : cellIndex * 0.025 }}
+                transition={{ duration: DUR_SECTION, ease: EASE_PAPER, delay: enteredRef.current ? 0 : cellIndex * 0.025 }}
                 className={cn(
                   'flex min-h-[64px] cursor-pointer flex-col border-r border-line p-1.5 text-left transition-colors duration-fast sm:min-h-[104px] sm:p-2',
                   '[&:nth-child(7n)]:border-r-0',
