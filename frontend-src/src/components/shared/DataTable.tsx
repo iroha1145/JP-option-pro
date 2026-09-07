@@ -129,7 +129,7 @@ export default function DataTable<T>({
               <motion.tr
                 key={key}
                 layout={reducedMotion ? false : 'position'}
-                transition={{ duration: reducedMotion ? 0 : 0.32, ease: [0.16, 1, 0.3, 1] }}
+                transition={{ duration: reducedMotion ? 0 : 0.24, ease: [0.16, 1, 0.3, 1] }}
                 onClick={
                   onRowClick
                     ? (event: ReactMouseEvent<HTMLTableRowElement>) => {

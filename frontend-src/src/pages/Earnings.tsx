@@ -279,7 +279,7 @@ export default function Earnings() {
                     <button
                       type="button"
                       onClick={() => onSelectDay(null)}
-                      className="flex items-center gap-1 rounded-sm border border-line bg-card px-2 py-1 text-caption text-ink-500 transition-colors hover:text-ink-800"
+                      className="flex items-center gap-1 rounded-sm border border-line bg-card px-2 py-1 text-caption text-ink-500 shadow-btn transition-colors hover:text-ink-800"
                     >
                       <Icon name="x" size={12} />
                       {t('清除筛选')}

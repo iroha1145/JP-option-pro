@@ -574,7 +574,7 @@ function AddStockForm({ onAdded, onError }: { onAdded: () => void; onError: (mes
         <button
           type="submit"
           disabled={saving || !input.trim()}
-          className="flex h-8 items-center gap-1 rounded-sm border border-line-strong bg-card px-2.5 text-caption text-ink-600 transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-8 items-center gap-1 rounded-sm border border-line-strong bg-card px-2.5 text-caption text-ink-600 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Icon name="plus" size={13} />
           {t('添加')}
