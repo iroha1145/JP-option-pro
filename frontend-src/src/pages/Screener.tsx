@@ -8,6 +8,7 @@
  * 无「客户端条件只作用于前 N 名」问题；新闻摘要一次批量取回。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { newsApi, quotesApi, strengthApi, type StrengthScanParams } from '@/api/modules';
 import { ApiError } from '@/api/client';
 import type { StrengthProfilesMeta, StrengthScanResponse, StrengthRow } from '@/api/types';
@@ -15,6 +16,7 @@ import { useAccess } from '@/hooks/useAccess';
 import PageHeader from '@/components/shared/PageHeader';
 import Segmented from '@/components/shared/Segmented';
 import EmptyState from '@/components/shared/EmptyState';
+import SoftBadge from '@/components/shared/SoftBadge';
 import { SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
 import { DataThrough } from '@/components/domain';
 import Icon from '@/components/icons';
@@ -41,6 +43,7 @@ import {
   type TierFilter,
 } from '@/components/screener/types';
 import { t } from '@/i18n/core';
+import { EASE_PAPER } from '@/lib/motion';
 import { usePolling } from '@/hooks/usePolling';
 import { useTickFlash } from '@/hooks/useTickFlash';
 import { quoteSourceLabel } from '@/lib/quoteSource';
@@ -346,12 +349,12 @@ export default function Screener() {
                   </span>
                 )}
                 {chips.map((chip) => (
-                  <span key={chip.key} className="inline-flex items-center gap-1 rounded-xs border border-line bg-card-warm px-1.5 py-0.5 text-micro text-ink-500">
+                  <SoftBadge key={chip.key} className="gap-1">
                     {chip.label}
                     <button type="button" onClick={chip.onRemove} aria-label={t('移除条件 {label}', { label: chip.label })} className="text-ink-300 transition-colors hover:text-down-600">
                       <Icon name="x" size={10} />
                     </button>
-                  </span>
+                  </SoftBadge>
                 ))}
               </>
             ) : (
@@ -532,6 +535,29 @@ export default function Screener() {
             onSelect={onTierFromHistogram}
           />
           <MethodCard meta={meta} profileId={applied.profile} loading={!meta && !metaFailed} error={metaFailed} onRetry={loadMeta} />
+          <AnimatePresence>
+            {scanState === 'done' && sorted.length === 0 && (
+              <motion.div
+                key="relax"
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, transition: { duration: 0.16 } }}
+                transition={{ duration: 0.48, ease: EASE_PAPER }}
+                className="card-surface card-lift p-5"
+              >
+                <p className="eyebrow">{t('无命中引导')}</p>
+                <p className="mt-2.5 text-body-s text-ink-500">{t('当前条件过严，没有标的进入结果集。')}</p>
+                <button
+                  type="button"
+                  onClick={() => patchAndScan({ tier: 'all', minScore: null, presetId: null })}
+                  className="mt-3 flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105"
+                >
+                  <Icon name="filter-funnel" size={13} />
+                  {t('放宽一档试试')}
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </aside>
       </div>
     </div>

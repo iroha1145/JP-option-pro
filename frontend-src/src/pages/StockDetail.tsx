@@ -7,14 +7,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router';
-import { stocksApi, watchlistApi, workerApi } from '@/api/modules';
+import { stocksApi, workerApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { useTickFlash } from '@/hooks/useTickFlash';
 import TickPrice from '@/components/shared/TickPrice';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import { remoteState } from '@/hooks/remoteState';
 import EmptyState from '@/components/shared/EmptyState';
-import ChangeBadge from '@/components/shared/ChangeBadge';
+import { InsightValue } from '@/components/shared/InsightCard';
+import WatchlistToggle from '@/components/shared/WatchlistToggle';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import { SkeletonCard } from '@/components/shared/Skeleton';
 import ReactECharts from '@/components/charts/ReactECharts';
@@ -160,22 +161,10 @@ export default function StockDetail() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           {backButton}
-          {isOwner && (
-            <button
-              type="button"
-              className="control-button"
-              onClick={async () => {
-                try {
-                  const result = await watchlistApi.add(security.canonical_code);
-                  toast.success(t('加入自选'), result.created ? t('已加入') : t('已在自选中'));
-                } catch (error) {
-                  toast.error(t('加入自选'), String((error as Error).message ?? error));
-                }
-              }}
-            >
-              + {t('加入自选')}
-            </button>
-          )}
+          <WatchlistToggle
+            canonicalCode={security.canonical_code}
+            displayCode={security.display_code}
+          />
         </div>
         <span className="eyebrow">STOCK · {security.display_code}</span>
       </div>
@@ -223,16 +212,19 @@ export default function StockDetail() {
             <div className="min-w-0">
               {/* 遅延気配を主表示にするが、必ず「遅延・非公式」と併記する。
                   公式の確定終値は隣に小さく残し、どちらの数字かを曖昧にしない。 */}
-              <span className="flex items-baseline gap-2">
-                <TickPrice
-                  flash={headerFlashes[security.canonical_code]}
-                  className="font-mono text-display-l text-ink-900"
-                >
-                  {fmtPrice(liveQuote.price)}
-                </TickPrice>
-                <ChangeBadge value={liveQuote.change_pct} />
-                <span className="text-micro text-ink-400">{t('vs 昨收')}</span>
-              </span>
+              <InsightValue
+                size="xl"
+                value={
+                  <TickPrice
+                    flash={headerFlashes[security.canonical_code]}
+                    className="font-mono"
+                  >
+                    {fmtPrice(liveQuote.price)}
+                  </TickPrice>
+                }
+                changePct={liveQuote.change_pct}
+                basis={t('vs 昨收')}
+              />
               <span className="mt-0.5 flex items-center gap-1 text-micro text-warn-700">
                 <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
                 {quoteSourceLabel(live.data).text}
@@ -244,16 +236,19 @@ export default function StockDetail() {
             </div>
           ) : (
             <div className="min-w-0">
-              <span className="flex items-baseline gap-2">
-                <TickPrice
-                  flash={headerFlashes[security.canonical_code]}
-                  className="font-mono text-display-l text-ink-900"
-                >
-                  {fmtPrice(data.quote.close)}
-                </TickPrice>
-                <ChangeBadge value={data.quote.change_pct} />
-                <span className="text-micro text-ink-400">{t('vs 昨收')}</span>
-              </span>
+              <InsightValue
+                size="xl"
+                value={
+                  <TickPrice
+                    flash={headerFlashes[security.canonical_code]}
+                    className="font-mono"
+                  >
+                    {fmtPrice(data.quote.close)}
+                  </TickPrice>
+                }
+                changePct={data.quote.change_pct}
+                basis={t('vs 昨收')}
+              />
             </div>
           )}
           <p className="pb-1.5 text-right font-mono text-micro text-ink-500 tnum">

@@ -17,6 +17,7 @@ import StaleStrip from '@/components/shared/StaleStrip';
 import CodeMark from '@/components/shared/CodeMark';
 import InfoHint from '@/components/shared/InfoHint';
 import PointerTooltip from '@/components/shared/PointerTooltip';
+import HorizontalScroller from '@/components/shared/HorizontalScroller';
 import { NEWS_HINTS } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { explanationLines } from '@/lib/explainText';
@@ -343,11 +344,13 @@ function HotspotStrip({
       <p className="eyebrow">HOT THEMES</p>
       <h3 className="mb-2 mt-1 text-h3 text-ink-900">{t('热点主题')}</h3>
       {loading ? (
-        <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
-          {Array.from({ length: 3 }, (_, index) => (
-            <SkeletonCard key={index} className="h-28 min-w-[220px] max-w-[260px] shrink-0" />
-          ))}
-        </div>
+        <HorizontalScroller className="mt-1" scrollerClassName="pb-1" label={t('热点主题带，可横向滚动')}>
+          <div className="flex gap-2">
+            {Array.from({ length: 3 }, (_, index) => (
+              <SkeletonCard key={index} className="h-28 min-w-[220px] max-w-[260px] shrink-0" />
+            ))}
+          </div>
+        </HorizontalScroller>
       ) : error && groups.length === 0 ? (
         <section className="card-surface">
           <EmptyState
@@ -367,11 +370,13 @@ function HotspotStrip({
           <EmptyState size="compact" image="/empty-news.svg" title={t('当前窗口暂无热点分组')} />
         </section>
       ) : (
-        <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
-          {groups.map((group) => (
-            <HotspotCard key={group.canonical_code} group={group} />
-          ))}
-        </div>
+        <HorizontalScroller className="mt-1" scrollerClassName="pb-1" label={t('热点主题带，可横向滚动')}>
+          <div className="flex gap-2">
+            {groups.map((group) => (
+              <HotspotCard key={group.canonical_code} group={group} />
+            ))}
+          </div>
+        </HorizontalScroller>
       )}
     </section>
   );

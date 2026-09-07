@@ -14,6 +14,7 @@ import FilterButton from '@/components/shared/FilterButton';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import SelectionViewport from '@/components/shared/SelectionViewport';
 import SoftBadge from '@/components/shared/SoftBadge';
+import MenuSelect from '@/components/shared/MenuSelect';
 import { SkeletonBlock } from '@/components/shared/Skeleton';
 import InfoHint from '@/components/shared/InfoHint';
 import { STRENGTH_HINTS, type ScoreHint } from '@/lib/indicatorHints';
@@ -89,21 +90,12 @@ function SelectField({
   ariaLabel: string;
 }) {
   return (
-    <div className="relative">
-      <select
-        aria-label={ariaLabel}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="menu-select-trigger h-9 appearance-none rounded-md border border-line-strong bg-card pl-2.5 pr-7 font-mono text-caption text-ink-600 tnum transition-colors hover:bg-paper-2"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <Icon name="chevron-down" size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-ink-400" />
-    </div>
+    <MenuSelect
+      ariaLabel={ariaLabel}
+      value={value}
+      onChange={onChange}
+      options={options}
+    />
   );
 }
 

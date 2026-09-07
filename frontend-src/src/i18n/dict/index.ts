@@ -1899,4 +1899,18 @@ export const DICT: Record<string, [string, string]> = {
   '剩 {n} 条': ['{n} left', '残り {n} 件'],
   '已加载全部 {n} 条': ['Loaded all {n}', '全 {n} 件を表示中'],
   '{code} {from} → {to}，打开': ['{code} {from} → {to}, open', '{code} {from} → {to}を開く'],
+  向左滚动: ['Scroll left', '左へスクロール'],
+  向右滚动: ['Scroll right', '右へスクロール'],
+  '热点主题带，可横向滚动': ['Hot themes, scroll sideways', 'ホットテーマ帯（横スクロール可）'],
+  登录后加入自选: ['Sign in to add', 'ログインして追加'],
+  已移出自选: ['Removed from watchlist', 'ウォッチリストから削除'],
+  '正在读取自选…': ['Loading watchlist…', 'ウォッチリストを読み込み中…'],
+  重试读取自选: ['Retry watchlist', 'ウォッチリストを再読み込み'],
+  无命中引导: ['No-hit hint', 'ヒットなし案内'],
+  '当前条件过严，没有标的进入结果集。': [
+    'Filters are too tight; nothing entered the result set.',
+    '条件が厳しすぎて、結果に銘柄が入りません。',
+  ],
+  放宽一档试试: ['Relax one tier', '一段ゆるめて試す'],
+  自选统计: ['Watchlist stats', 'ウォッチリスト統計'],
 };

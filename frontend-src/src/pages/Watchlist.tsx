@@ -16,6 +16,7 @@ import Segmented from '@/components/shared/Segmented';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import { SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
 import StatCard from '@/components/shared/StatCard';
+import HorizontalScroller from '@/components/shared/HorizontalScroller';
 import { CodeCell, DataThrough } from '@/components/domain';
 import Icon from '@/components/icons';
 import { useAccess } from '@/hooks/useAccess';
@@ -241,29 +242,31 @@ export default function Watchlist() {
       )}
 
       {items.length > 0 && (
-        <div className="no-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 sm:grid sm:grid-cols-4 sm:overflow-visible">
-          <StatCard className="min-w-[220px] snap-start sm:min-w-0" label={t('只标的')} icon="list" value={items.length} />
-          <StatCard
-            className="min-w-[220px] snap-start sm:min-w-0"
-            label={t('上涨')}
-            icon="arrow-up-right"
-            value={items.filter((item) => (item.quote?.change_pct ?? 0) > 0).length}
-            sub={<span className="text-up-700">{t('当日')}</span>}
-          />
-          <StatCard
-            className="min-w-[220px] snap-start sm:min-w-0"
-            label={t('下跌')}
-            icon="arrow-down-right"
-            value={items.filter((item) => (item.quote?.change_pct ?? 0) < 0).length}
-            sub={<span className="text-down-700">{t('当日')}</span>}
-          />
-          <StatCard
-            className="min-w-[220px] snap-start sm:min-w-0"
-            label={t('重点标记')}
-            icon="flag"
-            value={items.filter((item) => item.marked_important).length}
-          />
-        </div>
+        <HorizontalScroller className="-mx-1 sm:mx-0" scrollerClassName="px-1 sm:px-0" label={t('自选统计')}>
+          <div className="flex gap-3 sm:grid sm:grid-cols-4">
+            <StatCard className="min-w-[220px] snap-start sm:min-w-0" label={t('只标的')} icon="list" value={items.length} />
+            <StatCard
+              className="min-w-[220px] snap-start sm:min-w-0"
+              label={t('上涨')}
+              icon="arrow-up-right"
+              value={items.filter((item) => (item.quote?.change_pct ?? 0) > 0).length}
+              sub={<span className="text-up-700">{t('当日')}</span>}
+            />
+            <StatCard
+              className="min-w-[220px] snap-start sm:min-w-0"
+              label={t('下跌')}
+              icon="arrow-down-right"
+              value={items.filter((item) => (item.quote?.change_pct ?? 0) < 0).length}
+              sub={<span className="text-down-700">{t('当日')}</span>}
+            />
+            <StatCard
+              className="min-w-[220px] snap-start sm:min-w-0"
+              label={t('重点标记')}
+              icon="flag"
+              value={items.filter((item) => item.marked_important).length}
+            />
+          </div>
+        </HorizontalScroller>
       )}
 
       {anonymous ? (
