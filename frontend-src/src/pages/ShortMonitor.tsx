@@ -42,6 +42,8 @@ import { explanationLine } from '@/lib/explainText';
 import SoftBadge from '@/components/shared/SoftBadge';
 import StaleStrip from '@/components/shared/StaleStrip';
 import StatusNotice from '@/components/shared/StatusNotice';
+import InfoHint from '@/components/shared/InfoHint';
+import { SHORT_HINTS, shortScoreHint } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { cn } from '@/lib/utils';
 
@@ -400,7 +402,10 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
             <CodeCell displayCode={row.display_code} nameJa={row.name} to={`/stock/${row.display_code}`} />
             <ShortStateChip state={row.primary_state} />
             <span className="ml-auto flex items-baseline gap-1.5">
-              <span className="text-micro text-ink-400">{t('行为分')}</span>
+              <span className="text-micro text-ink-400">
+                {t('行为分')}
+                <InfoHint hint={SHORT_HINTS.behavior} side="top" align="end" size={11} className="ml-0.5" />
+              </span>
               <span className="font-mono text-display-m tnum text-ink-900">{fmtScore(row.behavior_score)}</span>
             </span>
           </header>
@@ -417,8 +422,10 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
             </span>
             {row.reported_in_scope_ratio != null &&
               row.reported_in_scope_ratio - (row.visible_short_ratio ?? 0) > 0.0005 && (
-                <span title={t('最后报告仍在公开范围内的全部机构之和，含报告已长期停更者。官方规则没有失效期限')}>
-                  {t('在册合计')}{' '}
+                <span className="inline-flex items-center gap-0.5">
+                  {t('在册合计')}
+                  <InfoHint hint={SHORT_HINTS.inScope} size={11} />
+                  {' '}
                   <span className="font-mono tnum text-ink-800">
                     {fmtPctLevel(row.reported_in_scope_ratio)}
                   </span>
@@ -631,7 +638,10 @@ function StockCard({ row, onSelect }: { row: ShortMonitorRow; onSelect: () => vo
       <div className="flex items-baseline gap-2">
         <CodeCell displayCode={row.display_code} nameJa={row.name} />
         <span className="ml-auto flex shrink-0 items-baseline gap-1.5">
-          <span className="text-micro text-ink-400">{t('行为分')}</span>
+          <span className="text-micro text-ink-400">
+            {t('行为分')}
+            <InfoHint hint={SHORT_HINTS.behavior} size={11} className="ml-0.5" />
+          </span>
           <span className="font-mono text-data-l tnum text-ink-900">{fmtScore(row.behavior_score)}</span>
         </span>
       </div>
@@ -719,7 +729,10 @@ function StockCard({ row, onSelect }: { row: ShortMonitorRow; onSelect: () => vo
       />
 
       <div>
-        <p className="mb-1 text-micro text-ink-400">{t('分项评分')}</p>
+        <p className="mb-1 flex items-center gap-0.5 text-micro text-ink-400">
+          {t('分项评分')}
+          <InfoHint hint={SHORT_HINTS.behavior} size={11} />
+        </p>
         <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
           <MiniScore label="低位" value={row.scores.low_position} />
           <MiniScore label="空头压力" value={row.scores.short_pressure} />
@@ -733,8 +746,10 @@ function StockCard({ row, onSelect }: { row: ShortMonitorRow; onSelect: () => vo
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-2 font-mono text-micro tnum text-ink-400">
-        <span>
-          {t('数据置信度')} <span className="text-ink-700">{row.data_confidence?.toFixed(2) ?? '—'}</span>
+        <span className="inline-flex items-center gap-0.5">
+          {t('数据置信度')}
+          <InfoHint hint={SHORT_HINTS.confidence} size={11} />
+          <span className="text-ink-700">{row.data_confidence?.toFixed(2) ?? '—'}</span>
         </span>
         <span>
           {t('监视优先级')} <span className="text-ink-700">{fmtScore(row.monitor_priority)}</span>
@@ -786,10 +801,12 @@ function MiniScore({
   tone?: 'factor' | 'risk';
 }) {
   const number = value ?? null;
+  const hint = shortScoreHint(label);
   return (
     <span className="flex items-center gap-1.5">
-      <span className="w-16 shrink-0 truncate text-micro text-ink-500" title={t(label)}>
-        {t(label)}
+      <span className="flex w-[4.75rem] shrink-0 items-center gap-0.5 text-micro text-ink-500">
+        <span className="truncate">{t(label)}</span>
+        {hint && <InfoHint hint={hint} size={11} />}
       </span>
       <span className="relative h-1 flex-1 overflow-hidden rounded-pill bg-line">
         {number !== null && (

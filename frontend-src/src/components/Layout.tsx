@@ -51,6 +51,9 @@ export default function Layout() {
 
   return (
     <ShellContext.Provider value={value}>
+      {/* overflow-x-clip：绝对定位的解释浮层即使处于 opacity-0 也占布局盒，
+          窄屏时会把文档撑出横向滚动条。clip 只裁剪绘制，不建立滚动容器；
+          InfoHint / PointerTooltip 的可见浮层是 position:fixed，不会被这里裁到。 */}
       <div className="flex min-h-[100dvh] flex-col overflow-x-clip">
         <a className="skip-link" href="#main-content">{t('跳到主要内容')}</a>
         <Navbar onOpenPalette={openPalette} />

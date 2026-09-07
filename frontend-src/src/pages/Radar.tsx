@@ -19,6 +19,8 @@ import { useAccess } from '@/hooks/useAccess';
 import { useToast } from '@/hooks/useToast';
 import StaleStrip from '@/components/shared/StaleStrip';
 import SoftBadge from '@/components/shared/SoftBadge';
+import InfoHint from '@/components/shared/InfoHint';
+import { RADAR_SCORE_HINTS } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { fmtDate, fmtPct, fmtPrice, fmtYenCompact } from '@/lib/format';
 import type { RadarEvent, StockBar } from '@/api/types';
@@ -206,7 +208,10 @@ function LeadBigCard({ event }: { event: RadarEvent }) {
             <SignalChip signal={event.signal_type} />
             <StateChip state={event.state} />
             <span className="ml-auto flex items-baseline gap-1.5">
-              <span className="text-micro text-ink-400">{t('优先级')}</span>
+              <span className="text-micro text-ink-400">
+                {t('优先级')}
+                <InfoHint hint={RADAR_SCORE_HINTS.优先级} side="top" align="end" size={11} className="ml-0.5" />
+              </span>
               <span className="font-mono text-display-m tnum text-ink-900">
                 {event.alert_priority !== null ? Math.round(event.alert_priority) : '—'}
               </span>

@@ -63,7 +63,7 @@ export default function DensityStrip({ items, onJumpDay }: DensityStripProps) {
                 )}
                 <span
                   className={cn(
-                    'glass pointer-events-none absolute -top-2 z-20 hidden w-max max-w-[190px] -translate-y-full rounded-md border border-line px-2.5 py-1.5 text-left shadow-sh-2 group-hover:block group-focus-visible:block',
+                    'cloud-popover pointer-events-none absolute -top-2 z-20 hidden w-max max-w-[190px] -translate-y-full px-2.5 py-1.5 text-left group-hover:block group-focus-visible:block',
                     index < days.length / 3 ? 'left-0' : index >= (days.length * 2) / 3 ? 'right-0' : 'left-1/2 -translate-x-1/2',
                   )}
                 >

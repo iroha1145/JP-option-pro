@@ -800,11 +800,10 @@
   100% { transform: scale(2.35); opacity: 0; }
 }
 .insight-cursor-pill {
-  background: var(--overlay);
-  backdrop-filter: blur(14px) saturate(1.5);
-  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  background: var(--card);
   border: 1px solid var(--line);
-  box-shadow: var(--shadow-sh-1);
+  border-radius: 9px;
+  box-shadow: var(--popover-shadow);
 }
 
 @media (prefers-reduced-motion: reduce) {

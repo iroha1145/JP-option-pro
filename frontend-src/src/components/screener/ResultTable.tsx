@@ -63,11 +63,23 @@ export default function ResultTable({
               {t('强度分')}
               <InfoHint hint={STRENGTH_HINTS.composite} side="bottom" size={11} className="ml-1" />
             </Th>
-            <Th>{t('分类')}</Th>
-            <Th>{t('分项')}</Th>
+            <Th>
+              {t('分类')}
+              <InfoHint hint={STRENGTH_HINTS.classification} side="bottom" size={11} className="ml-1" />
+            </Th>
+            <Th>
+              {t('分项')}
+              <InfoHint hint={STRENGTH_HINTS.families} side="bottom" size={11} className="ml-1" />
+            </Th>
             <Th align="right">{t('收盘 / 涨跌')}</Th>
-            <Th>{t('新闻 · 72H')}</Th>
-            <Th align="right">{t('20日均额')}</Th>
+            <Th>
+              {t('新闻 · 72H')}
+              <InfoHint hint={STRENGTH_HINTS.news72h} side="bottom" size={11} className="ml-1" />
+            </Th>
+            <Th align="right">
+              {t('20日均额')}
+              <InfoHint hint={STRENGTH_HINTS.avgTurnover} side="bottom" size={11} className="ml-1" />
+            </Th>
             <Th width="40px"> </Th>
           </tr>
         </thead>

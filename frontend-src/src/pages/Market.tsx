@@ -16,6 +16,8 @@ import HeatMatrix, { HeatMatrixSkeleton, metricValue, type HeatMetric } from '@/
 import SectorMembersPanel from '@/components/sectors/SectorMembersPanel';
 import StaleStrip from '@/components/shared/StaleStrip';
 import SessionLED from '@/components/shared/SessionLED';
+import InfoHint from '@/components/shared/InfoHint';
+import { MARKET_HINTS } from '@/lib/indicatorHints';
 import { tokyoSession } from '@/lib/tokyoSession';
 import { useNow } from '@/hooks/useNow';
 import { t } from '@/i18n/core';
@@ -255,7 +257,10 @@ export default function Market() {
             <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="eyebrow">{t('SECTOR MATRIX · 33 業種')}</p>
-                <h2 className="mt-0.5 text-h3 text-ink-900">{t('板块透视')}</h2>
+                <h2 className="mt-0.5 inline-flex items-center text-h3 text-ink-900">
+                  {t('板块透视')}
+                  <InfoHint hint={MARKET_HINTS.sectorMedian} side="bottom" size={12} className="ml-1" />
+                </h2>
                 <p className="mt-0.5 text-micro text-ink-400">
                   {tileSource === 'intraday' && liveByCode.size
                     ? t('1日=盘中延迟{n}分（{q}/{u} 只覆盖）· 20日=官方日线 {date}', {

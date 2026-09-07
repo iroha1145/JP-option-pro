@@ -171,4 +171,166 @@ export const STRENGTH_HINTS: Record<string, ScoreHint> = {
     body: t('六维：TOPIX 趋势（对 25/75/200 日线的位置与斜率）、动量（TOPIX 20日收益）、广度（200日线上方个股占比）、量能（成交额高于自身20日均额的个股占比）、风险偏好（全市场20日收益中位数）、强弱价差（グロース−プライム 20日中位收益差）。'),
     note: t('综合分权重 24/18/22/12/12/12；缺失维度重新配权。市场层只占最终排序分 8%。'),
   },
+  news72h: {
+    title: t('新闻 · 72H'),
+    body: t('最近 72 小时内、已接入 RSS 源里与该股票关联的新闻条数；旁注是这批新闻里的最高重要度。'),
+    note: t('仅覆盖已接入的 RSS 新闻源'),
+  },
+  avgTurnover: {
+    title: t('20日均额'),
+    body: t('最近 20 个交易日的平均买卖代金（円），不是当日成交额。筛选里的成交额下限用的也是这个口径。'),
+  },
+  classification: {
+    title: t('分类'),
+    body: t('由强度分与结构标签给出的研究分档（如趋势/观察），只描述当前断面，不是买卖建议。'),
+  },
+  tierCounts: {
+    title: t('强度分档'),
+    body: t('徽标数字是已评分候选池的分档人数，不是本次扫描命中数。S≥90 / A 80–89 / B 70–79 / C 60–69；D 档（<60）只计入「全部」。'),
+  },
+  timeframe: {
+    title: t('周期'),
+    body: t('提高对应族在内在强度里的权重：短期、中期或长期。选「全部周期」则用默认六族权重。'),
+  },
+  profile: {
+    title: t('偏好'),
+    body: t('稳健 / 均衡 / 进取三档会改「偏好适配」层的目标画像，占最终排序分 14%。'),
+  },
+  topN: {
+    title: t('返回数量'),
+    body: t('服务端按当前条件排序后最多返回的行数。条件作用在完整已评分池上，不是先截 Top N 再筛。'),
+  },
 };
+
+export const FAMILY_HINTS: Record<string, ScoreHint> = {
+  short: {
+    title: t('短期'),
+    body: t('5/20 日收益、量比、距 MA25 距离与 RSI14。约占内在强度 16%。'),
+  },
+  mid: {
+    title: t('中期'),
+    body: t('63 日收益、对 TOPIX 相对强度、均线排列、MACD 动向与距 MA75 距离。约占内在强度 24%。'),
+  },
+  long: {
+    title: t('长期'),
+    body: t('126/252 日收益、距 MA200 距离与 52 周高位位置。约占内在强度 14%。'),
+  },
+  trend: {
+    title: t('趋势'),
+    body: t('动量、Kaufman 效率比、MA50 斜率与波动稳定度。约占内在强度 16%。'),
+  },
+  breakout: {
+    title: t('突破质量'),
+    body: t('52 周高位位置、20 日收益，再叠加价格行为与量价一致的加减分。约占内在强度 15%。'),
+  },
+  price_action: PRICE_ACTION_HINT,
+};
+
+export const REGIME_DIM_HINTS: Record<string, ScoreHint> = {
+  index_trend: {
+    title: t('指数趋势'),
+    body: t('TOPIX 相对 25/75/200 日均线的位置与斜率。'),
+  },
+  momentum: {
+    title: t('市场动量'),
+    body: t('TOPIX 近 20 日收益的强弱。'),
+  },
+  breadth: {
+    title: t('市场广度'),
+    body: t('全市场收于 200 日线上方的个股占比。'),
+  },
+  volume: {
+    title: t('量能配合'),
+    body: t('成交额高于自身 20 日均额的个股占比。'),
+  },
+  risk_appetite: {
+    title: t('风险偏好'),
+    body: t('全市场 20 日收益中位数的强弱。'),
+  },
+  risk_on_spread: {
+    title: t('强弱价差'),
+    body: t('グロース与プライム市场 20 日收益中位数之差。'),
+  },
+};
+
+export const MARKET_HINTS: Record<string, ScoreHint> = {
+  sectorMedian: {
+    title: t('业种中位涨跌'),
+    body: t('东证 33 业种成分股当日或近 20 日收益的中位数。盘中口径的 1 日用延迟报价重算，20 日仍是官方日线。'),
+    note: t('砖底细条是业种内上涨股占比，用来区分「普涨」和「被少数拉起」。'),
+  },
+};
+
+export const NEWS_HINTS: Record<string, ScoreHint> = {
+  importance: {
+    title: t('新闻重要度'),
+    body: t('规则引擎按类别、关联个股与市场相关性给出的 0–100 分。≥75 高、≥55 中，其余为普通。'),
+    note: t('重要度是研究排序，不是涨跌方向预测。'),
+  },
+};
+
+export const SHORT_HINTS: Record<string, ScoreHint> = {
+  behavior: {
+    title: t('行为分'),
+    body: t('研究用排序分：卖压吸收 30% + 回补 22% + 低位 18% + 空头压力 15% + 机构轮换 8% + 催化 7%。缺项连同权重一起剔除。'),
+    note: t('不是上涨概率；首次走步验证未通过，只能当描述性分类。'),
+  },
+  inScope: {
+    title: t('在册合计'),
+    body: t('最后报告仍在公开范围内的全部机构之和，含报告已长期停更者。官方规则没有失效期限。'),
+  },
+  low_position: {
+    title: t('低位'),
+    body: t('股价相对自身中长期区间是否处在偏低位置。分项是「量」不是「品质」，不用涨跌色。'),
+  },
+  short_pressure: {
+    title: t('空头压力'),
+    body: t('公开可见空头变化相对 20 日均量的压力。分项是「量」不是「品质」，不用涨跌色。'),
+  },
+  absorption: {
+    title: t('卖压吸收'),
+    body: t('空头压力较高而单位压力造成的价格损害较低。权重最高，但走步验证里表现最差，不当看好信号。'),
+  },
+  price_damage: {
+    title: t('价格损害'),
+    body: t('同样公开空头压力下，股价相对 TOPIX / 业种跌了多少。'),
+  },
+  covering: {
+    title: t('回补强度'),
+    body: t('多家机构减仓、公开空头快速下降的程度。'),
+  },
+  rotation: {
+    title: t('机构轮换'),
+    body: t('一批退出、另一批进入。本身不是利好或利空。'),
+  },
+  catalyst: {
+    title: t('催化'),
+    body: t('近期决算或已接入新闻是否构成事件窗口。只占行为分 7%。'),
+  },
+  risk: {
+    title: t('风险减分'),
+    body: t('低流动性、信用拥挤、数据过期等会从行为分里最多扣 25 分，并且影响排序。'),
+  },
+  confidence: {
+    title: t('数据置信度'),
+    body: t('公开报告覆盖是否足够。监视优先级 = 行为分 × (0.35 + 0.65 × 置信度)。'),
+  },
+};
+
+export function familyHint(key: string): ScoreHint | undefined {
+  return FAMILY_HINTS[key];
+}
+
+export function shortScoreHint(label: string): ScoreHint | undefined {
+  const map: Record<string, ScoreHint> = {
+    低位: SHORT_HINTS.low_position,
+    空头压力: SHORT_HINTS.short_pressure,
+    卖压吸收: SHORT_HINTS.absorption,
+    价格损害: SHORT_HINTS.price_damage,
+    回补强度: SHORT_HINTS.covering,
+    机构轮换: SHORT_HINTS.rotation,
+    催化: SHORT_HINTS.catalyst,
+    风险减分: SHORT_HINTS.risk,
+  };
+  return map[label];
+}

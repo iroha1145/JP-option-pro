@@ -171,23 +171,23 @@ export function insightLineSeries(options: {
   };
 }
 
-/** 毛玻璃 tooltip（§6：overlay + blur(14px) + sh-2 + r-md） */
+/** 图表 hover 小窗：白底、细边、克制阴影（与美版 cloud-chart-tooltip 同口径） */
 export function glassTooltip(overrides: Record<string, unknown> = {}) {
   return {
     trigger: 'axis' as const,
-    backgroundColor: 'rgba(250,251,253,0.88)',
-    /* tooltip 为 DOM 渲染：边框跟随 --line 令牌（线条细化后自动同步） */
+    transitionDuration: 0,
+    className: 'cloud-chart-tooltip',
+    backgroundColor: '#FFFFFF',
     borderColor: 'var(--line)',
     borderWidth: 1,
     padding: [8, 12],
     textStyle: { color: '#3D4A68', fontSize: 12, fontFamily: 'Inter, sans-serif' },
     extraCssText:
-      'backdrop-filter:blur(14px) saturate(1.5);-webkit-backdrop-filter:blur(14px) saturate(1.5);' +
-      'box-shadow:0 1px 2px rgba(13,22,38,.04),0 8px 24px -12px rgba(13,22,38,.12);border-radius:8px;',
+      'box-shadow:var(--popover-shadow);border-radius:9px;font-variant-numeric:tabular-nums;transition:opacity 140ms ease-out;',
     axisPointer: {
       type: 'line' as const,
       snap: true,
-      lineStyle: { color: CH.ink300, width: 1, type: 'solid' as const },
+      lineStyle: { color: CH.ink300, width: 1, type: [3, 3] as number[] },
     },
     ...overrides,
   };

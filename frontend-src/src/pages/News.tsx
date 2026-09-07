@@ -14,6 +14,8 @@ import { SkeletonRows } from '@/components/shared/Skeleton';
 import SoftBadge from '@/components/shared/SoftBadge';
 import StaleStrip from '@/components/shared/StaleStrip';
 import CodeMark from '@/components/shared/CodeMark';
+import InfoHint from '@/components/shared/InfoHint';
+import { NEWS_HINTS } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { explanationLines } from '@/lib/explainText';
 import { fmtDate, fmtJstDateTime, fmtRelativeShort } from '@/lib/format';
@@ -188,7 +190,11 @@ function ImportanceBadge({ value }: { value: number | null }) {
     return <SoftBadge>—</SoftBadge>;
   }
   const tone = value >= 75 ? 'warn' : value >= 55 ? 'brand' : 'neutral';
-  return <SoftBadge tone={tone}>{Math.round(value)}</SoftBadge>;
+  return (
+    <InfoHint hint={NEWS_HINTS.importance} side="bottom" size={11}>
+      <SoftBadge tone={tone}>{Math.round(value)}</SoftBadge>
+    </InfoHint>
+  );
 }
 
 function AnalysisStateChip({ state }: { state: NewsItem['analysis_state'] }) {
@@ -350,6 +356,7 @@ function StocksImpactPanel({ rows, loading }: { rows: NewsSecurityRow[]; loading
       {
         key: 'importance',
         title: t('最高重要度'),
+        hint: <InfoHint hint={NEWS_HINTS.importance} side="bottom" size={11} />,
         align: 'right',
         sortable: true,
         sortValue: (row) => row.max_importance ?? -1,

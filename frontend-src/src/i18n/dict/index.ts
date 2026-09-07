@@ -1703,4 +1703,121 @@ export const DICT: Record<string, [string, string]> = {
   已在自选中: ['Already on watchlist', 'すでにウォッチリストにあります'],
   搜索: ['Search', '検索'],
   'RSI 14': ['RSI 14', 'RSI 14'],
+
+  /* ---- hover / InfoHint：筛选列、市场砖、新闻重要度、空卖分项 ---- */
+  '最近 72 小时内、已接入 RSS 源里与该股票关联的新闻条数；旁注是这批新闻里的最高重要度。': [
+    'How many connected-RSS stories tagged to this name in the last 72 hours; the side note is the highest importance among them.',
+    '直近 72 時間に、接続済み RSS でこの銘柄に紐づいたニュース件数。傍注はその中の最高重要度です。',
+  ],
+  '最近 20 个交易日的平均买卖代金（円），不是当日成交额。筛选里的成交额下限用的也是这个口径。': [
+    'Average yen turnover over the last 20 sessions — not today’s turnover. The screener’s turnover floor uses the same definition.',
+    '直近 20 営業日の平均売買代金（円）であり、当日代金ではありません。スクリーナーの代金下限も同じ口径です。',
+  ],
+  '由强度分与结构标签给出的研究分档（如趋势/观察），只描述当前断面，不是买卖建议。': [
+    'A research bucket from the strength score and structure tags (trend / watch, etc.). It describes this snapshot only — not a trade call.',
+    '強度スコアと構造タグから付く研究用の区分（トレンド/観察など）。この断面の記述であり、売買助言ではありません。',
+  ],
+  '徽标数字是已评分候选池的分档人数，不是本次扫描命中数。S≥90 / A 80–89 / B 70–79 / C 60–69；D 档（<60）只计入「全部」。': [
+    'The badge counts names in the scored universe, not this scan’s hits. S≥90 / A 80–89 / B 70–79 / C 60–69; D (<60) is included only in All.',
+    'バッジの数字は評価済み母集団のティア人数であり、今回のヒット数ではありません。S≥90 / A 80–89 / B 70–79 / C 60–69。D（<60）は「すべて」にだけ入ります。',
+  ],
+  '提高对应族在内在强度里的权重：短期、中期或长期。选「全部周期」则用默认六族权重。': [
+    'Raises that family’s weight inside intrinsic strength: short, medium or long. “All periods” keeps the default six-family mix.',
+    '内在強度の中で、短期・中期・長期のいずれかの系統の重みを上げます。「全期間」は既定の 6 系統ウェイトです。',
+  ],
+  '稳健 / 均衡 / 进取三档会改「偏好适配」层的目标画像，占最终排序分 14%。': [
+    'Conservative / balanced / aggressive changes the profile-fit layer, which is 14% of the final ranking score.',
+    '堅実 / 均衡 / 積極の 3 段階は「プロファイル適合」層の目標像を変え、最終ランキングの 14% を占めます。',
+  ],
+  '服务端按当前条件排序后最多返回的行数。条件作用在完整已评分池上，不是先截 Top N 再筛。': [
+    'The maximum rows the server returns after ranking on the current filters. Filters run on the full scored pool — they are not applied after a Top-N cut.',
+    '現在の条件で並べ替えたあと、サーバーが返す最大行数。条件は評価済み母集団全体に効き、先に Top N を切ってから絞るのではありません。',
+  ],
+  '5/20 日收益、量比、距 MA25 距离与 RSI14。约占内在强度 16%。': [
+    '5/20-day returns, volume ratio, distance from MA25 and RSI14. About 16% of intrinsic strength.',
+    '5/20 日リターン、出来高倍率、MA25 乖離、RSI14。内在強度の約 16%。',
+  ],
+  '63 日收益、对 TOPIX 相对强度、均线排列、MACD 动向与距 MA75 距离。约占内在强度 24%。': [
+    '63-day return, strength vs TOPIX, MA alignment, MACD direction and distance from MA75. About 24% of intrinsic strength.',
+    '63 日リターン、TOPIX 相対、移動平均整列、MACD 方向、MA75 乖離。内在強度の約 24%。',
+  ],
+  '126/252 日收益、距 MA200 距离与 52 周高位位置。约占内在强度 14%。': [
+    '126/252-day returns, distance from MA200 and 52-week-high position. About 14% of intrinsic strength.',
+    '126/252 日リターン、MA200 乖離、52 週高値圏。内在強度の約 14%。',
+  ],
+  '动量、Kaufman 效率比、MA50 斜率与波动稳定度。约占内在强度 16%。': [
+    'Momentum, Kaufman efficiency ratio, MA50 slope and return stability. About 16% of intrinsic strength.',
+    'モメンタム、Kaufman 効率比、MA50 の傾き、変動の安定度。内在強度の約 16%。',
+  ],
+  '52 周高位位置、20 日收益，再叠加价格行为与量价一致的加减分。约占内在强度 15%。': [
+    '52-week-high position and 20-day return, plus price-action and effort-vs-result adjustments. About 15% of intrinsic strength.',
+    '52 週高値圏と 20 日リターンに、プライスアクションと出来高一致の加減点を重ねます。内在強度の約 15%。',
+  ],
+  业种中位涨跌: ['Sector median return', '業種中央値の騰落'],
+  '东证 33 业种成分股当日或近 20 日收益的中位数。盘中口径的 1 日用延迟报价重算，20 日仍是官方日线。': [
+    'Median 1-day or 20-day return of TSE 33-sector members. The 1-day intraday reading is rebuilt from delayed quotes; the 20-day reading stays official daily bars.',
+    '東証 33 業種構成銘柄の当日または直近 20 日リターンの中央値。ザラ場口径の 1 日は遅延気配で作り直し、20 日は公式日足のままです。',
+  ],
+  '砖底细条是业种内上涨股占比，用来区分「普涨」和「被少数拉起」。': [
+    'The thin bar at the bottom of each tile is the share of advancers in the sector — to tell a broad advance from a few names dragging the median.',
+    'タイル下端の細いバーは業種内の値上がり比率です。全面高なのか、少数銘柄に引っ張られているのかを見分けます。',
+  ],
+  新闻重要度: ['News importance', 'ニュース重要度'],
+  '规则引擎按类别、关联个股与市场相关性给出的 0–100 分。≥75 高、≥55 中，其余为普通。': [
+    'A 0–100 score from the rules engine using category, linked names and market relevance. ≥75 high, ≥55 medium, otherwise ordinary.',
+    'カテゴリ・関連銘柄・市場関連度からルールエンジンが出す 0–100 点。≥75 が高、≥55 が中、それ以外は普通です。',
+  ],
+  '重要度是研究排序，不是涨跌方向预测。': [
+    'Importance is a research ranking, not a direction forecast.',
+    '重要度は研究用の並べ替えであり、騰落方向の予測ではありません。',
+  ],
+  '研究用排序分：卖压吸收 30% + 回补 22% + 低位 18% + 空头压力 15% + 机构轮换 8% + 催化 7%。缺项连同权重一起剔除。': [
+    'A research ranking: absorption 30% + covering 22% + low position 18% + short pressure 15% + rotation 8% + catalyst 7%. Missing parts drop out with their weight.',
+    '研究用の並べ替え: 売り圧吸収 30% ＋ 買い戻し 22% ＋ 低位 18% ＋ 空売り圧力 15% ＋ 機関ローテーション 8% ＋ 触媒 7%。欠けた項は重みごと外します。',
+  ],
+  '不是上涨概率；首次走步验证未通过，只能当描述性分类。': [
+    'Not an upside probability. The first walk-forward test failed, so treat it as a descriptive label only.',
+    '上昇確率ではありません。初回のウォークフォワード検証は未通過なので、記述的な分類としてだけ使います。',
+  ],
+  '最后报告仍在公开范围内的全部机构之和，含报告已长期停更者。官方规则没有失效期限。': [
+    'Sum of every institution whose last filing is still in the public scope, including those that have not updated for a long time. The official rule has no expiry.',
+    '最後の報告がまだ公開範囲にある全機関の合計。長期に更新が止まっている報告も含みます。公式ルールに失効期限はありません。',
+  ],
+  '股价相对自身中长期区间是否处在偏低位置。分项是「量」不是「品质」，不用涨跌色。': [
+    'Whether price sits low in its own medium/long range. The reading is a quantity, not a quality score, so it does not use up/down colours.',
+    '株価が自身の中長期レンジの低位にいるか。分項は「量」であり「質」ではないので、騰落色は使いません。',
+  ],
+  '公开可见空头变化相对 20 日均量的压力。分项是「量」不是「品质」，不用涨跌色。': [
+    'Pressure from the visible short change versus 20-day average volume. A quantity, not a quality score — no up/down colours.',
+    '公開可視の空売り変化を 20 日平均出来高で見た圧力。量であり質ではないので、騰落色は使いません。',
+  ],
+  '空头压力较高而单位压力造成的价格损害较低。权重最高，但走步验证里表现最差，不当看好信号。': [
+    'High short pressure with relatively little price damage per unit of pressure. Highest weight, but the worst walk-forward result — not a bullish signal.',
+    '空売り圧力は高いが、単位圧力あたりの価格ダメージは小さい。最も重い項だが、ウォークフォワードでは最悪で、強気シグナルにはしません。',
+  ],
+  '同样公开空头压力下，股价相对 TOPIX / 业种跌了多少。': [
+    'How far the stock fell versus TOPIX / its sector under the same visible short pressure.',
+    '同じ公開空売り圧力のもとで、株価が TOPIX / 業種に対してどれだけ下げたか。',
+  ],
+  '多家机构减仓、公开空头快速下降的程度。': [
+    'How strongly several institutions reduced and the visible short book fell.',
+    '複数機関の減倉と、公開空売りがどれだけ速く減ったか。',
+  ],
+  '一批退出、另一批进入。本身不是利好或利空。': [
+    'One cohort exits while another enters. That is not itself bullish or bearish.',
+    '一方が退場し、別の一方が入る。それ自体は強気でも弱気でもありません。',
+  ],
+  '近期决算或已接入新闻是否构成事件窗口。只占行为分 7%。': [
+    'Whether nearby earnings or connected news form an event window. Only 7% of the behavior score.',
+    '直近の決算や接続済みニュースがイベント窓になっているか。行動スコアの 7% だけです。',
+  ],
+  '低流动性、信用拥挤、数据过期等会从行为分里最多扣 25 分，并且影响排序。': [
+    'Thin liquidity, crowded margin, stale data and similar items can subtract up to 25 points from the behavior score and do change rank.',
+    '低流動性・信用の混雑・データ期限切れなどは行動スコアから最大 25 点を引き、順位にも効きます。',
+  ],
+  '公开报告覆盖是否足够。监视优先级 = 行为分 × (0.35 + 0.65 × 置信度)。': [
+    'Whether public filings cover enough. Monitor priority = behavior score × (0.35 + 0.65 × confidence).',
+    '公開報告のカバーが足りているか。監視優先度 ＝ 行動スコア × (0.35 + 0.65 × 信頼度)。',
+  ],
+  上涨占比: ['Advancers share', '値上がり比率'],
 };

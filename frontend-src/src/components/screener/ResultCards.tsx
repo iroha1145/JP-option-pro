@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils';
 import { fmtPrice } from '@/lib/format';
 import Icon from '@/components/icons';
 import ChangeBadge from '@/components/shared/ChangeBadge';
+import InfoHint from '@/components/shared/InfoHint';
+import { STRENGTH_HINTS } from '@/lib/indicatorHints';
 import RowExpansion from './RowExpansion';
 import { NewsBadge, SubscoreTicks } from './cells';
 import { strengthPresentation, type NewsSummaryMap } from './types';
@@ -87,6 +89,7 @@ export default function ResultCards({
                   {strength && (
                     <span className="ml-1.5 text-micro text-ink-400">
                       {t('强度分 ·')} {strength.band} {strength.label}
+                      <InfoHint hint={STRENGTH_HINTS.composite} size={11} className="ml-1" />
                     </span>
                   )}
                 </span>

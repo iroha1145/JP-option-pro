@@ -11,6 +11,8 @@ import type { StrengthProfilesMeta } from '@/api/types';
 import { cn } from '@/lib/utils';
 import Icon from '@/components/icons';
 import Segmented from '@/components/shared/Segmented';
+import InfoHint from '@/components/shared/InfoHint';
+import { STRENGTH_HINTS, type ScoreHint } from '@/lib/indicatorHints';
 import {
   PROFILE_CN,
   TIMEFRAME_CN,
@@ -48,7 +50,6 @@ function TierSegmented({
     <div
       role="tablist"
       aria-label={t('强度分档 · 计数基于已评分候选池')}
-      title={t('分档计数基于已评分候选池')}
       className="no-scrollbar inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-md border border-line bg-card-warm p-0.5"
     >
       {TIER_OPTIONS.map((option) => {
@@ -86,8 +87,13 @@ function TierSegmented({
   );
 }
 
-function FieldLabel({ children }: { children: string }) {
-  return <p className="mb-1.5 text-micro font-medium uppercase tracking-[0.08em] text-ink-400">{children}</p>;
+function FieldLabel({ children, hint }: { children: string; hint?: ScoreHint }) {
+  return (
+    <p className="mb-1.5 flex items-center gap-0.5 text-micro font-medium uppercase tracking-[0.08em] text-ink-400">
+      {children}
+      {hint && <InfoHint hint={hint} side="bottom" size={11} />}
+    </p>
+  );
 }
 
 function SelectField({
@@ -295,7 +301,7 @@ export default function FilterWorkbench({
       {/* 行 1 · 分档与预设 */}
       <motion.div variants={row} className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-3">
         <div className="w-full min-w-0 sm:w-auto">
-          <FieldLabel>{t('强度分档')}</FieldLabel>
+          <FieldLabel hint={STRENGTH_HINTS.tierCounts}>{t('强度分档')}</FieldLabel>
           <TierSegmented
             value={draft.tier}
             counts={tierCounts}
@@ -348,7 +354,7 @@ export default function FilterWorkbench({
       {/* 行 2 · 周期 / 偏好 / Top N */}
       <motion.div variants={row} className="flex flex-wrap items-end gap-x-6 gap-y-3">
         <div>
-          <FieldLabel>{t('周期')}</FieldLabel>
+          <FieldLabel hint={STRENGTH_HINTS.timeframe}>{t('周期')}</FieldLabel>
           <Segmented<Timeframe>
             options={(['short', 'mid', 'long', 'all'] as const).map((value) => ({ value, label: TIMEFRAME_CN[value] }))}
             value={draft.timeframe}
@@ -356,7 +362,7 @@ export default function FilterWorkbench({
           />
         </div>
         <div>
-          <FieldLabel>{t('偏好')}</FieldLabel>
+          <FieldLabel hint={STRENGTH_HINTS.profile}>{t('偏好')}</FieldLabel>
           <Segmented<ProfilePref>
             options={(['conservative', 'balanced', 'aggressive'] as const).map((value) => ({ value, label: PROFILE_CN[value] }))}
             value={draft.profile}
@@ -364,7 +370,7 @@ export default function FilterWorkbench({
           />
         </div>
         <div>
-          <FieldLabel>{t('返回数量')}</FieldLabel>
+          <FieldLabel hint={STRENGTH_HINTS.topN}>{t('返回数量')}</FieldLabel>
           <SelectField
             ariaLabel={t('返回数量 Top N')}
             value={draft.topN}
@@ -439,7 +445,7 @@ export default function FilterWorkbench({
           </div>
         </div>
         <div>
-          <FieldLabel>{t('成交额下限')}</FieldLabel>
+          <FieldLabel hint={STRENGTH_HINTS.avgTurnover}>{t('成交额下限')}</FieldLabel>
           <SelectField
             ariaLabel={t('成交额下限')}
             value={draft.minTurnover}

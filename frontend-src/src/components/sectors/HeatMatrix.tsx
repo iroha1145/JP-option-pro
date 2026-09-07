@@ -94,6 +94,39 @@ function HeatTile({
         </span>
       </span>
 
+      <span
+        role="tooltip"
+        className="cloud-popover pointer-events-none absolute -top-2 left-1/2 z-30 hidden w-48 -translate-x-1/2 -translate-y-full p-2.5 text-left md:group-hover:block md:group-focus-visible:block"
+      >
+        <span className="eyebrow block">{sector.sector33_name}</span>
+        <span className="mt-1.5 block space-y-1 text-micro">
+          <span className="flex items-center justify-between gap-2">
+            <span className="text-ink-500">{t('1日 中位')}</span>
+            <span className="font-mono text-ink-800 tnum">{fmtPct(sector.median_return_1d)}</span>
+          </span>
+          <span className="flex items-center justify-between gap-2">
+            <span className="text-ink-500">{t('20日 中位')}</span>
+            <span className="font-mono text-ink-800 tnum">{fmtPct(sector.median_return_20d)}</span>
+          </span>
+          {share !== null && (
+            <span className="flex items-center justify-between gap-2 border-t border-line pt-1">
+              <span className="text-ink-500">{t('上涨占比')}</span>
+              <span className="font-mono text-ink-800 tnum">{Math.round(share * 100)}%</span>
+            </span>
+          )}
+          {sector.leaders[0] && (
+            <span className="flex items-center justify-between gap-2">
+              <span className="text-ink-500">{t('今日领涨')}</span>
+              <span className="font-mono font-semibold text-ink-800">
+                {sector.leaders[0].canonical_code.length === 5 && sector.leaders[0].canonical_code.endsWith('0')
+                  ? sector.leaders[0].canonical_code.slice(0, 4)
+                  : sector.leaders[0].canonical_code}
+              </span>
+            </span>
+          )}
+        </span>
+      </span>
+
       {/* 底端细条＝业种内上涨股占比（中位数看不出「普涨」还是「被少数拉起」） */}
       {share !== null && (
         <span

@@ -10,8 +10,9 @@ import type { MarketRegime, StrengthProfilesMeta, TierDistribution } from '@/api
 import { cn } from '@/lib/utils';
 import Icon from '@/components/icons';
 import InfoHint from '@/components/shared/InfoHint';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import SourceNote from '@/components/shared/SourceNote';
-import { STRENGTH_HINTS } from '@/lib/indicatorHints';
+import { REGIME_DIM_HINTS, STRENGTH_HINTS } from '@/lib/indicatorHints';
 import { FAMILY_META, type Tier, type TierFilter } from './types';
 import { t } from '@/i18n/core';
 
@@ -21,13 +22,13 @@ const TIERS: Tier[] = ['S', 'A', 'B', 'C', 'D'];
 
 /* ---------------- 市场形态 6 维 ---------------- */
 
-const REGIME_DIMS: { key: keyof MarketRegime['dims']; label: string; en: string; hint: string }[] = [
-  { key: 'index_trend', label: t('指数趋势'), en: 'INDEX TREND', hint: t('TOPIX 相对 25/75/200 日均线的位置与斜率。') },
-  { key: 'momentum', label: t('市场动量'), en: 'MOMENTUM', hint: t('TOPIX 近 20 日收益的强弱。') },
-  { key: 'breadth', label: t('市场广度'), en: 'BREADTH', hint: t('全市场收于 200 日线上方的个股占比。') },
-  { key: 'volume', label: t('量能配合'), en: 'VOLUME', hint: t('成交额高于自身 20 日均额的个股占比。') },
-  { key: 'risk_appetite', label: t('风险偏好'), en: 'RISK APPETITE', hint: t('全市场 20 日收益中位数的强弱。') },
-  { key: 'risk_on_spread', label: t('强弱价差'), en: 'RISK-ON SPREAD', hint: t('グロース与プライム市场 20 日收益中位数之差。') },
+const REGIME_DIMS: { key: keyof MarketRegime['dims']; label: string; en: string }[] = [
+  { key: 'index_trend', label: t('指数趋势'), en: 'INDEX TREND' },
+  { key: 'momentum', label: t('市场动量'), en: 'MOMENTUM' },
+  { key: 'breadth', label: t('市场广度'), en: 'BREADTH' },
+  { key: 'volume', label: t('量能配合'), en: 'VOLUME' },
+  { key: 'risk_appetite', label: t('风险偏好'), en: 'RISK APPETITE' },
+  { key: 'risk_on_spread', label: t('强弱价差'), en: 'RISK-ON SPREAD' },
 ];
 
 export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
@@ -57,34 +58,48 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
       <div className="mt-4 grid grid-cols-[max-content_minmax(0,1fr)_max-content] gap-y-3">
         {REGIME_DIMS.map((dim, index) => {
           const value = regime.dims[dim.key];
+          const hint = REGIME_DIM_HINTS[dim.key];
           return (
-            <div key={dim.key} className="group relative col-span-3 grid grid-cols-subgrid items-center gap-x-3">
-              <span className="whitespace-nowrap text-caption text-ink-500">{dim.label}</span>
-              <span className="relative h-1.5 flex-1 overflow-hidden rounded-pill bg-line" role="presentation">
-                {value !== null && (
-                  <motion.span
-                    className="block h-full origin-left rounded-pill bg-brand-500"
-                    initial={{ scaleX: 0 }}
-                    whileInView={{ scaleX: 1 }}
-                    viewport={{ once: true, amount: 0.4 }}
-                    transition={{ duration: 0.7, ease: EASE_PAPER, delay: index * 0.045 }}
-                    style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
-                  />
-                )}
+            <div key={dim.key} className="col-span-3 grid grid-cols-subgrid items-center gap-x-3">
+              <span className="whitespace-nowrap text-caption text-ink-500">
+                {dim.label}
+                {hint && <InfoHint hint={hint} side="bottom" size={11} className="ml-0.5" />}
               </span>
+              <PointerTooltip
+                label={dim.label}
+                side="top"
+                width={224}
+                className="min-w-0 w-full"
+                contentClassName="p-3"
+                content={
+                  <>
+                    <span className="flex items-baseline justify-between">
+                      <span className="text-caption font-semibold text-ink-800">{dim.label}</span>
+                      <span className="font-mono text-micro text-ink-400">{dim.en}</span>
+                    </span>
+                    {hint && <span className="mt-1.5 block text-micro leading-[16px] text-ink-500">{hint.body}</span>}
+                    <span className="mt-1.5 block font-mono text-caption text-brand-600 tnum">
+                      {value !== null ? `${Math.round(value * 10) / 10} / 100` : t('暂无数据')}
+                    </span>
+                  </>
+                }
+              >
+                <span className="relative h-1.5 w-full overflow-hidden rounded-pill bg-line" role="presentation">
+                  {value !== null && (
+                    <motion.span
+                      className="block h-full origin-left rounded-pill bg-brand-500"
+                      initial={{ scaleX: 0 }}
+                      whileInView={{ scaleX: 1 }}
+                      viewport={{ once: true, amount: 0.4 }}
+                      transition={{ duration: 0.7, ease: EASE_PAPER, delay: index * 0.045 }}
+                      style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
+                    />
+                  )}
+                </span>
+              </PointerTooltip>
               <span className="text-right font-mono text-caption text-ink-800 tnum">
                 {value !== null ? Math.round(value) : '—'}
               </span>
-              <div className="glass pointer-events-none absolute -top-2 left-16 z-20 hidden w-56 -translate-y-full rounded-md border border-line p-3 shadow-sh-2 group-hover:block">
-                <p className="flex items-baseline justify-between">
-                  <span className="text-caption font-semibold text-ink-800">{dim.label}</span>
-                  <span className="font-mono text-micro text-ink-400">{dim.en}</span>
-                </p>
-                <p className="mt-1.5 text-micro leading-[16px] text-ink-500">{dim.hint}</p>
-                <p className="mt-1.5 font-mono text-caption text-brand-600 tnum">
-                  {value !== null ? `${Math.round(value * 10) / 10} / 100` : t('暂无数据')}
-                </p>
-              </div>
             </div>
           );
         })}
