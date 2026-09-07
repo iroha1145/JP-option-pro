@@ -193,11 +193,7 @@ export default function Earnings() {
               title={t('日历数据不可用')}
               description={q.error?.message || t('稍后刷新再试')}
               action={
-                <button
-                  type="button"
-                  onClick={() => q.refresh()}
-                  className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white transition-[filter] hover:brightness-105"
-                >
+                <button type="button" onClick={() => q.refresh({ force: true })} className="btn-primary">
                   {t('重试')}
                 </button>
               }

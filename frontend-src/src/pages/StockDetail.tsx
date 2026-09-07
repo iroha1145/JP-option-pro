@@ -158,6 +158,11 @@ export default function StockDetail() {
             image="/empty-chart.svg"
             title={t('加载失败')}
             description={String(overview.error?.message ?? '')}
+            action={
+              <button type="button" onClick={() => overview.refresh({ force: true })} className="btn-primary">
+                {t('重试')}
+              </button>
+            }
           />
         </section>
       </div>

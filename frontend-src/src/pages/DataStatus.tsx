@@ -128,7 +128,17 @@ export default function DataStatus() {
 
       {state === 'error' ? (
         <section className="card-surface">
-          <EmptyState variant="error" image="/empty-chart.svg" title={t('加载失败')} description={String(query.error?.message ?? '')} />
+          <EmptyState
+            variant="error"
+            image="/empty-chart.svg"
+            title={t('加载失败')}
+            description={String(query.error?.message ?? '')}
+            action={
+              <button type="button" onClick={() => query.refresh({ force: true })} className="btn-primary">
+                {t('重试')}
+              </button>
+            }
+          />
         </section>
       ) : (
         <SkeletonReveal

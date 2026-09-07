@@ -200,7 +200,17 @@ export default function Market() {
 
       {state === 'error' ? (
         <div className="card-surface">
-          <EmptyState variant="error" image="/empty-chart.svg" title={t('加载失败')} description={String(market.error?.message ?? '')} />
+          <EmptyState
+            variant="error"
+            image="/empty-chart.svg"
+            title={t('加载失败')}
+            description={String(market.error?.message ?? '')}
+            action={
+              <button type="button" onClick={() => market.refresh({ force: true })} className="btn-primary">
+                {t('重试')}
+              </button>
+            }
+          />
         </div>
       ) : (
         <>

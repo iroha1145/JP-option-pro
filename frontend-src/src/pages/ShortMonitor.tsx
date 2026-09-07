@@ -257,6 +257,11 @@ export default function ShortMonitor() {
             image="/empty-chart.svg"
             title={t('读取失败')}
             description={String(rankingQuery.error?.message ?? '')}
+            action={
+              <button type="button" onClick={() => rankingQuery.refresh({ force: true })} className="btn-primary">
+                {t('重试')}
+              </button>
+            }
           />
         </div>
       ) : (

@@ -304,6 +304,11 @@ export default function Radar() {
               image="/empty-radar.svg"
               title={t('加载失败')}
               description={String(query.error?.message ?? '')}
+              action={
+                <button type="button" onClick={() => query.refresh({ force: true })} className="btn-primary">
+                  {t('重试')}
+                </button>
+              }
             />
           </div>
           <HistoryRail events={[]} filterKey={`${group}:${onlyAbovePivot}:${minScore}`} onPromoteLead={promoteLead} />

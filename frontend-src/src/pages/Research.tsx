@@ -10,7 +10,7 @@
  *    読ませないための一文を常に添える。
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { researchApi } from '@/api/modules';
 import type { ResearchReport } from '@/api/types';
 import { ApiError } from '@/api/client';
@@ -53,25 +53,24 @@ export default function Research() {
   const [report, setReport] = useState<ResearchReport | null>(null);
   const [state, setState] = useState<'loading' | 'done' | 'empty' | 'running' | 'error'>('loading');
 
-  useEffect(() => {
-    let alive = true;
+  const load = useCallback(() => {
+    setState('loading');
     researchApi
       .report()
       .then((data) => {
-        if (!alive) return;
         setReport(data);
         setState('done');
       })
       .catch((error: unknown) => {
-        if (!alive) return;
         const status = error instanceof ApiError ? error.code : 0;
         // 「まだ走っている」と「一度も走っていない」を区別して出す。
         setState(status === 409 ? 'running' : status === 503 || status === 404 ? 'empty' : 'error');
       });
-    return () => {
-      alive = false;
-    };
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const verdict = report?.summary?.verdict ?? 'insufficient_data';
   const meta = VERDICT_TEXT[verdict] ?? VERDICT_TEXT.insufficient_data;
@@ -121,7 +120,16 @@ export default function Research() {
         <section className="card-surface card-lift p-5">
           <p className="eyebrow">WALK-FORWARD</p>
           <h3 className="mt-1 text-h3 text-ink-900">{t('历史验证')}</h3>
-          <EmptyState image="/empty-chart.svg" title={t('读取失败')} description={t('请稍后重试')} />
+          <EmptyState
+            image="/empty-chart.svg"
+            title={t('读取失败')}
+            description={t('请稍后重试')}
+            action={
+              <button type="button" onClick={load} className="btn-primary">
+                {t('重试')}
+              </button>
+            }
+          />
         </section>
       )}
 

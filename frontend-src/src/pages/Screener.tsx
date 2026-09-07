@@ -404,11 +404,7 @@ export default function Screener() {
                   title={scanError?.code === 503 ? t('扫描数据不可用') : t('扫描失败')}
                   description={scanError?.code === 503 ? t('收盘后批处理完成前暂无强度快照') : scanError?.message}
                   action={
-                    <button
-                      type="button"
-                      onClick={() => void runScan(applied)}
-                      className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white transition-[filter] hover:brightness-105"
-                    >
+                    <button type="button" onClick={() => void runScan(applied)} className="btn-primary">
                       {t('重试')}
                     </button>
                   }

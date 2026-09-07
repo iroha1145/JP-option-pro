@@ -177,7 +177,17 @@ export default function News() {
             </section>
           ) : feedState === 'error' ? (
             <section className="card-surface">
-              <EmptyState variant="error" image="/empty-news.svg" title={t('加载失败')} description={String(feed.error?.message ?? '')} />
+              <EmptyState
+                variant="error"
+                image="/empty-news.svg"
+                title={t('加载失败')}
+                description={String(feed.error?.message ?? '')}
+                action={
+                  <button type="button" onClick={() => feed.refresh({ force: true })} className="btn-primary">
+                    {t('重试')}
+                  </button>
+                }
+              />
             </section>
           ) : feedState === 'empty' ? (
             <section className="card-surface">
