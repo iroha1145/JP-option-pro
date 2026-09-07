@@ -133,7 +133,9 @@ export default function DataTable<T>({
                 onClick={
                   onRowClick
                     ? (event: ReactMouseEvent<HTMLTableRowElement>) => {
-                        if ((event.target as Element).closest('a, button, input, select, [role="button"]')) return;
+                        const hit = (event.target as Element).closest('a, button, input, select, [role="button"]');
+                        /* 行自己带 role=button，closest 会命中当前行；只有点到行内控件才拦截。 */
+                        if (hit && hit !== event.currentTarget) return;
                         onRowClick(row);
                       }
                     : undefined
