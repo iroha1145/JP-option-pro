@@ -1929,4 +1929,12 @@ export const DICT: Record<string, [string, string]> = {
   日历已更新: ['Calendar updated', 'カレンダーを更新しました'],
   刷新失败: ['Refresh failed', '更新に失敗'],
   刷新新闻: ['Refresh news', 'ニュースを更新'],
+  重新扫描: ['Rescan', '再スキャン'],
+  按当前条件重新读取当日快照: [
+    'Re-read today’s snapshot with the current filters',
+    '現在の条件で当日スナップショットを再読込',
+  ],
+  当日信号: ["Today's signals", '本日のシグナル'],
+  刷新监控: ['Refresh monitor', 'モニターを更新'],
+  重新读取空卖监控快照: ['Reload the short-monitor snapshot', '空売りモニターの断面を再読込'],
 };

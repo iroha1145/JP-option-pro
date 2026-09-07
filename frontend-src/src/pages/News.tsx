@@ -20,6 +20,9 @@ import PointerTooltip from '@/components/shared/PointerTooltip';
 import HorizontalScroller from '@/components/shared/HorizontalScroller';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
 import Switch from '@/components/shared/Switch';
+import AnalysisIcon from '@/components/shared/AnalysisIcon';
+import FilterButton from '@/components/shared/FilterButton';
+import SelectionViewport from '@/components/shared/SelectionViewport';
 import { NEWS_HINTS } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { explanationLines } from '@/lib/explainText';
@@ -123,27 +126,22 @@ export default function News() {
             <StaleStrip onRetry={() => feed.refresh()} refreshing={feed.refreshing} />
           )}
           <div className="flex flex-wrap items-center gap-2">
-            <div className="filter-group" role="group" aria-label={t('类别')}>
-              <button
-                type="button"
-                className="control-button"
-                aria-pressed={category === null}
-                onClick={() => setCategory(null)}
-              >
-                {t('全部')}
-              </button>
-              {CATEGORY_FILTERS.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className="control-button"
-                  aria-pressed={category === item}
-                  onClick={() => setCategory(category === item ? null : item)}
-                >
-                  {t(item)}
-                </button>
-              ))}
-            </div>
+            <SelectionViewport>
+              <div className="filter-group" role="group" aria-label={t('类别')}>
+                <FilterButton active={category === null} onClick={() => setCategory(null)}>
+                  {t('全部')}
+                </FilterButton>
+                {CATEGORY_FILTERS.map((item) => (
+                  <FilterButton
+                    key={item}
+                    active={category === item}
+                    onClick={() => setCategory(category === item ? null : item)}
+                  >
+                    {t(item)}
+                  </FilterButton>
+                ))}
+              </div>
+            </SelectionViewport>
             <label className="ml-auto flex items-center gap-2 text-caption text-ink-600">
               <Switch
                 checked={onlySecurities}
@@ -213,6 +211,7 @@ function StatusStrip({ status }: { status: NewsStatus | null }) {
         {t('数据源')} {feedsOk}/{status.feeds.length}
       </span>
       <SoftBadge tone={status.ai.enabled ? 'ai' : 'neutral'}>
+        <AnalysisIcon size={13} />
         AI {status.ai.enabled ? t('已启用') : t('未启用')}
       </SoftBadge>
     </span>
@@ -262,7 +261,8 @@ function StatusHero({ status }: { status: NewsStatus | null }) {
         </HeroCell>
         <HeroCell label="AI" index={1}>
           <SoftBadge tone={status?.ai.enabled ? 'ai' : 'neutral'} size="md">
-            {status?.ai.enabled ? t('已启用') : t('未启用')}
+            <AnalysisIcon size={14} />
+            <span>{status?.ai.enabled ? t('已启用') : t('未启用')}</span>
           </SoftBadge>
         </HeroCell>
         <HeroCell label={t('分析队列')} index={2}>
@@ -831,7 +831,10 @@ function SourcesPanel({ status, loading }: { status: NewsStatus | null; loading:
           className="card-surface card-lift p-5"
         >
           <p className="eyebrow">AI PIPELINE</p>
-          <h3 className="mb-2 mt-1 text-h3 text-ink-900">AI {t('管道')}</h3>
+          <h3 className="mb-2 mt-1 flex items-center gap-1.5 text-h3 text-ink-900">
+            <AnalysisIcon size={16} className="text-ai-600" />
+            AI {t('管道')}
+          </h3>
           <dl className="space-y-1.5 text-body-s">
             <div className="flex justify-between">
               <dt className="text-ink-500">{t('状态')}</dt>

@@ -1,6 +1,6 @@
 /**
  * §04 选股扫描（强度）— 对标美版 Screener 页。
- * B0 页头带（数据截至 / 扫描历史 popover）
+ * B0 页头带（数据截至 / 扫描历史 popover / 轻量重扫）
  * B1 筛选工作台（分档/预设/周期/偏好/TopN/业种/价格/成交额 + 扫描钮 dirty 脉冲）
  * B2 结果区（统计行 + 参数回显 chips + 三态排序 + 结果表/卡片流 + 行展开）
  * B3 右侧栏（市场形态 6 维 / 强度剖面 / 评分方法）
@@ -25,6 +25,7 @@ import FilterWorkbench from '@/components/screener/FilterWorkbench';
 import ResultTable from '@/components/screener/ResultTable';
 import ResultCards from '@/components/screener/ResultCards';
 import ScanHistoryPopover from '@/components/screener/ScanHistoryPopover';
+import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
 import { MarketRegimeCard, MethodCard, TierHistogram } from '@/components/screener/SideCards';
 import {
   DEFAULT_FILTERS,
@@ -304,6 +305,12 @@ export default function Screener() {
           <>
             <DataThrough date={response?.trade_date} />
             <ScanHistoryPopover history={history} />
+            <ForceRefreshButton
+              onClick={() => void runScan(applied)}
+              spinning={scanState === 'scanning'}
+              label={t('重新扫描')}
+              title={t('按当前条件重新读取当日快照')}
+            />
           </>
         }
       />

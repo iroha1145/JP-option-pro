@@ -18,11 +18,14 @@ import { SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
 import StatCard from '@/components/shared/StatCard';
 import HorizontalScroller from '@/components/shared/HorizontalScroller';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
+import SessionLED from '@/components/shared/SessionLED';
 import { CodeCell, DataThrough } from '@/components/domain';
 import Icon from '@/components/icons';
 import { useAccess } from '@/hooks/useAccess';
+import { useNow } from '@/hooks/useNow';
 import { useTickFlash } from '@/hooks/useTickFlash';
 import { useToast } from '@/hooks/useToast';
+import { tokyoSession } from '@/lib/tokyoSession';
 import TickPrice from '@/components/shared/TickPrice';
 import SoftBadge from '@/components/shared/SoftBadge';
 import StaleStrip from '@/components/shared/StaleStrip';
@@ -45,6 +48,8 @@ const STAT_ENTER = {
 export default function Watchlist() {
   const { canManageWatchlist, accountUsername, isOwner } = useAccess();
   const toast = useToast();
+  const now = useNow(30_000);
+  const session = tokyoSession(now);
   const [searchParams, setSearchParams] = useSearchParams();
   const query = usePolling(() => watchlistApi.list(), 120_000);
   const refreshWatchlist = query.refresh;
@@ -227,11 +232,12 @@ export default function Watchlist() {
         meta={
           <>
             {accountUsername && (
-              <SoftBadge tone="brand" className="hidden sm:inline-flex">
-                <Icon name="command" size={12} />
+              <span className="hidden items-center gap-1.5 rounded-pill border border-line-strong bg-card px-2.5 py-1 text-caption text-ink-600 sm:inline-flex">
+                <Icon name="command" size={12} className="text-brand-600" />
                 {accountUsername}
-              </SoftBadge>
+              </span>
             )}
+            <SessionLED session={session} />
             <DataThrough date={items.find((item) => item.quote?.trade_date)?.quote?.trade_date} />
             <ForceRefreshButton
               onClick={onForceRefresh}

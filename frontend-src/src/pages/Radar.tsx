@@ -198,6 +198,14 @@ export default function Radar() {
         />
       </div>
 
+      <section aria-label={t('当日信号')}>
+        <div className="radar-section-heading mb-4 flex items-end justify-between pb-1">
+          <div>
+            <p className="eyebrow">TODAY&apos;S SIGNALS</p>
+            <h2 className="mt-1 text-h2 text-ink-900">{t('当日信号')}</h2>
+          </div>
+        </div>
+
       {state === 'loading' ? (
         <>
           <SkeletonCard className="h-80" />
@@ -272,6 +280,7 @@ export default function Radar() {
           )}
         </>
       )}
+      </section>
     </div>
   );
 }

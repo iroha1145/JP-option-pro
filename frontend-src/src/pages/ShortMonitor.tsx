@@ -17,7 +17,7 @@
  * 一览表已废止（信息密度过高）。**所有字段都在卡片里出**，卡片是唯一的
  * 呈现形式 —— 这里没出的值，页面上就没有。 */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/shared/PageHeader';
@@ -48,6 +48,7 @@ import { explanationLine } from '@/lib/explainText';
 import SoftBadge from '@/components/shared/SoftBadge';
 import StaleStrip from '@/components/shared/StaleStrip';
 import StatusNotice from '@/components/shared/StatusNotice';
+import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
 import InfoHint from '@/components/shared/InfoHint';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import { SHORT_HINTS, shortScoreHint } from '@/lib/indicatorHints';
@@ -157,6 +158,13 @@ export default function ShortMonitor() {
   // 「还没验证」和「验证过但没通过」要分开说。
   const validation = overview?.validation;
   const unvalidated = overview?.validated && !overview.validated.score;
+  const refreshOverview = overviewQuery.refresh;
+  const refreshRanking = rankingQuery.refresh;
+  const refreshingMonitor = overviewQuery.refreshing || rankingQuery.refreshing;
+  const onRefreshMonitor = useCallback(() => {
+    refreshOverview({ force: true });
+    refreshRanking({ force: true });
+  }, [refreshOverview, refreshRanking]);
 
   return (
     <div className="space-y-6">
@@ -165,7 +173,17 @@ export default function ShortMonitor() {
         eyebrow="SHORT MONITOR · POST-CLOSE"
         title={t('机构空卖行为监控')}
         description={t('公开披露的机构空卖持仓发生了什么变化，股价对这部分压力作出了什么反应')}
-        meta={<DataThrough date={overview?.as_of_date} />}
+        meta={
+          <>
+            <DataThrough date={overview?.as_of_date} />
+            <ForceRefreshButton
+              onClick={onRefreshMonitor}
+              spinning={refreshingMonitor}
+              label={t('刷新监控')}
+              title={t('重新读取空卖监控快照')}
+            />
+          </>
+        }
       />
 
       <StatusNotice>

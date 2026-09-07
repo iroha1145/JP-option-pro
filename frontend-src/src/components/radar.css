@@ -22,6 +22,7 @@
   background: var(--warn-50);
   color: color-mix(in srgb, var(--warn-600) 75%, var(--ink-800));
 }
+.radar-section-heading > p { line-height: 1.6; }
 .radar-lead-card, .radar-signal-card, .radar-history {
   border-color: color-mix(in srgb, var(--line) 86%, transparent);
 }

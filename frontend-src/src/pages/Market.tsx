@@ -23,7 +23,7 @@ import { tokyoSession } from '@/lib/tokyoSession';
 import { useNow } from '@/hooks/useNow';
 import { t } from '@/i18n/core';
 import { quoteSourceLabel } from '@/lib/quoteSource';
-import { fmtPct, fmtPrice, fmtTimeJst, fmtYenCompact } from '@/lib/format';
+import { fmtPct, fmtPrice, fmtTimeHHMMSS, fmtTimeJst, fmtYenCompact } from '@/lib/format';
 import type { IntradayQuote, SectorMemberSort, SectorStrength } from '@/api/types';
 
 export default function Market() {
@@ -165,6 +165,11 @@ export default function Market() {
         meta={
           <div className="flex items-center gap-3">
             <SessionLED session={session} />
+            {market.lastUpdatedAt && (
+              <span className="font-mono text-caption text-ink-400 tnum">
+                {t('更新')} {fmtTimeHHMMSS(market.lastUpdatedAt)}
+              </span>
+            )}
             <DataThrough date={market.data?.data_through} />
           </div>
         }
