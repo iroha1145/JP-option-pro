@@ -79,7 +79,7 @@ export function SubscoreTicks({ row, tipSide = 'top' }: { row: StrengthRow; tipS
       ))}
     >
       {dims.map(({ key, value }) => (
-        <span key={key} className="inline-block h-[3px] w-[11px] overflow-hidden rounded-full bg-line" aria-hidden="true">
+        <span key={key} className="inline-block h-[3px] w-[11px] overflow-hidden rounded-full bg-paper" aria-hidden="true">
           {value !== null && (
             <span
               className={cn('block h-full rounded-full', value >= 70 ? 'bg-brand-600' : value >= 45 ? 'bg-brand-400' : 'bg-warn-600')}

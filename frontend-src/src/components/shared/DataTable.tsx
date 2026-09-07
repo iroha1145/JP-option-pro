@@ -1,8 +1,9 @@
 /** DataTable：发丝线行、r-lg 容器、表头 Eyebrow 化、行 hover paper-2 底、可排序 */
-import { useMemo, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { useMemo, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import Icon from '@/components/icons';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 
 export interface Column<T> {
   key: string;
@@ -49,6 +50,7 @@ export default function DataTable<T>({
   className,
   rowClassName,
 }: DataTableProps<T>) {
+  const reducedMotion = usePrefersReducedMotion();
   const [innerSort, setInnerSort] = useState(defaultSort);
   const sort = sortProp !== undefined ? sortProp : innerSort;
   const setSort = (s: SortState | null) => {
@@ -88,6 +90,7 @@ export default function DataTable<T>({
             {columns.map((c) => (
               <th
                 key={c.key}
+                scope="col"
                 style={c.width ? { width: c.width } : undefined}
                 className={cn(
                   'border-b border-line px-4 py-2.5 text-eyebrow font-sans uppercase tracking-[0.14em] text-ink-400',
@@ -125,9 +128,16 @@ export default function DataTable<T>({
             return (
               <motion.tr
                 key={key}
-                layout="position"
-                transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                layout={reducedMotion ? false : 'position'}
+                transition={{ duration: reducedMotion ? 0 : 0.32, ease: [0.16, 1, 0.3, 1] }}
+                onClick={
+                  onRowClick
+                    ? (event: ReactMouseEvent<HTMLTableRowElement>) => {
+                        if ((event.target as Element).closest('a, button, input, select, [role="button"]')) return;
+                        onRowClick(row);
+                      }
+                    : undefined
+                }
                 /* 可点击行同时可聚焦、可回车/空格触发（审计 P3-1）。 */
                 {...(onRowClick
                   ? {

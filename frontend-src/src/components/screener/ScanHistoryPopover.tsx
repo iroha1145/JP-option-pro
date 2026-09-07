@@ -4,7 +4,10 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { fmtJstTime } from '@/lib/format';
 import Icon from '@/components/icons';
+import EmptyState from '@/components/shared/EmptyState';
 import PointerTooltip from '@/components/shared/PointerTooltip';
+import SoftBadge from '@/components/shared/SoftBadge';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import type { ScanHistoryEntry } from './types';
 import { t } from '@/i18n/core';
 
@@ -13,6 +16,8 @@ const SPRING_POP = { type: 'spring', stiffness: 520, damping: 32 } as const;
 export default function ScanHistoryPopover({ history }: { history: ScanHistoryEntry[] }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(ref, open);
 
   useEffect(() => {
     if (!open) return;
@@ -38,7 +43,7 @@ export default function ScanHistoryPopover({ history }: { history: ScanHistoryEn
         aria-haspopup="dialog"
         aria-expanded={open}
         className={cn(
-          'flex h-9 items-center gap-1.5 rounded-md border px-3 text-caption transition-colors duration-fast',
+          'flex h-9 items-center gap-1.5 rounded-md border px-3 text-caption shadow-btn transition-colors duration-fast',
           open ? 'border-brand-400 text-brand-600' : 'border-line bg-card text-ink-500 hover:text-ink-800',
         )}
       >
@@ -58,11 +63,14 @@ export default function ScanHistoryPopover({ history }: { history: ScanHistoryEn
           >
             <p className="px-2 pb-1.5 pt-1 eyebrow">{t('最近 5 次扫描')}</p>
             {history.length === 0 ? (
-              <p className="px-2 py-4 text-center text-caption text-ink-400">{t('尚无扫描记录')}</p>
+              <EmptyState size="compact" image="/empty-chart.svg" title={t('尚无扫描记录')} />
             ) : (
-              <ul className="divide-y divide-line">
+              <ul>
                 {history.slice(0, 5).map((entry, index) => (
-                  <li key={index} className="flex items-center gap-3 px-2 py-2.5">
+                  <li
+                    key={index}
+                    className="flex min-h-[44px] items-center gap-3 px-2 py-2.5 transition-colors duration-fast hover:bg-paper-2/70"
+                  >
                     <span className="font-mono text-caption text-ink-800 tnum">
                       {fmtJstTime(new Date(entry.at).toISOString())}
                     </span>
@@ -75,9 +83,9 @@ export default function ScanHistoryPopover({ history }: { history: ScanHistoryEn
                     >
                       <span className="min-w-0 flex-1 truncate text-micro text-ink-500">{entry.summary}</span>
                     </PointerTooltip>
-                    <span className="shrink-0 rounded-xs bg-brand-50 px-1.5 py-px font-mono text-micro text-brand-700 tnum">
+                    <SoftBadge tone="brand" className="shrink-0 font-mono tnum">
                       {entry.count} {t('只')}
-                    </span>
+                    </SoftBadge>
                   </li>
                 ))}
               </ul>

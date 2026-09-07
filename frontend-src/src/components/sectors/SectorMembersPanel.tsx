@@ -108,7 +108,7 @@ export default function SectorMembersPanel({
                   </span>
                   {/* 份额条：本业种当日成交额里这只股占多少（「多热」的直接答案） */}
                   <span className="flex min-w-0 items-center gap-1.5">
-                    <span className="h-[4px] min-w-0 flex-1 overflow-hidden rounded-pill bg-line" aria-hidden="true">
+                    <span className="strength-track h-[4px] min-w-0 flex-1 overflow-hidden rounded-pill" aria-hidden="true">
                       <span
                         className="block h-full rounded-pill bg-brand-500"
                         style={{ width: `${Math.max(2, Math.min(100, (row.turnover_share ?? 0) * 100))}%` }}

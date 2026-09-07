@@ -13,6 +13,7 @@ import HatchLegend from '@/components/shared/HatchLegend';
 import InfoHint from '@/components/shared/InfoHint';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import SourceNote from '@/components/shared/SourceNote';
+import EmptyState from '@/components/shared/EmptyState';
 import { SkeletonBlock } from '@/components/shared/Skeleton';
 import { REGIME_DIM_HINTS, STRENGTH_HINTS } from '@/lib/indicatorHints';
 import { FAMILY_META, type Tier, type TierFilter } from './types';
@@ -35,7 +36,7 @@ const REGIME_DIMS: { key: keyof MarketRegime['dims']; label: string; en: string 
 
 export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
   return (
-    <div className="card-surface p-5">
+    <div className="card-surface card-lift p-5">
       <div className="flex items-baseline justify-between">
         <p className="eyebrow">
           {t('市场形态 · MARKET REGIME')}
@@ -142,7 +143,7 @@ export function TierHistogram({
   const maxHit = Math.max(1, ...TIERS.map((tier) => hits?.[tier] ?? 0));
   const maxRef = Math.max(1, ...TIERS.map((tier) => ref?.[tier] ?? 0));
   return (
-    <div className="card-surface p-5">
+    <div className="card-surface card-lift p-5">
       <p className="eyebrow">{t('强度剖面 · 分档命中')}</p>
       <div className="mt-4 flex h-28 items-end gap-2.5">
         {TIERS.map((tier, index) => {
@@ -229,7 +230,7 @@ export function MethodCard({
   const [open, setOpen] = useState(true);
   const profile = meta?.profiles.find((item) => item.id === profileId) ?? null;
   return (
-    <div className="card-surface p-5">
+    <div className="card-surface card-lift p-5">
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full items-center justify-between">
         <span className="eyebrow">
           {t('评分方法 ·')} {profile ? profile.name : loading ? t('读取中') : error ? t('档位未知') : t('默认权重')}
@@ -256,19 +257,23 @@ export function MethodCard({
                 <div className="t-skel-content" />
               </div>
             ) : !meta && error ? (
-              <div className="mt-4">
-                <p className="text-caption leading-[18px] text-ink-500">{t('评分档位读取失败，无法显示当前权重。')}</p>
-                {onRetry && (
-                  <button
-                    type="button"
-                    onClick={onRetry}
-                    className="mt-2 flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-caption text-ink-600 transition-colors hover:border-brand-400 hover:text-brand-600"
-                  >
-                    <Icon name="refresh" size={12} />
-                    {t('重试')}
-                  </button>
-                )}
-              </div>
+              <EmptyState
+                size="compact"
+                image="/empty-chart.svg"
+                title={t('评分档位读取失败，无法显示当前权重。')}
+                action={
+                  onRetry ? (
+                    <button
+                      type="button"
+                      onClick={onRetry}
+                      className="mt-2 flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-caption text-ink-600 transition-colors hover:border-brand-400 hover:text-brand-600"
+                    >
+                      <Icon name="refresh" size={12} />
+                      {t('重试')}
+                    </button>
+                  ) : undefined
+                }
+              />
             ) : (
               <>
                 <div className="mt-4 grid grid-cols-[max-content_minmax(0,1fr)_max-content] gap-y-2.5">

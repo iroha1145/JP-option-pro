@@ -94,8 +94,9 @@ export default function Research() {
       )}
 
       {state === 'running' && (
-        <section className="card-surface p-5">
+        <section className="card-surface card-lift p-5">
           <p className="eyebrow">WALK-FORWARD</p>
+          <h3 className="mt-1 text-h3 text-ink-900">{t('历史验证')}</h3>
           <EmptyState
             image="/empty-chart.svg"
             title={t('验证正在运行')}
@@ -105,8 +106,9 @@ export default function Research() {
       )}
 
       {state === 'empty' && (
-        <section className="card-surface p-5">
+        <section className="card-surface card-lift p-5">
           <p className="eyebrow">WALK-FORWARD</p>
+          <h3 className="mt-1 text-h3 text-ink-900">{t('历史验证')}</h3>
           <EmptyState
             image="/empty-chart.svg"
             title={t('尚未运行历史验证')}
@@ -116,8 +118,9 @@ export default function Research() {
       )}
 
       {state === 'error' && (
-        <section className="card-surface p-5">
+        <section className="card-surface card-lift p-5">
           <p className="eyebrow">WALK-FORWARD</p>
+          <h3 className="mt-1 text-h3 text-ink-900">{t('历史验证')}</h3>
           <EmptyState image="/empty-chart.svg" title={t('读取失败')} description={t('请稍后重试')} />
         </section>
       )}

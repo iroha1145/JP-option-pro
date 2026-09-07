@@ -59,7 +59,7 @@ export default function ScoreBarsMini({ event, className }: { event: RadarEvent;
                 <span className="text-[11px] leading-[16px] text-ink-500">{label}</span>
                 <span className="font-mono text-[11px] leading-[16px] text-ink-700 tnum">{disp(value)}</span>
               </p>
-              <div className="radar-bar-track mt-0.5 h-[5px] overflow-hidden rounded-pill bg-line">
+              <div className="radar-bar-track mt-0.5 h-[5px] overflow-hidden rounded-pill">
                 {fin(value) && (
                   <motion.div
                     className={cn(

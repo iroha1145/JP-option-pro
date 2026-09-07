@@ -1871,6 +1871,7 @@ export const DICT: Record<string, [string, string]> = {
   采集窗口: ['Ingest window', '取得窓'],
   上次采集: ['Last fetch', '前回取得'],
   热点主题: ['Hot themes', 'ホットテーマ'],
+  当前窗口暂无热点分组: ['No hot themes in this window', 'この窓にホットテーマはありません'],
   热度: ['Heat', '熱度'],
   按时间倒序: ['Newest first', '新しい順'],
   暂无匹配的历史事件: ['No matching history yet', '一致する履歴はまだありません'],

@@ -367,7 +367,7 @@ function StateDistribution({
                 <span className="w-16 shrink-0 truncate text-caption text-ink-500 group-hover:text-ink-800">
                   {t(STATE_LABELS[item.state] ?? item.state)}
                 </span>
-                <span className="relative h-1 flex-1 overflow-hidden rounded-pill bg-line">
+                <span className="strength-track relative h-1 flex-1 overflow-hidden rounded-pill">
                   <span
                     className={cn('absolute inset-y-0 left-0 rounded-pill', STATE_DOTS[item.state] ?? 'bg-ink-300')}
                     style={{ width: `${Math.max(2, (count / max) * 100)}%` }}
@@ -854,7 +854,7 @@ function MiniScore({
         <span className="truncate">{t(label)}</span>
         {hint && <InfoHint hint={hint} size={11} />}
       </span>
-      <span className="relative h-1 flex-1 overflow-hidden rounded-pill bg-line">
+      <span className="strength-track relative h-1 flex-1 overflow-hidden rounded-pill">
         {number !== null && (
           <span
             className={cn(

@@ -309,7 +309,7 @@ export default function Earnings() {
           {loading ? <SkeletonCard /> : !error503 && <DensityStrip items={items} onJumpDay={onJumpDay} />}
           <RecentPanel items={recentQ.data?.items ?? []} loading={recentQ.loading && !recentQ.data} />
           {q.data?.coverage_note && (
-            <div className="card-surface p-5">
+            <div className="card-surface card-lift p-5">
               <p className="eyebrow">{t('覆盖口径')}</p>
               <p className="mt-2.5 text-caption leading-[19px] text-ink-500">{t(q.data.coverage_note)}</p>
               <SourceNote className="mt-3" text={t('目安以公司正式公告为准，可能前后变动')} />
@@ -326,7 +326,7 @@ function RecentPanel({ items, loading }: { items: EarningsRecentItem[]; loading:
   if (loading) return <SkeletonCard />;
   const shown = items.slice(0, 8);
   return (
-    <section className="card-surface p-5" aria-label={t('最近决算')}>
+    <section className="card-surface card-lift p-5" aria-label={t('最近决算')}>
       <p className="eyebrow">{t('最近决算 · 7 天')}</p>
       {shown.length === 0 ? (
         <EmptyState size="compact" image="/empty-chart.svg" title={t('暂无数据')} className="mt-2" />

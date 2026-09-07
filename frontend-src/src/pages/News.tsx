@@ -132,16 +132,12 @@ export default function News() {
             </span>
           </div>
 
-          {(hotspots.data?.groups.length ?? 0) > 0 && (
-            <section aria-label={t('热点主题')}>
-              <p className="eyebrow mb-2">{t('热点主题')}</p>
-              <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
-                {hotspots.data!.groups.map((group) => (
-                  <HotspotCard key={group.canonical_code} group={group} />
-                ))}
-              </div>
-            </section>
-          )}
+          <HotspotStrip
+            groups={hotspots.data?.groups ?? []}
+            loading={hotspots.loading && !hotspots.data}
+            error={hotspots.error}
+            onRetry={() => hotspots.refresh()}
+          />
 
           {feedState === 'loading' ? (
             <section className="card-surface overflow-hidden">
@@ -331,12 +327,62 @@ function AnalysisStateChip({ state }: { state: NewsItem['analysis_state'] }) {
   return <SoftBadge tone={item.tone}>{item.label}</SoftBadge>;
 }
 
+function HotspotStrip({
+  groups,
+  loading,
+  error,
+  onRetry,
+}: {
+  groups: NewsHotspotGroup[];
+  loading: boolean;
+  error: unknown;
+  onRetry: () => void;
+}) {
+  return (
+    <section aria-label={t('热点主题')}>
+      <p className="eyebrow">HOT THEMES</p>
+      <h3 className="mb-2 mt-1 text-h3 text-ink-900">{t('热点主题')}</h3>
+      {loading ? (
+        <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
+          {Array.from({ length: 3 }, (_, index) => (
+            <SkeletonCard key={index} className="h-28 min-w-[220px] max-w-[260px] shrink-0" />
+          ))}
+        </div>
+      ) : error && groups.length === 0 ? (
+        <section className="card-surface">
+          <EmptyState
+            size="compact"
+            variant="error"
+            image="/empty-news.svg"
+            title={t('加载失败')}
+            action={
+              <button type="button" onClick={onRetry} className="btn-primary">
+                {t('重试')}
+              </button>
+            }
+          />
+        </section>
+      ) : groups.length === 0 ? (
+        <section className="card-surface">
+          <EmptyState size="compact" image="/empty-news.svg" title={t('当前窗口暂无热点分组')} />
+        </section>
+      ) : (
+        <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
+          {groups.map((group) => (
+            <HotspotCard key={group.canonical_code} group={group} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function HotspotCard({ group }: { group: NewsHotspotGroup }) {
   const heat = Math.max(0, Math.min(100, group.max_importance ?? 0));
   return (
     <Link
       to={`/stock/${group.display_code}`}
-      className="card-surface card-hover flex min-w-[220px] max-w-[260px] shrink-0 flex-col gap-1.5 p-3"
+      className="card-surface card-lift flex min-w-[220px] max-w-[260px] shrink-0 flex-col gap-1.5 p-3"
     >
       <span className="flex items-center gap-1.5">
         <CodeMark code={group.display_code} size={22} />
@@ -347,7 +393,7 @@ function HotspotCard({ group }: { group: NewsHotspotGroup }) {
         </span>
       </span>
       <span className="line-clamp-2 text-caption text-ink-600">{group.latest?.title ?? '—'}</span>
-      <span className="flex h-1 overflow-hidden rounded-pill bg-line" aria-label={`${t('热度')} ${heat}`}>
+      <span className="strength-track flex h-1 overflow-hidden rounded-pill" aria-label={`${t('热度')} ${heat}`}>
         <span className="block h-full rounded-pill bg-warn-600" style={{ width: `${heat}%` }} />
       </span>
       <span className="flex items-center gap-1.5 text-micro text-ink-400">

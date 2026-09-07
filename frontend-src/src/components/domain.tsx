@@ -127,7 +127,7 @@ export function ScoreBar({
         </PointerTooltip>
         {resolvedHint && <InfoHint hint={resolvedHint} size={12} />}
       </span>
-      <div className="track relative h-1.5 flex-1 overflow-hidden rounded-pill bg-line">
+      <div className="strength-track track relative h-1.5 flex-1 overflow-hidden rounded-pill">
         {value !== null && Number.isFinite(value) && (
           <div
             className={cn(
