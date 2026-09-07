@@ -64,7 +64,7 @@ function HeatTile({
         r20: fmtPct(sector.median_return_20d),
       })}
       className={cn(
-        'group relative h-[92px] overflow-hidden rounded-md text-left shadow-sh-1 transition-[box-shadow,transform] duration-fast hover:-translate-y-0.5 hover:shadow-sh-2 md:h-[108px]',
+        'group relative h-[92px] overflow-visible rounded-md text-left shadow-sh-1 transition-[box-shadow,transform] duration-fast hover:-translate-y-0.5 hover:shadow-sh-2 md:h-[108px]',
         primary === null && 'border border-dashed border-line-strong',
         selected && 'ring-2 ring-brand-600 ring-offset-1',
       )}
