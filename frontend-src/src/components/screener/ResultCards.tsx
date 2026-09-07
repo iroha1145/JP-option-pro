@@ -9,6 +9,7 @@ import { fmtPrice } from '@/lib/format';
 import Icon from '@/components/icons';
 import ChangeBadge from '@/components/shared/ChangeBadge';
 import InfoHint from '@/components/shared/InfoHint';
+import SoftBadge from '@/components/shared/SoftBadge';
 import TickPrice from '@/components/shared/TickPrice';
 import { STRENGTH_HINTS } from '@/lib/indicatorHints';
 import RowExpansion from './RowExpansion';
@@ -88,9 +89,13 @@ export default function ResultCards({
               </span>
               <span className="mt-3 flex items-end justify-between gap-3">
                 <span>
-                  <span className={cn('metric-value text-data-xl tnum', strength?.textClass ?? 'text-ink-300')}>
-                    {score !== null ? score.toFixed(1) : '—'}
-                  </span>
+                  {strength ? (
+                    <SoftBadge tone={strength.badgeTone} size="md" className="metric-value text-data-l tnum">
+                      {score !== null ? score.toFixed(1) : '—'}
+                    </SoftBadge>
+                  ) : (
+                    <span className="metric-value text-data-xl text-ink-300 tnum">—</span>
+                  )}
                   {strength && (
                     <span className="ml-1.5 text-micro text-ink-400">
                       {t('强度分 ·')} {strength.band} {strength.label}

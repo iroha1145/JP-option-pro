@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { fmtRelativeShort } from '@/lib/format';
 import Icon from '@/components/icons';
 import PointerTooltip from '@/components/shared/PointerTooltip';
+import SoftBadge from '@/components/shared/SoftBadge';
 import { SkeletonBlock } from '@/components/shared/Skeleton';
 import { FAMILY_META, strengthPresentation } from './types';
 import { t } from '@/i18n/core';
@@ -36,9 +37,9 @@ export function ScoreCell({ score, index }: { score: number | null; index: numbe
       }
     >
       <span className="inline-flex items-center gap-2.5">
-      <span className={cn('metric-value w-[3.25rem] shrink-0 text-right text-[15px] font-semibold leading-[20px] tnum', strength.textClass)}>
+      <SoftBadge tone={strength.badgeTone} className="metric-value w-[3.25rem] shrink-0 justify-end text-[15px] leading-[20px] font-semibold tnum">
         {score.toFixed(1)}
-      </span>
+      </SoftBadge>
       <span
         className="strength-track h-1 w-16 overflow-hidden rounded-pill bg-paper"
         role="progressbar"
