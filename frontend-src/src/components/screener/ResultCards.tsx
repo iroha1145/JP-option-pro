@@ -88,7 +88,7 @@ export default function ResultCards({
               </span>
               <span className="mt-3 flex items-end justify-between gap-3">
                 <span>
-                  <span className={cn('font-mono text-data-xl tnum', strength?.textClass ?? 'text-ink-300')}>
+                  <span className={cn('metric-value text-data-xl tnum', strength?.textClass ?? 'text-ink-300')}>
                     {score !== null ? score.toFixed(1) : '—'}
                   </span>
                   {strength && (
@@ -101,7 +101,7 @@ export default function ResultCards({
                 <span className="pb-0.5 text-right">
                   <TickPrice
                     flash={flashes[row.canonical_code]}
-                    className="font-mono text-data-m text-ink-800"
+                    className="metric-value text-data-m text-ink-800 tnum"
                   >
                     {fmtPrice(overlay?.[row.canonical_code]?.live_price ?? row.close)}
                   </TickPrice>

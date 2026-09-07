@@ -218,11 +218,11 @@ export default function Market() {
             <StaleStrip onRetry={() => market.refresh()} refreshing={market.refreshing} />
           )}
           {n225 && (
-            <section className="card-surface flex flex-wrap items-end justify-between gap-3 rounded-lg p-4">
+            <section className="card-surface flex flex-wrap items-end justify-between gap-3 p-4">
               <span className="flex flex-col">
                 <span className="eyebrow">{t('日経225 · 盘中')}</span>
                 <span className="mt-1 flex items-baseline gap-3">
-                  <span className="font-mono text-data-l tnum text-ink-900">
+                  <span className="metric-value text-data-l tnum text-ink-900">
                     {n225.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                   </span>
                   <ChangeBadge value={n225.change_pct} />
@@ -259,13 +259,13 @@ export default function Market() {
                   key={index.index_code}
                   type="button"
                   onClick={() => setIndexCode(index.index_code)}
-                  className={`card-surface flex w-full items-center justify-between px-3 py-2 text-left ${
-                    index.index_code === indexCode ? 'bg-paper-2 ring-1 ring-brand-100' : ''
+                  className={`card-surface flex w-full items-center justify-between px-3 py-2 text-left transition-shadow duration-240 ease-out hover:shadow-sh-2 ${
+                    index.index_code === indexCode ? 'bg-paper-2 ring-1 ring-brand-100' : 'hover:bg-paper-2'
                   }`}
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-body-s text-ink-700">{index.name}</span>
-                    <span className="font-mono text-data-m tnum text-ink-900">{fmtPrice(index.close)}</span>
+                    <span className="metric-value text-data-m tnum text-ink-900">{fmtPrice(index.close)}</span>
                   </span>
                   <span className="flex items-center gap-3">
                     <span className="w-[88px] shrink-0">
@@ -294,7 +294,7 @@ export default function Market() {
           </div>
 
           {/* 板块透视：热力砖（当日/近20日/今日领涨同砖）+ 列表视图 */}
-          <section className="card-surface rounded-lg p-4">
+          <section className="card-surface p-4 md:p-6">
             <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="eyebrow">{t('SECTOR MATRIX · 33 業種')}</p>
@@ -445,7 +445,7 @@ function IndexTrendPanel({
   }, [scrub, points, changePct]);
 
   return (
-    <section className="card-surface flex flex-col overflow-hidden rounded-xl p-0 lg:col-span-2">
+    <section className="card-surface flex flex-col overflow-hidden p-0 lg:col-span-2">
       <header className="flex items-center justify-between gap-3 px-4 pt-3">
         <div className="min-w-0">
           <p className="eyebrow">INDEX TREND · DAILY</p>
@@ -485,7 +485,7 @@ function IndexTrendPanel({
       </div>
       <div className="flex items-baseline justify-between gap-3 px-4 pb-4 pt-2">
         <div>
-          <p className="font-mono text-data-xl tnum text-ink-900">{fmtPrice(shown?.value)}</p>
+          <p className="metric-value text-data-xl tnum text-ink-900">{fmtPrice(shown?.value)}</p>
           <p className="mt-0.5 text-micro text-ink-400">
             {shown?.label ?? '—'} · {t('收盘')}
           </p>

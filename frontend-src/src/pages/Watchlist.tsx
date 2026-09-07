@@ -657,7 +657,7 @@ function WatchCard({
           <ChangeBadge value={item.quote?.change_pct} size="sm" />
         </span>
         <span className="mt-3 flex items-end justify-between">
-          <TickPrice flash={flash} className="font-mono text-data-l text-ink-900">
+          <TickPrice flash={flash} className="metric-value text-data-l text-ink-900 tnum">
             {fmtPrice(item.quote?.close)}
           </TickPrice>
           <span className="font-mono text-caption text-ink-500 tnum">{fmtYenCompact(item.quote?.turnover_value)}</span>

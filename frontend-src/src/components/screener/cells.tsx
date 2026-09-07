@@ -36,7 +36,7 @@ export function ScoreCell({ score, index }: { score: number | null; index: numbe
       }
     >
       <span className="inline-flex items-center gap-2.5">
-      <span className={cn('w-[3.25rem] shrink-0 text-right font-mono text-[15px] font-semibold leading-[20px] tnum', strength.textClass)}>
+      <span className={cn('metric-value w-[3.25rem] shrink-0 text-right text-[15px] font-semibold leading-[20px] tnum', strength.textClass)}>
         {score.toFixed(1)}
       </span>
       <span

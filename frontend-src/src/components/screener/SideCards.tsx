@@ -13,6 +13,7 @@ import HatchLegend from '@/components/shared/HatchLegend';
 import InfoHint from '@/components/shared/InfoHint';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import SourceNote from '@/components/shared/SourceNote';
+import SoftBadge from '@/components/shared/SoftBadge';
 import EmptyState from '@/components/shared/EmptyState';
 import { SkeletonBlock } from '@/components/shared/Skeleton';
 import { REGIME_DIM_HINTS, STRENGTH_HINTS } from '@/lib/indicatorHints';
@@ -42,7 +43,7 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
           <InfoHint hint={STRENGTH_HINTS.marketRegime} side="bottom" size={12} className="ml-1" />
         </p>
         {regime.score !== null ? (
-          <span className="font-mono text-data-m text-ink-900 tnum">{regime.score}</span>
+          <span className="metric-value text-data-m text-ink-900 tnum">{regime.score}</span>
         ) : (
           <span className="font-mono text-micro text-ink-300 tnum">{t('6 维')}</span>
         )}
@@ -50,10 +51,10 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
       {(regime.label || regime.spread_label) && (
         <p className="mt-1.5 flex flex-wrap items-center gap-1.5">
           {regime.label && (
-            <span className="rounded-xs bg-brand-50 px-1.5 py-px text-micro font-medium text-brand-700">{t(regime.label)}</span>
+            <SoftBadge tone="brand">{t(regime.label)}</SoftBadge>
           )}
           {regime.spread_label && (
-            <span className="rounded-xs border border-line bg-card-warm px-1.5 py-px text-micro text-ink-500">{t(regime.spread_label)}</span>
+            <SoftBadge>{t(regime.spread_label)}</SoftBadge>
           )}
         </p>
       )}
@@ -95,7 +96,7 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
                   )}
                 </span>
               </PointerTooltip>
-              <span className="text-right font-mono text-caption text-ink-800 tnum">
+              <span className="metric-value text-right text-caption text-ink-800 tnum">
                 {value !== null ? Math.round(value) : '—'}
               </span>
             </div>
@@ -105,9 +106,11 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
       {regime.warnings.length > 0 && (
         <ul className="mt-3.5 space-y-1 border-t border-line pt-3">
           {regime.warnings.map((warning, index) => (
-            <li key={index} className="flex items-start gap-1.5 text-micro leading-[16px] text-warn-600">
-              <span className="mt-px shrink-0" aria-hidden="true">⚠</span>
-              {t(warning)}
+            <li key={index}>
+              <SoftBadge tone="warn" className="items-start whitespace-normal">
+                <span className="mt-px shrink-0" aria-hidden="true">⚠</span>
+                {t(warning)}
+              </SoftBadge>
             </li>
           ))}
         </ul>
@@ -162,7 +165,7 @@ export function TierHistogram({
                 !selectable && 'cursor-default opacity-70',
               )}
             >
-              <span className="font-mono text-[10px] leading-none text-ink-400 tnum">{hit}</span>
+              <span className="metric-value text-[11px] leading-none text-ink-500 tnum">{hit}</span>
               {ref !== null && (
                 <span
                   className="w-full max-w-[26px] rounded-t-[3px] border border-ink-300/60"
