@@ -25,7 +25,7 @@ import Segmented from '@/components/shared/Segmented';
 import EmptyState from '@/components/shared/EmptyState';
 import StatCard from '@/components/shared/StatCard';
 import PriorityRing from '@/components/shared/PriorityRing';
-import { SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
+import { SkeletonBlock, SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
 import { CodeCell, DataThrough } from '@/components/domain';
 import ReactECharts from '@/components/charts/ReactECharts';
 import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart';
@@ -532,9 +532,12 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
           {detail ? (
             <Explanation detail={detail} />
           ) : (
-            <div className="space-y-1.5 border-t border-line pt-2.5">
-              <span className="skeleton-shimmer block h-3 w-full rounded-sm" aria-hidden />
-              <span className="skeleton-shimmer block h-3 w-4/5 rounded-sm" aria-hidden />
+            <div className="t-skel space-y-1.5 border-t border-line pt-2.5" data-state="loading" aria-hidden="true">
+              <div className="t-skel-skeleton is-pulsing space-y-1.5">
+                <SkeletonBlock className="h-3 w-full" />
+                <SkeletonBlock className="h-3 w-4/5" />
+              </div>
+              <div className="t-skel-content" />
             </div>
           )}
 

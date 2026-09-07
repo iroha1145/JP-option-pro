@@ -1890,4 +1890,7 @@ export const DICT: Record<string, [string, string]> = {
     '価格スケール：失効 {invalid}、トリガー {trigger}、目標 {target}、現値 {current}',
   ],
   'vs 昨收': ['vs prev close', '前日比'],
+  正常: ['OK', '正常'],
+  异常: ['Error', '異常'],
+  未采集: ['Not fetched', '未取得'],
 };

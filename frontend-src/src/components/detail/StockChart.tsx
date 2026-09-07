@@ -315,7 +315,7 @@ export default function StockChart({
           ) : barsLoading ? (
             <SkeletonCard className="h-[420px]" />
           ) : (
-            <EmptyState title={t('暂无数据')} />
+            <EmptyState image="/empty-chart.svg" title={t('暂无数据')} />
           )
         ) : (
           children

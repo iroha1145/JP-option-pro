@@ -13,6 +13,7 @@ import HatchLegend from '@/components/shared/HatchLegend';
 import InfoHint from '@/components/shared/InfoHint';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import SourceNote from '@/components/shared/SourceNote';
+import { SkeletonBlock } from '@/components/shared/Skeleton';
 import { REGIME_DIM_HINTS, STRENGTH_HINTS } from '@/lib/indicatorHints';
 import { FAMILY_META, type Tier, type TierFilter } from './types';
 import { t } from '@/i18n/core';
@@ -246,10 +247,13 @@ export function MethodCard({
             className="overflow-hidden"
           >
             {!meta && loading ? (
-              <div className="mt-4 space-y-2.5" aria-hidden="true">
-                {FAMILY_META.map(({ key }) => (
-                  <span key={key} className="skeleton-shimmer block h-3 w-full rounded-xs" />
-                ))}
+              <div className="t-skel mt-4 space-y-2.5" data-state="loading" aria-hidden="true">
+                <div className="t-skel-skeleton is-pulsing space-y-2.5">
+                  {FAMILY_META.map(({ key }) => (
+                    <SkeletonBlock key={key} className="h-3 w-full rounded-xs" />
+                  ))}
+                </div>
+                <div className="t-skel-content" />
               </div>
             ) : !meta && error ? (
               <div className="mt-4">

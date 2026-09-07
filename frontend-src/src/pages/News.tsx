@@ -11,7 +11,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
 import Segmented from '@/components/shared/Segmented';
 import DataTable, { type Column } from '@/components/shared/DataTable';
-import { SkeletonRows } from '@/components/shared/Skeleton';
+import { SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
 import SoftBadge from '@/components/shared/SoftBadge';
 import StaleStrip from '@/components/shared/StaleStrip';
 import CodeMark from '@/components/shared/CodeMark';
@@ -25,6 +25,7 @@ import { DUR_SECTION, EASE_PAPER } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import type {
   EconEvent,
+  NewsFeedState,
   NewsHotspotGroup,
   NewsItem,
   NewsSecurityRow,
@@ -626,8 +627,30 @@ function weekdayJa(isoDate: string): string {
 
 /* ---------------- 数据源 ---------------- */
 
+function feedHost(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+}
+
+function feedHealth(feed: NewsFeedState): { tone: 'up' | 'down' | 'neutral'; label: string } {
+  if (feed.last_error_code) return { tone: 'down', label: t('异常') };
+  if (feed.last_fetched_at) return { tone: 'up', label: t('正常') };
+  return { tone: 'neutral', label: t('未采集') };
+}
+
 function SourcesPanel({ status, loading }: { status: NewsStatus | null; loading: boolean }) {
-  if (loading && !status) return <SkeletonRows rows={5} />;
+  if (loading && !status) {
+    return (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {Array.from({ length: 6 }, (_, index) => (
+          <SkeletonCard key={index} />
+        ))}
+      </div>
+    );
+  }
   if (!status) {
     return (
       <section className="card-surface">
@@ -636,64 +659,98 @@ function SourcesPanel({ status, loading }: { status: NewsStatus | null; loading:
     );
   }
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <section className="card-surface card-lift p-5">
-        <p className="eyebrow">RSS FEEDS</p>
-        <h3 className="mb-2 mt-1 text-h3 text-ink-900">RSS {t('数据源')}</h3>
-        <ul className="divide-y divide-line">
-          {status.feeds.map((feed) => (
-            <li key={feed.feed_url} className="py-2">
-              <div className="flex items-center gap-2">
-                <span
-                  className={cn(
-                    'inline-block h-2 w-2 rounded-full',
-                    feed.last_error_code ? 'bg-down-600' : feed.last_fetched_at ? 'bg-ai-600' : 'bg-ink-300',
-                  )}
-                />
-                <span className="min-w-0 flex-1 truncate font-mono text-caption text-ink-700">{feed.feed_url}</span>
+    <div className="space-y-4">
+      <motion.div
+        initial="hidden"
+        animate="show"
+        variants={{ show: { transition: { staggerChildren: 0.05 } } }}
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
+      >
+        {status.feeds.map((feed) => {
+          const health = feedHealth(feed);
+          return (
+            <motion.section
+              key={feed.feed_url}
+              variants={{
+                hidden: { opacity: 0, y: 14 },
+                show: { opacity: 1, y: 0, transition: { duration: 0.48, ease: EASE_PAPER } },
+              }}
+              className="card-surface card-lift p-5"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="eyebrow">RSS</p>
+                  <h3 className="mt-1 truncate text-h3 text-ink-900">{feedHost(feed.feed_url)}</h3>
+                  <p className="mt-0.5 truncate font-mono text-micro text-ink-400">{feed.feed_url}</p>
+                </div>
+                <SoftBadge tone={health.tone}>
+                  <span
+                    className={cn(
+                      'inline-block size-1.5 rounded-full',
+                      health.tone === 'up' ? 'bg-ai-600' : health.tone === 'down' ? 'bg-down-600' : 'bg-ink-300',
+                    )}
+                    aria-hidden
+                  />
+                  {health.label}
+                </SoftBadge>
               </div>
-              <div className="mt-1 flex items-center gap-3 pl-4 text-micro text-ink-400">
-                <span>{t('最近取得')}: {fmtJstDateTime(feed.last_fetched_at)}</span>
-                <span>{t('累计')}: {feed.items_seen}</span>
-                {feed.last_error_code && <span className="text-down-700">{feed.last_error_code}</span>}
+              <div className="mt-4 grid grid-cols-2 gap-2 text-center">
+                <div>
+                  <p className="font-mono text-data-l text-ink-900 tnum">{feed.items_seen.toLocaleString('ja-JP')}</p>
+                  <p className="mt-0.5 text-micro text-ink-400">{t('累计')}</p>
+                </div>
+                <div>
+                  <p className="font-mono text-data-l text-ink-900 tnum">
+                    {feed.last_fetched_at ? fmtRelative(feed.last_fetched_at) : '—'}
+                  </p>
+                  <p className="mt-0.5 text-micro text-ink-400">{t('最近取得')}</p>
+                </div>
               </div>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-2 text-micro text-ink-400">
-          {t('实体目录')}: {status.entity_aliases.toLocaleString('ja-JP')} · {t('同步间隔')}: {status.sync_seconds}s
-        </p>
-      </section>
-
-      <section className="card-surface card-lift p-5">
-        <p className="eyebrow">AI PIPELINE</p>
-        <h3 className="mb-2 mt-1 text-h3 text-ink-900">AI {t('管道')}</h3>
-        <dl className="space-y-1.5 text-body-s">
-          <div className="flex justify-between">
-            <dt className="text-ink-500">{t('状态')}</dt>
-            <dd className={status.ai.enabled ? 'text-ai-600' : 'text-ink-400'}>
-              {status.ai.enabled ? t('已启用') : t('未启用')}
-            </dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-ink-500">{t('翻译目标语言')}</dt>
-            <dd className="font-mono text-ink-800">{status.ai.translation_target}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-ink-500">{t('分析语言')}</dt>
-            <dd className="font-mono text-ink-800">{status.ai.analysis_language}</dd>
-          </div>
-          {Object.keys(status.ai.queue).length > 0 && (
+              {feed.last_error_code && (
+                <p className="mt-3 border-t border-line pt-2.5 font-mono text-micro text-down-700">{feed.last_error_code}</p>
+              )}
+            </motion.section>
+          );
+        })}
+        <motion.section
+          variants={{
+            hidden: { opacity: 0, y: 14 },
+            show: { opacity: 1, y: 0, transition: { duration: 0.48, ease: EASE_PAPER } },
+          }}
+          className="card-surface card-lift p-5"
+        >
+          <p className="eyebrow">AI PIPELINE</p>
+          <h3 className="mb-2 mt-1 text-h3 text-ink-900">AI {t('管道')}</h3>
+          <dl className="space-y-1.5 text-body-s">
             <div className="flex justify-between">
-              <dt className="text-ink-500">{t('任务队列')}</dt>
-              <dd className="font-mono text-caption tnum text-ink-700">
-                {Object.entries(status.ai.queue).map(([key, count]) => `${key}:${count}`).join(' ')}
+              <dt className="text-ink-500">{t('状态')}</dt>
+              <dd className={status.ai.enabled ? 'text-ai-600' : 'text-ink-400'}>
+                {status.ai.enabled ? t('已启用') : t('未启用')}
               </dd>
             </div>
-          )}
-        </dl>
-        {status.ai.note_ja && <p className="mt-2 rounded-md bg-paper-2 p-2 text-caption text-ink-500">{status.ai.note_ja}</p>}
-      </section>
+            <div className="flex justify-between">
+              <dt className="text-ink-500">{t('翻译目标语言')}</dt>
+              <dd className="font-mono text-ink-800">{status.ai.translation_target}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-ink-500">{t('分析语言')}</dt>
+              <dd className="font-mono text-ink-800">{status.ai.analysis_language}</dd>
+            </div>
+            {Object.keys(status.ai.queue).length > 0 && (
+              <div className="flex justify-between">
+                <dt className="text-ink-500">{t('任务队列')}</dt>
+                <dd className="font-mono text-caption tnum text-ink-700">
+                  {Object.entries(status.ai.queue).map(([key, count]) => `${key}:${count}`).join(' ')}
+                </dd>
+              </div>
+            )}
+          </dl>
+          {status.ai.note_ja && <p className="mt-2 rounded-md bg-paper-2 p-2 text-caption text-ink-500">{status.ai.note_ja}</p>}
+        </motion.section>
+      </motion.div>
+      <p className="text-micro text-ink-400">
+        {t('实体目录')}: {status.entity_aliases.toLocaleString('ja-JP')} · {t('同步间隔')}: {status.sync_seconds}s
+      </p>
     </div>
   );
 }

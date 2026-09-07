@@ -14,6 +14,7 @@ import FilterButton from '@/components/shared/FilterButton';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import SelectionViewport from '@/components/shared/SelectionViewport';
 import SoftBadge from '@/components/shared/SoftBadge';
+import { SkeletonBlock } from '@/components/shared/Skeleton';
 import InfoHint from '@/components/shared/InfoHint';
 import { STRENGTH_HINTS, type ScoreHint } from '@/lib/indicatorHints';
 import {
@@ -371,10 +372,13 @@ export default function FilterWorkbench({
             {metaFailed ? (
               <p className="flex h-8 items-center text-caption text-ink-400">{t('预设暂不可用 · 使用默认条件')}</p>
             ) : presetChips.length === 0 ? (
-              <div className="flex gap-2" aria-hidden="true">
-                {Array.from({ length: 3 }, (_, i) => (
-                  <span key={i} className="skeleton-shimmer h-8 w-20 rounded-md" />
-                ))}
+              <div className="t-skel flex gap-2" data-state="loading" aria-hidden="true">
+                <div className="t-skel-skeleton is-pulsing flex gap-2">
+                  {Array.from({ length: 3 }, (_, i) => (
+                    <SkeletonBlock key={i} className="h-8 w-20 rounded-md" />
+                  ))}
+                </div>
+                <div className="t-skel-content" />
               </div>
             ) : (
               <SelectionViewport>
@@ -412,10 +416,13 @@ export default function FilterWorkbench({
           <div data-screener-field="sectors" className="min-w-0">
             <FieldLabel>{t('业种（多选）')}</FieldLabel>
             {sectorOptions.length === 0 ? (
-              <div className="flex flex-wrap gap-2" aria-hidden="true">
-                {Array.from({ length: 5 }, (_, i) => (
-                  <span key={i} className="skeleton-shimmer h-7 w-16 rounded-md" />
-                ))}
+              <div className="t-skel flex flex-wrap gap-2" data-state="loading" aria-hidden="true">
+                <div className="t-skel-skeleton is-pulsing flex flex-wrap gap-2">
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <SkeletonBlock key={i} className="h-7 w-16 rounded-md" />
+                  ))}
+                </div>
+                <div className="t-skel-content" />
               </div>
             ) : (
               <SelectionViewport>

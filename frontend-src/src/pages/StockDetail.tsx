@@ -312,7 +312,7 @@ export default function StockDetail() {
           {/* 雷达 */}
           <section className="card-surface p-5">
             <p className="eyebrow">BREAKOUT RADAR</p>
-            <h2 className="mb-2 mt-1 text-body font-medium text-ink-900">{t('突破雷达')}</h2>
+            <h2 className="mb-2 mt-1 text-h3 text-ink-900">{t('突破雷达')}</h2>
             {data.radar_events.length === 0 ? (
               <p className="text-caption text-ink-400">{t('暂无相关雷达事件')}</p>
             ) : (
@@ -333,14 +333,14 @@ export default function StockDetail() {
           {/* 信用交易 */}
           <section className="card-surface p-5">
             <p className="eyebrow">MARGIN</p>
-            <h2 className="mb-2 mt-1 text-body font-medium text-ink-900">{t('信用交易')}</h2>
+            <h2 className="mb-2 mt-1 text-h3 text-ink-900">{t('信用交易')}</h2>
             <MarginPanel rows={data.margin_interest} />
           </section>
 
           {/* 技术指标 */}
           <section className="card-surface p-5">
             <p className="eyebrow">TECHNICALS</p>
-            <h2 className="mb-2 mt-1 text-body font-medium text-ink-900">{t('技术指标')}</h2>
+            <h2 className="mb-2 mt-1 text-h3 text-ink-900">{t('技术指标')}</h2>
             <IndicatorGrid technical={technical} />
           </section>
         </div>

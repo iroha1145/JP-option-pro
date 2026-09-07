@@ -125,3 +125,11 @@
 @media (prefers-reduced-motion: reduce) {
   .radar-disclosure-arrow { transition: none; }
 }
+@keyframes bk-locate-flash {
+  0% { box-shadow: inset 3px 0 0 var(--brand-600), 0 0 0 3px rgba(46, 70, 224, 0.18); }
+  100% { box-shadow: inset 3px 0 0 transparent, 0 0 0 0 rgba(46, 70, 224, 0); }
+}
+.bk-locate { animation: bk-locate-flash 900ms cubic-bezier(.22, 1, .36, 1) 2; }
+@media (prefers-reduced-motion: reduce) {
+  .bk-locate { animation: none; }
+}

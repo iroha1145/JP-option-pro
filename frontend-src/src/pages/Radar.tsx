@@ -1,7 +1,7 @@
 /** 突破雷达 — 美版布局移植：Lead 大卡（K线+枢轴带）→ 信号卡片流 → 生命周期。
  *  数据仍为收盘后日线扫描，Lead 卡的 K 线按需拉取单只标的。 */
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { motion } from 'framer-motion';
 import { quotesApi, radarApi, stocksApi, workerApi } from '@/api/modules';
@@ -52,6 +52,23 @@ export default function Radar() {
   const [group, setGroup] = useState<StateGroup>('active');
   const [view, setView] = useState<ViewMode>('cards');
   const [leadId, setLeadId] = useState<string | null>(null);
+  const [locateId, setLocateId] = useState<string | null>(null);
+  const locateTimer = useRef<number | null>(null);
+
+  const promoteLead = (id: string) => {
+    setLeadId(id);
+    setLocateId(id);
+    if (locateTimer.current) window.clearTimeout(locateTimer.current);
+    locateTimer.current = window.setTimeout(() => setLocateId(null), 2000);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  useEffect(
+    () => () => {
+      if (locateTimer.current) window.clearTimeout(locateTimer.current);
+    },
+    [],
+  );
 
   const query = usePolling(
     () => radarApi.current(GROUP_STATES[group] ? { states: GROUP_STATES[group], limit: 200 } : { limit: 200 }),
@@ -209,7 +226,12 @@ export default function Radar() {
           )}
           {lead && (
             <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(260px,5fr)]">
-              <LeadBigCard event={lead} live={overlayRows[lead.event_id]} flash={flashes[lead.event_id]} />
+              <LeadBigCard
+                event={lead}
+                live={overlayRows[lead.event_id]}
+                flash={flashes[lead.event_id]}
+                locate={locateId === lead.event_id}
+              />
               <HistoryRail events={events} />
             </div>
           )}
@@ -228,10 +250,7 @@ export default function Radar() {
                       event={event}
                       live={overlayRows[event.event_id]}
                       flash={flashes[event.event_id]}
-                      onSelect={() => {
-                        setLeadId(event.event_id);
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
+                      onSelect={() => promoteLead(event.event_id)}
                     />
                   </motion.div>
                 ))}
@@ -241,10 +260,7 @@ export default function Radar() {
               events={events}
               flashes={flashes}
               overlay={overlayRows}
-              onSelect={(event) => {
-                setLeadId(event.event_id);
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
+              onSelect={(event) => promoteLead(event.event_id)}
             />
           )}
         </>
@@ -366,10 +382,12 @@ function LeadBigCard({
   event,
   live,
   flash,
+  locate = false,
 }: {
   event: RadarEvent;
   live?: { live_price: number; pivot_distance_pct?: number; above_pivot?: boolean };
   flash?: 'up' | 'down';
+  locate?: boolean;
 }) {
   const chart = usePolling(
     () => stocksApi.chart(event.canonical_code, '6m'),
@@ -386,7 +404,7 @@ function LeadBigCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: DUR_SECTION, ease: EASE_PAPER }}
       aria-label={t('{code} 首要信号大卡', { code: event.display_code })}
-      className="radar-lead-card card-surface p-5"
+      className={cn('radar-lead-card card-surface p-5', locate && 'bk-locate')}
     >
       <div className="flex flex-wrap items-center gap-1.5">
         <SignalChip signal={event.signal_type} />

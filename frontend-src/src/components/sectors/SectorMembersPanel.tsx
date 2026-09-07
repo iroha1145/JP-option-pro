@@ -80,7 +80,7 @@ export default function SectorMembersPanel({
         </div>
       ) : rows.length === 0 ? (
         <div className="mt-3">
-          <EmptyState title={t('暂无数据')} description={t('该业种在当前断面没有可用个股')} />
+          <EmptyState image="/empty-chart.svg" title={t('暂无数据')} description={t('该业种在当前断面没有可用个股')} />
         </div>
       ) : (
         <>

@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { fmtRelativeShort } from '@/lib/format';
 import Icon from '@/components/icons';
 import PointerTooltip from '@/components/shared/PointerTooltip';
+import { SkeletonBlock } from '@/components/shared/Skeleton';
 import { FAMILY_META, strengthPresentation } from './types';
 import { t } from '@/i18n/core';
 
@@ -102,7 +103,7 @@ export function NewsBadge({
   tipSide?: 'top' | 'bottom';
 }) {
   if (!loaded) {
-    return <span className="skeleton-shimmer inline-block h-5 w-14 rounded-xs" aria-hidden="true" />;
+    return <SkeletonBlock className="inline-block h-5 w-14 rounded-xs" />;
   }
   if (!summary || summary.news_count === 0) {
     return (
