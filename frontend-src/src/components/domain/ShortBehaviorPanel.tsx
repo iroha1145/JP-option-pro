@@ -10,6 +10,8 @@ import { shortMonitorApi } from '@/api/modules';
 import type { ShortMonitorDetail, ShortMonitorEvent, ShortMonitorHolder } from '@/api/types';
 import { fmtDate, fmtDateShort, fmtPct, fmtPctLevel, fmtShares } from '@/lib/format';
 import { explanationLine } from '@/lib/explainText';
+import InfoHint from '@/components/shared/InfoHint';
+import { SHORT_HINTS, type ScoreHint } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 
 const EVENT_LABELS: Record<string, string> = {
@@ -82,25 +84,25 @@ export default function ShortBehaviorPanel({ code }: { code: string }) {
 
       {/* 下层：行为指标 */}
       <dl className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-        <Metric label="行为分" value={detail.behavior_score?.toFixed(0) ?? '—'} />
-        <Metric label="数据置信度" value={detail.data_confidence?.toFixed(2) ?? '—'} />
+        <Metric label="行为分" value={detail.behavior_score?.toFixed(0) ?? '—'} hint={SHORT_HINTS.behavior} />
+        <Metric label="数据置信度" value={detail.data_confidence?.toFixed(2) ?? '—'} hint={SHORT_HINTS.confidence} />
         <Metric
           label="公开可见空头"
           value={fmtPctLevel(detail.visible_short_ratio)}
-          hint="近125个交易日有更新的报告义务中机构之和"
+          hint={SHORT_HINTS.visibleShort}
         />
         <Metric
           label="在册合计（官方口径）"
           value={fmtPctLevel(detail.reported_in_scope_ratio)}
-          hint="最后报告仍在公开范围内的全部机构之和，含报告已长期停更者。官方规则没有失效期限"
+          hint={SHORT_HINTS.inScope}
         />
         <Metric
           label="公开可见回补天数"
           value={detail.visible_days_to_cover?.toFixed(2) ?? '—'}
-          hint="仅按可见部分计算，不是市场总空头回补天数"
+          hint={SHORT_HINTS.daysToCover}
         />
-        <Metric label="卖压吸收" value={detail.scores.absorption?.toFixed(0) ?? '—'} />
-        <Metric label="回补强度" value={detail.scores.covering?.toFixed(0) ?? '—'} />
+        <Metric label="卖压吸收" value={detail.scores.absorption?.toFixed(0) ?? '—'} hint={SHORT_HINTS.absorption} />
+        <Metric label="回补强度" value={detail.scores.covering?.toFixed(0) ?? '—'} hint={SHORT_HINTS.covering} />
         <Metric label="相对TOPIX（20日）" value={fmtPct(detail.rel_topix_20d)} />
         <Metric label="相对行业（20日）" value={fmtPct(detail.rel_sector_20d)} />
       </dl>
@@ -164,10 +166,13 @@ export default function ShortBehaviorPanel({ code }: { code: string }) {
   );
 }
 
-function Metric({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Metric({ label, value, hint }: { label: string; value: string; hint?: ScoreHint }) {
   return (
-    <div className="rounded-md bg-paper-2 px-2 py-1.5" title={hint ? t(hint) : undefined}>
-      <div className="truncate text-micro text-ink-400">{t(label)}</div>
+    <div className="rounded-md bg-paper-2 px-2 py-1.5">
+      <div className="flex items-center gap-0.5 text-micro text-ink-400">
+        <span className="truncate">{t(label)}</span>
+        {hint && <InfoHint hint={hint} size={11} side="bottom" />}
+      </div>
       <div className="font-mono text-data-s tnum text-ink-900">{value}</div>
     </div>
   );

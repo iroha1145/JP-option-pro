@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { fmtPct } from '@/lib/format';
 import { heatColor } from '@/lib/chart';
 import { SkeletonBlock } from '@/components/shared/Skeleton';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import { t } from '@/i18n/core';
 import type { SectorStrength } from '@/api/types';
 
@@ -54,90 +55,95 @@ function HeatTile({
   const share = sector.advancers_share;
 
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
-      aria-label={t('{name}，当日 {r1}，近20日 {r20}', {
-        name: sector.sector33_name,
-        r1: fmtPct(sector.median_return_1d),
-        r20: fmtPct(sector.median_return_20d),
-      })}
-      className={cn(
-        'group relative h-[92px] overflow-visible rounded-md text-left shadow-sh-1 transition-[box-shadow,transform] duration-fast hover:-translate-y-0.5 hover:shadow-sh-2 md:h-[108px]',
-        primary === null && 'border border-dashed border-line-strong',
-        selected && 'ring-2 ring-brand-600 ring-offset-1',
-      )}
-      style={{ backgroundColor: bg }}
-    >
-      <span className="flex h-full flex-col justify-between p-3">
-        <span className="flex min-w-0 items-start justify-between gap-1.5">
-          <span className={cn('min-w-0 truncate text-[13px] font-semibold leading-[18px]', textMain)}>
-            {sector.sector33_name}
-          </span>
-          <span className={cn('shrink-0 font-mono text-micro tnum', textSub)}>
-            {t('{n} 只', { n: sector.member_count })}
-          </span>
-        </span>
-        <span>
-          <span className="flex items-baseline gap-1.5">
-            <span className={cn('font-mono text-[15px] font-semibold leading-5 tnum', textMain)}>
-              {fmtPct(primary)}
-            </span>
-            {/* 窄屏の 149px タイルには入らない（英語 "1d median" で確実に切れる）。
-                口径は直上の Segmented が示しているので端末幅では省く。 */}
-            <span className={cn('hidden truncate text-micro sm:inline', textSub)}>{primaryLabel}</span>
-          </span>
-          <span className={cn('block truncate font-mono text-micro tnum', textSub)}>
-            {secondaryLabel} {fmtPct(secondary)}
-          </span>
-        </span>
-      </span>
-
-      <span
-        role="tooltip"
-        className="cloud-popover pointer-events-none absolute -top-2 left-1/2 z-30 hidden w-48 -translate-x-1/2 -translate-y-full p-2.5 text-left md:group-hover:block md:group-focus-visible:block"
-      >
-        <span className="eyebrow block">{sector.sector33_name}</span>
-        <span className="mt-1.5 block space-y-1 text-micro">
-          <span className="flex items-center justify-between gap-2">
-            <span className="text-ink-500">{t('1日 中位')}</span>
-            <span className="font-mono text-ink-800 tnum">{fmtPct(sector.median_return_1d)}</span>
-          </span>
-          <span className="flex items-center justify-between gap-2">
-            <span className="text-ink-500">{t('20日 中位')}</span>
-            <span className="font-mono text-ink-800 tnum">{fmtPct(sector.median_return_20d)}</span>
-          </span>
-          {share !== null && (
-            <span className="flex items-center justify-between gap-2 border-t border-line pt-1">
-              <span className="text-ink-500">{t('上涨占比')}</span>
-              <span className="font-mono text-ink-800 tnum">{Math.round(share * 100)}%</span>
-            </span>
-          )}
-          {sector.leaders[0] && (
+    <PointerTooltip
+      passthrough
+      side="top"
+      width={192}
+      className="block h-full w-full"
+      contentClassName="p-2.5"
+      content={
+        <span className="block text-left">
+          <span className="eyebrow block">{sector.sector33_name}</span>
+          <span className="mt-1.5 block space-y-1 text-micro">
             <span className="flex items-center justify-between gap-2">
-              <span className="text-ink-500">{t('今日领涨')}</span>
-              <span className="font-mono font-semibold text-ink-800">
-                {sector.leaders[0].canonical_code.length === 5 && sector.leaders[0].canonical_code.endsWith('0')
-                  ? sector.leaders[0].canonical_code.slice(0, 4)
-                  : sector.leaders[0].canonical_code}
-              </span>
+              <span className="text-ink-500">{t('1日 中位')}</span>
+              <span className="font-mono text-ink-800 tnum">{fmtPct(sector.median_return_1d)}</span>
             </span>
-          )}
+            <span className="flex items-center justify-between gap-2">
+              <span className="text-ink-500">{t('20日 中位')}</span>
+              <span className="font-mono text-ink-800 tnum">{fmtPct(sector.median_return_20d)}</span>
+            </span>
+            {share !== null && (
+              <span className="flex items-center justify-between gap-2 border-t border-line pt-1">
+                <span className="text-ink-500">{t('上涨占比')}</span>
+                <span className="font-mono text-ink-800 tnum">{Math.round(share * 100)}%</span>
+              </span>
+            )}
+            {sector.leaders[0] && (
+              <span className="flex items-center justify-between gap-2">
+                <span className="text-ink-500">{t('今日领涨')}</span>
+                <span className="font-mono font-semibold text-ink-800">
+                  {sector.leaders[0].canonical_code.length === 5 && sector.leaders[0].canonical_code.endsWith('0')
+                    ? sector.leaders[0].canonical_code.slice(0, 4)
+                    : sector.leaders[0].canonical_code}
+                </span>
+              </span>
+            )}
+          </span>
         </span>
-      </span>
+      }
+    >
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-pressed={selected}
+        aria-label={t('{name}，当日 {r1}，近20日 {r20}', {
+          name: sector.sector33_name,
+          r1: fmtPct(sector.median_return_1d),
+          r20: fmtPct(sector.median_return_20d),
+        })}
+        className={cn(
+          'group relative h-[92px] w-full overflow-visible rounded-md text-left shadow-sh-1 transition-[box-shadow,transform] duration-fast hover:-translate-y-0.5 hover:shadow-sh-2 md:h-[108px]',
+          primary === null && 'border border-dashed border-line-strong',
+          selected && 'ring-2 ring-brand-600 ring-offset-1',
+        )}
+        style={{ backgroundColor: bg }}
+      >
+        <span className="flex h-full flex-col justify-between p-3">
+          <span className="flex min-w-0 items-start justify-between gap-1.5">
+            <span className={cn('min-w-0 truncate text-[13px] font-semibold leading-[18px]', textMain)}>
+              {sector.sector33_name}
+            </span>
+            <span className={cn('shrink-0 font-mono text-micro tnum', textSub)}>
+              {t('{n} 只', { n: sector.member_count })}
+            </span>
+          </span>
+          <span>
+            <span className="flex items-baseline gap-1.5">
+              <span className={cn('font-mono text-[15px] font-semibold leading-5 tnum', textMain)}>
+                {fmtPct(primary)}
+              </span>
+              {/* 窄屏の 149px タイルには入らない（英語 "1d median" で確実に切れる）。
+                  口径は直上の Segmented が示しているので端末幅では省く。 */}
+              <span className={cn('hidden truncate text-micro sm:inline', textSub)}>{primaryLabel}</span>
+            </span>
+            <span className={cn('block truncate font-mono text-micro tnum', textSub)}>
+              {secondaryLabel} {fmtPct(secondary)}
+            </span>
+          </span>
+        </span>
 
-      {/* 底端细条＝业种内上涨股占比（中位数看不出「普涨」还是「被少数拉起」） */}
-      {share !== null && (
-        <span
-          className={cn('absolute inset-x-0 bottom-0 h-[3px] overflow-hidden', barTrack)}
-          aria-hidden="true"
-          title={t('上涨占比 {pct}', { pct: `${Math.round(share * 100)}%` })}
-        >
-          <span className={cn('block h-full', barFill)} style={{ width: `${Math.max(2, share * 100)}%` }} />
-        </span>
-      )}
-    </button>
+        {/* 底端细条＝业种内上涨股占比（中位数看不出「普涨」还是「被少数拉起」） */}
+        {share !== null && (
+          <span
+            className={cn('absolute inset-x-0 bottom-0 h-[3px] overflow-hidden', barTrack)}
+            aria-hidden="true"
+          >
+            <span className={cn('block h-full', barFill)} style={{ width: `${Math.max(2, share * 100)}%` }} />
+          </span>
+        )}
+      </button>
+    </PointerTooltip>
   );
 }
 

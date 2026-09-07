@@ -279,6 +279,14 @@ export const SHORT_HINTS: Record<string, ScoreHint> = {
     title: t('在册合计'),
     body: t('最后报告仍在公开范围内的全部机构之和，含报告已长期停更者。官方规则没有失效期限。'),
   },
+  visibleShort: {
+    title: t('公开可见空头'),
+    body: t('近125个交易日有更新的报告义务中机构之和'),
+  },
+  daysToCover: {
+    title: t('公开可见回补天数'),
+    body: t('仅按可见部分计算，不是市场总空头回补天数'),
+  },
   low_position: {
     title: t('低位'),
     body: t('股价相对自身中长期区间是否处在偏低位置。分项是「量」不是「品质」，不用涨跌色。'),

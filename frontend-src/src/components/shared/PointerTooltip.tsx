@@ -36,14 +36,22 @@ export default function PointerTooltip({
   width = 240,
   className,
   contentClassName,
+  passthrough = false,
 }: {
   children: ReactNode;
   content: ReactNode;
-  label: string;
+  /** 读屏标签；passthrough 时由内部宿主自己负责，可省略。 */
+  label?: string;
   side?: 'top' | 'bottom';
   width?: number;
   className?: string;
   contentClassName?: string;
+  /**
+   * 包在「整块可点选」宿主（热力砖、密度柱）外时打开：
+   * 不设第二层 role=button、不拦截 click/键盘，避免选中/跳转失效。
+   * Layout 的 overflow-x-clip 会裁掉砖内 absolute 小窗，所以这类宿主也必须走 portal。
+   */
+  passthrough?: boolean;
 }) {
   const id = useId();
   const open = useSyncExternalStore(subscribe, snapshot, serverSnapshot) === id;
@@ -144,13 +152,16 @@ export default function PointerTooltip({
     <>
       <span
         ref={triggerRef}
-        role="button"
-        tabIndex={0}
-        aria-label={label}
+        role={passthrough ? undefined : 'button'}
+        tabIndex={passthrough ? undefined : 0}
+        aria-label={passthrough ? undefined : label}
         aria-expanded={open}
         aria-describedby={open ? id : undefined}
         data-pointer-tooltip-trigger=""
-        className={cn('inline-flex min-h-6 cursor-help items-center align-middle', className)}
+        className={cn(
+          passthrough ? undefined : 'inline-flex min-h-6 cursor-help items-center align-middle',
+          className,
+        )}
         onPointerEnter={(event) => {
           if (event.pointerType === 'touch') return;
           pointerKind.current = event.pointerType;
@@ -187,29 +198,37 @@ export default function PointerTooltip({
           skipPointerFocus.current = false;
           release(id);
         }}
-        onClick={(event) => {
-          event.stopPropagation();
-          if (pointerKind.current === 'touch' && activeTooltip === id) {
-            dismiss();
-            return;
-          }
-          if (pointerKind.current === 'touch') pointer.current = null;
-          dismissed.current = false;
-          claim(id);
-          schedulePlace();
-        }}
-        onKeyDown={(event) => {
-          if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
-          if (event.key !== 'Enter' && event.key !== ' ') return;
-          event.preventDefault();
-          event.stopPropagation();
-          if (activeTooltip === id) dismiss();
-          else {
-            pointer.current = null;
-            dismissed.current = false;
-            claim(id);
-          }
-        }}
+        onClick={
+          passthrough
+            ? undefined
+            : (event) => {
+                event.stopPropagation();
+                if (pointerKind.current === 'touch' && activeTooltip === id) {
+                  dismiss();
+                  return;
+                }
+                if (pointerKind.current === 'touch') pointer.current = null;
+                dismissed.current = false;
+                claim(id);
+                schedulePlace();
+              }
+        }
+        onKeyDown={
+          passthrough
+            ? undefined
+            : (event) => {
+                if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                event.stopPropagation();
+                if (activeTooltip === id) dismiss();
+                else {
+                  pointer.current = null;
+                  dismissed.current = false;
+                  claim(id);
+                }
+              }
+        }
       >
         {children}
       </span>
