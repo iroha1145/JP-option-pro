@@ -438,12 +438,16 @@ function LeadBigCard({
 
       <div className="mt-3">
         <p className="mb-1 text-micro text-ink-400">{t('日线 · 最多 30 个交易日')}</p>
-        {chart.data && chart.data.bars.length > 0 ? (
-          <div className="radar-mini-chart overflow-hidden rounded-md">
+        {chart.loading && !chart.data ? (
+          <SkeletonCard className="h-[150px]" />
+        ) : chart.data && chart.data.bars.length > 0 ? (
+          <div className="radar-mini-chart relative h-[120px] overflow-hidden rounded-md bg-card-warm sm:h-[150px]">
             <LeadChart bars={chart.data.bars.slice(-30)} event={event} />
           </div>
         ) : (
-          <SkeletonCard className="h-[180px]" />
+          <div className="radar-mini-chart relative flex h-[120px] items-center justify-center overflow-hidden rounded-md bg-card-warm sm:h-[150px]">
+            <img src="/empty-chart.svg" alt="" className="h-12 w-auto opacity-90" loading="lazy" />
+          </div>
         )}
       </div>
 
@@ -610,7 +614,7 @@ function LeadChart({ bars, event }: { bars: StockBar[]; event: RadarEvent }) {
       ],
     };
   }, [bars, event]);
-  return <ReactECharts className="h-[180px] w-full" option={option} ariaLabel={`${event.display_code} lead chart`} />;
+  return <ReactECharts className="h-full w-full" option={option} ariaLabel={`${event.display_code} lead chart`} />;
 }
 
 /* ---------------- イベントカード ---------------- */
@@ -708,7 +712,7 @@ function EventCard({ event, onSelect, live, flash }: {
 
 function CardFact({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <span className="rounded-md bg-paper-2 px-1.5 py-1">
+    <span>
       <span className="block text-micro text-ink-400">{label}</span>
       <span className="font-mono text-body-s tnum text-ink-800">{value}</span>
     </span>

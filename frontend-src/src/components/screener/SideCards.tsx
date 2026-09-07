@@ -158,7 +158,7 @@ export function TierHistogram({
               aria-label={selectable ? t('只看 {tier} 档', { tier }) : t('D 档（<60）计入「全部」')}
               className={cn(
                 'group relative flex h-full flex-1 flex-col items-center justify-end gap-1 rounded-t-[4px] border-b-2 pb-0.5 transition-colors duration-fast',
-                active ? 'border-brand-600 bg-brand-50' : 'border-transparent hover:bg-paper-2',
+                active ? 'border-brand-400 bg-paper-2' : 'border-transparent hover:bg-paper-2',
                 !selectable && 'cursor-default opacity-70',
               )}
             >

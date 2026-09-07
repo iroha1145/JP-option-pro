@@ -194,7 +194,7 @@ export default function News() {
               <EmptyState image="/empty-news.svg" title={t('暂无数据')} description={feed.data?.note_ja ?? ''} />
             </section>
           ) : (
-            <ul className="card-surface overflow-hidden">
+            <ul className="card-surface divide-y divide-line overflow-hidden">
               {feed.data!.items.map((item, index) => (
                 <NewsRow key={item.news_id} item={item} index={index} />
               ))}
@@ -364,7 +364,7 @@ function StatusHero({ status, loading }: { status: NewsStatus | null; loading: b
 function FeedSkeleton({ rows = 6 }: { rows?: number }) {
   return (
     <div className="t-skel" data-state="loading" aria-hidden="true">
-      <div className="t-skel-skeleton is-pulsing">
+      <div className="t-skel-skeleton is-pulsing divide-y divide-line">
         {Array.from({ length: rows }, (_, index) => (
           <div key={index} className="flex min-h-[60px] gap-3 px-4 py-[18px] sm:px-5">
             <div className="flex w-11 shrink-0 flex-col items-center">
@@ -889,7 +889,7 @@ function SourcesPanel({ status, loading }: { status: NewsStatus | null; loading:
                 hidden: { opacity: 0, y: 14 },
                 show: { opacity: 1, y: 0, transition: { duration: 0.48, ease: EASE_PAPER } },
               }}
-              className="card-surface card-lift p-5"
+              className="card-surface p-5"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -931,7 +931,7 @@ function SourcesPanel({ status, loading }: { status: NewsStatus | null; loading:
             hidden: { opacity: 0, y: 14 },
             show: { opacity: 1, y: 0, transition: { duration: 0.48, ease: EASE_PAPER } },
           }}
-          className="card-surface card-lift p-5"
+          className="card-surface p-5"
         >
           <p className="eyebrow">AI PIPELINE</p>
           <h3 className="mb-2 mt-1 flex items-center gap-1.5 text-h3 text-ink-900">
