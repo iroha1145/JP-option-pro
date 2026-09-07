@@ -21,7 +21,20 @@ export function ScoreCell({ score, index }: { score: number | null; index: numbe
   }
   const strength = strengthPresentation(score);
   return (
-    <span className="inline-flex items-center gap-2.5" title={`${strength.band} ${strength.label}`}>
+    <PointerTooltip
+      label={`${strength.band} ${strength.label}`}
+      width={168}
+      contentClassName="p-2.5"
+      content={
+        <>
+          <span className="block text-caption font-semibold text-ink-800">
+            {strength.band} · {strength.label}
+          </span>
+          <span className="mt-1 block font-mono text-micro text-ink-500 tnum">{score.toFixed(1)}</span>
+        </>
+      }
+    >
+      <span className="inline-flex items-center gap-2.5">
       <span className={cn('w-[3.25rem] shrink-0 text-right font-mono text-[15px] font-semibold leading-[20px] tnum', strength.textClass)}>
         {score.toFixed(1)}
       </span>
@@ -42,7 +55,8 @@ export function ScoreCell({ score, index }: { score: number | null; index: numbe
           style={{ width: `${Math.max(2, Math.min(100, score))}%` }}
         />
       </span>
-    </span>
+      </span>
+    </PointerTooltip>
   );
 }
 

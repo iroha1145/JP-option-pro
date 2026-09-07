@@ -1,10 +1,13 @@
 /** 突破雷达 — 美版布局移植：Lead 大卡（K线+枢轴带）→ 信号卡片流 → 生命周期。
  *  数据仍为收盘后日线扫描，Lead 卡的 K 线按需拉取单只标的。 */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { quotesApi, radarApi, stocksApi, workerApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
+import { useTickFlash } from '@/hooks/useTickFlash';
+import TickPrice from '@/components/shared/TickPrice';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import { cn } from '@/lib/utils';
 import { remoteState } from '@/hooks/remoteState';
 import PageHeader from '@/components/shared/PageHeader';
@@ -61,6 +64,15 @@ export default function Radar() {
     if (!onlyAbovePivot) return all;
     return all.filter((event) => overlayRows[event.event_id]?.above_pivot);
   }, [query.data, onlyAbovePivot, overlayRows]);
+  const flashRows = useMemo(
+    () =>
+      events.map((event) => ({
+        id: event.event_id,
+        price: overlayRows[event.event_id]?.live_price ?? (event.snapshot.close as number | null),
+      })),
+    [events, overlayRows],
+  );
+  const flashes = useTickFlash(flashRows, (row) => row.id, (row) => row.price);
 
   // Lead = 明示選択 or 優先度トップ。フィルタ変更で選択が消えたら先頭へ戻す。
   const lead = useMemo(() => {
@@ -118,21 +130,32 @@ export default function Radar() {
           onChange={setGroup}
         />
         {overlay.data?.enabled && (
-          <button
-            type="button"
-            onClick={() => setOnlyAbovePivot((v) => !v)}
-            className={cn(
-              'flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-caption transition-colors',
-              onlyAbovePivot
-                ? 'border-up-600/40 bg-up-50 text-up-700'
-                : 'border-line bg-card text-ink-600 hover:border-brand-400',
-            )}
-            title={t('用延迟{n}分的盘中价与夜间枢轴比较', { n: overlay.data?.delayed_minutes ?? 15 })}
+          <PointerTooltip
+            passthrough
+            label={t('用延迟{n}分的盘中价与夜间枢轴比较', { n: overlay.data?.delayed_minutes ?? 15 })}
+            width={240}
+            contentClassName="p-2.5"
+            content={
+              <span className="text-micro leading-[16px] text-ink-600">
+                {t('用延迟{n}分的盘中价与夜间枢轴比较', { n: overlay.data?.delayed_minutes ?? 15 })}
+              </span>
+            }
           >
-            <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
-            {t('盘中站上枢轴')}
-            <span className="font-mono tnum">{overlay.data?.above_pivot_count ?? 0}</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setOnlyAbovePivot((v) => !v)}
+              className={cn(
+                'flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-caption transition-colors',
+                onlyAbovePivot
+                  ? 'border-up-600/40 bg-up-50 text-up-700'
+                  : 'border-line bg-card text-ink-600 hover:border-brand-400',
+              )}
+            >
+              <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
+              {t('盘中站上枢轴')}
+              <span className="font-mono tnum">{overlay.data?.above_pivot_count ?? 0}</span>
+            </button>
+          </PointerTooltip>
         )}
         <Segmented<ViewMode>
           options={[
@@ -158,7 +181,7 @@ export default function Radar() {
           {state === 'stale' && (
             <StaleStrip onRetry={() => query.refresh()} refreshing={query.refreshing} />
           )}
-          {lead && <LeadBigCard event={lead} />}
+          {lead && <LeadBigCard event={lead} live={overlayRows[lead.event_id]} flash={flashes[lead.event_id]} />}
           {view === 'cards' ? (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {events
@@ -168,6 +191,7 @@ export default function Radar() {
                     key={event.event_id}
                     event={event}
                     live={overlayRows[event.event_id]}
+                    flash={flashes[event.event_id]}
                     onSelect={() => {
                       setLeadId(event.event_id);
                       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -176,10 +200,15 @@ export default function Radar() {
                 ))}
             </div>
           ) : (
-            <RadarTable events={events} onSelect={(event) => {
-              setLeadId(event.event_id);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }} />
+            <RadarTable
+              events={events}
+              flashes={flashes}
+              overlay={overlayRows}
+              onSelect={(event) => {
+                setLeadId(event.event_id);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+            />
           )}
         </>
       )}
@@ -189,7 +218,15 @@ export default function Radar() {
 
 /* ---------------- Lead 大卡（美版 LeadBigCard 対応） ---------------- */
 
-function LeadBigCard({ event }: { event: RadarEvent }) {
+function LeadBigCard({
+  event,
+  live,
+  flash,
+}: {
+  event: RadarEvent;
+  live?: { live_price: number; pivot_distance_pct?: number; above_pivot?: boolean };
+  flash?: 'up' | 'down';
+}) {
   const chart = usePolling(
     () => stocksApi.chart(event.canonical_code, '6m'),
     null,
@@ -224,7 +261,10 @@ function LeadBigCard({ event }: { event: RadarEvent }) {
               {t('枢轴价')} <span className="font-mono tnum text-ink-800">{fmtPrice(event.pivot_price)}</span>
             </span>
             <span>
-              {t('收盘')} <span className="font-mono tnum text-ink-800">{fmtPrice(event.snapshot.close as number | null)}</span>
+              {live ? t('盘中价') : t('收盘')}{' '}
+              <TickPrice flash={flash} className="font-mono text-ink-800">
+                {fmtPrice(live?.live_price ?? (event.snapshot.close as number | null))}
+              </TickPrice>
             </span>
             <span>
               {t('成交额')} <span className="font-mono tnum text-ink-800">{fmtYenCompact(event.snapshot.turnover_today as number | null)}</span>
@@ -357,10 +397,11 @@ function LeadChart({ bars, event }: { bars: StockBar[]; event: RadarEvent }) {
 
 /* ---------------- イベントカード ---------------- */
 
-function EventCard({ event, onSelect, live }: {
+function EventCard({ event, onSelect, live, flash }: {
   event: RadarEvent;
   onSelect: () => void;
   live?: { live_price: number; pivot_distance_pct?: number; above_pivot?: boolean };
+  flash?: 'up' | 'down';
 }) {
   const quality = event.scores?.breakout_quality?.score ?? null;
   const structure = event.structure ?? null;
@@ -393,12 +434,22 @@ function EventCard({ event, onSelect, live }: {
         {live ? (
           <CardFact
             label={t('盘中价')}
-            value={`${fmtPrice(live.live_price)}${
-              live.pivot_distance_pct != null ? ` (${fmtPct(live.pivot_distance_pct)})` : ''
-            }`}
+            value={
+              <TickPrice flash={flash} className="font-mono text-body-s text-ink-800">
+                {fmtPrice(live.live_price)}
+                {live.pivot_distance_pct != null ? ` (${fmtPct(live.pivot_distance_pct)})` : ''}
+              </TickPrice>
+            }
           />
         ) : (
-          <CardFact label={t('收盘')} value={fmtPrice(event.snapshot.close as number | null)} />
+          <CardFact
+            label={t('收盘')}
+            value={
+              <TickPrice flash={flash} className="font-mono text-body-s text-ink-800">
+                {fmtPrice(event.snapshot.close as number | null)}
+              </TickPrice>
+            }
+          />
         )}
         <CardFact label={t('枢轴价')} value={fmtPrice(event.pivot_price)} />
         <CardFact label={t('成交额')} value={fmtYenCompact(event.snapshot.turnover_today as number | null)} />
@@ -413,7 +464,7 @@ function EventCard({ event, onSelect, live }: {
   );
 }
 
-function CardFact({ label, value }: { label: string; value: string }) {
+function CardFact({ label, value }: { label: string; value: ReactNode }) {
   return (
     <span className="rounded-md bg-paper-2 px-1.5 py-1">
       <span className="block text-micro text-ink-400">{label}</span>
@@ -437,7 +488,17 @@ function Tag({ children, tone }: { children: React.ReactNode; tone: 'brand' | 'a
 
 /* ---------------- 列表視圖 ---------------- */
 
-function RadarTable({ events, onSelect }: { events: RadarEvent[]; onSelect: (event: RadarEvent) => void }) {
+function RadarTable({
+  events,
+  onSelect,
+  flashes,
+  overlay,
+}: {
+  events: RadarEvent[];
+  onSelect: (event: RadarEvent) => void;
+  flashes: Record<string, 'up' | 'down'>;
+  overlay: Record<string, { live_price: number }>;
+}) {
   const columns = useMemo<Column<RadarEvent>[]>(
     () => [
       {
@@ -452,7 +513,11 @@ function RadarTable({ events, onSelect }: { events: RadarEvent[]; onSelect: (eve
       },
       {
         key: 'close', title: t('收盘'), align: 'right',
-        render: (row) => <span className="font-mono text-body-s tnum">{fmtPrice(row.snapshot.close as number | null)}</span>,
+        render: (row) => (
+          <TickPrice flash={flashes[row.event_id]} className="font-mono text-body-s text-ink-900">
+            {fmtPrice(overlay[row.event_id]?.live_price ?? (row.snapshot.close as number | null))}
+          </TickPrice>
+        ),
       },
       {
         key: 'turnover', title: t('成交额'), align: 'right', sortable: true,
@@ -478,7 +543,7 @@ function RadarTable({ events, onSelect }: { events: RadarEvent[]; onSelect: (eve
         ),
       },
     ],
-    [],
+    [flashes, overlay],
   );
   return (
     <DataTable

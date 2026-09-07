@@ -3,20 +3,26 @@
  * 日股无期权链，热度改用真实可得的三个口径：成交额 / 量比（20日均额倍数）/ 当日涨幅。
  * 份额条 = 该股占本业种当日成交额的比例（这一栏才是「多热」的直接答案）。
  */
+import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { fmtPrice, fmtYenCompact } from '@/lib/format';
 import ChangeBadge from '@/components/shared/ChangeBadge';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import Segmented from '@/components/shared/Segmented';
 import EmptyState from '@/components/shared/EmptyState';
 import SourceNote from '@/components/shared/SourceNote';
+import TickPrice from '@/components/shared/TickPrice';
 import { SkeletonRows } from '@/components/shared/Skeleton';
 import { CodeCell, StateChip } from '@/components/domain';
+import { useTickFlash } from '@/hooks/useTickFlash';
 import { t } from '@/i18n/core';
 import type { IntradayQuote, SectorMembersView, SectorMemberSort } from '@/api/types';
 
 /* 列模板は見出し行と本体行の両方に必ず渡すこと（片方だけだと行が 1 列に潰れる） */
 const ROW_GRID =
   'md:grid-cols-[22px_minmax(150px,1.5fr)_minmax(120px,1.1fr)_96px_92px_76px]';
+
+const EMPTY_ROWS: SectorMembersView['rows'] = [];
 
 const SORT_OPTIONS: { value: SectorMemberSort; label: string }[] = [
   { value: 'turnover', label: t('成交额') },
@@ -41,7 +47,16 @@ export default function SectorMembersPanel({
   delayedMinutes?: number | null;
 }) {
   const hasLive = Boolean(liveQuotes && Object.keys(liveQuotes).length);
-  const rows = data?.rows ?? [];
+  const rows = data?.rows ?? EMPTY_ROWS;
+  const flashRows = useMemo(
+    () =>
+      rows.map((row) => ({
+        code: row.canonical_code,
+        price: liveQuotes?.[row.canonical_code]?.price ?? row.close ?? null,
+      })),
+    [rows, liveQuotes],
+  );
+  const flashes = useTickFlash(flashRows, (row) => row.code, (row) => row.price);
   return (
     <section className="card-surface p-4 md:p-5" aria-label={t('板块最热门个股')}>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -108,14 +123,26 @@ export default function SectorMembersPanel({
                     {liveQuotes?.[row.canonical_code] ? (
                       <>
                         <span className="block font-mono text-body-s tnum text-ink-900">
-                          {fmtPrice(liveQuotes[row.canonical_code].price)}
-                          <span className="ml-1 text-micro text-warn-700" title={t('延迟盘中价')}>●</span>
+                          <TickPrice flash={flashes[row.canonical_code]} className="font-mono text-body-s text-ink-900">
+                            {fmtPrice(liveQuotes[row.canonical_code].price)}
+                          </TickPrice>
+                          <PointerTooltip
+                            passthrough
+                            label={t('延迟盘中价')}
+                            width={168}
+                            contentClassName="p-2"
+                            content={<span className="text-micro text-ink-600">{t('延迟盘中价')}</span>}
+                          >
+                            <span className="ml-1 text-micro text-warn-700">●</span>
+                          </PointerTooltip>
                         </span>
                         <ChangeBadge value={liveQuotes[row.canonical_code].change_pct} size="sm" />
                       </>
                     ) : (
                       <>
-                        <span className="block font-mono text-body-s text-ink-900 tnum">{fmtPrice(row.close)}</span>
+                        <TickPrice flash={flashes[row.canonical_code]} className="font-mono text-body-s text-ink-900">
+                          {fmtPrice(row.close)}
+                        </TickPrice>
                         <ChangeBadge value={row.return_1d} size="sm" />
                       </>
                     )}
@@ -124,15 +151,21 @@ export default function SectorMembersPanel({
                     <span className="block font-mono text-caption text-ink-700 tnum">
                       {fmtYenCompact(row.turnover_value)}
                     </span>
-                    <span
-                      className={cn(
-                        'block font-mono text-micro tnum',
-                        (row.turnover_ratio ?? 0) >= 2 ? 'font-semibold text-warn-700' : 'text-ink-400',
-                      )}
-                      title={t('量比=当日成交额/20日均额')}
+                    <PointerTooltip
+                      label={t('量比=当日成交额/20日均额')}
+                      width={220}
+                      contentClassName="p-2.5"
+                      content={<span className="text-micro text-ink-600">{t('量比=当日成交额/20日均额')}</span>}
                     >
-                      {row.turnover_ratio != null ? `${row.turnover_ratio.toFixed(1)}x` : '—'}
-                    </span>
+                      <span
+                        className={cn(
+                          'block font-mono text-micro tnum',
+                          (row.turnover_ratio ?? 0) >= 2 ? 'font-semibold text-warn-700' : 'text-ink-400',
+                        )}
+                      >
+                        {row.turnover_ratio != null ? `${row.turnover_ratio.toFixed(1)}x` : '—'}
+                      </span>
+                    </PointerTooltip>
                   </span>
                   <span className="text-right">
                     <ChangeBadge value={row.return_20d} size="sm" />

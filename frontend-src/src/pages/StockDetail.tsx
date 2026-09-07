@@ -8,6 +8,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { stocksApi, watchlistApi, workerApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
+import { useTickFlash } from '@/hooks/useTickFlash';
+import TickPrice from '@/components/shared/TickPrice';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import { remoteState } from '@/hooks/remoteState';
 import EmptyState from '@/components/shared/EmptyState';
 import ChangeBadge from '@/components/shared/ChangeBadge';
@@ -85,6 +88,12 @@ export default function StockDetail() {
   const state = remoteState(overview);
   const liveQuote = live.data?.enabled ? (live.data.quotes[Object.keys(live.data.quotes)[0]] ?? null) : null;
   const technical = overview.data?.technical ?? null;
+  const headerQuote = useMemo(() => {
+    const code = overview.data?.security.canonical_code;
+    if (!code) return [];
+    return [{ key: code, price: liveQuote?.price ?? overview.data?.quote.close ?? null }];
+  }, [overview.data, liveQuote]);
+  const headerFlashes = useTickFlash(headerQuote, (row) => row.key, (row) => row.price);
 
   const chartOption = useMemo(() => {
     const bars = chart.data?.bars ?? [];
@@ -249,7 +258,12 @@ export default function StockDetail() {
                   公式の確定終値は隣に小さく残し、どちらの数字かを曖昧にしない。 */}
               <span className="flex flex-col">
                 <span className="flex items-baseline gap-2">
-                  <span className="font-mono text-display-l tnum text-ink-900">{fmtPrice(liveQuote.price)}</span>
+                  <TickPrice
+                    flash={headerFlashes[security.canonical_code]}
+                    className="font-mono text-display-l text-ink-900"
+                  >
+                    {fmtPrice(liveQuote.price)}
+                  </TickPrice>
                   <ChangeBadge value={liveQuote.change_pct} />
                 </span>
                 <span className="mt-0.5 flex items-center gap-1 text-micro text-warn-700">
@@ -265,7 +279,12 @@ export default function StockDetail() {
             </>
           ) : (
             <>
-              <span className="font-mono text-display-l tnum text-ink-900">{fmtPrice(data.quote.close)}</span>
+              <TickPrice
+                flash={headerFlashes[security.canonical_code]}
+                className="font-mono text-display-l text-ink-900"
+              >
+                {fmtPrice(data.quote.close)}
+              </TickPrice>
               <ChangeBadge value={data.quote.change_pct} />
             </>
           )}
@@ -1058,7 +1077,14 @@ function MiniStat({ label, value, hint }: { label: string; value: string; hint?:
       <div className="truncate font-mono text-body-s tnum text-ink-900">{value}</div>
       <div className="flex items-center justify-center gap-0.5 text-micro text-ink-400">
         {/* label は msgid（呼び出し側は中文原文）—— ここで訳さないと三言語とも中文のまま */}
-        <span className="truncate" title={t(label)}>{t(label)}</span>
+        <PointerTooltip
+          label={t(label)}
+          width={140}
+          contentClassName="p-2"
+          content={<span className="text-micro text-ink-600">{t(label)}</span>}
+        >
+          <span className="truncate">{t(label)}</span>
+        </PointerTooltip>
         {hint && <InfoHint hint={hint} size={11} side="bottom" />}
       </div>
     </div>

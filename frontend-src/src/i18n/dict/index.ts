@@ -321,6 +321,8 @@ export const DICT: Record<string, [string, string]> = {
   'D 档（<60）计入「全部」': ['Tier D (<60) counts under "All"', 'D ティア（<60）は「全部」に含む'],
   '强度剖面 · 分档命中': ['Strength profile · tier hits', '強度プロファイル · ティア別ヒット'],
   '实心=本次命中 · 斜纹=已评分候选池': ['Solid = hits · hatched = scored pool', '塗り=今回ヒット · 斜線=評価済み母集団'],
+  本次命中: ['This scan', '今回ヒット'],
+  全市场参照: ['Universe reference', '母集団参照'],
   仅统计本次筛选命中的标的: ['Counts current hits only', '今回のヒットのみ集計'],
   '评分方法 ·': ['Method ·', '採点方式 ·'],
   读取中: ['Loading', '読み込み中'],

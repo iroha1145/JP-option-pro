@@ -31,6 +31,7 @@ import {
 } from '@/components/earnings/types';
 import SoftBadge from '@/components/shared/SoftBadge';
 import StaleStrip from '@/components/shared/StaleStrip';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import { cn } from '@/lib/utils';
 import { fmtYenCompact } from '@/lib/format';
 import { t } from '@/i18n/core';
@@ -348,14 +349,30 @@ function RecentPanel({ items, loading }: { items: EarningsRecentItem[]; loading:
               <span className="shrink-0 text-right">
                 <span className="block font-mono text-caption text-ink-800 tnum">{fmtYenCompact(row.operating_profit)}</span>
                 {row.forecast_direction === 'upward' && (
-                  <span className="inline-flex text-up-700" title={t('上方修正')} aria-label={t('上方修正')}>
-                    <Icon name="arrow-up-right" size={12} />
-                  </span>
+                  <PointerTooltip
+                    passthrough
+                    label={t('上方修正')}
+                    width={120}
+                    contentClassName="p-2"
+                    content={<span className="text-micro text-ink-600">{t('上方修正')}</span>}
+                  >
+                    <span className="inline-flex text-up-700" aria-label={t('上方修正')}>
+                      <Icon name="arrow-up-right" size={12} />
+                    </span>
+                  </PointerTooltip>
                 )}
                 {row.forecast_direction === 'downward' && (
-                  <span className="inline-flex text-down-700" title={t('下方修正')} aria-label={t('下方修正')}>
-                    <Icon name="arrow-down-right" size={12} />
-                  </span>
+                  <PointerTooltip
+                    passthrough
+                    label={t('下方修正')}
+                    width={120}
+                    contentClassName="p-2"
+                    content={<span className="text-micro text-ink-600">{t('下方修正')}</span>}
+                  >
+                    <span className="inline-flex text-down-700" aria-label={t('下方修正')}>
+                      <Icon name="arrow-down-right" size={12} />
+                    </span>
+                  </PointerTooltip>
                 )}
               </span>
             </Link>

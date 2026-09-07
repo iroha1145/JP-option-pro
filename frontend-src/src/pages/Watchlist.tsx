@@ -18,7 +18,9 @@ import { SkeletonRows } from '@/components/shared/Skeleton';
 import { CodeCell, DataThrough } from '@/components/domain';
 import Icon from '@/components/icons';
 import { useAccess } from '@/hooks/useAccess';
+import { useTickFlash } from '@/hooks/useTickFlash';
 import { useToast } from '@/hooks/useToast';
+import TickPrice from '@/components/shared/TickPrice';
 import SoftBadge from '@/components/shared/SoftBadge';
 import StaleStrip from '@/components/shared/StaleStrip';
 import CodeMark from '@/components/shared/CodeMark';
@@ -28,6 +30,8 @@ import { fmtPrice, fmtYenCompact } from '@/lib/format';
 import { ApiError } from '@/api/client';
 import type { SearchResult, WatchlistItem } from '@/api/types';
 
+const EMPTY_WATCHLIST: WatchlistItem[] = [];
+
 export default function Watchlist() {
   const { canManageWatchlist, accountUsername, isOwner } = useAccess();
   const toast = useToast();
@@ -35,7 +39,8 @@ export default function Watchlist() {
   const [view, setView] = useState<'cards' | 'table'>('cards');
   const [busy, setBusy] = useState<string | null>(null);
 
-  const items = query.data?.items ?? [];
+  const items = query.data?.items ?? EMPTY_WATCHLIST;
+  const flashes = useTickFlash(items, (row) => row.canonical_code, (row) => row.quote?.close ?? null);
   const maxItems = query.data?.max_items ?? null;
   const anonymous =
     query.error instanceof ApiError && query.error.bizCode === 'account_login_required';
@@ -78,7 +83,14 @@ export default function Watchlist() {
       {
         key: 'sector',
         title: t('行业'),
-        render: (row) => <span className="text-caption text-ink-500">{row.sector33_name ?? '—'}</span>,
+        render: (row) =>
+          row.sector33_name ? (
+            <SoftBadge className="max-w-[7.5rem]" title={row.sector33_name}>
+              <span className="truncate">{row.sector33_name}</span>
+            </SoftBadge>
+          ) : (
+            <span className="text-caption text-ink-400">—</span>
+          ),
       },
       {
         key: 'close',
@@ -86,7 +98,11 @@ export default function Watchlist() {
         align: 'right',
         sortable: true,
         sortValue: (row) => row.quote?.close ?? Number.NEGATIVE_INFINITY,
-        render: (row) => <span className="font-mono text-body-s tnum">{fmtPrice(row.quote?.close)}</span>,
+        render: (row) => (
+          <TickPrice flash={flashes[row.canonical_code]} className="font-mono text-[15px] leading-6 text-ink-900">
+            {fmtPrice(row.quote?.close)}
+          </TickPrice>
+        ),
       },
       {
         key: 'change',
@@ -124,7 +140,7 @@ export default function Watchlist() {
               disabled={busy === row.canonical_code}
               title={t('标记重点')}
               className={cn(
-                'rounded-md border border-line px-2 py-0.5 text-micro hover:bg-brand-50',
+                'rounded-md border border-line px-2 py-0.5 text-micro shadow-btn hover:bg-brand-50',
                 row.marked_important ? 'text-warn-600' : 'text-ink-400',
               )}
               onClick={(event) => {
@@ -139,7 +155,7 @@ export default function Watchlist() {
               disabled={busy === row.canonical_code}
               title={t('从自选移除 {code}', { code: row.display_code })}
               aria-label={t('从自选移除 {code}', { code: row.display_code })}
-              className="rounded-md border border-line px-2 py-0.5 text-micro text-down-700 hover:bg-down-50"
+              className="rounded-md border border-line px-2 py-0.5 text-micro text-down-700 shadow-btn hover:bg-down-50"
               onClick={(event) => {
                 event.stopPropagation();
                 void doRemove(row.canonical_code);
@@ -153,7 +169,7 @@ export default function Watchlist() {
     }
     return base;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canManageWatchlist, busy]);
+  }, [canManageWatchlist, busy, flashes]);
 
   return (
     <div className="space-y-6">
@@ -235,6 +251,7 @@ export default function Watchlist() {
               key={item.canonical_code}
               item={item}
               index={index}
+              flash={flashes[item.canonical_code]}
               onRemove={canManageWatchlist ? () => void doRemove(item.canonical_code) : undefined}
               onToggleStar={canManageWatchlist ? () => void doToggleStar(item) : undefined}
             />
@@ -355,11 +372,13 @@ function AddStockForm({ onAdded, onError }: { onAdded: () => void; onError: (mes
 function WatchCard({
   item,
   index,
+  flash,
   onRemove,
   onToggleStar,
 }: {
   item: WatchlistItem;
   index: number;
+  flash?: 'up' | 'down';
   onRemove?: () => void;
   onToggleStar?: () => void;
 }) {
@@ -382,12 +401,20 @@ function WatchCard({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-body-s text-ink-800">{item.name_ja ?? '—'}</span>
-            <span className="block truncate text-micro text-ink-400">{item.sector33_name ?? '—'}</span>
+            {item.sector33_name ? (
+              <SoftBadge className="mt-0.5 max-w-[8rem]" title={item.sector33_name}>
+                <span className="truncate">{item.sector33_name}</span>
+              </SoftBadge>
+            ) : (
+              <span className="block truncate text-micro text-ink-400">—</span>
+            )}
           </span>
           <ChangeBadge value={item.quote?.change_pct} size="sm" />
         </span>
         <span className="mt-3 flex items-end justify-between">
-          <span className="font-mono text-data-l text-ink-900 tnum">{fmtPrice(item.quote?.close)}</span>
+          <TickPrice flash={flash} className="font-mono text-data-l text-ink-900">
+            {fmtPrice(item.quote?.close)}
+          </TickPrice>
           <span className="font-mono text-caption text-ink-500 tnum">{fmtYenCompact(item.quote?.turnover_value)}</span>
         </span>
         {item.note && (

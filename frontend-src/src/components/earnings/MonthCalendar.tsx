@@ -8,7 +8,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate } from 'react-router';
 import { cn } from '@/lib/utils';
 import Icon from '@/components/icons';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import type { EarningsUpcomingItem } from '@/api/types';
+import { EarningsChipContent, earningsChipLabel } from './chipTip';
 import { addDays, fmtMDCN, jstToday, statusMeta, weekStartMonday } from './types';
 import { t, getLocale } from '@/i18n/core';
 
@@ -211,20 +213,28 @@ export default function MonthCalendar({ items, selectedDay, onSelectDay }: Month
                   {shown.map((item) => {
                     const meta = statusMeta(item.status);
                     return (
-                      <motion.button
+                      <PointerTooltip
                         key={`${item.canonical_code}-${item.period_type}`}
-                        type="button"
-                        whileTap={{ scale: 0.96 }}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          navigate(`/stock/${item.display_code}`);
-                        }}
-                        title={`${item.name_ja ?? item.display_code} · ${item.quarter_label ?? ''} · ${meta.label}`}
-                        className="flex h-5 items-center gap-1 rounded-xs px-1 transition-colors duration-fast hover:bg-brand-50"
+                        passthrough
+                        label={earningsChipLabel(item)}
+                        width={220}
+                        contentClassName="p-2.5"
+                        className="block w-full"
+                        content={<EarningsChipContent item={item} />}
                       >
-                        <span className={cn('size-1.5 shrink-0 rounded-full', meta.dotClass)} aria-hidden="true" />
-                        <span className="truncate font-mono text-[10px] font-medium leading-4 text-ink-800">{item.display_code}</span>
-                      </motion.button>
+                        <motion.button
+                          type="button"
+                          whileTap={{ scale: 0.96 }}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            navigate(`/stock/${item.display_code}`);
+                          }}
+                          className="flex h-5 w-full items-center gap-1 rounded-xs px-1 transition-colors duration-fast hover:bg-brand-50"
+                        >
+                          <span className={cn('size-1.5 shrink-0 rounded-full', meta.dotClass)} aria-hidden="true" />
+                          <span className="truncate font-mono text-[10px] font-medium leading-4 text-ink-800">{item.display_code}</span>
+                        </motion.button>
+                      </PointerTooltip>
                     );
                   })}
                   {extra > 0 && <span className="px-1 font-mono text-[10px] leading-4 text-ink-400 tnum">+{extra}</span>}

@@ -8,6 +8,8 @@ import type { IndexSummary } from '@/api/types';
 import { ApiError } from '@/api/client';
 import { usePolling } from '@/hooks/usePolling';
 import { useNow } from '@/hooks/useNow';
+import { useTickFlash } from '@/hooks/useTickFlash';
+import TickPrice from '@/components/shared/TickPrice';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
 import ChangeBadge from '@/components/shared/ChangeBadge';
@@ -22,6 +24,8 @@ import { tokyoSession } from '@/lib/tokyoSession';
 import { t } from '@/i18n/core';
 import { fmtDate, fmtPct, fmtPrice, fmtTimeHHMMSS, fmtYenCompact } from '@/lib/format';
 import { cn } from '@/lib/utils';
+
+const EMPTY_INDICES: IndexSummary[] = [];
 
 function RetryButton({ onClick, refreshing }: { onClick: () => void; refreshing: boolean }) {
   return (
@@ -131,6 +135,9 @@ export default function Home() {
       .sort((a, b) => mag(b.quote?.change_pct) - mag(a.quote?.change_pct))
       .slice(0, 6);
   }, [watchlist.data]);
+  const indices = market.data?.indices ?? EMPTY_INDICES;
+  const indexFlashes = useTickFlash(indices, (row) => row.index_code, (row) => row.close ?? null);
+  const moverFlashes = useTickFlash(movers, (row) => row.canonical_code, (row) => row.quote?.close ?? null);
 
   return (
     <div>
@@ -175,7 +182,7 @@ export default function Home() {
             )}
             <div className="stagger-in grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {(market.data?.indices ?? []).map((index) => (
-                <IndexInsightCard key={index.index_code} index={index} />
+                <IndexInsightCard key={index.index_code} index={index} flash={indexFlashes[index.index_code]} />
               ))}
             </div>
           </>
@@ -318,7 +325,9 @@ export default function Home() {
                   >
                     <CodeCell displayCode={item.display_code} nameJa={item.name_ja} />
                     <span className="flex shrink-0 flex-col items-end gap-1">
-                      <span className="font-mono text-body-s tnum text-ink-900">{fmtPrice(item.quote?.close)}</span>
+                      <TickPrice flash={moverFlashes[item.canonical_code]} className="font-mono text-body-s text-ink-900">
+                        {fmtPrice(item.quote?.close)}
+                      </TickPrice>
                       <ChangeBadge value={item.quote?.change_pct} size="sm" />
                     </span>
                   </Link>
@@ -332,7 +341,7 @@ export default function Home() {
   );
 }
 
-function IndexInsightCard({ index }: { index: IndexSummary }) {
+function IndexInsightCard({ index, flash }: { index: IndexSummary; flash?: 'up' | 'down' }) {
   const [scrub, setScrub] = useState<InsightScrub | null>(null);
   const value = scrub?.value ?? index.close;
   const windowN = Math.max(index.sparkline.length, 1);
@@ -364,7 +373,9 @@ function IndexInsightCard({ index }: { index: IndexSummary }) {
         />
       </div>
       <div className="flex items-baseline justify-between gap-2 px-3 pb-3 pt-1">
-        <span className="metric-value text-data-xl tnum text-ink-900">{fmtPrice(value)}</span>
+        <TickPrice flash={flash} className="metric-value text-data-xl text-ink-900">
+          {fmtPrice(value)}
+        </TickPrice>
         <span className="flex items-center gap-1.5">
           <ChangeBadge value={badgeValue} size="sm" />
           <span className="text-micro text-ink-400">

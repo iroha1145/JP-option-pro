@@ -9,6 +9,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import type { MarketRegime, StrengthProfilesMeta, TierDistribution } from '@/api/types';
 import { cn } from '@/lib/utils';
 import Icon from '@/components/icons';
+import HatchLegend from '@/components/shared/HatchLegend';
 import InfoHint from '@/components/shared/InfoHint';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import SourceNote from '@/components/shared/SourceNote';
@@ -157,7 +158,7 @@ export function TierHistogram({
               animate={{ scale: active ? 1.04 : 1 }}
               transition={SPRING_POP}
               aria-pressed={active}
-              title={selectable ? t('只看 {tier} 档', { tier }) : t('D 档（<60）计入「全部」')}
+              aria-label={selectable ? t('只看 {tier} 档', { tier }) : t('D 档（<60）计入「全部」')}
               className={cn(
                 'group relative flex h-full flex-1 flex-col items-center justify-end gap-1 rounded-t-[4px] border-b-2 pb-0.5 transition-colors duration-fast',
                 active ? 'border-brand-600 bg-brand-50' : 'border-transparent hover:bg-paper-2',
@@ -200,9 +201,11 @@ export function TierHistogram({
           </span>
         ))}
       </div>
-      <p className="mt-3.5 text-micro text-ink-400">
-        {ref !== null ? t('实心=本次命中 · 斜纹=已评分候选池') : t('仅统计本次筛选命中的标的')}
-      </p>
+      {ref !== null ? (
+        <HatchLegend className="mt-3.5" actual={t('本次命中')} estimate={t('全市场参照')} />
+      ) : (
+        <p className="mt-3.5 text-micro text-ink-400">{t('仅统计本次筛选命中的标的')}</p>
+      )}
     </div>
   );
 }

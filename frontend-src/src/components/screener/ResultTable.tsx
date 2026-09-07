@@ -11,6 +11,7 @@ import { fmtPrice, fmtYenCompact } from '@/lib/format';
 import Icon from '@/components/icons';
 import ChangeBadge from '@/components/shared/ChangeBadge';
 import InfoHint from '@/components/shared/InfoHint';
+import TickPrice from '@/components/shared/TickPrice';
 import { CodeCell } from '@/components/domain';
 import { STRENGTH_HINTS } from '@/lib/indicatorHints';
 import RowExpansion from './RowExpansion';
@@ -35,6 +36,8 @@ export interface ResultTableProps {
   animKey: string;
   /** 盘中叠加（表示専用）。夜間断面のスコアは書き換えない。 */
   overlay?: Record<string, { live_price: number; live_change_pct?: number; live_pct_from_high_252?: number | null }>;
+  flashes?: Record<string, 'up' | 'down'>;
+  stale?: boolean;
 }
 
 export default function ResultTable({
@@ -51,9 +54,11 @@ export default function ResultTable({
   canManageWatchlist,
   animKey,
   overlay,
+  flashes = {},
+  stale = false,
 }: ResultTableProps) {
   return (
-    <div className="card-surface overflow-x-auto overscroll-x-contain">
+    <div className={cn('card-surface overflow-x-auto overscroll-x-contain', stale && 'opacity-60')}>
       <table className="w-full border-collapse">
         <thead>
           <tr className="bg-card-warm">
@@ -136,7 +141,12 @@ export default function ResultTable({
                     <SubscoreTicks row={row} tipSide={index < 3 ? 'bottom' : 'top'} />
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <span className="inline-block font-mono text-body-s text-ink-900 tnum">{fmtPrice(row.close)}</span>
+                    <TickPrice
+                      flash={flashes[row.canonical_code]}
+                      className="font-mono text-body-s text-ink-900"
+                    >
+                      {fmtPrice(overlay?.[row.canonical_code]?.live_price ?? row.close)}
+                    </TickPrice>
                     <span className="ml-1.5 align-middle">
                       <ChangeBadge value={row.change_pct !== null ? row.change_pct / 100 : null} size="sm" />
                     </span>

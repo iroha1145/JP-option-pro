@@ -8,7 +8,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate } from 'react-router';
 import { cn } from '@/lib/utils';
 import Icon from '@/components/icons';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import type { EarningsUpcomingItem } from '@/api/types';
+import { EarningsChipContent, earningsChipLabel } from './chipTip';
 import { fmtMDCN, fmtMMDD, jstToday, periodShort, statusMeta, weekDays, weekdayCN } from './types';
 import { t } from '@/i18n/core';
 
@@ -143,30 +145,38 @@ export default function WeekScrubber({
                         {shown.map((item, chipIndex) => {
                           const meta = statusMeta(item.status);
                           return (
-                            <motion.button
+                            <PointerTooltip
                               key={`${item.canonical_code}-${item.period_type}`}
-                              type="button"
-                              initial={{ opacity: 0, scale: 0.9 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              transition={{ type: 'spring', stiffness: 520, damping: 32, delay: dayIndex * 0.035 + chipIndex * 0.02 }}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                navigate(`/stock/${item.display_code}`);
-                              }}
-                              title={`${item.name_ja ?? item.display_code} · ${item.quarter_label ?? ''} · ${meta.label}`}
-                              className={cn(
-                                'flex h-6 items-center gap-1 rounded-xs border-l-2 px-1 transition-[transform,background-color] duration-fast hover:-translate-y-px',
-                                item.status === 'confirmed'
-                                  ? 'border-brand-600 bg-brand-50'
-                                  : item.status === 'released'
-                                    ? 'border-ink-300 bg-paper-2'
-                                    : 'border-transparent bg-paper-2/70 hover:bg-brand-50',
-                              )}
+                              passthrough
+                              label={earningsChipLabel(item)}
+                              width={220}
+                              contentClassName="p-2.5"
+                              className="block w-full"
+                              content={<EarningsChipContent item={item} />}
                             >
-                              <span className={cn('size-1.5 shrink-0 rounded-full', meta.dotClass)} aria-hidden="true" />
-                              <span className="min-w-0 truncate font-mono text-micro font-medium text-ink-800">{item.display_code}</span>
-                              <span className="ml-auto shrink-0 font-mono text-[9px] text-ink-400">{periodShort(item.period_type)}</span>
-                            </motion.button>
+                              <motion.button
+                                type="button"
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ type: 'spring', stiffness: 520, damping: 32, delay: dayIndex * 0.035 + chipIndex * 0.02 }}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  navigate(`/stock/${item.display_code}`);
+                                }}
+                                className={cn(
+                                  'flex h-6 w-full items-center gap-1 rounded-xs border-l-2 px-1 transition-[transform,background-color] duration-fast hover:-translate-y-px',
+                                  item.status === 'confirmed'
+                                    ? 'border-brand-600 bg-brand-50'
+                                    : item.status === 'released'
+                                      ? 'border-ink-300 bg-paper-2'
+                                      : 'border-transparent bg-paper-2/70 hover:bg-brand-50',
+                                )}
+                              >
+                                <span className={cn('size-1.5 shrink-0 rounded-full', meta.dotClass)} aria-hidden="true" />
+                                <span className="min-w-0 truncate font-mono text-micro font-medium text-ink-800">{item.display_code}</span>
+                                <span className="ml-auto shrink-0 font-mono text-[9px] text-ink-400">{periodShort(item.period_type)}</span>
+                              </motion.button>
+                            </PointerTooltip>
                           );
                         })}
                         {extra > 0 && <span className="px-1 font-mono text-[10px] leading-4 text-ink-400">+{extra}</span>}

@@ -9,6 +9,7 @@ import { fmtPrice } from '@/lib/format';
 import Icon from '@/components/icons';
 import ChangeBadge from '@/components/shared/ChangeBadge';
 import InfoHint from '@/components/shared/InfoHint';
+import TickPrice from '@/components/shared/TickPrice';
 import { STRENGTH_HINTS } from '@/lib/indicatorHints';
 import RowExpansion from './RowExpansion';
 import { NewsBadge, SubscoreTicks } from './cells';
@@ -29,6 +30,8 @@ export interface ResultCardsProps {
   page?: number;
   /** 盘中叠加（表示専用）。夜間断面のスコアは書き換えない。 */
   overlay?: Record<string, { live_price: number; live_change_pct?: number; live_pct_from_high_252?: number | null }>;
+  flashes?: Record<string, 'up' | 'down'>;
+  stale?: boolean;
 }
 
 export default function ResultCards({
@@ -42,9 +45,11 @@ export default function ResultCards({
   animKey,
   page = 1,
   overlay,
+  flashes = {},
+  stale = false,
 }: ResultCardsProps) {
   return (
-    <div className="grid grid-cols-1 gap-3" key={animKey}>
+    <div className={cn('grid grid-cols-1 gap-3', stale && 'opacity-60')} key={animKey}>
       {rows.map((row, index) => {
         const isOpen = expanded === row.canonical_code;
         const score = row.ranking_score;
@@ -94,7 +99,12 @@ export default function ResultCards({
                   )}
                 </span>
                 <span className="pb-0.5 text-right">
-                  <span className="block font-mono text-data-m text-ink-800 tnum">{fmtPrice(row.close)}</span>
+                  <TickPrice
+                    flash={flashes[row.canonical_code]}
+                    className="font-mono text-data-m text-ink-800"
+                  >
+                    {fmtPrice(overlay?.[row.canonical_code]?.live_price ?? row.close)}
+                  </TickPrice>
                 </span>
               </span>
               <span className="relative mt-2.5 h-[3px] w-full rounded-pill bg-line" role="presentation" aria-hidden="true">

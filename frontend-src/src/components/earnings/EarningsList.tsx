@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { fmtPrice, fmtYenCompact } from '@/lib/format';
 import EmptyState from '@/components/shared/EmptyState';
 import ChangeBadge from '@/components/shared/ChangeBadge';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import type { EarningsUpcomingItem } from '@/api/types';
 import { daysUntil, fmtMDCN, relativeDayCN, statusMeta, weekdayCN } from './types';
 import { t } from '@/i18n/core';
@@ -130,12 +131,26 @@ export function StatusChip({ item }: { item: EarningsUpcomingItem }) {
       <span className="whitespace-nowrap rounded-sm bg-paper-2 px-1.5 py-0.5 text-micro text-ink-600">
         {item.quarter_label ?? '—'}
       </span>
-      <span
-        className={cn('whitespace-nowrap rounded-sm px-1.5 py-0.5 text-micro', meta.chipClass)}
-        title={item.status === 'estimated' ? t('前年同期开示日推导的目安，以公司正式公告为准') : undefined}
-      >
-        {meta.label}
-      </span>
+      {item.status === 'estimated' ? (
+        <PointerTooltip
+          label={t('前年同期开示日推导的目安，以公司正式公告为准')}
+          width={240}
+          contentClassName="p-2.5"
+          content={
+            <span className="block text-micro leading-[16px] text-ink-600">
+              {t('前年同期开示日推导的目安，以公司正式公告为准')}
+            </span>
+          }
+        >
+          <span className={cn('whitespace-nowrap rounded-sm px-1.5 py-0.5 text-micro', meta.chipClass)}>
+            {meta.label}
+          </span>
+        </PointerTooltip>
+      ) : (
+        <span className={cn('whitespace-nowrap rounded-sm px-1.5 py-0.5 text-micro', meta.chipClass)}>
+          {meta.label}
+        </span>
+      )}
       {item.actual?.is_revision && (
         <span className="whitespace-nowrap rounded-sm bg-warn-50 px-1.5 py-0.5 text-micro text-warn-700">{t('业绩预想修正')}</span>
       )}
@@ -334,7 +349,16 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                     <span className="text-right font-mono text-caption text-ink-600 tnum">{fmtYenCompact(row.avg_turnover_20d)}</span>
                     <span className="text-right">
                       {row.in_watchlist && <span className="text-warn-600">★</span>}
-                      {row.radar_state && <span className="ml-1 inline-block size-1.5 rounded-full bg-brand-600 align-middle" title={t('雷达信号')} />}
+                      {row.radar_state && (
+                        <PointerTooltip
+                          label={t('雷达信号')}
+                          width={140}
+                          contentClassName="p-2"
+                          content={<span className="text-micro text-ink-600">{t('雷达信号')}</span>}
+                        >
+                          <span className="ml-1 inline-block size-1.5 rounded-full bg-brand-600 align-middle" />
+                        </PointerTooltip>
+                      )}
                     </span>
                   </motion.div>
 
@@ -412,7 +436,14 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                       <span>
                         {row.in_watchlist && <span className="text-warn-600">★</span>}
                         {row.radar_state && (
-                          <span className="ml-1 inline-block size-1.5 rounded-full bg-brand-600 align-middle" title={t('雷达信号')} />
+                          <PointerTooltip
+                            label={t('雷达信号')}
+                            width={140}
+                            contentClassName="p-2"
+                            content={<span className="text-micro text-ink-600">{t('雷达信号')}</span>}
+                          >
+                            <span className="ml-1 inline-block size-1.5 rounded-full bg-brand-600 align-middle" />
+                          </PointerTooltip>
                         )}
                       </span>
                     </span>

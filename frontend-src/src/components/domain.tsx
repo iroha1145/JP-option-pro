@@ -2,9 +2,11 @@
 
 import { Link } from 'react-router';
 import InfoHint from '@/components/shared/InfoHint';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import { t } from '@/i18n/core';
 import { fmtDate, fmtScore } from '@/lib/format';
 import { radarScoreHint, type ScoreHint } from '@/lib/indicatorHints';
+import { strengthBarClass } from '@/lib/strengthColor';
 import { cn } from '@/lib/utils';
 
 export const RADAR_STATE_LABELS: Record<string, string> = {
@@ -115,15 +117,22 @@ export function ScoreBar({
       {/* w-24 では日本語「高値掴みリスク」(84px) も英語 "Relative strength" (98px) も
           切れる。三言語の最長 98px + InfoHint 分を見て w-32。 */}
       <span className="flex w-32 shrink-0 items-center gap-1 text-caption text-ink-500">
-        <span className="truncate" title={t(label)}>{t(label)}</span>
+        <PointerTooltip
+          label={t(label)}
+          width={168}
+          contentClassName="p-2.5"
+          content={<span className="block text-caption text-ink-700">{t(label)}</span>}
+        >
+          <span className="truncate">{t(label)}</span>
+        </PointerTooltip>
         {resolvedHint && <InfoHint hint={resolvedHint} size={12} />}
       </span>
       <div className="track relative h-1.5 flex-1 overflow-hidden rounded-pill bg-line">
-        {value !== null && (
+        {value !== null && Number.isFinite(value) && (
           <div
             className={cn(
-              'absolute inset-y-0 left-0 rounded-pill',
-              value >= 70 ? 'bg-up-600' : value >= 45 ? 'bg-brand-500' : 'bg-warn-600',
+              'absolute inset-y-0 left-0 origin-left rounded-pill animate-grow-bar',
+              strengthBarClass(value),
             )}
             style={{ width: `${Math.max(3, Math.min(100, value))}%` }}
           />

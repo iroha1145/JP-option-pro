@@ -18,6 +18,7 @@ import EmptyState from '@/components/shared/EmptyState';
 import { SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
 import { DataThrough } from '@/components/domain';
 import Icon from '@/components/icons';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import FilterWorkbench from '@/components/screener/FilterWorkbench';
 import ResultTable from '@/components/screener/ResultTable';
 import ResultCards from '@/components/screener/ResultCards';
@@ -41,6 +42,7 @@ import {
 } from '@/components/screener/types';
 import { t } from '@/i18n/core';
 import { usePolling } from '@/hooks/usePolling';
+import { useTickFlash } from '@/hooks/useTickFlash';
 import { quoteSourceLabel } from '@/lib/quoteSource';
 import { fmtYenCompact } from '@/lib/format';
 
@@ -223,6 +225,16 @@ export default function Screener() {
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pageRows = useMemo(() => sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE), [sorted, safePage]);
+  const flashRows = useMemo(
+    () =>
+      pageRows.map((row) => ({
+        code: row.canonical_code,
+        price: overlayRows[row.canonical_code]?.live_price ?? row.close,
+      })),
+    [pageRows, overlayRows],
+  );
+  const flashes = useTickFlash(flashRows, (row) => row.code, (row) => row.price);
+  const staleResults = scanState === 'error' && Boolean(response);
 
   const onToggle = useCallback((code: string) => {
     setExpanded((prev) => (prev === code ? null : code));
@@ -414,12 +426,24 @@ export default function Screener() {
                     絞り込むのは「今の値段の位置」だけ（doc §八）。 */}
                 {overlay.data?.enabled && liveUpCount > 0 && (
                   <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <PointerTooltip
+                      passthrough
+                      label={t('用{n}分延迟的盘中价筛选，分数与排序仍来自夜间官方数据', {
+                        n: overlay.data?.delayed_minutes ?? 15,
+                      })}
+                      width={260}
+                      contentClassName="p-2.5"
+                      content={
+                        <span className="text-micro leading-[16px] text-ink-600">
+                          {t('用{n}分延迟的盘中价筛选，分数与排序仍来自夜间官方数据', {
+                            n: overlay.data?.delayed_minutes ?? 15,
+                          })}
+                        </span>
+                      }
+                    >
                     <button
                       type="button"
                       onClick={() => setOnlyLiveUp((prev) => !prev)}
-                      title={t('用{n}分延迟的盘中价筛选，分数与排序仍来自夜间官方数据', {
-                        n: overlay.data?.delayed_minutes ?? 15,
-                      })}
                       className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-caption transition-colors duration-fast ${
                         onlyLiveUp
                           ? 'border-brand-400 bg-brand-50 text-brand-700'
@@ -429,6 +453,7 @@ export default function Screener() {
                       <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
                       {t('盘中上涨')} {liveUpCount}
                     </button>
+                    </PointerTooltip>
                     <span className="text-micro text-ink-400">{quoteSourceLabel(overlay.data).text}</span>
                   </div>
                 )}
@@ -447,6 +472,8 @@ export default function Screener() {
                     canManageWatchlist={canManageWatchlist}
                     animKey={animKey}
                     overlay={overlayRows}
+                    flashes={flashes}
+                    stale={staleResults}
                   />
                 </div>
                 <div className={scanState === 'scanning' ? 'opacity-60 md:hidden' : 'md:hidden'}>
@@ -461,6 +488,8 @@ export default function Screener() {
                     animKey={animKey}
                     page={safePage}
                     overlay={overlayRows}
+                    flashes={flashes}
+                    stale={staleResults}
                   />
                   {totalPages > 1 && (
                     <div className="mt-4 flex items-center justify-center gap-2">
