@@ -49,7 +49,7 @@ export default function MenuSelect<T extends string | number>({
           ref={triggerRef}
           aria-label={ariaLabel}
           className={cn(
-            'menu-select-trigger flex min-h-9 max-w-full items-center gap-1.5 rounded-md border border-line-strong bg-card pl-2.5 pr-2 font-mono text-caption text-ink-600 tnum transition-colors duration-fast hover:bg-paper-2 data-[state=open]:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50',
+            'menu-select-trigger flex min-h-9 max-w-full items-center gap-1.5 rounded-md border border-line-strong bg-card pl-2.5 pr-2 text-caption text-ink-600 transition-colors duration-fast hover:bg-paper-2 data-[state=open]:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50',
             triggerClassName,
           )}
         >

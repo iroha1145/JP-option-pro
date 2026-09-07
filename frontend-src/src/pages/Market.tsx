@@ -260,7 +260,7 @@ export default function Market() {
                   type="button"
                   onClick={() => setIndexCode(index.index_code)}
                   className={`card-surface flex w-full items-center justify-between px-3 py-2 text-left ${
-                    index.index_code === indexCode ? 'ring-1 ring-brand-400' : ''
+                    index.index_code === indexCode ? 'bg-paper-2 ring-1 ring-brand-100' : ''
                   }`}
                 >
                   <span className="min-w-0">

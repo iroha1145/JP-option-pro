@@ -72,13 +72,13 @@ export default function ScanHistoryPopover({ history }: { history: ScanHistoryEn
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: -4, transition: { duration: 0.16 } }}
             transition={SPRING_POP}
-            className="cloud-popover absolute right-0 top-11 z-40 w-[320px] origin-top-right p-2"
+            className="absolute right-0 top-11 z-40 w-[320px] max-w-[calc(100vw-2rem)] origin-top-right rounded-md border border-line bg-card p-2 shadow-sh-2"
           >
             <p className="px-2 pb-1.5 pt-1 eyebrow">{t('最近 5 次扫描')}</p>
             {history.length === 0 ? (
               <EmptyState size="compact" image="/empty-chart.svg" title={t('尚无扫描记录')} />
             ) : (
-              <ul>
+              <ul className="divide-y divide-line">
                 {history.slice(0, 5).map((entry, index) => (
                   <li
                     key={index}

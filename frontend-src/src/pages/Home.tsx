@@ -473,7 +473,7 @@ function WatchlistMoverCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: DUR_SECTION, ease: EASE_PAPER, delay: staggerDelay(index) }}
     >
-      <Link to={`/stock/${item.display_code}`} className="card-surface card-hover block rounded-lg p-4">
+      <Link to={`/stock/${item.display_code}`} className="card-surface card-hover block overflow-hidden rounded-lg p-4">
         <div className="flex items-center gap-2">
           <CodeMark code={item.display_code} size={24} />
           <span className="shrink-0 font-mono text-caption font-semibold text-ink-800">{item.display_code}</span>

@@ -37,7 +37,7 @@ import PointerTooltip from '@/components/shared/PointerTooltip';
 import { t } from '@/i18n/core';
 import { cn } from '@/lib/utils';
 import { fmtPrice, fmtTimeHHMMSS, fmtYenCompact } from '@/lib/format';
-import { DUR_SECTION, EASE_PAPER } from '@/lib/motion';
+import { EASE_PAPER } from '@/lib/motion';
 import { ApiError } from '@/api/client';
 import type { SearchResult, WatchlistItem } from '@/api/types';
 
@@ -346,9 +346,9 @@ export default function Watchlist() {
       {query.loading && !query.data && (
         <HorizontalScroller className="-mx-1 sm:mx-0" scrollerClassName="px-1 sm:px-0" label={t('自选统计')}>
           <div className="flex gap-3 sm:grid sm:grid-cols-3">
-            <SkeletonCard className="min-w-[220px] sm:min-w-0" />
-            <SkeletonCard className="min-w-[220px] sm:min-w-0" />
-            <SkeletonCard className="min-w-[220px] sm:min-w-0" />
+            <SkeletonCard className="min-w-[240px] sm:min-w-0" />
+            <SkeletonCard className="min-w-[240px] sm:min-w-0" />
+            <SkeletonCard className="min-w-[240px] sm:min-w-0" />
           </div>
         </HorizontalScroller>
       )}
@@ -361,13 +361,13 @@ export default function Watchlist() {
             variants={{ hidden: {}, show: { transition: { staggerChildren: 0.045 } } }}
             className="flex gap-3 sm:grid sm:grid-cols-3"
           >
-            <motion.div variants={STAT_ENTER} className="min-w-[220px] snap-start sm:min-w-0">
+            <motion.div variants={STAT_ENTER} className="min-w-[240px] snap-start sm:min-w-0">
               <StatCard label={t('只标的')} icon="list" value={items.length} />
             </motion.div>
-            <motion.div variants={STAT_ENTER} className="min-w-[220px] snap-start sm:min-w-0">
+            <motion.div variants={STAT_ENTER} className="min-w-[240px] snap-start sm:min-w-0">
               <div className="card-surface metric-card p-5">
                 <div className="flex items-start justify-between">
-                  <p className="text-caption font-medium text-ink-500">{t('上涨 / 下跌')}</p>
+                  <p className="eyebrow">{t('上涨 / 下跌')}</p>
                   <Icon name="candle" size={18} className="text-ink-400" />
                 </div>
                 <AdvanceDeclineBar
@@ -377,7 +377,7 @@ export default function Watchlist() {
                 />
               </div>
             </motion.div>
-            <motion.div variants={STAT_ENTER} className="min-w-[220px] snap-start sm:min-w-0">
+            <motion.div variants={STAT_ENTER} className="min-w-[240px] snap-start sm:min-w-0">
               <StatCard
                 label={t('重点标记')}
                 icon="flag"
@@ -624,7 +624,7 @@ function WatchCard({
       animate={animateIn ? { opacity: 1, y: 0 } : undefined}
       transition={
         animateIn
-          ? { duration: DUR_SECTION, ease: EASE_PAPER, delay: Math.min(index * 0.04, 0.4) }
+          ? { duration: 0.48, ease: EASE_PAPER, delay: Math.min(index * 0.04, 0.4) }
           : undefined
       }
       className="group/card relative"

@@ -494,9 +494,9 @@ function HotspotCard({ group, index }: { group: NewsHotspotGroup; index: number 
   const heat = Math.max(0, Math.min(100, group.max_importance ?? 0));
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.2, delay: Math.min(index * 0.05, 0.4) }}
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.48, ease: EASE_PAPER, delay: Math.min(index * 0.05, 0.4) }}
     >
     <Link
       to={`/stock/${group.display_code}`}
