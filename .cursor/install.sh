@@ -8,7 +8,11 @@ set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 
 # python3.12 ships in the base image but its venv/ensurepip module does not.
-if ! python3.12 -m venv --help >/dev/null 2>&1; then
+# `python3.12 -m venv --help` succeeds even when ensurepip is missing, so probe
+# a throwaway venv creation instead — that is what actually fails without the
+# python3.12-venv package.
+if ! python3.12 -m venv --help >/dev/null 2>&1 \
+  || ! python3.12 -c 'import ensurepip' >/dev/null 2>&1; then
   sudo apt-get update -qq
   sudo apt-get install -y -qq python3.12-venv
 fi
