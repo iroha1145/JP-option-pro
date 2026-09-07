@@ -330,12 +330,10 @@ export default function Earnings() {
                   {showTbd && (
                     <div className="flex flex-wrap gap-1.5 border-t border-line px-4 py-3">
                       {tbdItems.map((item) => (
-                        <Link
-                          key={item.canonical_code}
-                          to={`/stock/${item.display_code}`}
-                          className="rounded-sm bg-paper-2 px-2 py-1 font-mono text-caption text-ink-600 hover:bg-brand-50 hover:text-brand-700"
-                        >
-                          {item.display_code} {item.name_ja ?? ''}
+                        <Link key={item.canonical_code} to={`/stock/${item.display_code}`}>
+                          <SoftBadge className="font-mono hover:bg-brand-50 hover:text-brand-700">
+                            {item.display_code} {item.name_ja ?? ''}
+                          </SoftBadge>
                         </Link>
                       ))}
                     </div>

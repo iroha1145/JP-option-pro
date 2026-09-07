@@ -108,14 +108,11 @@ export function NewsBadge({
   }
   if (!summary || summary.news_count === 0) {
     return (
-      <span className="font-mono text-caption text-ink-300 tnum" aria-label={t('72 小时内无新闻')}>
-        0
-      </span>
+      <SoftBadge aria-label={t('72 小时内无新闻')}>0</SoftBadge>
     );
   }
   const importance = summary.max_importance ?? 0;
-  const tone =
-    importance >= 75 ? 'text-warn-600 bg-warn-50' : importance >= 55 ? 'text-brand-700 bg-brand-50' : 'text-ink-500 bg-card-warm';
+  const tone = importance >= 75 ? 'warn' : importance >= 55 ? 'brand' : 'neutral';
   return (
     <PointerTooltip
       label={`${t('新闻 · 72H')} · ${summary.news_count}`}
@@ -143,13 +140,13 @@ export function NewsBadge({
         </>
       }
     >
-      <span className={cn('inline-flex items-center gap-1 rounded-xs px-1.5 py-0.5 text-micro font-medium leading-[16px]', tone)}>
+      <SoftBadge tone={tone}>
         <Icon name="bolt" size={11} />
         <span className="font-mono tnum">{summary.news_count}</span>
         {summary.max_importance !== null && (
           <span className="font-mono text-[10px] tnum opacity-80">· {Math.round(importance)}</span>
         )}
-      </span>
+      </SoftBadge>
     </PointerTooltip>
   );
 }

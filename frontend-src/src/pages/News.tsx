@@ -584,11 +584,8 @@ function NewsRow({ item, index }: { item: NewsItem; index: number }) {
                       ? affected.code.slice(0, 4)
                       : affected.code;
                   const chip = (
-                    <Link
-                      to={`/stock/${code}`}
-                      className="rounded-pill bg-paper-2 px-2 py-0.5 font-mono text-micro text-ink-600 hover:bg-brand-50 hover:text-brand-700"
-                    >
-                      {code}
+                    <Link to={`/stock/${code}`}>
+                      <SoftBadge className="font-mono hover:bg-brand-50 hover:text-brand-700">{code}</SoftBadge>
                     </Link>
                   );
                   return affected.reason_zh ? (
@@ -614,13 +611,11 @@ function NewsRow({ item, index }: { item: NewsItem; index: number }) {
             <SoftBadge key={cat}>{t(cat)}</SoftBadge>
           ))}
           {item.securities.map((security) => (
-            <Link
-              key={security.canonical_code}
-              to={`/stock/${security.display_code}`}
-              className="rounded-sm bg-brand-50 px-1.5 py-0.5 font-mono text-brand-700 hover:underline"
-            >
-              {security.display_code}
-              {security.name_ja ? ` ${security.name_ja}` : ''}
+            <Link key={security.canonical_code} to={`/stock/${security.display_code}`}>
+              <SoftBadge tone="brand" className="font-mono hover:underline">
+                {security.display_code}
+                {security.name_ja ? ` ${security.name_ja}` : ''}
+              </SoftBadge>
             </Link>
           ))}
           <AnalysisStateChip state={item.analysis_state} />

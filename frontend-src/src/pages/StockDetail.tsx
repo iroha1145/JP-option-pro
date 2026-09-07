@@ -768,19 +768,19 @@ function StructurePanel({ technical }: { technical: TechnicalStructure | null })
         <ScoreBar label="价格行为" score={pa.score} />
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {pa.pattern_labels.map((label) => (
-            <span key={label} className="rounded-pill border border-line bg-card px-2 py-0.5 text-micro text-ink-600">{t(label)}</span>
+            <SoftBadge key={label}>{t(label)}</SoftBadge>
           ))}
           {pa.spring && (
-            <span className="inline-flex items-center gap-1 rounded-pill bg-up-50 px-2 py-0.5 text-micro text-up-700">
+            <SoftBadge tone="up">
               {t('Spring 假跌破回收')}
               <InfoHint hint={STRUCTURE_HINTS.spring} size={11} />
-            </span>
+            </SoftBadge>
           )}
           {pa.upthrust && (
-            <span className="inline-flex items-center gap-1 rounded-pill bg-down-50 px-2 py-0.5 text-micro text-down-700">
+            <SoftBadge tone="down">
               {t('Upthrust 假突破')}
               <InfoHint hint={STRUCTURE_HINTS.upthrust} size={11} />
-            </span>
+            </SoftBadge>
           )}
         </div>
         <dl className="mt-2 grid grid-cols-2 gap-1.5 text-caption">
@@ -817,7 +817,7 @@ function StructurePanel({ technical }: { technical: TechnicalStructure | null })
             {t('量价一致（努力/结果）')}
             <InfoHint hint={STRUCTURE_HINTS.vol_price} />
           </span>
-          <span className="rounded-pill bg-ai-50 px-2 py-0.5 text-micro font-medium text-ai-600">{t(vpm.setup_label)}</span>
+          <SoftBadge tone="ai">{t(vpm.setup_label)}</SoftBadge>
         </div>
         <dl className="grid grid-cols-3 gap-1.5 text-caption">
           <StructFact label="努力" value={vpm.effort !== null ? `${vpm.effort.toFixed(2)}x` : '—'} />

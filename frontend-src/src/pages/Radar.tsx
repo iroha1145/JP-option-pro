@@ -454,13 +454,13 @@ function LeadBigCard({
 
       {structure && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {structure.structure_label && <Tag tone="brand">{t(structure.structure_label)}</Tag>}
-          {structure.setup_label && <Tag tone="ai">{t(structure.setup_label)}</Tag>}
+          {structure.structure_label && <SoftBadge tone="brand">{t(structure.structure_label)}</SoftBadge>}
+          {structure.setup_label && <SoftBadge tone="ai">{t(structure.setup_label)}</SoftBadge>}
           {(structure.pattern_labels ?? []).map((label) => (
-            <Tag key={label} tone="neutral">{t(label)}</Tag>
+            <SoftBadge key={label}>{t(label)}</SoftBadge>
           ))}
-          {structure.spring && <Tag tone="up">{t('Spring 假跌破回收')}</Tag>}
-          {structure.upthrust && <Tag tone="down">{t('Upthrust 假突破')}</Tag>}
+          {structure.spring && <SoftBadge tone="up">{t('Spring 假跌破回收')}</SoftBadge>}
+          {structure.upthrust && <SoftBadge tone="down">{t('Upthrust 假突破')}</SoftBadge>}
         </div>
       )}
 
@@ -658,7 +658,7 @@ function EventCard({ event, onSelect, live, flash }: {
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
         <SignalChip signal={event.signal_type} />
         <StateChip state={event.state} />
-        {structure?.setup_label && <Tag tone="ai">{t(structure.setup_label)}</Tag>}
+        {structure?.setup_label && <SoftBadge tone="ai">{t(structure.setup_label)}</SoftBadge>}
         {above && (
           <SoftBadge tone="up">
             <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
@@ -719,19 +719,6 @@ function CardFact({ label, value }: { label: string; value: ReactNode }) {
       <span className="block text-micro text-ink-400">{label}</span>
       <span className="font-mono text-body-s tnum text-ink-800">{value}</span>
     </span>
-  );
-}
-
-function Tag({ children, tone }: { children: React.ReactNode; tone: 'brand' | 'ai' | 'up' | 'down' | 'neutral' }) {
-  const tones = {
-    brand: 'bg-brand-50 text-brand-700',
-    ai: 'bg-ai-50 text-ai-600',
-    up: 'bg-up-50 text-up-700',
-    down: 'bg-down-50 text-down-700',
-    neutral: 'border border-line bg-card text-ink-600',
-  };
-  return (
-    <span className={`inline-flex items-center rounded-pill px-2 py-0.5 text-micro ${tones[tone]}`}>{children}</span>
   );
 }
 
