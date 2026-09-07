@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router';
 import { useNow } from '@/hooks/useNow';
+import { useColorMode } from '@/hooks/useColorMode';
 import SessionLED from '@/components/shared/SessionLED';
 import { tokyoSession } from '@/lib/tokyoSession';
 import { stocksApi, workerApi } from '@/api/modules';
@@ -499,7 +500,9 @@ function IntradayPane({
   onFetch: () => void;
   onRefresh: () => void;
 }) {
+  const colorMode = useColorMode();
   const option = useMemo(() => {
+    void colorMode;
     const bars = data?.bars ?? [];
     if (bars.length === 0) return null;
     const labels = bars.map((bar) => `${bar.trade_date.slice(5)} ${bar.bar_time}`);
@@ -539,7 +542,7 @@ function IntradayPane({
         },
       ],
     };
-  }, [data]);
+  }, [colorMode, data]);
 
   if (loading && !data) return <SkeletonCard className="h-[360px]" />;
   if (data && data.available && option) {

@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { quotesApi, radarApi, stocksApi, watchlistApi, workerApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { useTickFlash } from '@/hooks/useTickFlash';
+import { useColorMode } from '@/hooks/useColorMode';
 import TickPrice from '@/components/shared/TickPrice';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import PriorityRing from '@/components/shared/PriorityRing';
@@ -554,7 +555,9 @@ function LeadBigCard({
 }
 
 function LeadChart({ bars, event }: { bars: StockBar[]; event: RadarEvent }) {
+  const colorMode = useColorMode();
   const option = useMemo(() => {
+    void colorMode;
     const dates = bars.map((bar) => bar.trade_date.slice(5));
     const candles = bars.map((bar) => [
       bar.adj_open ?? bar.open,
@@ -613,7 +616,7 @@ function LeadChart({ bars, event }: { bars: StockBar[]; event: RadarEvent }) {
         },
       ],
     };
-  }, [bars, event]);
+  }, [bars, colorMode, event]);
   return <ReactECharts className="h-full w-full" option={option} ariaLabel={`${event.display_code} lead chart`} />;
 }
 

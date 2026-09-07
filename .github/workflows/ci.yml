@@ -60,6 +60,9 @@ jobs:
       - name: i18n dictionary duplicate gate
         run: node --experimental-strip-types frontend-src/tests/dict_no_duplicates.mjs
 
+      - name: Color-mode preference gate
+        run: node --experimental-strip-types --test frontend-src/tests/color-preference.mjs
+
       # 後端が組み立てた文（テンプレート + パラメータ）を 3 言語で描画できるか。
       # 辞書に載っていても引き方を間違えれば画面には出ない ——「載っているか」の
       # 門（pytest 側）とは別に見る。

@@ -1,7 +1,7 @@
 /**
  * 板块透视热力砖 — 对标美版 sectors/HeatMatrix。
  * 一块砖同时承载：当日中位涨跌 · 近20日中位涨跌 · 今日领涨（美版此处是 IV）。
- * 底色按所选口径连续映射（红涨绿跌）；缺数用虚线中性砖，绝不与「真持平」同色。
+ * 底色按所选口径连续映射，并跟随涨跌色彩习惯；缺数用虚线中性砖，绝不与「真持平」同色。
  */
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -9,6 +9,7 @@ import { fmtPct } from '@/lib/format';
 import { heatColor } from '@/lib/chart';
 import { SkeletonBlock } from '@/components/shared/Skeleton';
 import PointerTooltip from '@/components/shared/PointerTooltip';
+import { useColorMode } from '@/hooks/useColorMode';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import { EASE_PAPER } from '@/lib/motion';
 import { t } from '@/i18n/core';
@@ -45,6 +46,9 @@ function HeatTile({
   onSelect: () => void;
   index: number;
 }) {
+  /* heatColor 在渲染期读 getColorMode()。不订阅则换盘后整块矩阵停在旧口径，
+     与同屏徽章 / 涨跌幅红绿相反，直到别的原因触发重绘才追上。 */
+  useColorMode();
   const reduce = usePrefersReducedMotion();
   const primary = metricValue(sector, metric);
   const secondary = metric === 'r1' ? sector.median_return_20d : sector.median_return_1d;
@@ -113,9 +117,9 @@ function HeatTile({
         transition={{ duration: 0.48, ease: EASE_PAPER, delay: Math.min(index * 0.04, 0.4) }}
         whileHover={reduce ? undefined : { y: -3, transition: { duration: 0.24, ease: 'easeOut' } }}
         className={cn(
-          'group relative h-[92px] w-full overflow-visible rounded-md text-left shadow-sh-1 transition-shadow duration-fast hover:shadow-sh-2 md:h-[108px]',
+          'group relative h-[92px] w-full overflow-visible rounded-md text-left shadow-sh-1 transition-shadow duration-240 ease-out hover:shadow-sh-2 md:h-[108px]',
           primary === null && 'border border-dashed border-line-strong',
-          selected && 'ring-2 ring-brand-600 ring-offset-1',
+          selected && 'shadow-sh-2',
         )}
         style={{ backgroundColor: bg }}
       >
@@ -202,8 +206,8 @@ export default function HeatMatrix({
 export function HeatMatrixSkeleton() {
   return (
     <div className={GRID_CLASS} aria-hidden="true">
-      {Array.from({ length: 12 }, (_, index) => (
-        <SkeletonBlock key={index} className="h-[104px] rounded-md" />
+      {Array.from({ length: 33 }, (_, index) => (
+        <SkeletonBlock key={index} className="h-[92px] rounded-md md:h-[108px]" />
       ))}
     </div>
   );

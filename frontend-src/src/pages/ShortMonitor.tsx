@@ -18,6 +18,7 @@
  * 呈现形式 —— 这里没出的值，页面上就没有。 */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useColorMode } from '@/hooks/useColorMode';
 import { Link } from 'react-router';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/shared/PageHeader';
@@ -625,7 +626,9 @@ function Explanation({ detail }: { detail: ShortMonitorDetail }) {
  *  标记打在 `effective_trade_date`（公开日之后的首个交易日）而不是仓位日：
  *  市场在公开之前不可能知道这件事，标在仓位日等于把未来信息画进过去。 */
 function LeadChart({ bars, events, code }: { bars: StockBar[]; events: ShortMonitorEvent[]; code: string }) {
+  const colorMode = useColorMode();
   const option = useMemo(() => {
+    void colorMode;
     const dates = bars.map((bar) => bar.trade_date.slice(5));
     const candles = bars.map((bar) => [
       bar.adj_open ?? bar.open,
@@ -677,7 +680,7 @@ function LeadChart({ bars, events, code }: { bars: StockBar[]; events: ShortMoni
         },
       ],
     };
-  }, [bars, events]);
+  }, [bars, colorMode, events]);
   return <ReactECharts className="h-64 w-full" option={option} ariaLabel={`${code} short monitor chart`} />;
 }
 

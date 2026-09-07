@@ -23,7 +23,7 @@ import type {
   MarkPointComponentOption,
   TooltipComponentOption,
 } from 'echarts/components';
-import { directionColors } from './colorPreference.ts';
+import { directionColors, getColorMode } from './colorPreference.ts';
 
 echarts.use([
   LineChart, BarChart, CandlestickChart, PieChart,
@@ -233,18 +233,19 @@ export function hatchDecal(color = CH.brand600) {
 }
 
 /* ---------- 涨跌热力色阶（§1.7 连续映射） ----------
-   日本・中華圏の慣習: 上昇=赤 / 下落=緑。米版から移植した際に色順が
-   そのまま（緑が上昇）だったのを反転済み —— 全站の up-600/down-600 と一致。 */
+   色阶两端是「涨/跌」不是固定绿/红。基表按西方习惯（绿涨红跌）；
+   亚洲习惯下翻转符号，与 ColorModeSwitcher / CH.up600 共用同一快照。 */
 const HEAT_STOPS: { pct: number; rgb: [number, number, number] }[] = [
-  { pct: -3, rgb: [14, 159, 110] },
-  { pct: -1.5, rgb: [124, 207, 169] },
+  { pct: -3, rgb: [214, 53, 59] },
+  { pct: -1.5, rgb: [240, 131, 127] },
   { pct: 0, rgb: [241, 239, 232] },
-  { pct: 1.5, rgb: [240, 131, 127] },
-  { pct: 3, rgb: [214, 53, 59] },
+  { pct: 1.5, rgb: [124, 207, 169] },
+  { pct: 3, rgb: [14, 159, 110] },
 ];
 
 export function heatColor(pct: number): string {
-  const clamped = Math.max(-3, Math.min(3, pct));
+  const signed = getColorMode() === 'asian' ? -pct : pct;
+  const clamped = Math.max(-3, Math.min(3, signed));
   for (let i = 0; i < HEAT_STOPS.length - 1; i++) {
     const a = HEAT_STOPS[i];
     const b = HEAT_STOPS[i + 1];
