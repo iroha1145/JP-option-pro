@@ -11,6 +11,7 @@ import { fmtPrice, fmtYenCompact } from '@/lib/format';
 import EmptyState from '@/components/shared/EmptyState';
 import ChangeBadge from '@/components/shared/ChangeBadge';
 import PointerTooltip from '@/components/shared/PointerTooltip';
+import SoftBadge from '@/components/shared/SoftBadge';
 import Icon from '@/components/icons';
 import type { EarningsUpcomingItem } from '@/api/types';
 import { daysUntil, fmtMDCN, relativeDayCN, statusMeta, weekdayCN } from './types';
@@ -310,7 +311,13 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                       </span>
                       <span className="min-w-0">
                         <span className="block truncate text-body-s text-ink-800">{row.name_ja ?? '—'}</span>
-                        <span className="block truncate text-micro text-ink-400">{row.sector33_name ?? '—'}</span>
+                        {row.sector33_name ? (
+                          <SoftBadge className="mt-0.5 max-w-[11rem]" title={row.sector33_name}>
+                            <span className="truncate">{row.sector33_name}</span>
+                          </SoftBadge>
+                        ) : (
+                          <span className="block truncate text-micro text-ink-400">—</span>
+                        )}
                       </span>
                     </span>
                     <StatusChip item={row} />
@@ -392,7 +399,13 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-body-s text-ink-800">{row.name_ja ?? '—'}</span>
-                        <span className="block truncate text-micro text-ink-400">{row.sector33_name ?? '—'}</span>
+                        {row.sector33_name ? (
+                          <SoftBadge className="mt-0.5 max-w-[11rem]" title={row.sector33_name}>
+                            <span className="truncate">{row.sector33_name}</span>
+                          </SoftBadge>
+                        ) : (
+                          <span className="block truncate text-micro text-ink-400">—</span>
+                        )}
                       </span>
                       <span className="shrink-0 text-right">
                         <span className="block font-mono text-body-s text-ink-900 tnum">{fmtPrice(row.close)}</span>
