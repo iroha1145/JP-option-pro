@@ -16,7 +16,8 @@ import { useToast } from '@/hooks/useToast';
 import Icon from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { t } from '@/i18n/core';
-import { fmtJstDateTime } from '@/lib/format';
+import { fmtJstDateTime, fmtTimeHHMMSS } from '@/lib/format';
+import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
 import type { DatasetStatus } from '@/api/types';
 
 const MANUAL_ACTIONS: { type: string; label: string }[] = [
@@ -102,12 +103,25 @@ export default function DataStatus() {
         title={t('数据状态')}
         description={t('本页为日线数据，收盘后更新')}
         meta={
-          query.data ? (
-            <span className="text-caption text-ink-500">
-              {t('数据源')}: {query.data.provider} · {t('订阅计划')}: {query.data.plan.toUpperCase()} · API key:{' '}
-              {query.data.api_key_configured ? '✓' : '✗'}
-            </span>
-          ) : undefined
+          <>
+            {query.data ? (
+              <span className="text-caption text-ink-500">
+                {t('数据源')}: {query.data.provider} · {t('订阅计划')}: {query.data.plan.toUpperCase()} · API key:{' '}
+                {query.data.api_key_configured ? '✓' : '✗'}
+              </span>
+            ) : null}
+            {query.lastUpdatedAt && (
+              <span className="font-mono text-caption text-ink-400 tnum">
+                {t('更新')} {fmtTimeHHMMSS(query.lastUpdatedAt)}
+              </span>
+            )}
+            <ForceRefreshButton
+              onClick={() => query.refresh({ force: true })}
+              spinning={query.refreshing}
+              label={t('刷新状态')}
+              title={t('刷新状态')}
+            />
+          </>
         }
       />
 

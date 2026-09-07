@@ -17,6 +17,8 @@ import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import Segmented from '@/components/shared/Segmented';
+import FilterButton from '@/components/shared/FilterButton';
+import SelectionViewport from '@/components/shared/SelectionViewport';
 import { SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
 import ReactECharts from '@/components/charts/ReactECharts';
 import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart';
@@ -33,12 +35,18 @@ import SoftBadge from '@/components/shared/SoftBadge';
 import { RADAR_SCORE_HINTS } from '@/lib/indicatorHints';
 import { DUR_SECTION, EASE_PAPER } from '@/lib/motion';
 import { t } from '@/i18n/core';
-import { fmtDate, fmtPct, fmtPrice, fmtYenCompact } from '@/lib/format';
+import { fmtDate, fmtPct, fmtPrice, fmtTimeHHMMSS, fmtYenCompact } from '@/lib/format';
 import type { RadarEvent, StockBar } from '@/api/types';
 import '@/components/radar.css';
 
 type StateGroup = 'active' | 'confirmed' | 'watching' | 'closed' | 'all';
 type ViewMode = 'cards' | 'table';
+
+const SCORE_CAPS = [
+  { value: 0, label: t('不限') },
+  { value: 65, label: t('65 分以上') },
+  { value: 80, label: t('80 分以上') },
+];
 
 const GROUP_STATES: Record<StateGroup, string | undefined> = {
   all: undefined,
@@ -85,12 +93,16 @@ export default function Radar() {
   const overlay = usePolling(() => quotesApi.overlay('radar', 200), 60_000, []);
   const overlayRows = overlay.data?.enabled ? overlay.data.rows : {};
   const [onlyAbovePivot, setOnlyAbovePivot] = useState(false);
+  const [minScore, setMinScore] = useState(0);
 
   const events = useMemo(() => {
     const all = query.data?.events ?? [];
-    if (!onlyAbovePivot) return all;
-    return all.filter((event) => overlayRows[event.event_id]?.above_pivot);
-  }, [query.data, onlyAbovePivot, overlayRows]);
+    return all.filter((event) => {
+      if (minScore > 0 && (event.alert_priority ?? -1) < minScore) return false;
+      if (onlyAbovePivot && !overlayRows[event.event_id]?.above_pivot) return false;
+      return true;
+    });
+  }, [query.data, onlyAbovePivot, overlayRows, minScore]);
   const flashRows = useMemo(
     () =>
       events.map((event) => ({
@@ -112,7 +124,12 @@ export default function Radar() {
 
   useEffect(() => {
     setLeadId(null);
-  }, [group]);
+  }, [group, minScore]);
+
+  const restEvents = useMemo(
+    () => events.filter((event) => event.event_id !== lead?.event_id),
+    [events, lead],
+  );
 
   return (
     <div className="space-y-6">
@@ -148,7 +165,7 @@ export default function Radar() {
         }
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="radar-filterbar flex flex-wrap items-center gap-x-5 gap-y-3 pb-4">
         <Segmented<StateGroup>
           options={[
             { value: 'active', label: t('已触发') },
@@ -160,6 +177,26 @@ export default function Radar() {
           value={group}
           onChange={setGroup}
         />
+        <div className="flex max-w-full flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1.5 text-caption text-ink-500">
+            <Icon name="filter-funnel" size={13} />
+            {t('评分')}
+          </span>
+          <SelectionViewport>
+            <div className="filter-group" role="group" aria-label={t('评分')}>
+              {SCORE_CAPS.map((cap) => (
+                <FilterButton
+                  key={cap.value}
+                  active={minScore === cap.value}
+                  onClick={() => setMinScore(cap.value)}
+                  aria-label={t('评分{label}', { label: cap.label })}
+                >
+                  {cap.label}
+                </FilterButton>
+              ))}
+            </div>
+          </SelectionViewport>
+        </div>
         {overlay.data?.enabled && (
           <PointerTooltip
             passthrough
@@ -199,11 +236,19 @@ export default function Radar() {
       </div>
 
       <section aria-label={t('当日信号')}>
-        <div className="radar-section-heading mb-4 flex items-end justify-between pb-1">
+        <div className="radar-section-heading mb-4 flex flex-wrap items-end justify-between gap-2 pb-1">
           <div>
             <p className="eyebrow">TODAY&apos;S SIGNALS</p>
             <h2 className="mt-1 text-h2 text-ink-900">{t('当日信号')}</h2>
+            <p className="mt-1 text-caption text-ink-400">
+              {t('{n} 个活跃', { n: events.length })}
+            </p>
           </div>
+          {query.lastUpdatedAt && (
+            <span className="font-mono text-micro text-ink-400 tnum">
+              {t('更新')} {fmtTimeHHMMSS(query.lastUpdatedAt)}
+            </span>
+          )}
         </div>
 
       {state === 'loading' ? (
@@ -221,7 +266,7 @@ export default function Radar() {
               description={String(query.error?.message ?? '')}
             />
           </div>
-          <HistoryRail events={[]} filterKey={`${group}:${onlyAbovePivot}`} onPromoteLead={promoteLead} />
+          <HistoryRail events={[]} filterKey={`${group}:${onlyAbovePivot}:${minScore}`} onPromoteLead={promoteLead} />
         </div>
       ) : state === 'empty' ? (
         <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(260px,5fr)]">
@@ -232,7 +277,7 @@ export default function Radar() {
               description={query.data?.note ?? t('新信号出现时会立刻出现在这里。')}
             />
           </div>
-          <HistoryRail events={events} filterKey={`${group}:${onlyAbovePivot}`} onPromoteLead={promoteLead} />
+          <HistoryRail events={events} filterKey={`${group}:${onlyAbovePivot}:${minScore}`} onPromoteLead={promoteLead} />
         </div>
       ) : (
         <>
@@ -247,13 +292,19 @@ export default function Radar() {
                 flash={flashes[lead.event_id]}
                 locate={locateId === lead.event_id}
               />
-              <HistoryRail events={events} filterKey={`${group}:${onlyAbovePivot}`} onPromoteLead={promoteLead} />
+              <HistoryRail events={events} filterKey={`${group}:${onlyAbovePivot}:${minScore}`} onPromoteLead={promoteLead} />
+            </div>
+          )}
+          {restEvents.length > 0 && (
+            <div className="radar-section-heading mb-3 mt-6 flex flex-wrap items-baseline justify-between gap-2 pb-2">
+              <p className="eyebrow">
+                {t('其余信号')} · {restEvents.length}
+              </p>
             </div>
           )}
           {view === 'cards' ? (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {events
-                .filter((event) => event.event_id !== lead?.event_id)
+              {restEvents
                 .map((event, index) => (
                   <motion.div
                     key={event.event_id}
@@ -313,7 +364,7 @@ function LeadBigCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: DUR_SECTION, ease: EASE_PAPER }}
       aria-label={t('{code} 首要信号大卡', { code: event.display_code })}
-      className={cn('radar-lead-card card-surface p-5', locate && 'bk-locate')}
+      className={cn('radar-lead-card card-surface card-lift p-5', locate && 'bk-locate')}
     >
       <div className="flex flex-wrap items-center gap-1.5">
         <SignalChip signal={event.signal_type} />

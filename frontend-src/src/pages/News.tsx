@@ -21,6 +21,7 @@ import HorizontalScroller from '@/components/shared/HorizontalScroller';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
 import Switch from '@/components/shared/Switch';
 import AnalysisIcon from '@/components/shared/AnalysisIcon';
+import PulseDot from '@/components/shared/PulseDot';
 import FilterButton from '@/components/shared/FilterButton';
 import SelectionViewport from '@/components/shared/SelectionViewport';
 import { NEWS_HINTS } from '@/lib/indicatorHints';
@@ -211,7 +212,7 @@ function StatusStrip({ status }: { status: NewsStatus | null }) {
         {t('数据源')} {feedsOk}/{status.feeds.length}
       </span>
       <SoftBadge tone={status.ai.enabled ? 'ai' : 'neutral'}>
-        <AnalysisIcon size={13} />
+        {status.ai.enabled ? <PulseDot className="bg-ai-600" size={7} /> : <AnalysisIcon size={13} />}
         AI {status.ai.enabled ? t('已启用') : t('未启用')}
       </SoftBadge>
     </span>
@@ -261,7 +262,11 @@ function StatusHero({ status }: { status: NewsStatus | null }) {
         </HeroCell>
         <HeroCell label="AI" index={1}>
           <SoftBadge tone={status?.ai.enabled ? 'ai' : 'neutral'} size="md">
-            <AnalysisIcon size={14} />
+            {status?.ai.enabled || queued > 0 ? (
+              <PulseDot className="bg-ai-600" size={7} />
+            ) : (
+              <AnalysisIcon size={14} />
+            )}
             <span>{status?.ai.enabled ? t('已启用') : t('未启用')}</span>
           </SoftBadge>
         </HeroCell>

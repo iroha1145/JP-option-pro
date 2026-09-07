@@ -19,6 +19,7 @@ import StatCard from '@/components/shared/StatCard';
 import HorizontalScroller from '@/components/shared/HorizontalScroller';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
 import SessionLED from '@/components/shared/SessionLED';
+import MenuSelect from '@/components/shared/MenuSelect';
 import { CodeCell, DataThrough } from '@/components/domain';
 import Icon from '@/components/icons';
 import { useAccess } from '@/hooks/useAccess';
@@ -33,7 +34,7 @@ import CodeMark from '@/components/shared/CodeMark';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import { t } from '@/i18n/core';
 import { cn } from '@/lib/utils';
-import { fmtPrice, fmtYenCompact } from '@/lib/format';
+import { fmtPrice, fmtTimeHHMMSS, fmtYenCompact } from '@/lib/format';
 import { DUR_SECTION, EASE_PAPER } from '@/lib/motion';
 import { ApiError } from '@/api/client';
 import type { SearchResult, WatchlistItem } from '@/api/types';
@@ -45,6 +46,30 @@ const STAT_ENTER = {
   show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE_PAPER } },
 };
 
+type WatchSortId = 'default' | 'gain' | 'loss' | 'turnover' | 'code';
+
+const WATCH_SORTS: { id: WatchSortId; label: string }[] = [
+  { id: 'default', label: t('默认排序') },
+  { id: 'gain', label: t('涨幅优先') },
+  { id: 'loss', label: t('跌幅优先') },
+  { id: 'turnover', label: t('成交额优先') },
+  { id: 'code', label: t('按代码 A–Z') },
+];
+
+function sortWatchlist(items: WatchlistItem[], sortId: WatchSortId): WatchlistItem[] {
+  if (sortId === 'default') return items;
+  const out = [...items];
+  const pct = (item: WatchlistItem) => item.quote?.change_pct ?? Number.NEGATIVE_INFINITY;
+  const turnover = (item: WatchlistItem) => item.quote?.turnover_value ?? Number.NEGATIVE_INFINITY;
+  if (sortId === 'gain') out.sort((a, b) => pct(b) - pct(a) || a.canonical_code.localeCompare(b.canonical_code));
+  if (sortId === 'loss') out.sort((a, b) => pct(a) - pct(b) || a.canonical_code.localeCompare(b.canonical_code));
+  if (sortId === 'turnover') {
+    out.sort((a, b) => turnover(b) - turnover(a) || a.canonical_code.localeCompare(b.canonical_code));
+  }
+  if (sortId === 'code') out.sort((a, b) => a.display_code.localeCompare(b.display_code));
+  return out;
+}
+
 export default function Watchlist() {
   const { canManageWatchlist, accountUsername, isOwner } = useAccess();
   const toast = useToast();
@@ -54,6 +79,7 @@ export default function Watchlist() {
   const query = usePolling(() => watchlistApi.list(), 120_000);
   const refreshWatchlist = query.refresh;
   const [view, setView] = useState<'cards' | 'table'>('cards');
+  const [sortId, setSortId] = useState<WatchSortId>('default');
   const [busy, setBusy] = useState<string | null>(null);
 
   const onForceRefresh = useCallback(() => {
@@ -73,7 +99,10 @@ export default function Watchlist() {
     );
   }, [onForceRefresh, searchParams, setSearchParams]);
 
-  const items = query.data?.items ?? EMPTY_WATCHLIST;
+  const items = useMemo(
+    () => sortWatchlist(query.data?.items ?? EMPTY_WATCHLIST, sortId),
+    [query.data?.items, sortId],
+  );
   const flashes = useTickFlash(items, (row) => row.canonical_code, (row) => row.quote?.close ?? null);
   const maxItems = query.data?.max_items ?? null;
   const anonymous =
@@ -265,12 +294,28 @@ export default function Watchlist() {
               onError={(message) => toast.error(t('添加失败'), message)}
             />
           )}
+          <MenuSelect<WatchSortId>
+            value={sortId}
+            onChange={setSortId}
+            options={WATCH_SORTS.map((option) => ({ value: option.id, label: option.label }))}
+            ariaLabel={t('默认排序')}
+            align="right"
+            leading={<Icon name="filter-funnel" size={13} />}
+            triggerClassName="px-2.5 text-ink-500 hover:text-ink-800"
+          />
         </div>
-        <p className="text-right text-caption text-ink-400">
-          <span className="font-mono tnum">{items.length}</span> {t('只标的')}
-          {maxItems !== null && <span className="ml-1 text-ink-300">{t('/ 上限')} {maxItems}</span>}
-          {isOwner && <span className="ml-1 text-ink-300">· {t('所有者清单')}</span>}
-        </p>
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {query.lastUpdatedAt && (
+            <span className="font-mono text-caption text-ink-400 tnum">
+              {t('更新')} {fmtTimeHHMMSS(query.lastUpdatedAt)}
+            </span>
+          )}
+          <p className="text-right text-caption text-ink-400">
+            <span className="font-mono tnum">{items.length}</span> {t('只标的')}
+            {maxItems !== null && <span className="ml-1 text-ink-300">{t('/ 上限')} {maxItems}</span>}
+            {isOwner && <span className="ml-1 text-ink-300">· {t('所有者清单')}</span>}
+          </p>
+        </div>
       </div>
 
       {query.error && query.data && (
@@ -368,6 +413,7 @@ export default function Watchlist() {
                     item={item}
                     index={index}
                     flash={flashes[item.canonical_code]}
+                    animateIn={index < 9}
                     onRemove={canManageWatchlist ? () => void doRemove(item.canonical_code) : undefined}
                     onToggleStar={canManageWatchlist ? () => void doToggleStar(item) : undefined}
                   />
@@ -494,18 +540,24 @@ function WatchCard({
   flash,
   onRemove,
   onToggleStar,
+  animateIn,
 }: {
   item: WatchlistItem;
   index: number;
   flash?: 'up' | 'down';
   onRemove?: () => void;
   onToggleStar?: () => void;
+  animateIn: boolean;
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: DUR_SECTION, ease: EASE_PAPER, delay: Math.min(index * 0.04, 0.4) }}
+      initial={animateIn ? { opacity: 0, y: 14 } : false}
+      animate={animateIn ? { opacity: 1, y: 0 } : undefined}
+      transition={
+        animateIn
+          ? { duration: DUR_SECTION, ease: EASE_PAPER, delay: Math.min(index * 0.04, 0.4) }
+          : undefined
+      }
       className="group/card relative"
     >
       <Link

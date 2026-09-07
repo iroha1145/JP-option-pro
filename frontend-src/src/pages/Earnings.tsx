@@ -35,7 +35,7 @@ import PointerTooltip from '@/components/shared/PointerTooltip';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
 import { useToast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
-import { fmtYenCompact } from '@/lib/format';
+import { fmtTimeHHMMSS, fmtYenCompact } from '@/lib/format';
 import { t } from '@/i18n/core';
 import type { EarningsRecentItem } from '@/api/types';
 
@@ -148,6 +148,11 @@ export default function Earnings() {
               </span>
             )}
             <DataThrough date={q.data?.today} />
+            {q.lastUpdatedAt && (
+              <span className="hidden font-mono text-caption text-ink-400 tnum sm:inline">
+                {t('更新')} {fmtTimeHHMMSS(q.lastUpdatedAt)}
+              </span>
+            )}
             <ForceRefreshButton
               onClick={onForceRefresh}
               spinning={q.refreshing || pendingFlash}

@@ -1,6 +1,6 @@
 /** 日本市场页：指数走势 + 全部33业种强弱 + 广度与空卖。 */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { marketApi, stocksApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { remoteState } from '@/hooks/remoteState';
@@ -17,6 +17,7 @@ import HeatMatrix, { HeatMatrixSkeleton, metricValue, type HeatMetric } from '@/
 import SectorMembersPanel from '@/components/sectors/SectorMembersPanel';
 import StaleStrip from '@/components/shared/StaleStrip';
 import SessionLED from '@/components/shared/SessionLED';
+import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
 import InfoHint from '@/components/shared/InfoHint';
 import { MARKET_HINTS } from '@/lib/indicatorHints';
 import { tokyoSession } from '@/lib/tokyoSession';
@@ -105,6 +106,20 @@ export default function Market() {
   );
   const liveQuotes: Record<string, IntradayQuote> = live.data?.enabled ? live.data.quotes : {};
   const n225 = live.data?.enabled ? (live.data.indices?.['^N225'] ?? null) : null;
+  const refreshMarket = market.refresh;
+  const refreshSeries = series.refresh;
+  const refreshLiveSectors = liveSectors.refresh;
+  const refreshMembers = members.refresh;
+  const refreshLive = live.refresh;
+  const onRefreshMarket = useCallback(() => {
+    refreshMarket({ force: true });
+    refreshSeries({ force: true });
+    refreshLiveSectors({ force: true });
+    refreshMembers({ force: true });
+    refreshLive({ force: true });
+  }, [refreshLive, refreshLiveSectors, refreshMarket, refreshMembers, refreshSeries]);
+  const refreshingMarket =
+    market.refreshing || series.refreshing || liveSectors.refreshing || members.refreshing || live.refreshing;
 
   const sectorColumns: Column<SectorStrength>[] = [
     {
@@ -171,6 +186,12 @@ export default function Market() {
               </span>
             )}
             <DataThrough date={market.data?.data_through} />
+            <ForceRefreshButton
+              onClick={onRefreshMarket}
+              spinning={refreshingMarket}
+              label={t('刷新市场')}
+              title={t('刷新市场')}
+            />
           </div>
         }
       />

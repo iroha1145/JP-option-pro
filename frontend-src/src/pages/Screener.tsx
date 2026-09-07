@@ -48,7 +48,7 @@ import { EASE_PAPER } from '@/lib/motion';
 import { usePolling } from '@/hooks/usePolling';
 import { useTickFlash } from '@/hooks/useTickFlash';
 import { quoteSourceLabel } from '@/lib/quoteSource';
-import { fmtYenCompact } from '@/lib/format';
+import { fmtTimeHHMMSS, fmtYenCompact } from '@/lib/format';
 
 const PAGE_SIZE = 20;
 
@@ -304,6 +304,14 @@ export default function Screener() {
         meta={
           <>
             <DataThrough date={response?.trade_date} />
+            {history[0] && (
+              <span className="hidden text-right sm:block">
+                <span className="block text-micro text-ink-400">{t('上次扫描')}</span>
+                <span className="font-mono text-caption text-ink-600 tnum">
+                  {fmtTimeHHMMSS(history[0].at)}
+                </span>
+              </span>
+            )}
             <ScanHistoryPopover history={history} />
             <ForceRefreshButton
               onClick={() => void runScan(applied)}

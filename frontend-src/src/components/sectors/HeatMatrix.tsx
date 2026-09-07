@@ -3,17 +3,20 @@
  * 一块砖同时承载：当日中位涨跌 · 近20日中位涨跌 · 今日领涨（美版此处是 IV）。
  * 底色按所选口径连续映射（红涨绿跌）；缺数用虚线中性砖，绝不与「真持平」同色。
  */
+import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { fmtPct } from '@/lib/format';
 import { heatColor } from '@/lib/chart';
 import { SkeletonBlock } from '@/components/shared/Skeleton';
 import PointerTooltip from '@/components/shared/PointerTooltip';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
+import { EASE_PAPER } from '@/lib/motion';
 import { t } from '@/i18n/core';
 import type { SectorStrength } from '@/api/types';
 
 export type HeatMetric = 'r1' | 'r20';
 
-const GRID_CLASS = 'stagger-in grid grid-cols-2 gap-2.5 md:grid-cols-4 md:gap-3 xl:grid-cols-6';
+const GRID_CLASS = 'grid grid-cols-2 gap-2.5 md:grid-cols-4 md:gap-3 xl:grid-cols-6';
 
 export function metricValue(sector: SectorStrength, metric: HeatMetric): number | null {
   return metric === 'r1' ? sector.median_return_1d : sector.median_return_20d;
@@ -34,12 +37,15 @@ function HeatTile({
   metric,
   selected,
   onSelect,
+  index,
 }: {
   sector: SectorStrength;
   metric: HeatMetric;
   selected: boolean;
   onSelect: () => void;
+  index: number;
 }) {
+  const reduce = usePrefersReducedMotion();
   const primary = metricValue(sector, metric);
   const secondary = metric === 'r1' ? sector.median_return_20d : sector.median_return_1d;
   /* 「当日」と書くと今日の値だと読めてしまう —— 実際は直近取引日（引け後
@@ -93,7 +99,7 @@ function HeatTile({
         </span>
       }
     >
-      <button
+      <motion.button
         type="button"
         onClick={onSelect}
         aria-pressed={selected}
@@ -102,13 +108,28 @@ function HeatTile({
           r1: fmtPct(sector.median_return_1d),
           r20: fmtPct(sector.median_return_20d),
         })}
+        initial={reduce ? false : { opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.48, ease: EASE_PAPER, delay: Math.min(index * 0.04, 0.4) }}
+        whileHover={reduce ? undefined : { y: -3, transition: { duration: 0.24, ease: 'easeOut' } }}
         className={cn(
-          'group relative h-[92px] w-full overflow-visible rounded-md text-left shadow-sh-1 transition-[box-shadow,transform] duration-fast hover:-translate-y-0.5 hover:shadow-sh-2 md:h-[108px]',
+          'group relative h-[92px] w-full overflow-visible rounded-md text-left shadow-sh-1 transition-shadow duration-fast hover:shadow-sh-2 md:h-[108px]',
           primary === null && 'border border-dashed border-line-strong',
           selected && 'ring-2 ring-brand-600 ring-offset-1',
         )}
         style={{ backgroundColor: bg }}
       >
+        {selected && (
+          <motion.span
+            layoutId="jp-sector-selected-bar"
+            className="absolute left-0 top-0 z-10 h-full w-[3px] rounded-l-md bg-brand-600"
+            initial={reduce ? false : { scaleY: 0 }}
+            animate={{ scaleY: 1 }}
+            transition={{ duration: 0.26, ease: EASE_PAPER }}
+            style={{ originY: 0.5 }}
+            aria-hidden="true"
+          />
+        )}
         <span className="flex h-full flex-col justify-between p-3">
           <span className="flex min-w-0 items-start justify-between gap-1.5">
             <span className={cn('min-w-0 truncate text-[13px] font-semibold leading-[18px]', textMain)}>
@@ -142,7 +163,7 @@ function HeatTile({
             <span className={cn('block h-full', barFill)} style={{ width: `${Math.max(2, share * 100)}%` }} />
           </span>
         )}
-      </button>
+      </motion.button>
     </PointerTooltip>
   );
 }
@@ -160,13 +181,14 @@ export default function HeatMatrix({
 }) {
   return (
     <div className={GRID_CLASS} role="list" aria-label={t('板块透视')}>
-      {sectors.map((sector) => (
+      {sectors.map((sector, index) => (
         <span key={sector.sector33_code} role="listitem" className="min-w-0">
           <HeatTile
             sector={sector}
             metric={metric}
             selected={selectedCode === sector.sector33_code}
             onSelect={() => onSelect(sector.sector33_code)}
+            index={index}
           />
         </span>
       ))}
