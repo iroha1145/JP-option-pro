@@ -106,7 +106,7 @@ export default function News() {
         <StatusHero status={status.data ?? null} loading={status.loading && !status.data} />
       </div>
 
-      <div className="mt-8 flex flex-wrap items-center justify-between gap-2">
+      <div className="mt-8 flex min-w-0 flex-wrap items-center justify-between gap-2">
         <Segmented<Tab>
           options={[
             { value: 'feed', label: t('信息流') },
@@ -130,7 +130,7 @@ export default function News() {
         )}
       </div>
 
-      <div className="mt-6 space-y-5">
+      <div className="mt-4 space-y-5">
       {tab === 'feed' && (
         <>
           {feedState === 'stale' && (
@@ -186,7 +186,7 @@ export default function News() {
                 title={t('加载失败')}
                 description={String(feed.error?.message ?? '')}
                 action={
-                  <button type="button" onClick={() => feed.refresh({ force: true })} className="btn-primary">
+                  <button type="button" onClick={() => feed.refresh({ force: true })} className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105">
                     {t('重试')}
                   </button>
                 }
@@ -471,7 +471,7 @@ function HotspotStrip({
             image="/empty-news.svg"
             title={t('加载失败')}
             action={
-              <button type="button" onClick={onRetry} className="btn-primary">
+              <button type="button" onClick={onRetry} className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105">
                 {t('重试')}
               </button>
             }

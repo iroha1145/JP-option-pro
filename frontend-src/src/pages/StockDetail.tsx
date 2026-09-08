@@ -174,7 +174,7 @@ export default function StockDetail() {
             title={t('加载失败')}
             description={String(overview.error?.message ?? '')}
             action={
-              <button type="button" onClick={() => overview.refresh({ force: true })} className="btn-primary">
+              <button type="button" onClick={() => overview.refresh({ force: true })} className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105">
                 {t('重试')}
               </button>
             }
@@ -364,7 +364,7 @@ export default function StockDetail() {
           {/* 雷达 */}
           <section className="card-surface p-5">
             <p className="eyebrow">BREAKOUT RADAR</p>
-            <h3 className="mb-2 mt-1 text-h3 text-ink-900">{t('突破雷达')}</h3>
+            <h3 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('突破雷达')}</h3>
             {data.radar_events.length === 0 ? (
               <PanelEmpty image="/empty-radar.svg" title={t('暂无相关雷达事件')} />
             ) : (
@@ -385,14 +385,14 @@ export default function StockDetail() {
           {/* 信用交易 */}
           <section className="card-surface p-5">
             <p className="eyebrow">MARGIN</p>
-            <h3 className="mb-2 mt-1 text-h3 text-ink-900">{t('信用交易')}</h3>
+            <h3 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('信用交易')}</h3>
             <MarginPanel rows={data.margin_interest} />
           </section>
 
           {/* 技术指标 */}
           <section className="card-surface p-5">
             <p className="eyebrow">TECHNICALS</p>
-            <h3 className="mb-2 mt-1 text-h3 text-ink-900">{t('技术指标')}</h3>
+            <h3 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('技术指标')}</h3>
             <IndicatorGrid technical={technical} />
           </section>
         </div>
@@ -402,14 +402,14 @@ export default function StockDetail() {
       <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
         <section className="card-surface p-5 xl:col-span-7">
           <p className="eyebrow">EARNINGS TIMELINE</p>
-          <h2 className="mb-3 mt-1 text-h3 text-ink-900">{t('决算时间线')}</h2>
+          <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('决算时间线')}</h2>
           <div className="max-h-[360px] overflow-y-auto">
             <FinancialTable summaries={data.financials.summaries} />
           </div>
         </section>
         <section className="card-surface p-5 xl:col-span-5">
           <p className="eyebrow">CHART STRUCTURE</p>
-          <h2 className="mb-3 mt-1 text-h3 text-ink-900">{t('K线结构分析')}</h2>
+          <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('K线结构分析')}</h2>
           <StructurePanel technical={technical} />
         </section>
       </div>
@@ -417,7 +417,7 @@ export default function StockDetail() {
       {/* 机构空卖行为：报告本身在下面的「空卖残高报告」，这里是行为分析 */}
       <section className="mt-6 card-surface p-5">
         <p className="eyebrow">SHORT BEHAVIOR</p>
-        <h2 className="mb-3 mt-1 text-h3 text-ink-900">{t('机构空卖行为')}</h2>
+        <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('机构空卖行为')}</h2>
         <ShortBehaviorPanel code={security.canonical_code} />
       </section>
 
@@ -425,12 +425,12 @@ export default function StockDetail() {
       <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
         <section className="card-surface p-5">
           <p className="eyebrow">SHORT INTEREST</p>
-          <h2 className="mb-3 mt-1 text-h3 text-ink-900">{t('空卖残高报告')}</h2>
+          <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('空卖残高报告')}</h2>
           <ShortPositionsPanel rows={data.short_positions} summary={data.short_interest} />
         </section>
         <section className="card-surface p-5">
           <p className="eyebrow">EARNINGS SCHEDULE</p>
-          <h2 className="mb-3 mt-1 text-h3 text-ink-900">{t('发表预定')}</h2>
+          <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('发表预定')}</h2>
           {data.earnings.length === 0 ? (
             <PanelEmpty title={t('暂无数据')} />
           ) : (

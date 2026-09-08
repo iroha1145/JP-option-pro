@@ -259,7 +259,7 @@ export default function ShortMonitor() {
             title={t('读取失败')}
             description={String(rankingQuery.error?.message ?? '')}
             action={
-              <button type="button" onClick={() => rankingQuery.refresh({ force: true })} className="btn-primary">
+              <button type="button" onClick={() => rankingQuery.refresh({ force: true })} className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105">
                 {t('重试')}
               </button>
             }

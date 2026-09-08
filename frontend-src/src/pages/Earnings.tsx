@@ -193,7 +193,7 @@ export default function Earnings() {
               title={t('日历数据不可用')}
               description={q.error?.message || t('稍后刷新再试')}
               action={
-                <button type="button" onClick={() => q.refresh({ force: true })} className="btn-primary">
+                <button type="button" onClick={() => q.refresh({ force: true })} className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105">
                   {t('重试')}
                 </button>
               }
@@ -357,7 +357,7 @@ export default function Earnings() {
         </div>
 
         {/* B3 右栏 */}
-        <aside className="min-w-0 space-y-6 self-start xl:sticky xl:top-20 xl:col-span-4" aria-label={t('侧栏')}>
+        <aside className="min-w-0 space-y-6 self-start xl:col-span-4" aria-label={t('侧栏')}>
           {loading ? <SkeletonCard /> : !error503 && <DensityStrip items={items} onJumpDay={onJumpDay} />}
           <RecentPanel items={recentQ.data?.items ?? []} loading={recentQ.loading && !recentQ.data} />
           {q.data?.coverage_note && (

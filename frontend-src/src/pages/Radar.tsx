@@ -181,7 +181,7 @@ export default function Radar() {
         }
       />
 
-      <div className="radar-filterbar mt-6 flex flex-wrap items-center gap-x-5 gap-y-3 pb-4">
+      <div className="radar-filterbar mt-4 flex flex-wrap items-center gap-x-5 gap-y-3 pb-4">
         <Segmented<StateGroup>
           options={[
             { value: 'active', label: t('已触发') },
@@ -308,7 +308,7 @@ export default function Radar() {
               title={t('加载失败')}
               description={String(query.error?.message ?? '')}
               action={
-                <button type="button" onClick={() => query.refresh({ force: true })} className="btn-primary">
+                <button type="button" onClick={() => query.refresh({ force: true })} className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105">
                   {t('重试')}
                 </button>
               }
