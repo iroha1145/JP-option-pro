@@ -41,6 +41,7 @@ import Icon from '@/components/icons';
 import { RADAR_SCORE_HINTS, STRUCTURE_HINTS, TECHNICAL_HINTS, type ScoreHint } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { quoteSourceLabel } from '@/lib/quoteSource';
+import { codesMatch, pickQuoteForCode } from '@/lib/securityIdentity';
 import { dateAnchorParts, fmtDate, fmtDateShort, fmtPct, fmtPrice, fmtShares, fmtTimeJst, fmtYenCompact } from '@/lib/format';
 import { jstToday } from '@/components/earnings/types';
 import { cn } from '@/lib/utils';
@@ -68,8 +69,18 @@ export default function StockDetail() {
   const [range, setRange] = useState<ChartRange>('6m');
   const [interval, setInterval] = useState<ChartInterval>('1d');
   const [priceMode, setPriceMode] = useState<PriceMode>('adjusted');
-  const overview = usePolling(() => stocksApi.overview(code), null, [code]);
-  const chart = usePolling(() => stocksApi.chart(code, range), null, [code, range]);
+  const overview = usePolling(
+    () => stocksApi.overview(code),
+    null,
+    [code],
+    { identity: code, belongsTo: (data) => codesMatch(data.security.canonical_code, code) },
+  );
+  const chart = usePolling(
+    () => stocksApi.chart(code, range),
+    null,
+    [code, range],
+    { identity: code, belongsTo: (data) => codesMatch(data.canonical_code, code) },
+  );
   const [intradayPollMs, setIntradayPollMs] = useState<number | null>(null);
   const [tickPollMs, setTickPollMs] = useState<number | null>(null);
   const wantIntraday = interval !== '1d' && interval !== 'tick';
@@ -81,24 +92,39 @@ export default function StockDetail() {
         : Promise.resolve(null),
     wantIntraday ? intradayPollMs : null,
     [code, interval, wantIntraday],
+    {
+      identity: code,
+      belongsTo: (data) => data == null || codesMatch(data.canonical_code, code),
+    },
   );
   const ticks = usePolling(
     () => (wantTicks ? stocksApi.tickView(code) : Promise.resolve(null)),
     wantTicks ? tickPollMs : null,
     [code, interval, wantTicks],
+    {
+      identity: code,
+      belongsTo: (data) => data == null || codesMatch(data.canonical_code, code),
+    },
   );
   // Derive the poll cadence from the committed (generation-guarded) response instead
   // of setting state inside the fetcher: that avoided a stale in-flight response
   // clobbering the cadence for a newer selection.
   useEffect(() => {
-    setIntradayPollMs(wantIntraday && intraday.data?.reason === 'fetching' ? 5_000 : null);
-  }, [wantIntraday, intraday.data]);
+    const bound = intraday.data && codesMatch(intraday.data.canonical_code, code) ? intraday.data : null;
+    setIntradayPollMs(wantIntraday && bound?.reason === 'fetching' ? 5_000 : null);
+  }, [wantIntraday, intraday.data, code]);
   useEffect(() => {
-    setTickPollMs(wantTicks && ticks.data?.reason === 'fetching' ? 8_000 : null);
-  }, [wantTicks, ticks.data]);
+    const bound = ticks.data && codesMatch(ticks.data.canonical_code, code) ? ticks.data : null;
+    setTickPollMs(wantTicks && bound?.reason === 'fetching' ? 8_000 : null);
+  }, [wantTicks, ticks.data, code]);
   /* 遅延気配は 1 分ポーリング。J-Quants は場中に何も出さないので、
      「今いくらか」はこの非公式・15分遅延の値でしか埋められない。 */
-  const live = usePolling(() => stocksApi.intradayQuotes([code]), 60_000, [code]);
+  const live = usePolling(
+    () => stocksApi.intradayQuotes([code]),
+    60_000,
+    [code],
+    { identity: code },
+  );
   const { isOwner } = useAccess();
   const toast = useToast();
   const [fetchNote, setFetchNote] = useState<string | null>(null);
@@ -109,13 +135,19 @@ export default function StockDetail() {
   ) : null;
 
   const state = remoteState(overview);
-  const liveQuote = live.data?.enabled ? (live.data.quotes[Object.keys(live.data.quotes)[0]] ?? null) : null;
-  const technical = overview.data?.technical ?? null;
+  const liveQuote = live.data?.enabled ? pickQuoteForCode(live.data.quotes, code) : null;
+  const overviewData =
+    overview.data && codesMatch(overview.data.security.canonical_code, code) ? overview.data : null;
+  const chartData = chart.data && codesMatch(chart.data.canonical_code, code) ? chart.data : null;
+  const ticksData = ticks.data && codesMatch(ticks.data.canonical_code, code) ? ticks.data : null;
+  const intradayData =
+    intraday.data && codesMatch(intraday.data.canonical_code, code) ? intraday.data : null;
+  const technical = overviewData?.technical ?? null;
   const headerQuote = useMemo(() => {
-    const code = overview.data?.security.canonical_code;
-    if (!code) return [];
-    return [{ key: code, price: liveQuote?.price ?? overview.data?.quote.close ?? null }];
-  }, [overview.data, liveQuote]);
+    const boundCode = overviewData?.security.canonical_code;
+    if (!boundCode) return [];
+    return [{ key: boundCode, price: liveQuote?.price ?? overviewData?.quote.close ?? null }];
+  }, [overviewData, liveQuote]);
   const headerFlashes = useTickFlash(headerQuote, (row) => row.key, (row) => row.price);
   const todayKey = jstToday();
 
@@ -158,7 +190,7 @@ export default function StockDetail() {
       </div>
     );
   }
-  if (state === 'error' || !overview.data) {
+  if (state === 'error' || !overviewData) {
     return (
       <div>
         <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
@@ -181,7 +213,7 @@ export default function StockDetail() {
     );
   }
 
-  const data = overview.data;
+  const data = overviewData;
   const security = data.security;
 
   return (
@@ -310,14 +342,14 @@ export default function StockDetail() {
           onRange={setRange}
           priceMode={priceMode}
           onPriceMode={setPriceMode}
-          bars={chart.data?.bars}
+          bars={chartData?.bars}
           barsLoading={chart.loading}
           overlays={technical?.chart_overlays}
           onRetry={() => chart.refresh({ force: true })}
         >
           {interval === 'tick' ? (
             <TickPane
-              data={ticks.data ?? null}
+              data={ticksData ?? null}
               loading={ticks.loading}
               isOwner={isOwner}
               fetchNote={fetchNote}
@@ -336,7 +368,7 @@ export default function StockDetail() {
             />
           ) : (
             <IntradayPane
-              data={intraday.data ?? null}
+              data={intradayData ?? null}
               loading={intraday.loading}
               isOwner={isOwner}
               fetchNote={fetchNote}

@@ -20,6 +20,7 @@ import {
   sessionLow,
   sessionOpen,
 } from '@/lib/keyStats';
+import { codesMatch } from '@/lib/securityIdentity';
 
 export default function KeyStats({
   code,
@@ -28,8 +29,13 @@ export default function KeyStats({
   code: string;
   quote: StockOverview['quote'];
 }) {
-  const year = usePolling(() => stocksApi.chart(code, '1y'), null, [code]);
-  const bars = year.data?.bars ?? [];
+  const year = usePolling(
+    () => stocksApi.chart(code, '1y'),
+    null,
+    [code],
+    { identity: code, belongsTo: (data) => codesMatch(data.canonical_code, code) },
+  );
+  const bars = year.data && codesMatch(year.data.canonical_code, code) ? year.data.bars : [];
   const latest = lastBar(bars);
   const prior = previousBar(bars);
   const extremes = periodExtremes(bars);

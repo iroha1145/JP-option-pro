@@ -142,6 +142,14 @@ export default function Radar() {
     () => events.filter((event) => event.event_id !== lead?.event_id),
     [events, lead],
   );
+  const remoteCount = query.data?.events.length ?? 0;
+  const filteredEmpty =
+    (state === 'ready' || state === 'stale') && remoteCount > 0 && events.length === 0;
+  const clearLocalFilters = () => {
+    setMinScore(0);
+    setOnlyAbovePivot(false);
+    setOnlyWatch(false);
+  };
 
   return (
     <div>
@@ -329,6 +337,21 @@ export default function Radar() {
           {state === 'stale' && (
             <StaleStrip onRetry={() => query.refresh()} refreshing={query.refreshing} />
           )}
+          {filteredEmpty && (
+            <div className="card-surface" data-testid="radar-filter-empty">
+              <EmptyState
+                image="/empty-radar.svg"
+                title={t('当前条件无命中')}
+                description={t('尝试放宽条件，或移除部分过滤器')}
+                action={
+                  <EmptyRetryButton
+                    onClick={clearLocalFilters}
+                    label={t('清除过滤')}
+                  />
+                }
+              />
+            </div>
+          )}
           {lead && (
             <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(260px,5fr)]">
               <LeadBigCard
@@ -348,7 +371,7 @@ export default function Radar() {
               <p className="text-micro text-ink-400">{t('点击小卡设为首要信号 · 点击代码打开个股页')}</p>
             </div>
           )}
-          {view === 'cards' ? (
+          {!filteredEmpty && view === 'cards' ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {restEvents
                 .map((event, index) => (
@@ -367,14 +390,14 @@ export default function Radar() {
                   </motion.div>
                 ))}
             </div>
-          ) : (
+          ) : !filteredEmpty ? (
             <RadarTable
               events={events}
               flashes={flashes}
               overlay={overlayRows}
               onSelect={(event) => promoteLead(event.event_id)}
             />
-          )}
+          ) : null}
         </>
       )}
       </section>
@@ -400,6 +423,7 @@ function LeadBigCard({
     () => stocksApi.chart(event.canonical_code, '6m'),
     null,
     [event.canonical_code],
+    { identity: event.canonical_code },
   );
   const scores = event.scores ?? {};
   const structure = event.structure ?? null;

@@ -1,6 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { MotionConfig } from 'framer-motion';
-import { Route, Routes } from 'react-router';
+import { Navigate, Route, Routes } from 'react-router';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import Layout from '@/components/Layout';
 import { AccessProvider } from '@/hooks/useAccess';
@@ -34,6 +34,7 @@ export default function App() {
                 <Route path="/login" element={<Login />} />
                 <Route element={<Layout />}>
                   <Route index element={<Home />} />
+                  <Route path="/home" element={<Navigate to="/" replace />} />
                   <Route path="/watchlist" element={<Watchlist />} />
                   <Route path="/screener" element={<Screener />} />
                   <Route path="/radar" element={<Radar />} />

@@ -51,6 +51,13 @@ import { usePolling } from '@/hooks/usePolling';
 import { useTickFlash } from '@/hooks/useTickFlash';
 import { quoteSourceLabel } from '@/lib/quoteSource';
 import { fmtTimeHHMMSS, fmtYenCompact, fmtJstTime } from '@/lib/format';
+import {
+  filtersEqual,
+  interpretOwnerRefresh,
+  promisedPublication,
+  refreshMayCommitResults,
+  silentScanMayCommit,
+} from '@/components/screener/freshness';
 
 const PAGE_SIZE = 20;
 
@@ -70,10 +77,6 @@ function buildParams(filters: ScanFilters): StrengthScanParams {
   };
 }
 
-function filtersEqual(a: ScanFilters, b: ScanFilters): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
 function summarizeFilters(filters: ScanFilters): string {
   const parts: string[] = [];
   if (filters.tier !== 'all') parts.push(`${filters.tier} ${t('档')}`);
@@ -88,7 +91,7 @@ function summarizeFilters(filters: ScanFilters): string {
 }
 
 export default function Screener() {
-  const { canManageWatchlist, isOwner } = useAccess();
+  const { canManageWatchlist, isOwner, accountUsername } = useAccess();
 
   const [meta, setMeta] = useState<StrengthProfilesMeta | null>(null);
   const [metaFailed, setMetaFailed] = useState(false);
@@ -106,8 +109,14 @@ export default function Screener() {
   const [newsLoaded, setNewsLoaded] = useState(false);
   const [refreshState, setRefreshState] = useState<'idle' | 'queued' | 'running' | 'waiting' | 'done' | 'error'>('idle');
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
-  const scanSeq = useRef(0);
+  const [unverified, setUnverified] = useState(false);
+  const requestSeq = useRef(0);
+  const verifySeq = useRef(0);
   const refreshSeq = useRef(0);
+  const sessionGen = useRef(0);
+  const appliedRef = useRef(applied);
+  appliedRef.current = applied;
+  const sessionKey = `${isOwner}:${accountUsername ?? ''}`;
 
   const dirty = scanState === 'done' && !filtersEqual(draft, applied);
 
@@ -144,8 +153,26 @@ export default function Screener() {
     };
   }, []);
 
+  const sessionKeyRef = useRef(sessionKey);
+  useEffect(() => {
+    if (sessionKeyRef.current === sessionKey) return;
+    sessionKeyRef.current = sessionKey;
+    sessionGen.current += 1;
+    refreshSeq.current += 1;
+  }, [sessionKey]);
+
+  useEffect(
+    () => () => {
+      sessionGen.current += 1;
+      refreshSeq.current += 1;
+    },
+    [],
+  );
+
   const runScan = useCallback(async (filters: ScanFilters, opts?: { silent?: boolean; cache?: RequestCache }) => {
-    const seq = opts?.silent ? scanSeq.current : ++scanSeq.current;
+    const sessionAtStart = sessionGen.current;
+    const requestAtStart = opts?.silent ? requestSeq.current : ++requestSeq.current;
+    const verifyAtStart = opts?.silent ? ++verifySeq.current : verifySeq.current;
     if (!opts?.silent) {
       setScanState('scanning');
       setScanError(null);
@@ -153,29 +180,54 @@ export default function Screener() {
     const startedAt = Date.now();
     try {
       const result = await strengthApi.scan(buildParams(filters), opts?.cache ? { cache: opts.cache } : undefined);
-      if (scanSeq.current !== seq) return false;
-      setResponse(result);
-      if (!opts?.silent) {
-        setApplied(filters);
-        setDraft(filters);
-        setScanDurationMs(Date.now() - startedAt);
-        setPage(1);
-        setExpanded(null);
-        setScanState('done');
-        setHistory((prev) =>
-          [
-            { at: Date.now(), count: result.rows.length, durationMs: Date.now() - startedAt, summary: summarizeFilters(filters), kind: 'filter' as const },
-            ...prev,
-          ].slice(0, 5),
-        );
+      if (opts?.silent) {
+        if (
+          !silentScanMayCommit({
+            verifySeq: verifyAtStart,
+            currentVerifySeq: verifySeq.current,
+            requestSeqAtStart: requestAtStart,
+            currentRequestSeq: requestSeq.current,
+            sessionAtStart,
+            currentSession: sessionGen.current,
+            filters,
+            applied: appliedRef.current,
+          })
+        ) {
+          return false;
+        }
+        setResponse(result);
+        setUnverified(false);
+        return true;
       }
+      if (requestSeq.current !== requestAtStart) return false;
+      if (sessionGen.current !== sessionAtStart) return false;
+      setResponse(result);
+      setUnverified(false);
+      setApplied(filters);
+      setDraft(filters);
+      setScanDurationMs(Date.now() - startedAt);
+      setPage(1);
+      setExpanded(null);
+      setScanState('done');
+      setHistory((prev) =>
+        [
+          { at: Date.now(), count: result.rows.length, durationMs: Date.now() - startedAt, summary: summarizeFilters(filters), kind: 'filter' as const },
+          ...prev,
+        ].slice(0, 5),
+      );
       return true;
     } catch (error) {
-      if (scanSeq.current !== seq) return false;
-      if (!opts?.silent) {
-        setScanError(error instanceof ApiError ? error : new ApiError(500, error instanceof Error ? error.message : t('扫描失败')));
-        setScanState('error');
+      if (opts?.silent) {
+        if (verifySeq.current !== verifyAtStart) return false;
+        if (sessionGen.current !== sessionAtStart) return false;
+        if (requestSeq.current !== requestAtStart) return false;
+        setUnverified(true);
+        return false;
       }
+      if (requestSeq.current !== requestAtStart) return false;
+      if (sessionGen.current !== sessionAtStart) return false;
+      setScanError(error instanceof ApiError ? error : new ApiError(500, error instanceof Error ? error.message : t('扫描失败')));
+      setScanState('error');
       return false;
     }
   }, []);
@@ -192,19 +244,21 @@ export default function Screener() {
     const deadline = Date.now() + 90_000;
     let last: Record<string, unknown> | null = null;
     while (Date.now() < deadline) {
-      if (refreshSeq.current !== seq) return null;
+      if (refreshSeq.current !== seq) return { item: null, timedOut: false };
       const item = await workerApi.action(actionId);
       last = item as Record<string, unknown>;
       const status = String(item.status);
-      if (status === 'completed' || status === 'failed') return item;
+      if (status === 'completed' || status === 'failed') return { item, timedOut: false };
       setRefreshState(status === 'running' ? 'running' : 'queued');
       await new Promise((resolve) => setTimeout(resolve, 1500));
     }
-    return last;
+    return { item: last, timedOut: true };
   }, []);
 
   const onOwnerRefresh = useCallback(async () => {
     const seq = ++refreshSeq.current;
+    const sessionAtStart = sessionGen.current;
+    const requestAtStart = requestSeq.current;
     setRefreshState('queued');
     setRefreshMessage(null);
     try {
@@ -215,60 +269,55 @@ export default function Screener() {
         setRefreshMessage(t('无法提交日线更新'));
         return;
       }
-      const finished = await pollAction(actionId, seq);
-      if (refreshSeq.current !== seq) return;
-      if (!finished) {
+      const polled = await pollAction(actionId, seq);
+      if (refreshSeq.current !== seq || sessionGen.current !== sessionAtStart) return;
+      if (!polled.item && !polled.timedOut) {
         setRefreshState('error');
         setRefreshMessage(t('更新未完成'));
         return;
       }
-      const outcome = String((finished.result as Record<string, unknown> | undefined)?.outcome ?? '');
-      if (finished.status === 'failed') {
-        setRefreshState('error');
-        setRefreshMessage(t('更新失败，已保留上次结果'));
-        return;
-      }
+      const finished = (polled.item ?? {}) as { status?: string; result?: Record<string, unknown> };
+      const promised = promisedPublication(finished as Record<string, unknown>);
       const previousId = response?.publication_id ?? null;
-      const verified = await strengthApi.scan(buildParams(applied), { cache: 'reload' });
-      if (refreshSeq.current !== seq) return;
-      ++scanSeq.current;
-      setResponse(verified);
-      if (outcome === 'waiting_input' || outcome === 'retained') {
-        setRefreshState('waiting');
-        setRefreshMessage(
-          outcome === 'waiting_input' ? t('仍在等待供应商发布当日日线') : t('覆盖不足，已保留上次完整发布'),
-        );
-        return;
+      const readFilters = appliedRef.current;
+      const verified = await strengthApi.scan(buildParams(readFilters), { cache: 'reload' });
+      if (refreshSeq.current !== seq || sessionGen.current !== sessionAtStart) return;
+      const verdict = interpretOwnerRefresh({
+        actionStatus: String(finished.status ?? ''),
+        timedOut: polled.timedOut,
+        promised,
+        readback: verified,
+        previousPublicationId: previousId,
+      });
+      setRefreshState(verdict.state);
+      setRefreshMessage(t(verdict.messageKey));
+      const mayCommit = refreshMayCommitResults({
+        refreshSeq: seq,
+        currentRefreshSeq: refreshSeq.current,
+        sessionAtStart,
+        currentSession: sessionGen.current,
+        requestSeqAtStart: requestAtStart,
+        currentRequestSeq: requestSeq.current,
+      });
+      if (verdict.commitResponse && mayCommit) {
+        setResponse(verified);
+        setUnverified(false);
+        if (verdict.state === 'done' && promised.outcome === 'published') {
+          setHistory((prev) =>
+            [
+              { at: Date.now(), count: verified.rows.length, durationMs: 0, summary: t('后台更新读回'), kind: 'refresh' as const },
+              ...prev,
+            ].slice(0, 5),
+          );
+        }
       }
-      if (outcome === 'already_current') {
-        setRefreshState('done');
-        setRefreshMessage(t('已是最新可用日线'));
-        return;
-      }
-      if (outcome === 'published' && verified.publication_id && verified.publication_id !== previousId) {
-        setRefreshState('done');
-        setRefreshMessage(t('日线与评分已更新'));
-        setHistory((prev) =>
-          [
-            { at: Date.now(), count: verified.rows.length, durationMs: 0, summary: t('后台更新读回'), kind: 'refresh' as const },
-            ...prev,
-          ].slice(0, 5),
-        );
-        return;
-      }
-      if (outcome === 'published' && previousId && verified.publication_id === previousId) {
-        setRefreshState('error');
-        setRefreshMessage(t('任务已结束但读回仍是旧发布'));
-        return;
-      }
-      setRefreshState('done');
-      setRefreshMessage(t('已读取当前发布'));
     } catch (error) {
       if (refreshSeq.current !== seq) return;
+      if (sessionGen.current !== sessionAtStart) return;
       setRefreshState('error');
       setRefreshMessage(error instanceof ApiError ? error.message : t('更新失败，已保留上次结果'));
     }
-  }, [applied, pollAction, response?.publication_id]);
+  }, [pollAction, response?.publication_id]);
 
   useEffect(() => {
     const onVisible = () => {
@@ -400,7 +449,7 @@ export default function Screener() {
   }, [applied, meta, patchAndScan]);
 
   const familyWeights = meta?.family_weights ?? null;
-  const animKey = `${scanSeq.current}:${safePage}`;
+  const animKey = `${requestSeq.current}:${safePage}`;
 
   return (
     <div className="space-y-0">
@@ -519,9 +568,29 @@ export default function Screener() {
               {t('快照日期早于当前目标交易日，这是筛选结果不是新的日线计算')}
             </SoftBadge>
           )}
+          {response && response.freshness === 'partial' && (
+            <SoftBadge tone="warn" className="mt-2">
+              {t('输入不完整，不能当作最新日线')}
+            </SoftBadge>
+          )}
+          {response && response.freshness === 'degraded' && (
+            <SoftBadge tone="warn" className="mt-2">
+              {t('指数输入偏旧，股票评分可用但不是完整新鲜')}
+            </SoftBadge>
+          )}
+          {response && response.freshness === 'unknown' && (
+            <SoftBadge tone="warn" className="mt-2">
+              {t('日历覆盖未知，不能当作最新日线')}
+            </SoftBadge>
+          )}
           {response && response.score_compatible === false && (
             <SoftBadge tone="warn" className="mt-2">
               {t('已保存评分版本与当前代码不一致')}
+            </SoftBadge>
+          )}
+          {unverified && (
+            <SoftBadge tone="warn" className="mt-2" data-testid="screener-unverified">
+              {t('核验未完成，列表可能不是最新')}
             </SoftBadge>
           )}
           {refreshMessage && (

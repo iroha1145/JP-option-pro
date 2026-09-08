@@ -280,6 +280,34 @@ export const DICT: Record<string, [string, string]> = {
   后台更新读回: ['Background update read-back', 'バックグラウンド更新の読戻し'],
   任务已结束但读回仍是旧发布: ['Task finished but read-back still shows the old publication', 'タスクは終了しましたが読戻しは旧公開のままです'],
   已读取当前发布: ['Current publication loaded', '現在の公開を読み込みました'],
+  后台任务仍在运行: ['The background job is still running', 'バックグラウンド処理は継続中です'],
+  未能核验承诺发布: ['Could not verify the promised publication', '約束された公開を確認できません'],
+  读回发布与任务承诺不一致: [
+    'Read-back publication does not match the job promise',
+    '読戻しの公開がタスクの約束と一致しません',
+  ],
+  '核验未完成，列表可能不是最新': [
+    'Verification did not finish; the list may not be current',
+    '検証未完了。一覧は最新ではない可能性があります',
+  ],
+  '输入不完整，不能当作最新日线': [
+    'Coverage is incomplete; this is not the latest complete daily set',
+    '入力が不完全です。最新の完全な日足としては扱えません',
+  ],
+  '指数输入偏旧，股票评分可用但不是完整新鲜': [
+    'Index input is stale; equity scores may exist but are not fully fresh',
+    '指数入力が古いです。株式スコアは使えますが完全な鮮度ではありません',
+  ],
+  '日历覆盖未知，不能当作最新日线': [
+    'Calendar coverage is unknown; this is not treated as the latest session',
+    'カレンダーカバレッジが不明です。最新営業日としては扱えません',
+  ],
+  本次未发布新评分: ['No new score publication this run', '今回の新規スコア公開はありません'],
+  '读回新鲜度不是当前，不能当作最新日线': [
+    'Read-back freshness is not current',
+    '読戻しの鮮度は current ではありません',
+  ],
+  清除过滤: ['Clear filters', 'フィルタをクリア'],
   '快照日期早于当前目标交易日，这是筛选结果不是新的日线计算': [
     'Snapshot date is older than the current target session; this is a filter result, not a new daily computation',
     'スナップショット日は現在の対象営業日より古いです。これは絞り込みであり、新しい日足計算ではありません',
