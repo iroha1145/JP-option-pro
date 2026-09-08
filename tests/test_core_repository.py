@@ -157,10 +157,12 @@ def test_empty_replace_does_not_wipe_screener_or_strength(tmp_path):
     rows, total = repo.screener_query(where_sql="1=1", params=[], order_sql="canonical_code", limit=10, offset=0)
     assert total == 1
 
-    assert repo.replace_strength_rows(
+    first = repo.replace_strength_rows(
         [{"canonical_code": "72030", "trade_date": "2026-07-31"}],
         trade_date="2026-07-31", regime={"score": 50.0},
-    ) == 1
-    assert repo.replace_strength_rows([], trade_date="2026-08-01", regime={"score": 10.0}) == 0
+    )
+    assert first.rows_written == 1 and first.outcome == "published"
+    empty = repo.replace_strength_rows([], trade_date="2026-08-01", regime={"score": 10.0})
+    assert empty.rows_written == 0 and empty.outcome == "retained"
     assert len(repo.strength_rows_all()) == 1  # kept last good snapshot
     assert repo.strength_meta()["trade_date"] == "2026-07-31"  # meta not clobbered

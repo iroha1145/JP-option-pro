@@ -3,12 +3,14 @@
  * 周一→周日 7 日格 · 每日件数 + 前 3 个代码 chips（確定=实心点 / 目安=空心点 / 已公布=灰点）
  * 点击日格过滤当天；点击 chip 跳个股页；‹ › 周切换整带 slide。
  */
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate } from 'react-router';
 import { cn } from '@/lib/utils';
 import Icon from '@/components/icons';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import type { EarningsUpcomingItem } from '@/api/types';
+import { EarningsChipContent, earningsChipLabel } from './chipTip';
 import { fmtMDCN, fmtMMDD, jstToday, periodShort, statusMeta, weekDays, weekdayCN } from './types';
 import { t } from '@/i18n/core';
 
@@ -19,6 +21,7 @@ interface WeekScrubberProps {
   onWeekChange: (dir: -1 | 1) => void;
   selectedDay: string | null;
   onSelectDay: (date: string | null) => void;
+  flashSignal?: number;
 }
 
 const MAX_CHIPS = 3;
@@ -30,10 +33,22 @@ export default function WeekScrubber({
   onWeekChange,
   selectedDay,
   onSelectDay,
+  flashSignal = 0,
 }: WeekScrubberProps) {
   const navigate = useNavigate();
   const days = useMemo(() => weekDays(monday), [monday]);
   const today = jstToday();
+  const [flashing, setFlashing] = useState(false);
+  const [prevFlashSignal, setPrevFlashSignal] = useState(flashSignal);
+  if (flashSignal !== prevFlashSignal) {
+    setPrevFlashSignal(flashSignal);
+    if (flashSignal > 0) setFlashing(true);
+  }
+  useEffect(() => {
+    if (!flashing) return;
+    const timer = window.setTimeout(() => setFlashing(false), 700);
+    return () => window.clearTimeout(timer);
+  }, [flashing]);
 
   const byDate = useMemo(() => {
     const map = new Map<string, EarningsUpcomingItem[]>();
@@ -62,7 +77,7 @@ export default function WeekScrubber({
         <button
           type="button"
           onClick={() => onWeekChange(-1)}
-          className="flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-500 transition-colors duration-fast hover:border-brand-400 hover:text-brand-600"
+          className="flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-500 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600"
           aria-label={t('上一周')}
         >
           <Icon name="chevron-right" size={14} className="rotate-180" />
@@ -74,7 +89,7 @@ export default function WeekScrubber({
         <button
           type="button"
           onClick={() => onWeekChange(1)}
-          className="flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-500 transition-colors duration-fast hover:border-brand-400 hover:text-brand-600"
+          className="flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-500 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600"
           aria-label={t('下一周')}
         >
           <Icon name="chevron-right" size={14} />
@@ -123,6 +138,8 @@ export default function WeekScrubber({
                   className={cn(
                     'flex min-h-[148px] w-[86px] shrink-0 cursor-pointer snap-start flex-col border-r border-line px-2 py-2.5 text-left transition-colors duration-fast last:border-r-0 sm:w-auto sm:min-w-0',
                     isSelected ? 'bg-brand-50' : 'hover:bg-paper-2',
+                    'tick-flash',
+                    flashing && dayItems.length > 0 && 'tick-flash-up',
                   )}
                 >
                   <div className="flex items-center justify-between">
@@ -143,30 +160,38 @@ export default function WeekScrubber({
                         {shown.map((item, chipIndex) => {
                           const meta = statusMeta(item.status);
                           return (
-                            <motion.button
+                            <PointerTooltip
                               key={`${item.canonical_code}-${item.period_type}`}
-                              type="button"
-                              initial={{ opacity: 0, scale: 0.9 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              transition={{ type: 'spring', stiffness: 520, damping: 32, delay: dayIndex * 0.035 + chipIndex * 0.02 }}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                navigate(`/stock/${item.display_code}`);
-                              }}
-                              title={`${item.name_ja ?? item.display_code} · ${item.quarter_label ?? ''} · ${meta.label}`}
-                              className={cn(
-                                'flex h-6 items-center gap-1 rounded-xs border-l-2 px-1 transition-[transform,background-color] duration-fast hover:-translate-y-px',
-                                item.status === 'confirmed'
-                                  ? 'border-brand-600 bg-brand-50'
-                                  : item.status === 'released'
-                                    ? 'border-ink-300 bg-paper-2'
-                                    : 'border-transparent bg-paper-2/70 hover:bg-brand-50',
-                              )}
+                              passthrough
+                              label={earningsChipLabel(item)}
+                              width={220}
+                              contentClassName="p-2.5"
+                              className="block w-full"
+                              content={<EarningsChipContent item={item} />}
                             >
-                              <span className={cn('size-1.5 shrink-0 rounded-full', meta.dotClass)} aria-hidden="true" />
-                              <span className="min-w-0 truncate font-mono text-micro font-medium text-ink-800">{item.display_code}</span>
-                              <span className="ml-auto shrink-0 font-mono text-[9px] text-ink-400">{periodShort(item.period_type)}</span>
-                            </motion.button>
+                              <motion.button
+                                type="button"
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ type: 'spring', stiffness: 520, damping: 32, delay: dayIndex * 0.035 + chipIndex * 0.02 }}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  navigate(`/stock/${item.display_code}`);
+                                }}
+                                className={cn(
+                                  'flex h-6 w-full items-center gap-1 rounded-xs border-l-2 px-1 transition-[transform,background-color] duration-fast hover:-translate-y-px',
+                                  item.status === 'confirmed'
+                                    ? 'border-brand-600 bg-brand-50'
+                                    : item.status === 'released'
+                                      ? 'border-ink-300 bg-paper-2'
+                                      : 'border-transparent bg-paper-2/70 hover:bg-brand-50',
+                                )}
+                              >
+                                <span className={cn('size-1.5 shrink-0 rounded-full', meta.dotClass)} aria-hidden="true" />
+                                <span className="min-w-0 truncate font-mono text-micro font-medium text-ink-800">{item.display_code}</span>
+                                <span className="ml-auto shrink-0 font-mono text-[9px] text-ink-400">{periodShort(item.period_type)}</span>
+                              </motion.button>
+                            </PointerTooltip>
                           );
                         })}
                         {extra > 0 && <span className="px-1 font-mono text-[10px] leading-4 text-ink-400">+{extra}</span>}

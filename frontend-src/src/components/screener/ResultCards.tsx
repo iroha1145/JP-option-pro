@@ -8,9 +8,14 @@ import { cn } from '@/lib/utils';
 import { fmtPrice } from '@/lib/format';
 import Icon from '@/components/icons';
 import ChangeBadge from '@/components/shared/ChangeBadge';
+import InfoHint from '@/components/shared/InfoHint';
+import SoftBadge from '@/components/shared/SoftBadge';
+import TickPrice from '@/components/shared/TickPrice';
+import { STRENGTH_HINTS } from '@/lib/indicatorHints';
 import RowExpansion from './RowExpansion';
 import { NewsBadge, SubscoreTicks } from './cells';
 import { strengthPresentation, type NewsSummaryMap } from './types';
+import { quotePair } from './quotePair';
 import { t } from '@/i18n/core';
 
 const EASE_PAPER = [0.16, 1, 0.3, 1] as [number, number, number, number];
@@ -27,6 +32,8 @@ export interface ResultCardsProps {
   page?: number;
   /** 盘中叠加（表示専用）。夜間断面のスコアは書き換えない。 */
   overlay?: Record<string, { live_price: number; live_change_pct?: number; live_pct_from_high_252?: number | null }>;
+  flashes?: Record<string, 'up' | 'down'>;
+  stale?: boolean;
 }
 
 export default function ResultCards({
@@ -40,14 +47,17 @@ export default function ResultCards({
   animKey,
   page = 1,
   overlay,
+  flashes = {},
+  stale = false,
 }: ResultCardsProps) {
   return (
-    <div className="grid grid-cols-1 gap-3" key={animKey}>
+    <div className={cn('grid grid-cols-1 gap-3', stale && 'opacity-60')} key={animKey}>
       {rows.map((row, index) => {
         const isOpen = expanded === row.canonical_code;
         const score = row.ranking_score;
         const strength = score !== null ? strengthPresentation(score) : null;
         const width = score !== null ? Math.max(2, Math.min(100, score)) : 0;
+        const quote = quotePair(row, overlay);
         return (
           <motion.div
             key={row.canonical_code}
@@ -61,7 +71,7 @@ export default function ResultCards({
               layout: { duration: 0.32, ease: EASE_PAPER },
             }}
             whileHover={{ y: -3, transition: { duration: 0.24, ease: 'easeOut' } }}
-            className="card-surface overflow-hidden transition-shadow duration-fast hover:shadow-sh-2"
+            className="card-surface overflow-hidden transition-shadow duration-240 ease-out hover:shadow-sh-2"
           >
             <button type="button" onClick={() => onToggle(row.canonical_code)} aria-expanded={isOpen} className="flex w-full flex-col p-4 text-left">
               <span className="flex items-center gap-2.5">
@@ -70,9 +80,15 @@ export default function ResultCards({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-body-s text-ink-800">{row.name_ja ?? '—'}</span>
-                  <span className="block truncate text-micro text-ink-400">{row.sector33_name ?? '—'}</span>
+                  {row.sector33_name ? (
+                    <SoftBadge className="mt-0.5 max-w-[11rem]" title={row.sector33_name}>
+                      <span className="truncate">{row.sector33_name}</span>
+                    </SoftBadge>
+                  ) : (
+                    <span className="block truncate text-micro text-ink-400">—</span>
+                  )}
                 </span>
-                <ChangeBadge value={row.change_pct !== null ? row.change_pct / 100 : null} size="sm" />
+                <ChangeBadge value={quote.change} size="sm" />
                 <Icon
                   name="chevron-down"
                   size={14}
@@ -81,28 +97,53 @@ export default function ResultCards({
               </span>
               <span className="mt-3 flex items-end justify-between gap-3">
                 <span>
-                  <span className={cn('font-mono text-data-xl tnum', strength?.textClass ?? 'text-ink-300')}>
-                    {score !== null ? score.toFixed(1) : '—'}
-                  </span>
+                  {strength ? (
+                    <SoftBadge tone={strength.badgeTone} size="md" className="metric-value text-data-l tnum">
+                      {score !== null ? score.toFixed(1) : '—'}
+                    </SoftBadge>
+                  ) : (
+                    <span className="metric-value text-data-xl text-ink-300 tnum">—</span>
+                  )}
                   {strength && (
                     <span className="ml-1.5 text-micro text-ink-400">
                       {t('强度分 ·')} {strength.band} {strength.label}
+                      <InfoHint hint={STRENGTH_HINTS.composite} size={11} className="ml-1" />
                     </span>
                   )}
                 </span>
                 <span className="pb-0.5 text-right">
-                  <span className="block font-mono text-data-m text-ink-800 tnum">{fmtPrice(row.close)}</span>
+                  <TickPrice
+                    flash={flashes[row.canonical_code]}
+                    className="metric-value text-data-m text-ink-800 tnum"
+                  >
+                    {fmtPrice(quote.price)}
+                  </TickPrice>
                 </span>
               </span>
-              <span className="relative mt-2.5 h-[3px] w-full rounded-pill bg-line" role="presentation" aria-hidden="true">
+              <span
+                className="strength-track relative mt-2.5 h-1 w-full rounded-pill bg-paper"
+                role="presentation"
+                aria-hidden="true"
+                data-strength-band={strength?.band}
+              >
                 {strength && (
-                  <motion.span
-                    className={cn('block h-full origin-left rounded-pill', strength.barClass)}
-                    initial={{ scaleX: 0 }}
-                    animate={{ scaleX: 1 }}
-                    transition={{ duration: 0.7, ease: EASE_PAPER, delay: 0.15 + index * 0.03 }}
-                    style={{ width: `${width}%` }}
-                  />
+                  <>
+                    <span
+                      className={cn('block h-full origin-left rounded-pill', strength.barClass)}
+                      style={{ width: `${width}%` }}
+                    />
+                    <motion.span
+                      className={cn(
+                        'absolute size-2 rounded-full border-2 border-card shadow-sh-1',
+                        strength.barClass,
+                      )}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.26, ease: EASE_PAPER, delay: 0.72 + index * 0.03 }}
+                      style={{ left: `calc(${width}% - 4px)`, top: 'calc(50% - 4px)' }}
+                      aria-hidden="true"
+                    />
+                  </>
                 )}
               </span>
               <span className="mt-3 flex items-center justify-between border-t border-line pt-3">

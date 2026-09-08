@@ -1,6 +1,6 @@
 /**
  * §04 选股扫描（强度）— 对标美版 Screener 页。
- * B0 页头带（数据截至 / 扫描历史 popover）
+ * B0 页头带（数据截至 / 扫描历史 popover / 轻量重扫）
  * B1 筛选工作台（分档/预设/周期/偏好/TopN/业种/价格/成交额 + 扫描钮 dirty 脉冲）
  * B2 结果区（统计行 + 参数回显 chips + 三态排序 + 结果表/卡片流 + 行展开）
  * B3 右侧栏（市场形态 6 维 / 强度剖面 / 评分方法）
@@ -8,20 +8,26 @@
  * 无「客户端条件只作用于前 N 名」问题；新闻摘要一次批量取回。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { newsApi, quotesApi, strengthApi, type StrengthScanParams } from '@/api/modules';
+import { AnimatePresence, motion } from 'framer-motion';
+import { newsApi, quotesApi, strengthApi, workerApi, type StrengthScanParams } from '@/api/modules';
 import { ApiError } from '@/api/client';
 import type { StrengthProfilesMeta, StrengthScanResponse, StrengthRow } from '@/api/types';
 import { useAccess } from '@/hooks/useAccess';
 import PageHeader from '@/components/shared/PageHeader';
 import Segmented from '@/components/shared/Segmented';
 import EmptyState from '@/components/shared/EmptyState';
+import EmptyRetryButton from '@/components/shared/EmptyRetryButton';
+import SoftBadge from '@/components/shared/SoftBadge';
 import { SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
 import { DataThrough } from '@/components/domain';
 import Icon from '@/components/icons';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import FilterWorkbench from '@/components/screener/FilterWorkbench';
 import ResultTable from '@/components/screener/ResultTable';
 import ResultCards from '@/components/screener/ResultCards';
 import ScanHistoryPopover from '@/components/screener/ScanHistoryPopover';
+import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
+import SourceNote from '@/components/shared/SourceNote';
 import { MarketRegimeCard, MethodCard, TierHistogram } from '@/components/screener/SideCards';
 import {
   DEFAULT_FILTERS,
@@ -40,9 +46,18 @@ import {
   type TierFilter,
 } from '@/components/screener/types';
 import { t } from '@/i18n/core';
+import { EASE_PAPER } from '@/lib/motion';
 import { usePolling } from '@/hooks/usePolling';
+import { useTickFlash } from '@/hooks/useTickFlash';
 import { quoteSourceLabel } from '@/lib/quoteSource';
-import { fmtYenCompact } from '@/lib/format';
+import { fmtTimeHHMMSS, fmtYenCompact, fmtJstTime } from '@/lib/format';
+import {
+  filtersEqual,
+  interpretOwnerRefresh,
+  promisedPublication,
+  refreshMayCommitResults,
+  silentScanMayCommit,
+} from '@/components/screener/freshness';
 
 const PAGE_SIZE = 20;
 
@@ -62,10 +77,6 @@ function buildParams(filters: ScanFilters): StrengthScanParams {
   };
 }
 
-function filtersEqual(a: ScanFilters, b: ScanFilters): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
 function summarizeFilters(filters: ScanFilters): string {
   const parts: string[] = [];
   if (filters.tier !== 'all') parts.push(`${filters.tier} ${t('档')}`);
@@ -80,13 +91,13 @@ function summarizeFilters(filters: ScanFilters): string {
 }
 
 export default function Screener() {
-  const { canManageWatchlist } = useAccess();
+  const { canManageWatchlist, isOwner, accountUsername, loading: accessLoading } = useAccess();
 
   const [meta, setMeta] = useState<StrengthProfilesMeta | null>(null);
   const [metaFailed, setMetaFailed] = useState(false);
   const [draft, setDraft] = useState<ScanFilters>(DEFAULT_FILTERS);
   const [applied, setApplied] = useState<ScanFilters>(DEFAULT_FILTERS);
-  const [scanState, setScanState] = useState<ScanState>('idle');
+  const [scanState, setScanState] = useState<ScanState>('scanning');
   const [scanError, setScanError] = useState<ApiError | null>(null);
   const [response, setResponse] = useState<StrengthScanResponse | null>(null);
   const [scanDurationMs, setScanDurationMs] = useState(0);
@@ -96,7 +107,16 @@ export default function Screener() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [news, setNews] = useState<NewsSummaryMap>({});
   const [newsLoaded, setNewsLoaded] = useState(false);
-  const scanSeq = useRef(0);
+  const [refreshState, setRefreshState] = useState<'idle' | 'queued' | 'running' | 'waiting' | 'done' | 'error'>('idle');
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
+  const [unverified, setUnverified] = useState(false);
+  const requestSeq = useRef(0);
+  const verifySeq = useRef(0);
+  const refreshSeq = useRef(0);
+  const sessionGen = useRef(0);
+  const appliedRef = useRef(applied);
+  appliedRef.current = applied;
+  const sessionKey = `${isOwner}:${accountUsername ?? ''}`;
 
   const dirty = scanState === 'done' && !filtersEqual(draft, applied);
 
@@ -133,15 +153,63 @@ export default function Screener() {
     };
   }, []);
 
-  const runScan = useCallback(async (filters: ScanFilters) => {
-    const seq = ++scanSeq.current;
-    setScanState('scanning');
-    setScanError(null);
+  const sessionKeyRef = useRef(sessionKey);
+  useEffect(() => {
+    if (sessionKeyRef.current === sessionKey) return;
+    sessionKeyRef.current = sessionKey;
+    sessionGen.current += 1;
+    refreshSeq.current += 1;
+    requestSeq.current += 1;
+    verifySeq.current += 1;
+    setRefreshState('idle');
+    setRefreshMessage(null);
+  }, [sessionKey]);
+
+  useEffect(
+    () => () => {
+      sessionGen.current += 1;
+      refreshSeq.current += 1;
+    },
+    [],
+  );
+
+  const runScan = useCallback(async (filters: ScanFilters, opts?: { silent?: boolean; cache?: RequestCache }) => {
+    const sessionAtStart = sessionGen.current;
+    const requestAtStart = opts?.silent ? requestSeq.current : ++requestSeq.current;
+    const verifyAtStart = opts?.silent ? ++verifySeq.current : verifySeq.current;
+    if (!opts?.silent) {
+      setScanState('scanning');
+      setScanError(null);
+    }
     const startedAt = Date.now();
     try {
-      const result = await strengthApi.scan(buildParams(filters));
-      if (scanSeq.current !== seq) return false;
+      const result = await strengthApi.scan(buildParams(filters), opts?.cache ? { cache: opts.cache } : undefined);
+      if (opts?.silent) {
+        if (
+          !silentScanMayCommit({
+            verifySeq: verifyAtStart,
+            currentVerifySeq: verifySeq.current,
+            requestSeqAtStart: requestAtStart,
+            currentRequestSeq: requestSeq.current,
+            sessionAtStart,
+            currentSession: sessionGen.current,
+            filters,
+            applied: appliedRef.current,
+          })
+        ) {
+          return false;
+        }
+        setResponse(result);
+        setUnverified(false);
+        return true;
+      }
+      if (requestSeq.current !== requestAtStart) return false;
+      if (sessionGen.current !== sessionAtStart) return false;
+      // A silent read may have started during this query with the same filters.
+      // Once the explicit result lands, that older read must not replace it.
+      verifySeq.current += 1;
       setResponse(result);
+      setUnverified(false);
       setApplied(filters);
       setDraft(filters);
       setScanDurationMs(Date.now() - startedAt);
@@ -150,26 +218,140 @@ export default function Screener() {
       setScanState('done');
       setHistory((prev) =>
         [
-          { at: Date.now(), count: result.rows.length, durationMs: Date.now() - startedAt, summary: summarizeFilters(filters) },
+          { at: Date.now(), count: result.rows.length, durationMs: Date.now() - startedAt, summary: summarizeFilters(filters), kind: 'filter' as const },
           ...prev,
         ].slice(0, 5),
       );
       return true;
     } catch (error) {
-      if (scanSeq.current !== seq) return false;
+      if (opts?.silent) {
+        if (verifySeq.current !== verifyAtStart) return false;
+        if (sessionGen.current !== sessionAtStart) return false;
+        if (requestSeq.current !== requestAtStart) return false;
+        setUnverified(true);
+        return false;
+      }
+      if (requestSeq.current !== requestAtStart) return false;
+      if (sessionGen.current !== sessionAtStart) return false;
       setScanError(error instanceof ApiError ? error : new ApiError(500, error instanceof Error ? error.message : t('扫描失败')));
       setScanState('error');
       return false;
     }
   }, []);
 
-  /* 首次进入自动跑一次默认扫描（读取夜间快照，成本低）。 */
+  /* Wait for the first identity, then also restart reads after an account
+     change. Otherwise its generation guard drops the initial pending result
+     without ever settling the page's scanning state. */
   useEffect(() => {
-    void runScan(DEFAULT_FILTERS);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (accessLoading) return;
+    void runScan(appliedRef.current, { cache: 'reload' });
+  }, [accessLoading, sessionKey, runScan]);
 
   const onScanClick = useCallback(() => void runScan(draft), [draft, runScan]);
+
+  const pollAction = useCallback(async (actionId: number, seq: number) => {
+    const deadline = Date.now() + 90_000;
+    let last: Record<string, unknown> | null = null;
+    while (Date.now() < deadline) {
+      if (refreshSeq.current !== seq) return { item: null, timedOut: false };
+      const item = await workerApi.action(actionId);
+      if (refreshSeq.current !== seq) return { item: null, timedOut: false };
+      last = item as Record<string, unknown>;
+      const status = String(item.status);
+      if (status === 'completed' || status === 'failed') return { item, timedOut: false };
+      setRefreshState(status === 'running' ? 'running' : 'queued');
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+    return { item: last, timedOut: true };
+  }, []);
+
+  const onOwnerRefresh = useCallback(async () => {
+    const seq = ++refreshSeq.current;
+    const sessionAtStart = sessionGen.current;
+    const requestAtStart = requestSeq.current;
+    verifySeq.current += 1;
+    setRefreshState('queued');
+    setRefreshMessage(null);
+    try {
+      const accepted = await workerApi.trigger('post_close_batch');
+      if (refreshSeq.current !== seq || sessionGen.current !== sessionAtStart) return;
+      const actionId = accepted.action_id;
+      if (actionId == null) {
+        setRefreshState('error');
+        setRefreshMessage(t('无法提交日线更新'));
+        return;
+      }
+      const polled = await pollAction(actionId, seq);
+      if (refreshSeq.current !== seq || sessionGen.current !== sessionAtStart) return;
+      if (!polled.item && !polled.timedOut) {
+        setRefreshState('error');
+        setRefreshMessage(t('更新未完成'));
+        return;
+      }
+      const finished = (polled.item ?? {}) as { status?: string; result?: Record<string, unknown> };
+      const promised = promisedPublication(finished as Record<string, unknown>);
+      const previousId = response?.publication_id ?? null;
+      const readFilters = appliedRef.current;
+      const verified = await strengthApi.scan(buildParams(readFilters), { cache: 'reload' });
+      if (refreshSeq.current !== seq || sessionGen.current !== sessionAtStart) return;
+      const verdict = interpretOwnerRefresh({
+        actionStatus: String(finished.status ?? ''),
+        timedOut: polled.timedOut,
+        promised,
+        readback: verified,
+        previousPublicationId: previousId,
+      });
+      setRefreshState(verdict.state);
+      setRefreshMessage(t(verdict.messageKey));
+      const mayCommit = refreshMayCommitResults({
+        refreshSeq: seq,
+        currentRefreshSeq: refreshSeq.current,
+        sessionAtStart,
+        currentSession: sessionGen.current,
+        requestSeqAtStart: requestAtStart,
+        currentRequestSeq: requestSeq.current,
+      });
+      if (verdict.commitResponse && mayCommit) {
+        // Only replace an earlier query after a usable readback. Failed owner
+        // updates must leave an unfinished initial query able to settle.
+        requestSeq.current += 1;
+        verifySeq.current += 1;
+        setResponse(verified);
+        setScanState('done');
+        setScanError(null);
+        setUnverified(false);
+        if (verdict.state === 'done' && promised.outcome === 'published') {
+          setHistory((prev) =>
+            [
+              { at: Date.now(), count: verified.rows.length, durationMs: 0, summary: t('后台更新读回'), kind: 'refresh' as const },
+              ...prev,
+            ].slice(0, 5),
+          );
+        }
+      }
+    } catch (error) {
+      if (refreshSeq.current !== seq) return;
+      if (sessionGen.current !== sessionAtStart) return;
+      setRefreshState('error');
+      setRefreshMessage(error instanceof ApiError ? error.message : t('更新失败，已保留上次结果'));
+    }
+  }, [pollAction, response]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      void runScan(applied, { silent: true, cache: 'reload' });
+    };
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      void runScan(applied, { silent: true, cache: 'reload' });
+    }, 120_000);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [applied, runScan]);
 
   const patchAndScan = useCallback(
     (partial: Partial<ScanFilters>) => {
@@ -223,6 +405,16 @@ export default function Screener() {
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pageRows = useMemo(() => sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE), [sorted, safePage]);
+  const flashRows = useMemo(
+    () =>
+      pageRows.map((row) => ({
+        code: row.canonical_code,
+        price: overlayRows[row.canonical_code]?.live_price ?? row.close,
+      })),
+    [pageRows, overlayRows],
+  );
+  const flashes = useTickFlash(flashRows, (row) => row.code, (row) => row.price);
+  const staleResults = scanState === 'error' && Boolean(response);
 
   const onToggle = useCallback((code: string) => {
     setExpanded((prev) => (prev === code ? null : code));
@@ -275,20 +467,50 @@ export default function Screener() {
   }, [applied, meta, patchAndScan]);
 
   const familyWeights = meta?.family_weights ?? null;
-  const animKey = `${scanSeq.current}:${safePage}`;
+  const animKey = `${requestSeq.current}:${safePage}`;
 
   return (
     <div className="space-y-0">
       {/* B0 页头带 */}
       <PageHeader
-        section="04"
+        section="03"
         eyebrow="SCREENER · STRENGTH SCAN"
         title={t('选股扫描')}
-        description={t('收盘后按日线全市场计算强度分，扫描读取当日快照。')}
+        description={t('收盘后按日线全市场计算强度分，扫描读取已保存发布，不会触发供应商。')}
         meta={
           <>
-            <DataThrough date={response?.trade_date} />
+            <DataThrough date={response?.input_data_through ?? response?.trade_date} />
+            {response?.built_at && (
+              <span className="hidden text-right sm:block">
+                <span className="block text-micro text-ink-400">{t('评分时间')}</span>
+                <span className="font-mono text-caption text-ink-600 tnum">{fmtJstTime(response.built_at)}</span>
+              </span>
+            )}
+            {history[0] && (
+              <span className="hidden text-right sm:block">
+                <span className="block text-micro text-ink-400">{t('上次筛选')}</span>
+                <span className="font-mono text-caption text-ink-600 tnum">
+                  {fmtTimeHHMMSS(history[0].at)}
+                </span>
+              </span>
+            )}
             <ScanHistoryPopover history={history} />
+            <ForceRefreshButton
+              onClick={() => void runScan(applied, { cache: 'reload' })}
+              spinning={scanState === 'scanning'}
+              label={t('重新读取')}
+              title={t('按当前条件重新读取已保存发布，不会重算日线')}
+              testId="screener-reread"
+            />
+            {isOwner && (
+              <ForceRefreshButton
+                onClick={() => void onOwnerRefresh()}
+                spinning={refreshState === 'queued' || refreshState === 'running'}
+                label={t('更新日线与评分')}
+                title={t('所有者提交有界后台任务：拉取日线并发布新评分')}
+                testId="screener-owner-refresh"
+              />
+            )}
           </>
         }
       />
@@ -329,17 +551,17 @@ export default function Screener() {
                   </span>
                 )}
                 {response && (response.matched_count ?? 0) > rows.length && (
-                  <span className="rounded-xs bg-paper-2 px-1.5 py-px text-micro text-ink-500">
+                  <SoftBadge tone="warn">
                     {t('显示强度前 {n} 名（条件命中共 {m} 只）', { n: rows.length, m: response.matched_count })}
-                  </span>
+                  </SoftBadge>
                 )}
                 {chips.map((chip) => (
-                  <span key={chip.key} className="inline-flex items-center gap-1 rounded-xs border border-line bg-card-warm px-1.5 py-0.5 text-micro text-ink-500">
+                  <SoftBadge key={chip.key} className="gap-1">
                     {chip.label}
                     <button type="button" onClick={chip.onRemove} aria-label={t('移除条件 {label}', { label: chip.label })} className="text-ink-300 transition-colors hover:text-down-600">
                       <Icon name="x" size={10} />
                     </button>
-                  </span>
+                  </SoftBadge>
                 ))}
               </>
             ) : (
@@ -359,6 +581,41 @@ export default function Screener() {
           {sortMode !== 'deterministic' && (
             <p className="mt-2 text-micro text-ink-400">{t('催化排序基于 72h 新闻摘要（仅覆盖已接入 RSS 源）；无新闻的股票排在其后。')}</p>
           )}
+          {response && (response.freshness === 'stale' || response.calendar_state === 'stale') && (
+            <SoftBadge tone="warn" className="mt-2">
+              {t('快照日期早于当前目标交易日，这是筛选结果不是新的日线计算')}
+            </SoftBadge>
+          )}
+          {response && response.freshness === 'partial' && (
+            <SoftBadge tone="warn" className="mt-2">
+              {t('输入不完整，不能当作最新日线')}
+            </SoftBadge>
+          )}
+          {response && response.freshness === 'degraded' && (
+            <SoftBadge tone="warn" className="mt-2">
+              {t('指数输入偏旧，股票评分可用但不是完整新鲜')}
+            </SoftBadge>
+          )}
+          {response && response.freshness === 'unknown' && (
+            <SoftBadge tone="warn" className="mt-2">
+              {t('日历覆盖未知，不能当作最新日线')}
+            </SoftBadge>
+          )}
+          {response && response.score_compatible === false && (
+            <SoftBadge tone="warn" className="mt-2">
+              {t('已保存评分版本与当前代码不一致')}
+            </SoftBadge>
+          )}
+          {unverified && (
+            <SoftBadge tone="warn" className="mt-2" data-testid="screener-unverified">
+              {t('核验未完成，列表可能不是最新')}
+            </SoftBadge>
+          )}
+          {refreshMessage && (
+            <p className="mt-2 text-micro text-ink-500" data-testid="screener-refresh-status">
+              {refreshMessage}
+            </p>
+          )}
 
           <div className="mt-4">
             {scanState === 'scanning' && !response ? (
@@ -369,22 +626,18 @@ export default function Screener() {
               <div className="card-surface">
                 <EmptyState
                   variant="error"
+                  image="/empty-scan.svg"
                   title={scanError?.code === 503 ? t('扫描数据不可用') : t('扫描失败')}
                   description={scanError?.code === 503 ? t('收盘后批处理完成前暂无强度快照') : scanError?.message}
                   action={
-                    <button
-                      type="button"
-                      onClick={() => void runScan(applied)}
-                      className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white transition-[filter] hover:brightness-105"
-                    >
-                      {t('重试')}
-                    </button>
+                    <EmptyRetryButton onClick={() => void runScan(applied)} />
                   }
                 />
               </div>
             ) : sorted.length === 0 ? (
               <div className="card-surface">
                 <EmptyState
+                  image="/empty-scan.svg"
                   title={t('当前条件无命中')}
                   description={t('尝试放宽条件，或移除部分过滤器')}
                   action={
@@ -406,7 +659,7 @@ export default function Screener() {
               <>
                 {scanState === 'error' && (
                   <p className="mb-2 flex items-center gap-2 text-caption text-ink-400">
-                    <span className="rounded-xs bg-warn-50 px-1.5 py-px font-mono text-micro text-warn-600">{t('已过期')}</span>
+                    <SoftBadge tone="warn">{t('已过期')}</SoftBadge>
                     {t('本次扫描失败，显示上次成功结果')}
                   </p>
                 )}
@@ -414,12 +667,24 @@ export default function Screener() {
                     絞り込むのは「今の値段の位置」だけ（doc §八）。 */}
                 {overlay.data?.enabled && liveUpCount > 0 && (
                   <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <PointerTooltip
+                      passthrough
+                      label={t('用{n}分延迟的盘中价筛选，分数与排序仍来自夜间官方数据', {
+                        n: overlay.data?.delayed_minutes ?? 15,
+                      })}
+                      width={260}
+                      contentClassName="p-2.5"
+                      content={
+                        <span className="text-micro leading-[16px] text-ink-600">
+                          {t('用{n}分延迟的盘中价筛选，分数与排序仍来自夜间官方数据', {
+                            n: overlay.data?.delayed_minutes ?? 15,
+                          })}
+                        </span>
+                      }
+                    >
                     <button
                       type="button"
                       onClick={() => setOnlyLiveUp((prev) => !prev)}
-                      title={t('用{n}分延迟的盘中价筛选，分数与排序仍来自夜间官方数据', {
-                        n: overlay.data?.delayed_minutes ?? 15,
-                      })}
                       className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-caption transition-colors duration-fast ${
                         onlyLiveUp
                           ? 'border-brand-400 bg-brand-50 text-brand-700'
@@ -429,7 +694,9 @@ export default function Screener() {
                       <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
                       {t('盘中上涨')} {liveUpCount}
                     </button>
+                    </PointerTooltip>
                     <span className="text-micro text-ink-400">{quoteSourceLabel(overlay.data).text}</span>
+                    <span className="text-micro text-ink-400">{t('盘中价较新不等于日线评分已更新')}</span>
                   </div>
                 )}
                 <div className={scanState === 'scanning' ? 'hidden opacity-60 md:block' : 'hidden md:block'}>
@@ -447,6 +714,8 @@ export default function Screener() {
                     canManageWatchlist={canManageWatchlist}
                     animKey={animKey}
                     overlay={overlayRows}
+                    flashes={flashes}
+                    stale={staleResults}
                   />
                 </div>
                 <div className={scanState === 'scanning' ? 'opacity-60 md:hidden' : 'md:hidden'}>
@@ -461,6 +730,8 @@ export default function Screener() {
                     animKey={animKey}
                     page={safePage}
                     overlay={overlayRows}
+                    flashes={flashes}
+                    stale={staleResults}
                   />
                   {totalPages > 1 && (
                     <div className="mt-4 flex items-center justify-center gap-2">
@@ -486,7 +757,12 @@ export default function Screener() {
           ) : (
             <div className="card-surface p-5">
               <p className="eyebrow">{t('市场形态 · MARKET REGIME')}</p>
-              <p className="mt-3 text-body-s text-ink-500">{t('数据暂不可用 · 稍后刷新再试')}</p>
+              <EmptyState
+                size="compact"
+                image="/empty-chart.svg"
+                title={t('数据暂不可用')}
+                description={t('稍后刷新再试')}
+              />
             </div>
           )}
           <TierHistogram
@@ -496,8 +772,32 @@ export default function Screener() {
             onSelect={onTierFromHistogram}
           />
           <MethodCard meta={meta} profileId={applied.profile} loading={!meta && !metaFailed} error={metaFailed} onRetry={loadMeta} />
+          <AnimatePresence>
+            {scanState === 'done' && sorted.length === 0 && (
+              <motion.div
+                key="relax"
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, transition: { duration: 0.16 } }}
+                transition={{ duration: 0.48, ease: EASE_PAPER }}
+                className="card-surface p-5"
+              >
+                <p className="eyebrow">{t('无命中引导')}</p>
+                <p className="mt-2.5 text-body-s text-ink-500">{t('当前条件过严，没有标的进入结果集。')}</p>
+                <button
+                  type="button"
+                  onClick={() => patchAndScan({ tier: 'all', minScore: null, presetId: null })}
+                  className="mt-3 flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105"
+                >
+                  <Icon name="filter-funnel" size={13} />
+                  {t('放宽一档试试')}
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </aside>
       </div>
+      <SourceNote className="mt-8" text={t('强度扫描结果 · 日线收盘后快照')} />
     </div>
   );
 }
@@ -507,7 +807,7 @@ function SuggestButton({ label, onClick }: { label: string; onClick: () => void 
     <button
       type="button"
       onClick={onClick}
-      className="flex h-8 items-center rounded-pill border border-line bg-card px-3 text-caption text-ink-500 transition-colors duration-fast hover:border-brand-400/60 hover:text-brand-600"
+      className="control-button"
     >
       {label}
     </button>

@@ -1,13 +1,20 @@
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
+import EmptyState from '@/components/shared/EmptyState';
 import { t } from '@/i18n/core';
 
 export default function NotFound() {
+  const location = useLocation();
   return (
-    <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3">
-      <span className="font-mono text-display-xl text-ink-300">404</span>
-      <Link to="/" className="text-body text-brand-700 hover:underline">
-        {t('首页')}
-      </Link>
-    </div>
+    <EmptyState
+      icon="search"
+      title={t('页面不存在')}
+      description={t('没有找到 {path} 对应的页面。链接可能已失效或地址输入有误。', { path: location.pathname })}
+      action={
+        <Link to="/" className="btn-primary">
+          {t('返回首页')}
+        </Link>
+      }
+      className="min-h-[70vh] justify-center py-16"
+    />
   );
 }

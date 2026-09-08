@@ -6,16 +6,17 @@
  * B3 右栏：未来 35 天密度条 + 直近決算摘要 + 覆盖口径卡
  * 数据三态：released（实绩）/ confirmed（官方確定）/ estimated（目安，前年同期推导）。
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Link } from 'react-router';
 import { earningsApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
+import EmptyRetryButton from '@/components/shared/EmptyRetryButton';
 import Segmented from '@/components/shared/Segmented';
 import SourceNote from '@/components/shared/SourceNote';
-import { SkeletonBlock, SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
+import { SkeletonBlock, SkeletonCard, SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
 import { DataThrough } from '@/components/domain';
 import Icon from '@/components/icons';
 import WeekScrubber from '@/components/earnings/WeekScrubber';
@@ -29,8 +30,13 @@ import {
   weekStartMonday,
   type ListMode,
 } from '@/components/earnings/types';
+import SoftBadge from '@/components/shared/SoftBadge';
+import StaleStrip from '@/components/shared/StaleStrip';
+import PointerTooltip from '@/components/shared/PointerTooltip';
+import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
+import { useToast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
-import { fmtYenCompact } from '@/lib/format';
+import { fmtTimeHHMMSS, fmtYenCompact } from '@/lib/format';
 import { t } from '@/i18n/core';
 import type { EarningsRecentItem } from '@/api/types';
 
@@ -40,6 +46,10 @@ const EASE_PAPER = [0.16, 1, 0.3, 1] as [number, number, number, number];
 export default function Earnings() {
   const q = usePolling(() => earningsApi.upcoming(), 1_800_000);
   const recentQ = usePolling(() => earningsApi.recent(7), 1_800_000);
+  const toast = useToast();
+  const [flashSignal, setFlashSignal] = useState(0);
+  const [pendingFlash, setPendingFlash] = useState(false);
+  const sawRefreshing = useRef(false);
 
   const [monday, setMonday] = useState(() => weekStartMonday(jstToday()));
   const [weekDir, setWeekDir] = useState(0);
@@ -73,6 +83,30 @@ export default function Earnings() {
     },
     [monday],
   );
+
+  const onForceRefresh = useCallback(() => {
+    if (q.refreshing) return;
+    q.refresh({ force: true });
+    recentQ.refresh({ force: true });
+    setPendingFlash(true);
+  }, [q, recentQ]);
+
+  useEffect(() => {
+    if (!pendingFlash) return;
+    if (q.refreshing) {
+      sawRefreshing.current = true;
+      return;
+    }
+    if (!sawRefreshing.current) return;
+    sawRefreshing.current = false;
+    setPendingFlash(false);
+    if (q.error) {
+      toast.error(t('刷新失败'), q.error.message);
+      return;
+    }
+    setFlashSignal((value) => value + 1);
+    toast.success(t('日历已更新'));
+  }, [pendingFlash, q.data, q.error, q.refreshing, toast]);
 
   const onJumpDay = useCallback(
     (date: string) => {
@@ -109,15 +143,30 @@ export default function Earnings() {
           <>
             {counts && (
               <span className="hidden items-center gap-1.5 sm:flex">
-                <CountChip label={t('已公布')} value={counts.released} className="bg-paper-2 text-ink-600" />
-                <CountChip label={t('確定')} value={counts.confirmed} className="bg-brand-50 text-brand-700" />
-                <CountChip label={t('目安')} value={counts.estimated} className="border border-dashed border-line-strong text-ink-500" />
+                <SoftBadge>{t('已公布')} {counts.released}</SoftBadge>
+                <SoftBadge tone="brand">{t('確定')} {counts.confirmed}</SoftBadge>
+                <SoftBadge tone="warn">{t('目安')} {counts.estimated}</SoftBadge>
               </span>
             )}
             <DataThrough date={q.data?.today} />
+            {q.lastUpdatedAt && (
+              <span className="hidden font-mono text-caption text-ink-400 tnum sm:inline">
+                {t('更新')} {fmtTimeHHMMSS(q.lastUpdatedAt)}
+              </span>
+            )}
+            <ForceRefreshButton
+              onClick={onForceRefresh}
+              spinning={q.refreshing || pendingFlash}
+              label={t('刷新日历')}
+              title={t('刷新日历')}
+            />
           </>
         }
       />
+
+      {q.error && q.data && (
+        <StaleStrip className="mt-4" onRetry={() => q.refresh()} refreshing={q.refreshing} />
+      )}
 
       {/* B1 周历 / 月历 */}
       <div className="mt-6">
@@ -141,17 +190,10 @@ export default function Earnings() {
           <section className="card-surface" aria-label={t('日历数据不可用')}>
             <EmptyState
               variant="error"
+              image="/empty-chart.svg"
               title={t('日历数据不可用')}
               description={q.error?.message || t('稍后刷新再试')}
-              action={
-                <button
-                  type="button"
-                  onClick={() => q.refresh()}
-                  className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white transition-[filter] hover:brightness-105"
-                >
-                  {t('重试')}
-                </button>
-              }
+              action={<EmptyRetryButton onClick={() => q.refresh({ force: true })} refreshing={q.refreshing} />}
             />
           </section>
         ) : (
@@ -184,6 +226,7 @@ export default function Earnings() {
                     onWeekChange={onWeekChange}
                     selectedDay={selectedDay}
                     onSelectDay={onSelectDay}
+                    flashSignal={flashSignal}
                   />
                 </motion.div>
               ) : (
@@ -195,7 +238,12 @@ export default function Earnings() {
                   transition={{ duration: 0.32, ease: EASE_PAPER }}
                   className="overflow-hidden"
                 >
-                  <MonthCalendar items={items} selectedDay={selectedDay} onSelectDay={onSelectDay} />
+                  <MonthCalendar
+                    items={items}
+                    selectedDay={selectedDay}
+                    onSelectDay={onSelectDay}
+                    anchorDate={monday}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -205,12 +253,16 @@ export default function Earnings() {
 
       {/* B2 列表（8 列）· B3 右栏（4 列） */}
       <div className="mt-6 grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-12" aria-label={t('决算主体')}>
-        <div className="min-w-0 space-y-4 xl:col-span-8">
-          {loading ? (
-            <div className="card-surface">
-              <SkeletonRows rows={8} />
-            </div>
-          ) : error503 ? null : (
+        <div className="min-w-0 space-y-6 xl:col-span-8">
+          {error503 ? null : (
+            <SkeletonReveal
+              loading={loading}
+              skeleton={
+                <div className="card-surface">
+                  <SkeletonRows rows={8} />
+                </div>
+              }
+            >
             <>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <Segmented
@@ -229,7 +281,7 @@ export default function Earnings() {
                     <button
                       type="button"
                       onClick={() => onSelectDay(null)}
-                      className="flex items-center gap-1 rounded-sm border border-line bg-card px-2 py-1 text-caption text-ink-500 transition-colors hover:text-ink-800"
+                      className="flex items-center gap-1 rounded-sm border border-line bg-card px-2 py-1 text-caption text-ink-500 shadow-btn transition-colors hover:text-ink-800"
                     >
                       <Icon name="x" size={12} />
                       {t('清除筛选')}
@@ -243,6 +295,10 @@ export default function Earnings() {
                 filteredByDay={selectedDay !== null}
                 featuredFilteredEmpty={listMode === 'featured' && listState.allCount > 0 && listState.featuredCount === 0}
                 onShowAll={() => onListModeChange('all')}
+                onNextWeek={() => {
+                  setSelectedDay(null);
+                  onWeekChange(1);
+                }}
               />
 
               {listState.visibleItems.length < listState.listItems.length && (
@@ -255,9 +311,20 @@ export default function Earnings() {
                   <button
                     type="button"
                     onClick={() => setVisibleLimit((limit) => limit + LIST_PAGE_SIZE)}
-                    className="h-8 rounded-md border border-line bg-card-warm px-3 text-caption text-ink-600 transition-colors hover:border-brand-400 hover:text-brand-600"
+                    className="h-8 rounded-md border border-line bg-card-warm px-3 text-caption text-ink-600 shadow-btn transition-colors hover:border-brand-400 hover:text-brand-600"
                   >
                     {t('显示更多 ·')} {Math.min(LIST_PAGE_SIZE, listState.listItems.length - listState.visibleItems.length)} {t('件')}
+                  </button>
+                </div>
+              )}
+              {visibleLimit > LIST_PAGE_SIZE && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setVisibleLimit(LIST_PAGE_SIZE)}
+                    className="h-8 px-2 text-caption text-ink-400 transition-colors hover:text-brand-600"
+                  >
+                    {t('收起至前')} {LIST_PAGE_SIZE} {t('件')}
                   </button>
                 </div>
               )}
@@ -279,12 +346,10 @@ export default function Earnings() {
                   {showTbd && (
                     <div className="flex flex-wrap gap-1.5 border-t border-line px-4 py-3">
                       {tbdItems.map((item) => (
-                        <Link
-                          key={item.canonical_code}
-                          to={`/stock/${item.display_code}`}
-                          className="rounded-sm bg-paper-2 px-2 py-1 font-mono text-caption text-ink-600 hover:bg-brand-50 hover:text-brand-700"
-                        >
-                          {item.display_code} {item.name_ja ?? ''}
+                        <Link key={item.canonical_code} to={`/stock/${item.display_code}`}>
+                          <SoftBadge className="font-mono hover:bg-brand-50 hover:text-brand-700">
+                            {item.display_code} {item.name_ja ?? ''}
+                          </SoftBadge>
                         </Link>
                       ))}
                     </div>
@@ -292,11 +357,12 @@ export default function Earnings() {
                 </div>
               )}
             </>
+            </SkeletonReveal>
           )}
         </div>
 
         {/* B3 右栏 */}
-        <aside className="min-w-0 space-y-6 self-start xl:sticky xl:top-20 xl:col-span-4" aria-label={t('侧栏')}>
+        <aside className="min-w-0 space-y-6 self-start xl:col-span-4" aria-label={t('侧栏')}>
           {loading ? <SkeletonCard /> : !error503 && <DensityStrip items={items} onJumpDay={onJumpDay} />}
           <RecentPanel items={recentQ.data?.items ?? []} loading={recentQ.loading && !recentQ.data} />
           {q.data?.coverage_note && (
@@ -312,15 +378,6 @@ export default function Earnings() {
   );
 }
 
-function CountChip({ label, value, className }: { label: string; value: number; className: string }) {
-  return (
-    <span className={cn('inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-micro', className)}>
-      {label}
-      <span className="font-mono tnum">{value}</span>
-    </span>
-  );
-}
-
 /* ---------------- 直近決算摘要（右栏） ---------------- */
 function RecentPanel({ items, loading }: { items: EarningsRecentItem[]; loading: boolean }) {
   if (loading) return <SkeletonCard />;
@@ -329,7 +386,7 @@ function RecentPanel({ items, loading }: { items: EarningsRecentItem[]; loading:
     <section className="card-surface p-5" aria-label={t('最近决算')}>
       <p className="eyebrow">{t('最近决算 · 7 天')}</p>
       {shown.length === 0 ? (
-        <p className="mt-3 text-caption text-ink-400">{t('暂无数据')}</p>
+        <EmptyState size="compact" image="/empty-chart.svg" title={t('暂无数据')} className="mt-2" />
       ) : (
         <div className="mt-3 space-y-2.5">
           {shown.map((row) => (
@@ -351,14 +408,30 @@ function RecentPanel({ items, loading }: { items: EarningsRecentItem[]; loading:
               <span className="shrink-0 text-right">
                 <span className="block font-mono text-caption text-ink-800 tnum">{fmtYenCompact(row.operating_profit)}</span>
                 {row.forecast_direction === 'upward' && (
-                  <span className="inline-flex text-up-700" title={t('上方修正')} aria-label={t('上方修正')}>
-                    <Icon name="arrow-up-right" size={12} />
-                  </span>
+                  <PointerTooltip
+                    passthrough
+                    label={t('上方修正')}
+                    width={120}
+                    contentClassName="p-2"
+                    content={<span className="text-micro text-ink-600">{t('上方修正')}</span>}
+                  >
+                    <span className="inline-flex text-up-700" aria-label={t('上方修正')}>
+                      <Icon name="arrow-up-right" size={12} />
+                    </span>
+                  </PointerTooltip>
                 )}
                 {row.forecast_direction === 'downward' && (
-                  <span className="inline-flex text-down-700" title={t('下方修正')} aria-label={t('下方修正')}>
-                    <Icon name="arrow-down-right" size={12} />
-                  </span>
+                  <PointerTooltip
+                    passthrough
+                    label={t('下方修正')}
+                    width={120}
+                    contentClassName="p-2"
+                    content={<span className="text-micro text-ink-600">{t('下方修正')}</span>}
+                  >
+                    <span className="inline-flex text-down-700" aria-label={t('下方修正')}>
+                      <Icon name="arrow-down-right" size={12} />
+                    </span>
+                  </PointerTooltip>
                 )}
               </span>
             </Link>

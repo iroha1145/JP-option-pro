@@ -2,9 +2,12 @@
 
 import { Link } from 'react-router';
 import InfoHint from '@/components/shared/InfoHint';
+import PointerTooltip from '@/components/shared/PointerTooltip';
+import SoftBadge, { type BadgeTone } from '@/components/shared/SoftBadge';
 import { t } from '@/i18n/core';
 import { fmtDate, fmtScore } from '@/lib/format';
 import { radarScoreHint, type ScoreHint } from '@/lib/indicatorHints';
+import { strengthBarClass } from '@/lib/strengthColor';
 import { cn } from '@/lib/utils';
 
 export const RADAR_STATE_LABELS: Record<string, string> = {
@@ -30,40 +33,27 @@ export const SIGNAL_LABELS: Record<string, string> = {
   volume_surge_break: '放量突破',
 };
 
-const STATE_TONES: Record<string, string> = {
-  discovered: 'bg-brand-50 text-brand-700',
-  watching: 'bg-brand-50 text-brand-700',
-  triggered: 'bg-warn-50 text-warn-700',
-  confirmed: 'bg-up-50 text-up-700',
-  holding: 'bg-up-50 text-up-700',
-  retesting: 'bg-warn-50 text-warn-700',
-  retest_held: 'bg-up-50 text-up-700',
-  reaccelerating: 'bg-up-50 text-up-700',
-  extended: 'bg-warn-50 text-warn-700',
-  failed: 'bg-down-50 text-down-700',
-  expired: 'bg-paper-2 text-ink-400',
+const STATE_TONES: Record<string, BadgeTone> = {
+  discovered: 'brand',
+  watching: 'brand',
+  triggered: 'warn',
+  confirmed: 'brand',
+  holding: 'brand',
+  retesting: 'warn',
+  retest_held: 'brand',
+  reaccelerating: 'brand',
+  extended: 'warn',
+  failed: 'warn',
+  expired: 'neutral',
 };
 
 export function StateChip({ state }: { state: string }) {
   const label = RADAR_STATE_LABELS[state] ?? state;
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded-pill px-2 py-0.5 text-micro font-medium',
-        STATE_TONES[state] ?? 'bg-paper-2 text-ink-500',
-      )}
-    >
-      {t(label)}
-    </span>
-  );
+  return <SoftBadge tone={STATE_TONES[state] ?? 'neutral'}>{t(label)}</SoftBadge>;
 }
 
 export function SignalChip({ signal }: { signal: string }) {
-  return (
-    <span className="inline-flex items-center rounded-pill border border-line bg-card px-2 py-0.5 text-micro text-ink-600">
-      {t(SIGNAL_LABELS[signal] ?? signal)}
-    </span>
-  );
+  return <SoftBadge>{t(SIGNAL_LABELS[signal] ?? signal)}</SoftBadge>;
 }
 
 /** 数据基准日徽章 —— 每个数据卡都必须标注截至日期，不冒充实时。 */
@@ -89,10 +79,10 @@ export function DataThrough({ date, className }: { date: string | null | undefin
       <span className="inline-block h-1.5 w-1.5 rounded-full bg-ink-300" aria-hidden />
       {t('数据截至')} {fmtDate(date)} · {t('日线数据')}
       {sessionOpen && (
-        <span className="inline-flex items-center gap-1 rounded-sm bg-warn-50 px-1.5 py-0.5 text-micro text-warn-700">
+        <SoftBadge tone="warn">
           <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
           {t('盘中 · 当日数据收盘后更新')}
-        </span>
+        </SoftBadge>
       )}
     </span>
   );
@@ -115,15 +105,22 @@ export function ScoreBar({
       {/* w-24 では日本語「高値掴みリスク」(84px) も英語 "Relative strength" (98px) も
           切れる。三言語の最長 98px + InfoHint 分を見て w-32。 */}
       <span className="flex w-32 shrink-0 items-center gap-1 text-caption text-ink-500">
-        <span className="truncate" title={t(label)}>{t(label)}</span>
+        <PointerTooltip
+          label={t(label)}
+          width={168}
+          contentClassName="p-2.5"
+          content={<span className="block text-caption text-ink-700">{t(label)}</span>}
+        >
+          <span className="truncate">{t(label)}</span>
+        </PointerTooltip>
         {resolvedHint && <InfoHint hint={resolvedHint} size={12} />}
       </span>
-      <div className="track relative h-1.5 flex-1 overflow-hidden rounded-pill bg-line">
-        {value !== null && (
+      <div className="strength-track track relative h-1.5 flex-1 overflow-hidden rounded-pill">
+        {value !== null && Number.isFinite(value) && (
           <div
             className={cn(
-              'absolute inset-y-0 left-0 rounded-pill',
-              value >= 70 ? 'bg-up-600' : value >= 45 ? 'bg-brand-500' : 'bg-warn-600',
+              'absolute inset-y-0 left-0 origin-left rounded-pill animate-grow-bar',
+              strengthBarClass(value),
             )}
             style={{ width: `${Math.max(3, Math.min(100, value))}%` }}
           />

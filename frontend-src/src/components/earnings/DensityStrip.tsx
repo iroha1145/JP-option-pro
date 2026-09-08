@@ -5,6 +5,7 @@
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import SourceNote from '@/components/shared/SourceNote';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import type { EarningsUpcomingItem } from '@/api/types';
 import { addDays, fmtMDCN, fmtMMDD, jstToday, weekdayCN } from './types';
 import { t } from '@/i18n/core';
@@ -45,12 +46,45 @@ export default function DensityStrip({ items, onJumpDay }: DensityStripProps) {
           const isToday = index === 0;
           return (
             <span key={day.date} role="listitem" className="contents">
+              <PointerTooltip
+                passthrough
+                side="top"
+                width={190}
+                className="flex h-full min-w-0 flex-1"
+                contentClassName="px-2.5 py-1.5"
+                content={
+                  <span className="block text-left">
+                    <span className="block font-mono text-[10px] text-ink-500">
+                      {fmtMMDD(day.date)} {weekdayCN(day.date)}
+                      {n > 0 && (
+                        <span className="ml-1 text-ink-400">
+                          {t('確定')} {solid} / {t('目安')} {n - solid}
+                        </span>
+                      )}
+                    </span>
+                    {n === 0 ? (
+                      <span className="block text-[10px] text-ink-300">{t('无决算')}</span>
+                    ) : (
+                      <span className="mt-0.5 flex flex-wrap gap-1">
+                        {day.rows.slice(0, MAX_TOOLTIP_CODES).map((row) => (
+                          <span key={`${row.canonical_code}-${row.period_type}`} className="font-mono text-[10px] font-semibold text-ink-800">
+                            {row.display_code}
+                          </span>
+                        ))}
+                        {n > MAX_TOOLTIP_CODES && (
+                          <span className="font-mono text-[10px] text-ink-400">+{n - MAX_TOOLTIP_CODES}</span>
+                        )}
+                      </span>
+                    )}
+                  </span>
+                }
+              >
               <button
                 type="button"
                 onClick={() => onJumpDay(day.date)}
                 aria-label={t('{date} {weekday}，{n} 件决算，跳转', { date: fmtMDCN(day.date), weekday: weekdayCN(day.date), n })}
                 className={cn(
-                  'group relative flex h-full min-w-0 flex-1 items-end focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400/60',
+                  'group relative flex h-full w-full items-end focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400/60',
                   /* 今天 = 整列淡底 + 列顶圆点（环套在数像素高的柱段上会成一个怪方块） */
                   isToday && 'rounded-[3px] bg-brand-50',
                 )}
@@ -61,31 +95,6 @@ export default function DensityStrip({ items, onJumpDay }: DensityStripProps) {
                     className="absolute -top-1 left-1/2 size-1 -translate-x-1/2 rounded-full bg-brand-600"
                   />
                 )}
-                <span
-                  className={cn(
-                    'glass pointer-events-none absolute -top-2 z-20 hidden w-max max-w-[190px] -translate-y-full rounded-md border border-line px-2.5 py-1.5 text-left shadow-sh-2 group-hover:block group-focus-visible:block',
-                    index < days.length / 3 ? 'left-0' : index >= (days.length * 2) / 3 ? 'right-0' : 'left-1/2 -translate-x-1/2',
-                  )}
-                >
-                  <span className="block font-mono text-[10px] text-ink-500">
-                    {fmtMMDD(day.date)} {weekdayCN(day.date)}
-                    {n > 0 && <span className="ml-1 text-ink-400">{t('確定')} {solid} / {t('目安')} {n - solid}</span>}
-                  </span>
-                  {n === 0 ? (
-                    <span className="block text-[10px] text-ink-300">{t('无决算')}</span>
-                  ) : (
-                    <span className="mt-0.5 flex flex-wrap gap-1">
-                      {day.rows.slice(0, MAX_TOOLTIP_CODES).map((row) => (
-                        <span key={`${row.canonical_code}-${row.period_type}`} className="font-mono text-[10px] font-semibold text-ink-800">
-                          {row.display_code}
-                        </span>
-                      ))}
-                      {n > MAX_TOOLTIP_CODES && (
-                        <span className="font-mono text-[10px] text-ink-400">+{n - MAX_TOOLTIP_CODES}</span>
-                      )}
-                    </span>
-                  )}
-                </span>
                 {/* 双段柱：下段=確定/已公布（实色），上段=目安（淡色）。
                     不做 scaleY 入场动画：whileInView 在数像素高的元素上会停在
                     scaleY(0)（实机复现），柱子直接按最终高度静态渲染。 */}
@@ -106,6 +115,7 @@ export default function DensityStrip({ items, onJumpDay }: DensityStripProps) {
                   />
                 </span>
               </button>
+              </PointerTooltip>
             </span>
           );
         })}

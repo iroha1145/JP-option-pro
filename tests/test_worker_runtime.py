@@ -282,9 +282,14 @@ def test_worker_schema_v1_migrates_to_v2(tmp_path):
             row[1]
             for row in connection.execute("PRAGMA index_list('worker_action_requests')").fetchall()
         }
+        tables = {
+            row[0]
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        }
     assert version == WORKER_SCHEMA_VERSION
     assert "uq_worker_action_active" not in indexes
     assert "uq_worker_action_active_nonfetch" in indexes
+    assert "worker_retry_deadlines" in tables
 
 
 def test_news_sync_outcome_fails_when_every_feed_errors():

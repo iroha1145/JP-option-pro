@@ -18,15 +18,19 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from datetime import datetime, timedelta, timezone
+
+from app.services.publication import seconds_until_deadline
 from app.worker.state import WorkerLeaseLost, WorkerStateRepository
 
 
 @dataclass
 class TaskResult:
-    status: str  # completed | failed | skipped
+    status: str  # completed | failed | skipped — lifecycle, not a publication proof
     next_delay_seconds: float
     details: dict[str, Any] = field(default_factory=dict)
     error_code: str | None = None
+    outcome: str | None = None  # published | already_current | retained | waiting_input | skipped | failed
 
 
 @dataclass
@@ -212,13 +216,22 @@ class WorkerSupervisor:
             else:
                 failures = 0
                 delay = result.next_delay_seconds
+            delay = await asyncio.to_thread(self._apply_retry_policy, spec.name, result, delay)
+            if result.outcome is None:
+                success = result.status == "completed"
+            else:
+                success = result.outcome in {"published", "already_current"}
+            next_run_at = (
+                datetime.now(timezone.utc) + timedelta(seconds=max(0.5, delay))
+            ).strftime("%Y-%m-%dT%H:%M:%SZ")
             await asyncio.to_thread(
                 self._state.record_task,
                 self._owner_id, self._fencing_token, spec.name,
                 status="completed" if result.status != "failed" else "failed",
                 error_code=result.error_code,
-                details=result.details,
-                success=(result.status == "completed"),
+                details={**result.details, "outcome": result.outcome},
+                success=success,
+                next_run_at=next_run_at,
             )
             if action_id is not None:
                 await asyncio.to_thread(
@@ -226,8 +239,63 @@ class WorkerSupervisor:
                     self._owner_id, self._fencing_token, action_id,
                     status="completed" if result.status != "failed" else "failed",
                     error_code=result.error_code,
-                    result={"task": spec.name, "action_type": payload_type, **result.details},
+                    result={
+                        "task": spec.name,
+                        "action_type": payload_type,
+                        "outcome": result.outcome,
+                        **result.details,
+                    },
                 )
+
+    def _apply_retry_policy(self, task_name: str, result: TaskResult, delay: float) -> float:
+        retry = (result.details or {}).get("retry")
+        if isinstance(retry, dict):
+            scope = str(retry.get("dataset_scope") or "daily_bars")
+            target = str(retry.get("target_trade_date") or "")
+            if retry.get("clear") and target:
+                clearer = getattr(self._state, "clear_retry", None)
+                if clearer is not None:
+                    clearer(
+                        task_name=str(retry.get("task_name") or task_name),
+                        target_trade_date=target,
+                        dataset_scope=scope,
+                    )
+            elif retry.get("next_retry_at") and target:
+                upsert = getattr(self._state, "upsert_retry", None)
+                if upsert is not None:
+                    upsert(
+                        task_name=str(retry.get("task_name") or task_name),
+                        target_trade_date=target,
+                        dataset_scope=scope,
+                        reason=str(retry.get("reason") or "waiting_input"),
+                        next_retry_at=str(retry["next_retry_at"]),
+                    )
+        pending = []
+        lookup = getattr(self._state, "pending_retries_for_task", None)
+        if lookup is not None:
+            pending = lookup(task_name)
+        details = result.details or {}
+        current_target = ""
+        if isinstance(retry, dict):
+            current_target = str(retry.get("target_trade_date") or "")
+        if not current_target:
+            current_target = str(details.get("target_date") or "")
+        radar = details.get("radar")
+        if not current_target and isinstance(radar, dict):
+            current_target = str(radar.get("target_date") or "")
+        for item in pending:
+            deadline = item.get("next_retry_at")
+            if not deadline:
+                continue
+            remaining = seconds_until_deadline(str(deadline))
+            item_target = str(item.get("target_trade_date") or "")
+            if current_target and item_target and item_target != current_target:
+                # Expired rows for another session must not spin today's loop.
+                if remaining > 0.5:
+                    delay = min(delay, remaining)
+                continue
+            delay = min(delay, remaining)
+        return max(0.5, delay)
 
     async def _wait(self, task_name: str, delay: float) -> bool:
         """Sleep until the schedule fires, a manual trigger arrives, or stop.

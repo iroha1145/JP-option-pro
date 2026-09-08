@@ -1,12 +1,17 @@
 /**
  * 板块透视热力砖 — 对标美版 sectors/HeatMatrix。
  * 一块砖同时承载：当日中位涨跌 · 近20日中位涨跌 · 今日领涨（美版此处是 IV）。
- * 底色按所选口径连续映射（红涨绿跌）；缺数用虚线中性砖，绝不与「真持平」同色。
+ * 底色按所选口径连续映射，并跟随涨跌色彩习惯；缺数用虚线中性砖，绝不与「真持平」同色。
  */
+import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { fmtPct } from '@/lib/format';
 import { heatColor } from '@/lib/chart';
 import { SkeletonBlock } from '@/components/shared/Skeleton';
+import PointerTooltip from '@/components/shared/PointerTooltip';
+import { useColorMode } from '@/hooks/useColorMode';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
+import { EASE_PAPER } from '@/lib/motion';
 import { t } from '@/i18n/core';
 import type { SectorStrength } from '@/api/types';
 
@@ -33,12 +38,18 @@ function HeatTile({
   metric,
   selected,
   onSelect,
+  index,
 }: {
   sector: SectorStrength;
   metric: HeatMetric;
   selected: boolean;
   onSelect: () => void;
+  index: number;
 }) {
+  /* heatColor 在渲染期读 getColorMode()。不订阅则换盘后整块矩阵停在旧口径，
+     与同屏徽章 / 涨跌幅红绿相反，直到别的原因触发重绘才追上。 */
+  useColorMode();
+  const reduce = usePrefersReducedMotion();
   const primary = metricValue(sector, metric);
   const secondary = metric === 'r1' ? sector.median_return_20d : sector.median_return_1d;
   /* 「当日」と書くと今日の値だと読めてしまう —— 実際は直近取引日（引け後
@@ -54,57 +65,113 @@ function HeatTile({
   const share = sector.advancers_share;
 
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
-      aria-label={t('{name}，当日 {r1}，近20日 {r20}', {
-        name: sector.sector33_name,
-        r1: fmtPct(sector.median_return_1d),
-        r20: fmtPct(sector.median_return_20d),
-      })}
-      className={cn(
-        'group relative h-[92px] overflow-hidden rounded-md text-left shadow-sh-1 transition-[box-shadow,transform] duration-fast hover:-translate-y-0.5 hover:shadow-sh-2 md:h-[108px]',
-        primary === null && 'border border-dashed border-line-strong',
-        selected && 'ring-2 ring-brand-600 ring-offset-1',
-      )}
-      style={{ backgroundColor: bg }}
-    >
-      <span className="flex h-full flex-col justify-between p-3">
-        <span className="flex min-w-0 items-start justify-between gap-1.5">
-          <span className={cn('min-w-0 truncate text-[13px] font-semibold leading-[18px]', textMain)}>
-            {sector.sector33_name}
-          </span>
-          <span className={cn('shrink-0 font-mono text-micro tnum', textSub)}>
-            {t('{n} 只', { n: sector.member_count })}
-          </span>
-        </span>
-        <span>
-          <span className="flex items-baseline gap-1.5">
-            <span className={cn('font-mono text-[15px] font-semibold leading-5 tnum', textMain)}>
-              {fmtPct(primary)}
+    <PointerTooltip
+      passthrough
+      side="top"
+      width={192}
+      className="block h-full w-full"
+      contentClassName="p-2.5"
+      content={
+        <span className="block text-left">
+          <span className="eyebrow block">{sector.sector33_name}</span>
+          <span className="mt-1.5 block space-y-1 text-micro">
+            <span className="flex items-center justify-between gap-2">
+              <span className="text-ink-500">{t('1日 中位')}</span>
+              <span className="font-mono text-ink-800 tnum">{fmtPct(sector.median_return_1d)}</span>
             </span>
-            {/* 窄屏の 149px タイルには入らない（英語 "1d median" で確実に切れる）。
-                口径は直上の Segmented が示しているので端末幅では省く。 */}
-            <span className={cn('hidden truncate text-micro sm:inline', textSub)}>{primaryLabel}</span>
-          </span>
-          <span className={cn('block truncate font-mono text-micro tnum', textSub)}>
-            {secondaryLabel} {fmtPct(secondary)}
+            <span className="flex items-center justify-between gap-2">
+              <span className="text-ink-500">{t('20日 中位')}</span>
+              <span className="font-mono text-ink-800 tnum">{fmtPct(sector.median_return_20d)}</span>
+            </span>
+            {share !== null && (
+              <span className="flex items-center justify-between gap-2 border-t border-line pt-1">
+                <span className="text-ink-500">{t('上涨占比')}</span>
+                <span className="font-mono text-ink-800 tnum">{Math.round(share * 100)}%</span>
+              </span>
+            )}
+            {sector.leaders[0] && (
+              <span className="flex items-center justify-between gap-2">
+                <span className="text-ink-500">{t('今日领涨')}</span>
+                <span className="font-mono font-semibold text-ink-800">
+                  {sector.leaders[0].canonical_code.length === 5 && sector.leaders[0].canonical_code.endsWith('0')
+                    ? sector.leaders[0].canonical_code.slice(0, 4)
+                    : sector.leaders[0].canonical_code}
+                </span>
+              </span>
+            )}
           </span>
         </span>
-      </span>
+      }
+    >
+      <motion.button
+        type="button"
+        onClick={onSelect}
+        aria-pressed={selected}
+        aria-label={t('{name}，当日 {r1}，近20日 {r20}', {
+          name: sector.sector33_name,
+          r1: fmtPct(sector.median_return_1d),
+          r20: fmtPct(sector.median_return_20d),
+        })}
+        initial={reduce ? false : { opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.48, ease: EASE_PAPER, delay: Math.min(index * 0.04, 0.4) }}
+        whileHover={reduce ? undefined : { y: -3, transition: { duration: 0.24, ease: 'easeOut' } }}
+        className={cn(
+          'group relative h-[92px] w-full overflow-visible rounded-md text-left shadow-sh-1 transition-shadow duration-240 ease-out hover:shadow-sh-2 md:h-[108px]',
+          primary === null && 'border border-dashed border-line-strong',
+          selected && 'shadow-sh-2',
+        )}
+        style={{ backgroundColor: bg }}
+      >
+        {selected && (
+          <motion.span
+            layoutId="jp-sector-selected-bar"
+            className="absolute left-0 top-0 z-10 h-full w-[3px] rounded-l-md bg-brand-600"
+            initial={reduce ? false : { scaleY: 0 }}
+            animate={{ scaleY: 1 }}
+            transition={{ duration: 0.26, ease: EASE_PAPER }}
+            style={{ originY: 0.5 }}
+            aria-hidden="true"
+          />
+        )}
+        <span className="flex h-full flex-col justify-between p-3">
+          <span className="flex min-w-0 items-start justify-between gap-1.5">
+            <span className={cn('min-w-0 truncate text-[13px] font-semibold leading-[18px]', textMain)}>
+              {sector.sector33_name}
+            </span>
+            <span className={cn('shrink-0 font-mono text-micro tnum', textSub)}>
+              {t('{n} 只', { n: sector.member_count })}
+            </span>
+          </span>
+          <span>
+            <span className="flex items-baseline gap-1.5">
+              <span className={cn('font-mono text-[15px] font-semibold leading-5 tnum', textMain)}>
+                {fmtPct(primary)}
+              </span>
+              {/* 窄屏の 149px タイルには入らない（英語 "1d median" で確実に切れる）。
+                  口径は直上の Segmented が示しているので端末幅では省く。 */}
+              <span className={cn('hidden truncate text-micro sm:inline', textSub)}>{primaryLabel}</span>
+            </span>
+            <span className={cn('block truncate font-mono text-micro tnum', textSub)}>
+              {secondaryLabel} {fmtPct(secondary)}
+            </span>
+          </span>
+        </span>
 
-      {/* 底端细条＝业种内上涨股占比（中位数看不出「普涨」还是「被少数拉起」） */}
-      {share !== null && (
-        <span
-          className={cn('absolute inset-x-0 bottom-0 h-[3px] overflow-hidden', barTrack)}
-          aria-hidden="true"
-          title={t('上涨占比 {pct}', { pct: `${Math.round(share * 100)}%` })}
-        >
-          <span className={cn('block h-full', barFill)} style={{ width: `${Math.max(2, share * 100)}%` }} />
-        </span>
-      )}
-    </button>
+        {/* 底端细条＝业种内上涨股占比（中位数看不出「普涨」还是「被少数拉起」） */}
+        {share !== null && (
+          <span
+            className={cn('absolute inset-x-0 bottom-0 h-[3px] overflow-hidden rounded-b-md', barTrack)}
+            aria-hidden="true"
+          >
+            <span
+              className={cn('block h-full origin-left animate-grow-bar', barFill)}
+              style={{ width: `${Math.max(2, share * 100)}%`, animationDelay: `${index * 40 + 120}ms` }}
+            />
+          </span>
+        )}
+      </motion.button>
+    </PointerTooltip>
   );
 }
 
@@ -121,13 +188,14 @@ export default function HeatMatrix({
 }) {
   return (
     <div className={GRID_CLASS} role="list" aria-label={t('板块透视')}>
-      {sectors.map((sector) => (
-        <span key={sector.sector33_code} role="listitem" className="contents">
+      {sectors.map((sector, index) => (
+        <span key={sector.sector33_code} role="listitem" className="min-w-0">
           <HeatTile
             sector={sector}
             metric={metric}
             selected={selectedCode === sector.sector33_code}
             onSelect={() => onSelect(sector.sector33_code)}
+            index={index}
           />
         </span>
       ))}
@@ -138,8 +206,8 @@ export default function HeatMatrix({
 export function HeatMatrixSkeleton() {
   return (
     <div className={GRID_CLASS} aria-hidden="true">
-      {Array.from({ length: 12 }, (_, index) => (
-        <SkeletonBlock key={index} className="h-[104px] rounded-md" />
+      {Array.from({ length: 33 }, (_, index) => (
+        <SkeletonBlock key={index} className="h-[92px] rounded-md md:h-[108px]" />
       ))}
     </div>
   );

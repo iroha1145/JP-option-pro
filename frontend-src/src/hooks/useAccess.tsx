@@ -13,7 +13,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { accessApi } from '@/api/modules';
+import { accessApi, accountApi } from '@/api/modules';
 import { PRINCIPAL_INVALID_EVENT } from '@/api/client';
 import { dropQueryRegistry, setQueryPrincipal } from '@/api/queryRegistry';
 import type { AccessStatus } from '@/api/types';
@@ -24,11 +24,18 @@ interface AccessContextValue {
   mode: 'private_network' | 'password' | null;
   /** 访客账号（与美股版共库；不含任何 owner 权限）。 */
   accountUsername: string | null;
+  /** 任一主体已登录（Owner 或访客账号）。 */
+  isSignedIn: boolean;
+  /** 显示用用户名：Owner 为 admin，访客为账号名。 */
+  username: string | null;
+  isCustomer: boolean;
+  loading: boolean;
   /** 自选可写主体：owner 或已登录的访客账号。 */
   canManageWatchlist: boolean;
   identityUnavailable: boolean;
   refresh: () => Promise<void>;
   login: (password: string, username?: string) => Promise<void>;
+  register: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -93,24 +100,42 @@ export function AccessProvider({ children }: { children: ReactNode }) {
     [refresh],
   );
 
+  const register = useCallback(
+    async (username: string, password: string) => {
+      await accountApi.register(username, password);
+      await refresh();
+    },
+    [refresh],
+  );
+
   const logout = useCallback(async () => {
     await accessApi.logout();
     await refresh();
   }, [refresh]);
 
+  const isOwner = Boolean(status?.is_owner);
+  const accountUsername = status?.account?.logged_in ? (status.account.username ?? null) : null;
+  const isCustomer = Boolean(!isOwner && accountUsername);
+  const isSignedIn = isOwner || isCustomer;
+
   const value = useMemo<AccessContextValue>(
     () => ({
       status,
-      isOwner: Boolean(status?.is_owner),
+      isOwner,
       mode: status?.mode ?? null,
-      accountUsername: status?.account?.logged_in ? (status.account.username ?? null) : null,
-      canManageWatchlist: Boolean(status?.is_owner || status?.account?.logged_in),
+      accountUsername,
+      isSignedIn,
+      username: isOwner ? 'admin' : accountUsername,
+      isCustomer,
+      loading: status === null && !identityUnavailable,
+      canManageWatchlist: isSignedIn,
       identityUnavailable,
       refresh,
       login,
+      register,
       logout,
     }),
-    [status, identityUnavailable, refresh, login, logout],
+    [status, isOwner, accountUsername, isSignedIn, isCustomer, identityUnavailable, refresh, login, register, logout],
   );
 
   return <AccessContext.Provider value={value}>{children}</AccessContext.Provider>;

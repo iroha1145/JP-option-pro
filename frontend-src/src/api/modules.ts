@@ -256,6 +256,15 @@ export const workerApi = {
       body,
     );
   },
+  action(actionId: number) {
+    return get<{
+      action_id: number;
+      action_type: string;
+      status: string;
+      error_code?: string | null;
+      result?: Record<string, unknown>;
+    }>(`/worker/actions/${actionId}`, { cache: 'reload' });
+  },
 };
 
 export interface StrengthScanParams {
@@ -271,8 +280,8 @@ export interface StrengthScanParams {
 }
 
 export const strengthApi = {
-  scan(params: StrengthScanParams = {}): Promise<StrengthScanResponse> {
-    return get(`/strength/scan?${toQuery({ ...params })}`);
+  scan(params: StrengthScanParams = {}, options?: { cache?: RequestCache }): Promise<StrengthScanResponse> {
+    return get(`/strength/scan?${toQuery({ ...params })}`, options);
   },
   market(): Promise<{ trade_date: string; built_at: string; market_regime: MarketRegime; universe_count: number }> {
     return get('/strength/market');

@@ -10,10 +10,18 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from app.api.deps import core_repository
 from app.domain.constants import SECTOR33
+from app.domain.timeutil import iso_date, now_jst, today_jst
+from app.personal_config import get_personal_config
+from app.repositories.base import utc_now_iso
+from app.services.publication import (
+    evaluate_freshness,
+    expected_trade_date,
+    strength_etag,
+)
 from app.services.strength_scan import (
     PROFILES,
     STRENGTH_SCORE_VERSION,
@@ -29,12 +37,62 @@ router = APIRouter(prefix="/api/strength", tags=["strength"])
 _MAX_TOP = 200
 
 
+def _expected_trade_date(repository) -> str | None:
+    config = get_personal_config()
+    return expected_trade_date(
+        today=iso_date(today_jst()),
+        now=now_jst(),
+        batch_hhmm=config.sync.daily_batch_time_jst,
+        latest_trading_day=repository.latest_trading_day,
+        session_status=repository.is_trading_day,
+    )
+
+
+def _publication_fields(meta: dict, *, expected: str | None) -> dict:
+    stored_version = meta.get("stored_score_version")
+    if stored_version is None:
+        stored_version = meta.get("score_version")
+    coverage = meta.get("coverage") or {}
+    freshness = evaluate_freshness(
+        stored_trade_date=meta.get("trade_date"),
+        expected=expected,
+        stored_score_version=stored_version,
+        current_score_version=STRENGTH_SCORE_VERSION,
+        coverage=coverage,
+    )
+    return {
+        "queried_at": utc_now_iso(),
+        "publication_id": meta.get("publication_id"),
+        "stored_score_version": stored_version,
+        "expected_score_version": STRENGTH_SCORE_VERSION,
+        "score_compatible": freshness["score_compatible"],
+        "expected_trade_date": expected,
+        "input_data_through": meta.get("input_data_through") or meta.get("trade_date"),
+        "index_input_date": meta.get("index_input_date"),
+        "coverage": coverage,
+        "freshness": freshness["freshness"],
+        "calendar_state": freshness["calendar_state"],
+        "version_state": freshness["version_state"],
+        "query_kind": "filter",
+    }
+
+
+def _maybe_304(request: Request, response: Response, etag: str) -> bool:
+    response.headers["ETag"] = f'"{etag}"'
+    response.headers["Cache-Control"] = "private, must-revalidate"
+    incoming = request.headers.get("if-none-match")
+    if incoming and incoming.strip() in {etag, f'"{etag}"'}:
+        response.status_code = 304
+        return True
+    return False
+
+
 def _load_snapshot() -> tuple[list[dict], dict]:
     repository = core_repository()
     if not repository.exists():
         raise HTTPException(status_code=503, detail={"code": "data_not_initialized"})
-    meta = repository.strength_meta()
-    if meta is None:
+    snapshot = repository.strength_snapshot()
+    if snapshot is None:
         raise HTTPException(
             status_code=503,
             detail={
@@ -42,11 +100,13 @@ def _load_snapshot() -> tuple[list[dict], dict]:
                 "message": "強度断面は未生成です（引け後バッチ完了後に利用可能）",
             },
         )
-    return repository.strength_rows_all(), meta
+    return snapshot
 
 
 @router.get("/scan")
 def strength_scan(
+    request: Request,
+    response: Response,
     timeframe: str = Query(default="all"),
     profile: str = Query(default="balanced"),
     top: int = Query(default=20, ge=1, le=_MAX_TOP),
@@ -69,6 +129,18 @@ def strength_scan(
             raise HTTPException(status_code=422, detail={"code": "invalid_sector"})
 
     stored, meta = _load_snapshot()
+    repository = core_repository()
+    expected = _expected_trade_date(repository)
+    extra = _publication_fields(meta, expected=expected)
+    etag = strength_etag(
+        publication_id=extra.get("publication_id"),
+        stored_score_version=extra.get("stored_score_version"),
+        expected_trade_date_value=expected,
+        freshness={"freshness": extra["freshness"], "calendar_state": extra["calendar_state"]},
+        universe_count=int(meta.get("universe_count") or 0),
+    )
+    if _maybe_304(request, response, etag):
+        return {}
     view = build_view_rows(stored, meta["regime"], profile=profile)
 
     # サーバ側フィルタ: 全評価済み母集団に適用（米国版はクライアント側条件が
@@ -100,7 +172,8 @@ def strength_scan(
     return {
         "trade_date": meta["trade_date"],
         "built_at": meta["built_at"],
-        "score_version": STRENGTH_SCORE_VERSION,
+        "score_version": extra.get("stored_score_version"),
+        **extra,
         "params": {
             "timeframe": timeframe, "profile": profile, "top": top,
             "sector_id": sector_id, "min_price": min_price,
@@ -177,11 +250,14 @@ def _public_row(row: dict) -> dict:
 @router.get("/market")
 def strength_market() -> dict:
     _stored, meta = _load_snapshot()
+    extra = _publication_fields(meta, expected=_expected_trade_date(core_repository()))
     return {
         "trade_date": meta["trade_date"],
         "built_at": meta["built_at"],
         "market_regime": meta["regime"],
         "universe_count": meta["universe_count"],
+        **extra,
+        "score_version": extra.get("stored_score_version"),
     }
 
 

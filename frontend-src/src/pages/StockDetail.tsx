@@ -5,26 +5,46 @@
  *  K线叠加: 基底阻力带 markArea + 枢轴/失效位 markLine + 摆动点。 */
 
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router';
-import { stocksApi, watchlistApi, workerApi } from '@/api/modules';
+import { motion } from 'framer-motion';
+import { useNavigate, useParams } from 'react-router';
+import { useNow } from '@/hooks/useNow';
+import { useColorMode } from '@/hooks/useColorMode';
+import SessionLED from '@/components/shared/SessionLED';
+import { tokyoSession } from '@/lib/tokyoSession';
+import { stocksApi, workerApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
+import { useTickFlash } from '@/hooks/useTickFlash';
+import TickPrice from '@/components/shared/TickPrice';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import { remoteState } from '@/hooks/remoteState';
 import EmptyState from '@/components/shared/EmptyState';
-import ChangeBadge from '@/components/shared/ChangeBadge';
-import Segmented from '@/components/shared/Segmented';
+import EmptyRetryButton from '@/components/shared/EmptyRetryButton';
+import SourceNote from '@/components/shared/SourceNote';
+import { InsightValue } from '@/components/shared/InsightCard';
+import WatchlistToggle from '@/components/shared/WatchlistToggle';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import { SkeletonCard } from '@/components/shared/Skeleton';
 import ReactECharts from '@/components/charts/ReactECharts';
 import InfoHint from '@/components/shared/InfoHint';
 import TickAnalyticsPanel from '@/components/charts/TickAnalyticsPanel';
 import ShortBehaviorPanel from '@/components/domain/ShortBehaviorPanel';
+import StockChart, { type ChartInterval, type ChartRange, type PriceMode } from '@/components/detail/StockChart';
+import KeyStats from '@/components/detail/KeyStats';
 import { CH, baseGrid, categoryAxis, glassTooltip, insightLineSeries, valueAxis } from '@/lib/chart';
 import { DataThrough, ScoreBar, SignalChip, StateChip } from '@/components/domain';
+import StrengthBar from '@/components/shared/StrengthBar';
 import { useAccess } from '@/hooks/useAccess';
-import { STRUCTURE_HINTS, TECHNICAL_HINTS, type ScoreHint } from '@/lib/indicatorHints';
+import { useToast } from '@/hooks/useToast';
+import SoftBadge from '@/components/shared/SoftBadge';
+import CodeMark from '@/components/shared/CodeMark';
+import Icon from '@/components/icons';
+import { RADAR_SCORE_HINTS, STRUCTURE_HINTS, TECHNICAL_HINTS, type ScoreHint } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { quoteSourceLabel } from '@/lib/quoteSource';
-import { fmtDate, fmtDateShort, fmtPct, fmtPrice, fmtShares, fmtTimeJst, fmtYenCompact } from '@/lib/format';
+import { codesMatch, pickQuoteForCode } from '@/lib/securityIdentity';
+import { dateAnchorParts, fmtDate, fmtDateShort, fmtPct, fmtPrice, fmtShares, fmtTimeJst, fmtYenCompact } from '@/lib/format';
+import { jstToday } from '@/components/earnings/types';
+import { cn } from '@/lib/utils';
 import type {
   FinancialSummaryView,
   IntradayChart,
@@ -35,17 +55,32 @@ import type {
   TickView,
 } from '@/api/types';
 
-type Range = '3m' | '6m' | '1y' | '3y' | '10y';
-type PriceMode = 'adjusted' | 'raw';
-type Interval = '1d' | '60m' | '5m' | '1m' | 'tick';
+/** 用收盘/现价与涨跌比率还原绝对变动，不另编字段。 */
+function yenChangeFromPct(price: number | null | undefined, changePct: number | null | undefined): number | null {
+  if (price == null || changePct == null || !Number.isFinite(price) || !Number.isFinite(changePct)) return null;
+  const denom = 1 + changePct;
+  if (denom === 0) return null;
+  return (price * changePct) / denom;
+}
 
 export default function StockDetail() {
   const { code = '' } = useParams();
-  const [range, setRange] = useState<Range>('6m');
-  const [interval, setInterval] = useState<Interval>('1d');
+  const navigate = useNavigate();
+  const [range, setRange] = useState<ChartRange>('6m');
+  const [interval, setInterval] = useState<ChartInterval>('1d');
   const [priceMode, setPriceMode] = useState<PriceMode>('adjusted');
-  const overview = usePolling(() => stocksApi.overview(code), null, [code]);
-  const chart = usePolling(() => stocksApi.chart(code, range), null, [code, range]);
+  const overview = usePolling(
+    () => stocksApi.overview(code),
+    null,
+    [code],
+    { identity: code, belongsTo: (data) => codesMatch(data.security.canonical_code, code) },
+  );
+  const chart = usePolling(
+    () => stocksApi.chart(code, range),
+    null,
+    [code, range],
+    { identity: code, belongsTo: (data) => codesMatch(data.canonical_code, code) },
+  );
   const [intradayPollMs, setIntradayPollMs] = useState<number | null>(null);
   const [tickPollMs, setTickPollMs] = useState<number | null>(null);
   const wantIntraday = interval !== '1d' && interval !== 'tick';
@@ -57,313 +92,310 @@ export default function StockDetail() {
         : Promise.resolve(null),
     wantIntraday ? intradayPollMs : null,
     [code, interval, wantIntraday],
+    {
+      identity: code,
+      belongsTo: (data) => data == null || codesMatch(data.canonical_code, code),
+    },
   );
   const ticks = usePolling(
     () => (wantTicks ? stocksApi.tickView(code) : Promise.resolve(null)),
     wantTicks ? tickPollMs : null,
     [code, interval, wantTicks],
+    {
+      identity: code,
+      belongsTo: (data) => data == null || codesMatch(data.canonical_code, code),
+    },
   );
   // Derive the poll cadence from the committed (generation-guarded) response instead
   // of setting state inside the fetcher: that avoided a stale in-flight response
   // clobbering the cadence for a newer selection.
   useEffect(() => {
-    setIntradayPollMs(wantIntraday && intraday.data?.reason === 'fetching' ? 5_000 : null);
-  }, [wantIntraday, intraday.data]);
+    const bound = intraday.data && codesMatch(intraday.data.canonical_code, code) ? intraday.data : null;
+    setIntradayPollMs(wantIntraday && bound?.reason === 'fetching' ? 5_000 : null);
+  }, [wantIntraday, intraday.data, code]);
   useEffect(() => {
-    setTickPollMs(wantTicks && ticks.data?.reason === 'fetching' ? 8_000 : null);
-  }, [wantTicks, ticks.data]);
+    const bound = ticks.data && codesMatch(ticks.data.canonical_code, code) ? ticks.data : null;
+    setTickPollMs(wantTicks && bound?.reason === 'fetching' ? 8_000 : null);
+  }, [wantTicks, ticks.data, code]);
   /* 遅延気配は 1 分ポーリング。J-Quants は場中に何も出さないので、
      「今いくらか」はこの非公式・15分遅延の値でしか埋められない。 */
-  const live = usePolling(() => stocksApi.intradayQuotes([code]), 60_000, [code]);
+  const live = usePolling(
+    () => stocksApi.intradayQuotes([code]),
+    60_000,
+    [code],
+    { identity: code },
+  );
   const { isOwner } = useAccess();
-  const [watchNote, setWatchNote] = useState<string | null>(null);
+  const toast = useToast();
   const [fetchNote, setFetchNote] = useState<string | null>(null);
+  const now = useNow(30_000);
+  const session = tokyoSession(now);
+  const watchlistToggle = code ? (
+    <WatchlistToggle canonicalCode={code} displayCode={code} />
+  ) : null;
 
   const state = remoteState(overview);
-  const liveQuote = live.data?.enabled ? (live.data.quotes[Object.keys(live.data.quotes)[0]] ?? null) : null;
-  const technical = overview.data?.technical ?? null;
+  const liveQuote = live.data?.enabled ? pickQuoteForCode(live.data.quotes, code) : null;
+  const overviewData =
+    overview.data && codesMatch(overview.data.security.canonical_code, code) ? overview.data : null;
+  const chartData = chart.data && codesMatch(chart.data.canonical_code, code) ? chart.data : null;
+  const ticksData = ticks.data && codesMatch(ticks.data.canonical_code, code) ? ticks.data : null;
+  const intradayData =
+    intraday.data && codesMatch(intraday.data.canonical_code, code) ? intraday.data : null;
+  const technical = overviewData?.technical ?? null;
+  const headerQuote = useMemo(() => {
+    const boundCode = overviewData?.security.canonical_code;
+    if (!boundCode) return [];
+    return [{ key: boundCode, price: liveQuote?.price ?? overviewData?.quote.close ?? null }];
+  }, [overviewData, liveQuote]);
+  const headerFlashes = useTickFlash(headerQuote, (row) => row.key, (row) => row.price);
+  const todayKey = jstToday();
 
-  const chartOption = useMemo(() => {
-    const bars = chart.data?.bars ?? [];
-    if (bars.length === 0) return null;
-    const pick = (
-      bar: (typeof bars)[number],
-      adj: 'adj_open' | 'adj_high' | 'adj_low' | 'adj_close',
-      raw: 'open' | 'high' | 'low' | 'close',
-    ) => (priceMode === 'adjusted' ? (bar[adj] ?? bar[raw]) : bar[raw]);
-    const dates = bars.map((bar) => bar.trade_date);
-    const shortDates = dates.map((date) => date.slice(2));
-    const candles = bars.map((bar) => [
-      pick(bar, 'adj_open', 'open'),
-      pick(bar, 'adj_close', 'close'),
-      pick(bar, 'adj_low', 'low'),
-      pick(bar, 'adj_high', 'high'),
-    ]);
-    const turnover = bars.map((bar) => bar.turnover_value);
-
-    const overlays = technical?.chart_overlays;
-    const markLines: Record<string, unknown>[] = [];
-    const markPoints: ({ name: string } & Record<string, unknown>)[] = [];
-    if (priceMode === 'adjusted' && overlays) {
-      if (overlays.invalidation_price != null) {
-        markLines.push({
-          yAxis: overlays.invalidation_price,
-          lineStyle: { color: CH.down600, type: 'dotted', width: 1 },
-          label: { formatter: t('失效位'), position: 'insideEndBottom', color: CH.down600, fontSize: 10 },
-        });
-      }
-      const markSwing = (points: { trade_date: string; price: number | null }[], isHigh: boolean) => {
-        for (const point of points.slice(-3)) {
-          const index = dates.indexOf(point.trade_date);
-          if (index >= 0 && point.price != null) {
-            markPoints.push({
-              name: isHigh ? 'swing-high' : 'swing-low',
-              coord: [index, point.price],
-              symbol: 'triangle',
-              symbolRotate: isHigh ? 180 : 0,
-              symbolSize: 8,
-              itemStyle: { color: isHigh ? CH.warn600 : CH.ai600 },
-              label: { show: false },
-            });
-          }
-        }
-      };
-      markSwing(overlays.swing_highs ?? [], true);
-      markSwing(overlays.swing_lows ?? [], false);
-    }
-
-    return {
-      grid: [
-        baseGrid({ top: 8, bottom: '24%', left: 4, right: 48 }),
-        baseGrid({ top: '80%', bottom: 2, left: 4, right: 48 }),
-      ],
-      tooltip: glassTooltip({ trigger: 'axis' }),
-      xAxis: [
-        { ...categoryAxis(shortDates), gridIndex: 0 },
-        { ...categoryAxis(shortDates), gridIndex: 1, axisLabel: { show: false } },
-      ],
-      yAxis: [
-        { ...valueAxis({ scale: true, position: 'right' }), gridIndex: 0 },
-        { ...valueAxis(), gridIndex: 1, axisLabel: { show: false }, splitLine: { show: false } },
-      ],
-      series: [
-        {
-          type: 'candlestick' as const,
-          data: candles,
-          xAxisIndex: 0,
-          yAxisIndex: 0,
-          itemStyle: {
-            color: CH.up600, color0: CH.down600,
-            borderColor: CH.up600, borderColor0: CH.down600,
-          },
-          markLine: { symbol: 'none', animation: false, data: markLines },
-          markPoint: { animation: false, data: markPoints },
-          ...(priceMode === 'adjusted'
-          && overlays?.resistance_high != null
-          && overlays?.resistance_low != null
-            ? {
-                markArea: {
-                  silent: true,
-                  itemStyle: { color: CH.brand400, opacity: 0.08 },
-                  data: [
-                    [{ yAxis: overlays.resistance_low }, { yAxis: overlays.resistance_high }] as [
-                      { yAxis: number },
-                      { yAxis: number },
-                    ],
-                  ],
-                },
-              }
-            : {}),
-        },
-        {
-          type: 'bar' as const,
-          data: turnover,
-          xAxisIndex: 1,
-          yAxisIndex: 1,
-          itemStyle: { color: CH.brand400, opacity: 0.4 },
-        },
-      ],
-    };
-  }, [chart.data, priceMode, technical]);
+  const goBack = () => {
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (idx > 0) navigate(-1);
+    else navigate('/watchlist', { replace: true });
+  };
+  const backButton = (
+    <button
+      type="button"
+      onClick={goBack}
+      className="inline-flex items-center gap-1.5 rounded-md border border-line-strong bg-card px-3 py-1.5 text-caption font-medium text-ink-600 shadow-btn transition-colors duration-fast hover:bg-paper-2 hover:text-ink-800"
+    >
+      <Icon name="chevron-right" size={14} className="rotate-180" />
+      {t('返回')}
+    </button>
+  );
 
   if (state === 'loading') {
-    return <SkeletonCard className="mt-6 h-96" />;
-  }
-  if (state === 'error' || !overview.data) {
     return (
-      <EmptyState
-        variant="error"
-        title={t('加载失败')}
-        description={String(overview.error?.message ?? '')}
-        className="mt-12"
-      />
+      <div className="space-y-5" aria-busy="true">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {backButton}
+            {watchlistToggle}
+          </div>
+          <span className="eyebrow">STOCK · {code}</span>
+        </div>
+        <SkeletonCard className="h-24" />
+        <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
+          <SkeletonCard className="h-[420px] xl:col-span-8" />
+          <div className="grid content-start gap-6 xl:col-span-4">
+            <SkeletonCard className="h-48" />
+            <SkeletonCard className="h-32" />
+            <SkeletonCard className="h-32" />
+            <SkeletonCard className="h-32" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (state === 'error' || !overviewData) {
+    return (
+      <div>
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {backButton}
+            {watchlistToggle}
+          </div>
+          <span className="eyebrow">STOCK · {code}</span>
+        </div>
+        <section className="card-surface">
+          <EmptyState
+            variant="error"
+            image="/empty-chart.svg"
+            title={t('加载失败')}
+            description={String(overview.error?.message ?? '')}
+            action={<EmptyRetryButton onClick={() => overview.refresh({ force: true })} refreshing={overview.refreshing} />}
+          />
+        </section>
+      </div>
     );
   }
 
-  const data = overview.data;
+  const data = overviewData;
   const security = data.security;
 
   return (
-    <div className="space-y-5">
-      {/* ヘッダー */}
-      <header className="border-b border-line pb-3">
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {backButton}
+          <WatchlistToggle
+            canonicalCode={security.canonical_code}
+            displayCode={security.display_code}
+          />
+        </div>
+        <span className="eyebrow">STOCK · {security.display_code}</span>
+      </div>
+
+      {/* ヘッダー：代码主读 + 名称次读，对齐美站 PriceHeader 节奏；不搬 Logo / 实时伪装。 */}
+      <motion.header
+        className="border-b border-line pb-3"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.48, ease: [0.16, 1, 0.3, 1] }}
+      >
         <div className="flex flex-wrap items-center gap-3">
-          <span className="rounded-md bg-brand-50 px-2 py-1 font-mono text-h3 font-bold text-brand-700">
-            {security.display_code}
-          </span>
-          <h1 className="font-display text-display-m text-ink-900">{security.name_ja ?? security.name_en ?? '—'}</h1>
-          {security.active === 0 && (
-            <span className="rounded-sm bg-down-50 px-1.5 py-0.5 text-micro text-down-700">
-              {t('上場廃止')} {security.delisted_date ?? ''}
-            </span>
-          )}
-          {isOwner && (
-            <button
-              type="button"
-              className="ml-auto rounded-md border border-line bg-card px-2.5 py-1 text-caption text-ink-600 hover:bg-brand-50"
-              onClick={async () => {
-                try {
-                  const result = await watchlistApi.add(security.canonical_code);
-                  setWatchNote(result.created ? '✓' : '★');
-                } catch {
-                  setWatchNote('—');
-                }
-              }}
-            >
-              {watchNote ?? `+ ${t('加入自选')}`}
-            </button>
+          <CodeMark code={security.display_code} size={40} />
+          <div className="min-w-0">
+            <h1 className="flex flex-wrap items-baseline gap-x-2.5">
+              <span className="font-display text-[22px] leading-[28px] font-bold text-ink-900">
+                {security.display_code}
+              </span>
+              <span className="text-body-s text-ink-500">{security.name_ja ?? security.name_en ?? '—'}</span>
+            </h1>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <SessionLED session={session} />
+              {security.sector33_name && <SoftBadge>{security.sector33_name}</SoftBadge>}
+              {security.market_name && <SoftBadge>{security.market_name}</SoftBadge>}
+              {security.scale_category && <SoftBadge>{security.scale_category}</SoftBadge>}
+              {security.margin_name && <SoftBadge>{security.margin_name}</SoftBadge>}
+              {security.active === 0 && (
+                <SoftBadge tone="warn">
+                  {t('上場廃止')} {security.delisted_date ?? ''}
+                </SoftBadge>
+              )}
+            </div>
+          </div>
+          {data.radar_events[0] && (
+            <div className="ml-auto text-right">
+              <p className="eyebrow">
+                {t('告警优先级')}
+                <InfoHint hint={RADAR_SCORE_HINTS.优先级} side="bottom" align="end" size={12} className="ml-1" />
+              </p>
+              <StrengthBar score={data.radar_events[0].alert_priority} width={72} className="mt-1.5" />
+            </div>
           )}
         </div>
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-ink-500">
-          <span>{security.market_name ?? '—'}</span>
-          <span>{security.sector33_name ?? '—'}</span>
-          {security.scale_category && <span>{security.scale_category}</span>}
-          {security.margin_name && <span>{security.margin_name}</span>}
-        </div>
-        <div className="mt-2 flex flex-wrap items-end gap-4">
+        <div className="mt-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
           {liveQuote ? (
-            <>
+            <div className="min-w-0">
               {/* 遅延気配を主表示にするが、必ず「遅延・非公式」と併記する。
                   公式の確定終値は隣に小さく残し、どちらの数字かを曖昧にしない。 */}
-              <span className="flex flex-col">
-                <span className="flex items-baseline gap-2">
-                  <span className="font-mono text-display-l tnum text-ink-900">{fmtPrice(liveQuote.price)}</span>
-                  <ChangeBadge value={liveQuote.change_pct} />
-                </span>
-                <span className="mt-0.5 flex items-center gap-1 text-micro text-warn-700">
-                  <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
-                  {quoteSourceLabel(live.data).text}
-                  {liveQuote.as_of_epoch ? ` · ${fmtTimeJst(liveQuote.as_of_epoch)}` : ''}
-                </span>
+              <div
+                className={cn(
+                  'tick-flash rounded-xs',
+                  headerFlashes[security.canonical_code] === 'up' && 'tick-flash-up',
+                  headerFlashes[security.canonical_code] === 'down' && 'tick-flash-down',
+                )}
+              >
+                <InsightValue
+                  size="xl"
+                  value={
+                    <TickPrice flash={headerFlashes[security.canonical_code]}>
+                      {fmtPrice(liveQuote.price)}
+                    </TickPrice>
+                  }
+                  changePct={liveQuote.change_pct}
+                  change={yenChangeFromPct(liveQuote.price, liveQuote.change_pct)}
+                  basis={t('vs 昨收')}
+                />
+              </div>
+              <span className="mt-0.5 flex items-center gap-1 text-micro text-warn-700">
+                <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
+                {quoteSourceLabel(live.data).text}
+                {liveQuote.as_of_epoch ? ` · ${fmtTimeJst(liveQuote.as_of_epoch)}` : ''}
               </span>
-              <span className="flex flex-col text-caption text-ink-400">
-                <span className="font-mono tnum text-ink-600">{fmtPrice(data.quote.close)}</span>
-                <span>{t('官方终值')} {data.quote.trade_date ?? ''}</span>
+              <span className="mt-1 block font-mono text-micro tnum text-ink-400">
+                {t('官方终值')} {fmtPrice(data.quote.close)} {data.quote.trade_date ?? ''}
               </span>
-            </>
+            </div>
           ) : (
-            <>
-              <span className="font-mono text-display-l tnum text-ink-900">{fmtPrice(data.quote.close)}</span>
-              <ChangeBadge value={data.quote.change_pct} />
-            </>
+            <div className="min-w-0">
+              <div
+                className={cn(
+                  'tick-flash rounded-xs',
+                  headerFlashes[security.canonical_code] === 'up' && 'tick-flash-up',
+                  headerFlashes[security.canonical_code] === 'down' && 'tick-flash-down',
+                )}
+              >
+                <InsightValue
+                  size="xl"
+                  value={
+                    <TickPrice flash={headerFlashes[security.canonical_code]}>
+                      {fmtPrice(data.quote.close)}
+                    </TickPrice>
+                  }
+                  changePct={data.quote.change_pct}
+                  change={yenChangeFromPct(data.quote.close, data.quote.change_pct)}
+                  basis={t('vs 昨收')}
+                />
+              </div>
+            </div>
           )}
-          <span className="text-body-s text-ink-500">
-            {t('成交额')} <span className="font-mono tnum">{fmtYenCompact(data.quote.turnover_value)}</span>
-          </span>
-          <DataThrough date={data.quote.trade_date} className="ml-auto" />
+          <p className="pb-1.5 text-right font-mono text-micro text-ink-500 tnum">
+            {t('成交额')} {fmtYenCompact(data.quote.turnover_value)}
+            {data.quote.volume != null ? ` · ${fmtShares(data.quote.volume)}${t('株')}` : ''}
+          </p>
         </div>
-      </header>
+        <DataThrough date={data.quote.trade_date} className="mt-2" />
+      </motion.header>
 
       {/* 行1: K線 + 右侧紧凑栏 */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <section className="card-surface rounded-lg p-3 xl:col-span-8">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <span className="flex flex-wrap items-center gap-2">
-              <Segmented<Interval>
-                options={[
-                  { value: '1d', label: t('日K') },
-                  { value: '60m', label: t('60分') },
-                  { value: '5m', label: t('5分') },
-                  { value: '1m', label: t('1分') },
-                  { value: 'tick', label: t('逐笔') },
-                ]}
-                value={interval}
-                onChange={setInterval}
-              />
-              {interval === '1d' && (
-                <Segmented<Range>
-                  options={(['3m', '6m', '1y', '3y', '10y'] as Range[]).map((value) => ({ value, label: value.toUpperCase() }))}
-                  value={range}
-                  onChange={setRange}
-                />
-              )}
-            </span>
-            <span className="flex items-center gap-2">
-              <span className="flex items-center gap-1 text-caption text-ink-400">
-                {t('图例')}
-                <InfoHint hint={STRUCTURE_HINTS.chart_overlays} align="end" />
-              </span>
-              {interval === '1d' && (
-                <Segmented<PriceMode>
-                  options={[
-                    { value: 'adjusted', label: t('复权') },
-                    { value: 'raw', label: t('不复权') },
-                  ]}
-                  value={priceMode}
-                  onChange={setPriceMode}
-                />
-              )}
-            </span>
-          </div>
-          {interval === '1d' ? (
-            chartOption ? (
-              <ReactECharts className="h-72 w-full" option={chartOption} ariaLabel={`${security.display_code} chart`} />
-            ) : chart.loading ? (
-              <SkeletonCard className="h-72" />
-            ) : (
-              <EmptyState title={t('暂无数据')} />
-            )
-          ) : interval === 'tick' ? (
+      <div className="mt-8 grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
+        <StockChart
+          displayCode={security.display_code}
+          interval={interval}
+          onInterval={setInterval}
+          range={range}
+          onRange={setRange}
+          priceMode={priceMode}
+          onPriceMode={setPriceMode}
+          bars={chartData?.bars}
+          barsLoading={chart.loading}
+          overlays={technical?.chart_overlays}
+          onRetry={() => chart.refresh({ force: true })}
+        >
+          {interval === 'tick' ? (
             <TickPane
-              data={ticks.data ?? null}
+              data={ticksData ?? null}
               loading={ticks.loading}
               isOwner={isOwner}
               fetchNote={fetchNote}
               onFetch={async () => {
                 try {
                   await workerApi.trigger('tick_fetch', { code: security.canonical_code });
+                  toast.success(t('逐笔'), t('已提交，数据到达后刷新本页'));
                   setFetchNote(t('已提交，数据到达后刷新本页'));
                 } catch (error) {
-                  setFetchNote(String((error as Error).message ?? error));
+                  const message = String((error as Error).message ?? error);
+                  toast.error(t('逐笔'), message);
+                  setFetchNote(message);
                 }
               }}
               onRefresh={() => ticks.refresh({ force: true })}
             />
           ) : (
             <IntradayPane
-              data={intraday.data ?? null}
+              data={intradayData ?? null}
               loading={intraday.loading}
               isOwner={isOwner}
               fetchNote={fetchNote}
               onFetch={async () => {
                 try {
                   await workerApi.trigger('intraday_fetch', { code: security.canonical_code });
+                  toast.success(t('盘中'), t('已提交，数据到达后刷新本页'));
                   setFetchNote(t('已提交，数据到达后刷新本页'));
                 } catch (error) {
-                  setFetchNote(String((error as Error).message ?? error));
+                  const message = String((error as Error).message ?? error);
+                  toast.error(t('盘中'), message);
+                  setFetchNote(message);
                 }
               }}
               onRefresh={() => intraday.refresh({ force: true })}
             />
           )}
-        </section>
+        </StockChart>
 
-        <div className="grid content-start gap-4 xl:col-span-4">
+        <div className="grid content-start gap-6 xl:col-span-4">
+          <KeyStats code={code} quote={data.quote} />
           {/* 雷达 */}
-          <section className="card-surface rounded-lg p-3">
-            <h2 className="mb-2 text-body font-medium text-ink-900">{t('突破雷达')}</h2>
+          <section className="card-surface p-5">
+            <p className="eyebrow">BREAKOUT RADAR</p>
+            <h3 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('突破雷达')}</h3>
             {data.radar_events.length === 0 ? (
-              <p className="text-caption text-ink-400">{t('暂无相关雷达事件')}</p>
+              <PanelEmpty image="/empty-radar.svg" title={t('暂无相关雷达事件')} />
             ) : (
               <ul className="space-y-1.5">
                 {data.radar_events.slice(0, 3).map((event) => (
@@ -380,64 +412,97 @@ export default function StockDetail() {
           </section>
 
           {/* 信用交易 */}
-          <section className="card-surface rounded-lg p-3">
-            <h2 className="mb-2 text-body font-medium text-ink-900">{t('信用交易')}</h2>
+          <section className="card-surface p-5">
+            <p className="eyebrow">MARGIN</p>
+            <h3 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('信用交易')}</h3>
             <MarginPanel rows={data.margin_interest} />
           </section>
 
           {/* 技术指标 */}
-          <section className="card-surface rounded-lg p-3">
-            <h2 className="mb-2 text-body font-medium text-ink-900">{t('技术指标')}</h2>
+          <section className="card-surface p-5">
+            <p className="eyebrow">TECHNICALS</p>
+            <h3 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('技术指标')}</h3>
             <IndicatorGrid technical={technical} />
           </section>
         </div>
       </div>
 
       {/* 行2: 决算时间线 + 技术结构 */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <section className="card-surface rounded-lg p-4 xl:col-span-7">
-          <h2 className="mb-3 text-h3 text-ink-900">{t('决算时间线')}</h2>
+      <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
+        <section className="card-surface p-5 xl:col-span-7">
+          <p className="eyebrow">EARNINGS TIMELINE</p>
+          <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('决算时间线')}</h2>
           <div className="max-h-[360px] overflow-y-auto">
             <FinancialTable summaries={data.financials.summaries} />
           </div>
         </section>
-        <section className="card-surface rounded-lg p-4 xl:col-span-5">
-          <h2 className="mb-3 text-h3 text-ink-900">{t('K线结构分析')}</h2>
+        <section className="card-surface p-5 xl:col-span-5">
+          <p className="eyebrow">CHART STRUCTURE</p>
+          <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('K线结构分析')}</h2>
           <StructurePanel technical={technical} />
         </section>
       </div>
 
       {/* 机构空卖行为：报告本身在下面的「空卖残高报告」，这里是行为分析 */}
-      <section className="card-surface rounded-lg p-4">
-        <h2 className="mb-3 text-h3 text-ink-900">{t('机构空卖行为')}</h2>
+      <section className="mt-6 card-surface p-5">
+        <p className="eyebrow">SHORT BEHAVIOR</p>
+        <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('机构空卖行为')}</h2>
         <ShortBehaviorPanel code={security.canonical_code} />
       </section>
 
       {/* 行3: 空卖 + 发表预定 */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <section className="card-surface rounded-lg p-4">
-          <h2 className="mb-3 text-h3 text-ink-900">{t('空卖残高报告')}</h2>
+      <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
+        <section className="card-surface p-5">
+          <p className="eyebrow">SHORT INTEREST</p>
+          <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('空卖残高报告')}</h2>
           <ShortPositionsPanel rows={data.short_positions} summary={data.short_interest} />
         </section>
-        <section className="card-surface rounded-lg p-4">
-          <h2 className="mb-3 text-h3 text-ink-900">{t('发表预定')}</h2>
+        <section className="card-surface p-5">
+          <p className="eyebrow">EARNINGS SCHEDULE</p>
+          <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('发表预定')}</h2>
           {data.earnings.length === 0 ? (
-            <p className="text-body-s text-ink-400">{t('暂无数据')}</p>
+            <PanelEmpty title={t('暂无数据')} />
           ) : (
-            <ul className="divide-y divide-line">
+            <ul>
               {data.earnings.slice(0, 4).map((item, index) => (
-                <li key={index} className="flex items-center justify-between py-1.5 text-body-s">
-                  <span className="text-ink-700">{String(item.fiscal_quarter ?? '—')}</span>
-                  <span className="font-mono tnum text-ink-900">
-                    {item.announcement_date ? fmtDate(String(item.announcement_date)) : t('未定')}
-                  </span>
-                </li>
+                <EarningsScheduleRow key={index} item={item} todayKey={todayKey} />
               ))}
             </ul>
           )}
         </section>
       </div>
+      <SourceNote className="mt-8" text={t('官方终值来自日线；盘中价为延迟行情，不是实时伪装')} />
     </div>
+  );
+}
+
+function PanelEmpty({ title, image = '/empty-chart.svg' }: { title: string; image?: string }) {
+  return <EmptyState size="compact" image={image} title={title} />;
+}
+
+function EarningsScheduleRow({ item, todayKey }: { item: Record<string, unknown>; todayKey: string }) {
+  const date = item.announcement_date ? String(item.announcement_date) : '';
+  const quarter = item.fiscal_quarter ? String(item.fiscal_quarter) : '—';
+  const anchor = dateAnchorParts(date);
+  const isToday = date.slice(0, 10) === todayKey;
+  return (
+    <li className="flex min-h-[60px] items-center gap-3 px-1 py-[14px] transition-colors duration-fast hover:bg-paper-2/70">
+      <span
+        className={cn(
+          'w-11 shrink-0 rounded-[9px] py-1.5 text-center',
+          isToday ? 'bg-brand-50' : 'bg-paper-2/80',
+        )}
+      >
+        <span className={cn('block font-mono text-body-s font-semibold tnum', isToday ? 'text-brand-700' : 'text-ink-900')}>
+          {anchor ? anchor.day : '—'}
+        </span>
+        <span className="block text-micro text-ink-400">{anchor?.monthShort ?? ''}</span>
+      </span>
+      <span className="min-w-0 flex-1 truncate text-body-s text-ink-700">{quarter}</span>
+      <span className="shrink-0 font-mono text-caption tnum text-ink-500">
+        {date ? fmtDate(date) : t('未定')}
+      </span>
+    </li>
   );
 }
 
@@ -458,7 +523,9 @@ function IntradayPane({
   onFetch: () => void;
   onRefresh: () => void;
 }) {
+  const colorMode = useColorMode();
   const option = useMemo(() => {
+    void colorMode;
     const bars = data?.bars ?? [];
     if (bars.length === 0) return null;
     const labels = bars.map((bar) => `${bar.trade_date.slice(5)} ${bar.bar_time}`);
@@ -498,13 +565,13 @@ function IntradayPane({
         },
       ],
     };
-  }, [data]);
+  }, [colorMode, data]);
 
-  if (loading && !data) return <SkeletonCard className="h-72" />;
+  if (loading && !data) return <SkeletonCard className="h-[360px]" />;
   if (data && data.available && option) {
     return (
       <div>
-        <ReactECharts className="h-72 w-full" option={option} ariaLabel="intraday chart" />
+        <ReactECharts className="h-[360px] w-full" option={option} ariaLabel="intraday chart" />
         <p className="mt-1 text-right text-micro text-ink-400">
           {t('分钟数据为未复权原始价')} · {(data.days ?? []).length} {t('个交易日')} ·{' '}
           {t('数据截至')} {data.data_through ?? '—'}
@@ -515,7 +582,7 @@ function IntradayPane({
   const planBlocked = data?.reason === 'plan_not_included';
   const empty = data?.reason === 'empty';
   return (
-    <div className="flex h-72 flex-col items-center justify-center gap-3 rounded-md bg-paper-2">
+    <div className="flex h-[360px] flex-col items-center justify-center gap-3 rounded-md bg-paper-2">
       <p className="max-w-md px-6 text-center text-body-s text-ink-600">
         {planBlocked
           ? t('分钟线需要 J-Quants 分足加购（当前订阅未包含）')
@@ -530,7 +597,7 @@ function IntradayPane({
         <button
           type="button"
           onClick={onFetch}
-          className="rounded-md bg-brand-600 px-3 py-1.5 text-body-s font-medium text-white"
+          className="rounded-md bg-brand-600 px-3 py-1.5 text-body-s font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105"
         >
           {t('取得最近5个交易日的分钟数据')}
         </button>
@@ -540,7 +607,6 @@ function IntradayPane({
           type="button"
           onClick={onFetch}
           className="rounded-md border border-line px-3 py-1.5 text-caption text-ink-500 hover:bg-brand-50"
-          title={t('重新检测订阅状态')}
         >
           {t('重新检测订阅状态')}
         </button>
@@ -613,13 +679,13 @@ function TickPane({
     };
   }, [data]);
 
-  if (loading && !data) return <SkeletonCard className="h-72" />;
+  if (loading && !data) return <SkeletonCard className="h-[360px]" />;
   if (data && data.available && option) {
     return (
       <div className="space-y-3">
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_232px]">
         <div className="min-w-0">
-          <ReactECharts className="h-72 w-full" option={option} ariaLabel="tick chart" />
+          <ReactECharts className="h-[360px] w-full" option={option} ariaLabel="tick chart" />
           <p className="mt-1 text-right text-micro text-ink-400">
             {data.trade_date} · {data.tick_count.toLocaleString()} {t('笔')} ·{' '}
             {t('约 {n} 秒/点', { n: data.bucket_seconds ?? 1 })}
@@ -663,7 +729,7 @@ function TickPane({
   const fetching = data?.reason === 'fetching';
   const empty = data?.reason === 'empty';
   return (
-    <div className="flex h-72 flex-col items-center justify-center gap-3 rounded-md bg-paper-2">
+    <div className="flex h-[360px] flex-col items-center justify-center gap-3 rounded-md bg-paper-2">
       <p className="max-w-md px-6 text-center text-body-s text-ink-600">
         {planBlocked
           ? t('逐笔需要 J-Quants Tick 加购（刚购买时，API 侧生效可能有延迟）')
@@ -678,7 +744,7 @@ function TickPane({
         <button
           type="button"
           onClick={onFetch}
-          className="rounded-md bg-brand-600 px-3 py-1.5 text-body-s font-medium text-white"
+          className="rounded-md bg-brand-600 px-3 py-1.5 text-body-s font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105"
         >
           {t('取得最近交易日的逐笔数据')}
         </button>
@@ -688,7 +754,6 @@ function TickPane({
           type="button"
           onClick={onFetch}
           className="rounded-md border border-line px-3 py-1.5 text-caption text-ink-500 hover:bg-brand-50"
-          title={t('重新检测订阅状态')}
         >
           {t('重新检测订阅状态')}
         </button>
@@ -714,7 +779,7 @@ function cnTick(direction: 'up' | 'down' | 'flat'): string {
 /* ---------------- 技术结构面板（美版算法输出） ---------------- */
 
 function StructurePanel({ technical }: { technical: TechnicalStructure | null }) {
-  if (!technical) return <p className="text-body-s text-ink-400">{t('暂无数据')}</p>;
+  if (!technical) return <PanelEmpty title={t('暂无数据')} />;
   const pa = technical.price_action;
   const vpm = technical.vol_price;
   const base = technical.base;
@@ -732,19 +797,19 @@ function StructurePanel({ technical }: { technical: TechnicalStructure | null })
         <ScoreBar label="价格行为" score={pa.score} />
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {pa.pattern_labels.map((label) => (
-            <span key={label} className="rounded-pill border border-line bg-card px-2 py-0.5 text-micro text-ink-600">{t(label)}</span>
+            <SoftBadge key={label}>{t(label)}</SoftBadge>
           ))}
           {pa.spring && (
-            <span className="inline-flex items-center gap-1 rounded-pill bg-up-50 px-2 py-0.5 text-micro text-up-700">
+            <SoftBadge tone="up">
               {t('Spring 假跌破回收')}
               <InfoHint hint={STRUCTURE_HINTS.spring} size={11} />
-            </span>
+            </SoftBadge>
           )}
           {pa.upthrust && (
-            <span className="inline-flex items-center gap-1 rounded-pill bg-down-50 px-2 py-0.5 text-micro text-down-700">
+            <SoftBadge tone="down">
               {t('Upthrust 假突破')}
               <InfoHint hint={STRUCTURE_HINTS.upthrust} size={11} />
-            </span>
+            </SoftBadge>
           )}
         </div>
         <dl className="mt-2 grid grid-cols-2 gap-1.5 text-caption">
@@ -781,7 +846,7 @@ function StructurePanel({ technical }: { technical: TechnicalStructure | null })
             {t('量价一致（努力/结果）')}
             <InfoHint hint={STRUCTURE_HINTS.vol_price} />
           </span>
-          <span className="rounded-pill bg-ai-50 px-2 py-0.5 text-micro font-medium text-ai-600">{t(vpm.setup_label)}</span>
+          <SoftBadge tone="ai">{t(vpm.setup_label)}</SoftBadge>
         </div>
         <dl className="grid grid-cols-3 gap-1.5 text-caption">
           <StructFact label="努力" value={vpm.effort !== null ? `${vpm.effort.toFixed(2)}x` : '—'} />
@@ -797,7 +862,7 @@ function StructurePanel({ technical }: { technical: TechnicalStructure | null })
 }
 
 function IndicatorGrid({ technical }: { technical: TechnicalStructure | null }) {
-  if (!technical) return <p className="text-caption text-ink-400">{t('暂无数据')}</p>;
+  if (!technical) return <PanelEmpty title={t('暂无数据')} />;
   const tech = technical.technicals;
   return (
     <dl className="grid grid-cols-3 gap-1.5">
@@ -857,9 +922,9 @@ function FinancialTable({ summaries }: { summaries: FinancialSummaryView[] }) {
       key: 'period', title: t('决算种别'),
       render: (row) => (
         <span className="flex items-center gap-1">
-          <span className="rounded-sm bg-paper-2 px-1.5 py-0.5 text-micro text-ink-600">
+          <SoftBadge>
             {row.fiscal_year_end?.slice(0, 7) ?? '—'} {row.period_type ?? ''}
-          </span>
+          </SoftBadge>
           <span className="text-micro text-ink-400">{row.is_consolidated ? t('连结') : t('单体')}</span>
         </span>
       ),
@@ -885,14 +950,14 @@ function FinancialTable({ summaries }: { summaries: FinancialSummaryView[] }) {
       ),
     },
   ];
-  if (summaries.length === 0) return <p className="text-body-s text-ink-400">{t('暂无数据')}</p>;
+  if (summaries.length === 0) return <PanelEmpty title={t('暂无数据')} />;
   return (
     <DataTable columns={columns} rows={summaries} rowKey={(row) => `${row.disclosed_date}-${row.disclosure_number}`} rowHeight={44} />
   );
 }
 
 function MarginPanel({ rows }: { rows: MarginInterestRow[] }) {
-  if (rows.length === 0) return <p className="text-caption text-ink-400">{t('暂无数据')}</p>;
+  if (rows.length === 0) return <PanelEmpty title={t('暂无数据')} />;
   const latest = rows[rows.length - 1];
   const ratio =
     latest.long_total !== null && latest.short_total !== null && latest.short_total > 0
@@ -919,7 +984,7 @@ function ShortPositionsPanel({
   rows: ShortPositionRow[];
   summary: ShortInterestSummary | null;
 }) {
-  if (rows.length === 0) return <p className="text-body-s text-ink-400">{t('暂无数据')}</p>;
+  if (rows.length === 0) return <PanelEmpty title={t('暂无数据')} />;
 
   const changes = summary?.changes ?? [];
   const KIND_LABEL: Record<string, string> = {
@@ -990,55 +1055,58 @@ function ShortPositionsPanel({
           </p>
           {/* 1 行 2 段。横に 5 列並べると「義務消失」が折り返して行の高さが
               暴れるので、名前・区分・日付を上段、水準・株数・変化を下段に置く。 */}
-          <ul className="divide-y divide-line">
+          <ul>
             {changes.map((row, index) => (
-              <li key={index} className="py-1.5 text-body-s">
-                <div className="flex items-baseline gap-2">
-                  <span className="min-w-0 flex-1 truncate text-ink-700">{row.holder_name ?? '—'}</span>
-                  <span
-                    className={`shrink-0 whitespace-nowrap text-micro ${
-                      KIND_TONE[row.kind] ?? 'text-ink-400'
-                    }`}
-                  >
-                    {t(KIND_LABEL[row.kind] ?? '')}
-                  </span>
-                  <span
-                    className="shrink-0 whitespace-nowrap font-mono text-micro tnum text-ink-400"
-                    title={fmtDate(row.calculated_date)}
-                  >
+              <li
+                key={index}
+                className="flex min-h-[60px] items-start gap-3 px-1 py-[14px] transition-colors duration-fast hover:bg-paper-2/70"
+              >
+                <div className="flex w-11 shrink-0 flex-col items-center self-stretch pt-0.5">
+                  <span className="font-mono text-[11px] leading-[14px] text-ink-400 tnum">
                     {fmtDateShort(row.calculated_date)}
                   </span>
+                  <span className="mt-1.5 hidden w-[2px] flex-1 rounded-full bg-line sm:block" aria-hidden="true" />
                 </div>
-                <div className="flex items-baseline gap-2 font-mono tnum">
-                  {/* 水準（符号なし）と変化（符号あり）を分けて出す。 */}
-                  <span className="shrink-0 text-ink-900">
-                    {row.ratio != null ? `${(row.ratio * 100).toFixed(2)}%` : '—'}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-micro text-ink-400">
-                    {row.shares != null ? `${fmtShares(row.shares)}${t('株')}` : ''}
-                  </span>
-                  <span
-                    className={`shrink-0 whitespace-nowrap text-micro ${
-                      row.delta == null
-                        ? 'text-ink-400'
-                        : row.delta > 0
-                          ? 'text-up-600'
-                          : row.delta < 0
-                            ? 'text-down-600'
-                            : 'text-ink-400'
-                    }`}
-                  >
-                    {row.delta != null
-                      ? `${row.delta > 0 ? '+' : row.delta < 0 ? '−' : '±'}${Math.abs(row.delta * 100).toFixed(2)}%`
-                      : '—'}
-                  </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate text-body-s text-ink-700">{row.holder_name ?? '—'}</span>
+                    <span className={`shrink-0 whitespace-nowrap text-micro ${KIND_TONE[row.kind] ?? 'text-ink-400'}`}>
+                      {t(KIND_LABEL[row.kind] ?? '')}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-caption tnum">
+                    <span className="text-ink-900">
+                      {row.ratio != null ? `${(row.ratio * 100).toFixed(2)}%` : '—'}
+                    </span>
+                    {row.shares != null && (
+                      <span className="text-ink-500">
+                        {fmtShares(row.shares)}
+                        {t('株')}
+                      </span>
+                    )}
+                    <span
+                      className={
+                        row.delta == null
+                          ? 'text-ink-400'
+                          : row.delta > 0
+                            ? 'text-up-600'
+                            : row.delta < 0
+                              ? 'text-down-600'
+                              : 'text-ink-400'
+                      }
+                    >
+                      {row.delta != null
+                        ? `${row.delta > 0 ? '+' : row.delta < 0 ? '−' : '±'}${Math.abs(row.delta * 100).toFixed(2)}%`
+                        : '—'}
+                    </span>
+                  </div>
                 </div>
               </li>
             ))}
           </ul>
         </div>
       ) : (
-        <p className="text-micro text-ink-400">{t('2周内没有新的残高报告')}</p>
+        <PanelEmpty title={t('2周内没有新的残高报告')} />
       )}
     </div>
   );
@@ -1050,7 +1118,14 @@ function MiniStat({ label, value, hint }: { label: string; value: string; hint?:
       <div className="truncate font-mono text-body-s tnum text-ink-900">{value}</div>
       <div className="flex items-center justify-center gap-0.5 text-micro text-ink-400">
         {/* label は msgid（呼び出し側は中文原文）—— ここで訳さないと三言語とも中文のまま */}
-        <span className="truncate" title={t(label)}>{t(label)}</span>
+        <PointerTooltip
+          label={t(label)}
+          width={140}
+          contentClassName="p-2"
+          content={<span className="text-micro text-ink-600">{t(label)}</span>}
+        >
+          <span className="truncate">{t(label)}</span>
+        </PointerTooltip>
         {hint && <InfoHint hint={hint} size={11} side="bottom" />}
       </div>
     </div>

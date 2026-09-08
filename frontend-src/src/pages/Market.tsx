@@ -1,28 +1,78 @@
 /** 日本市场页：指数走势 + 全部33业种强弱 + 广度与空卖。 */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router';
+import { AnimatePresence, motion } from 'framer-motion';
 import { marketApi, stocksApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { remoteState } from '@/hooks/remoteState';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
+import EmptyRetryButton from '@/components/shared/EmptyRetryButton';
 import ChangeBadge from '@/components/shared/ChangeBadge';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import Segmented from '@/components/shared/Segmented';
-import { SkeletonCard } from '@/components/shared/Skeleton';
+import { SkeletonCard, SkeletonReveal } from '@/components/shared/Skeleton';
 import InsightLineChart, { type InsightScrub } from '@/components/charts/InsightLineChart';
+import Sparkline from '@/components/charts/Sparkline';
 import { CodeCell, DataThrough } from '@/components/domain';
 import HeatMatrix, { HeatMatrixSkeleton, metricValue, type HeatMetric } from '@/components/sectors/HeatMatrix';
 import SectorMembersPanel from '@/components/sectors/SectorMembersPanel';
+import StaleStrip from '@/components/shared/StaleStrip';
+import SessionLED from '@/components/shared/SessionLED';
+import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
+import SourceNote from '@/components/shared/SourceNote';
+import InfoHint from '@/components/shared/InfoHint';
+import { MARKET_HINTS } from '@/lib/indicatorHints';
+import { tokyoSession } from '@/lib/tokyoSession';
+import { useNow } from '@/hooks/useNow';
+import { useTickFlash } from '@/hooks/useTickFlash';
+import TickPrice from '@/components/shared/TickPrice';
 import { t } from '@/i18n/core';
 import { quoteSourceLabel } from '@/lib/quoteSource';
-import { fmtPct, fmtPrice, fmtTimeJst, fmtYenCompact } from '@/lib/format';
+import { fmtPct, fmtPrice, fmtTimeHHMMSS, fmtTimeJst, fmtYenCompact } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import type { IntradayQuote, SectorMemberSort, SectorStrength } from '@/api/types';
 
+/** 与后端 `HOME_INDEX_CODES` 对齐：首页指数卡 / 顶部 tape 写入的 `?index=`。 */
+const HOME_INDEX_CODES = new Set(['0000', '0500', '0501', '0502', '0028', '002D']);
+const DEFAULT_INDEX = '0000';
+
+function parseMarketIndex(sp: URLSearchParams): string {
+  const raw = (sp.get('index') ?? '').trim();
+  return HOME_INDEX_CODES.has(raw) ? raw : DEFAULT_INDEX;
+}
+
 export default function Market() {
+  const now = useNow(30_000);
+  const session = tokyoSession(now);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawIndex = (searchParams.get('index') ?? '').trim();
+  const hasExplicitIndex = HOME_INDEX_CODES.has(rawIndex);
+  const indexCode = parseMarketIndex(searchParams);
+  const setIndexCode = useCallback(
+    (code: string) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (HOME_INDEX_CODES.has(code) && code !== DEFAULT_INDEX) next.set('index', code);
+          else next.delete('index');
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
   const market = usePolling(() => marketApi.overview(), 120_000);
-  const [indexCode, setIndexCode] = useState('0000');
   const series = usePolling(() => marketApi.indexSeries(indexCode, 250), null, [indexCode]);
+  const indexCardRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const scrolledForRef = useRef<string | null>(null);
+  const indexFlashes = useTickFlash(
+    market.data?.indices,
+    (row) => row.index_code,
+    (row) => row.close ?? null,
+  );
   const state = remoteState(market, (d) => d.indices.length === 0);
 
   const [heatMetric, setHeatMetric] = useState<HeatMetric>('r1');
@@ -96,6 +146,30 @@ export default function Market() {
   );
   const liveQuotes: Record<string, IntradayQuote> = live.data?.enabled ? live.data.quotes : {};
   const n225 = live.data?.enabled ? (live.data.indices?.['^N225'] ?? null) : null;
+  const refreshMarket = market.refresh;
+  const refreshSeries = series.refresh;
+  const refreshLiveSectors = liveSectors.refresh;
+  const refreshMembers = members.refresh;
+  const refreshLive = live.refresh;
+  const onRefreshMarket = useCallback(() => {
+    refreshMarket({ force: true });
+    refreshSeries({ force: true });
+    refreshLiveSectors({ force: true });
+    refreshMembers({ force: true });
+    refreshLive({ force: true });
+  }, [refreshLive, refreshLiveSectors, refreshMarket, refreshMembers, refreshSeries]);
+  const refreshingMarket =
+    market.refreshing || series.refreshing || liveSectors.refreshing || members.refreshing || live.refreshing;
+
+  /* 只有 URL 明确带合法 ?index= 才定位；默认进 /market 不要把页面拽走。 */
+  useEffect(() => {
+    if (!hasExplicitIndex || !market.data) return;
+    if (scrolledForRef.current === indexCode) return;
+    const el = indexCardRefs.current[indexCode];
+    if (!el) return;
+    scrolledForRef.current = indexCode;
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [hasExplicitIndex, indexCode, market.data]);
 
   const sectorColumns: Column<SectorStrength>[] = [
     {
@@ -149,23 +223,50 @@ export default function Market() {
   return (
     <div className="space-y-6">
       <PageHeader
-        section="02"
+        section="05"
         eyebrow="JAPAN MARKET · TOPIX & SECTORS"
         title={t('日本市场')}
         description={t('本页为日线数据，收盘后更新')}
-        meta={<DataThrough date={market.data?.data_through} />}
+        meta={
+          <div className="flex items-center gap-3">
+            <SessionLED session={session} />
+            {market.lastUpdatedAt && (
+              <span className="font-mono text-caption text-ink-400 tnum">
+                {t('更新')} {fmtTimeHHMMSS(market.lastUpdatedAt)}
+              </span>
+            )}
+            <DataThrough date={market.data?.data_through} />
+            <ForceRefreshButton
+              onClick={onRefreshMarket}
+              spinning={refreshingMarket}
+              label={t('刷新市场')}
+              title={t('刷新市场')}
+            />
+          </div>
+        }
       />
 
       {state === 'error' ? (
-        <EmptyState variant="error" title={t('加载失败')} description={String(market.error?.message ?? '')} />
+        <div className="card-surface">
+          <EmptyState
+            variant="error"
+            image="/empty-chart.svg"
+            title={t('加载失败')}
+            description={String(market.error?.message ?? '')}
+            action={<EmptyRetryButton onClick={() => market.refresh({ force: true })} refreshing={market.refreshing} />}
+          />
+        </div>
       ) : (
         <>
+          {state === 'stale' && (
+            <StaleStrip onRetry={() => market.refresh()} refreshing={market.refreshing} />
+          )}
           {n225 && (
-            <section className="card-surface flex flex-wrap items-end justify-between gap-3 rounded-lg p-4">
+            <section className="card-surface flex flex-wrap items-end justify-between gap-3 p-4">
               <span className="flex flex-col">
                 <span className="eyebrow">{t('日経225 · 盘中')}</span>
                 <span className="mt-1 flex items-baseline gap-3">
-                  <span className="font-mono text-display-m tnum text-ink-900">
+                  <span className="metric-value text-data-l tnum text-ink-900">
                     {n225.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                   </span>
                   <ChangeBadge value={n225.change_pct} />
@@ -190,7 +291,7 @@ export default function Market() {
                 label: index.name.replace('東証', '').replace('市場指数', ''),
               }))}
               bars={series.data?.bars ?? []}
-              loading={series.loading && !series.data}
+              loading={series.loading}
               changePct={
                 market.data?.indices.find((index) => index.index_code === indexCode)?.change_pct ?? null
               }
@@ -201,25 +302,38 @@ export default function Market() {
                 <button
                   key={index.index_code}
                   type="button"
+                  ref={(el) => {
+                    indexCardRefs.current[index.index_code] = el;
+                  }}
+                  data-index-code={index.index_code}
+                  aria-pressed={index.index_code === indexCode}
                   onClick={() => setIndexCode(index.index_code)}
-                  className={`card-surface card-hover flex w-full items-center justify-between rounded-lg px-3 py-2 text-left ${
-                    index.index_code === indexCode ? 'ring-1 ring-brand-400' : ''
-                  }`}
+                  className={cn(
+                    'card-surface flex w-full scroll-mt-16 items-center justify-between px-3 py-2 text-left',
+                    'transition-shadow duration-240 ease-out hover:shadow-sh-2',
+                    'focus-visible:outline-none focus-visible:shadow-focus-ring',
+                    index.index_code === indexCode ? 'bg-paper-2 ring-1 ring-brand-100' : 'hover:bg-paper-2',
+                  )}
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-body-s text-ink-700">{index.name}</span>
-                    <span className="font-mono text-data-m tnum text-ink-900">{fmtPrice(index.close)}</span>
+                    <TickPrice
+                      flash={indexFlashes[index.index_code]}
+                      className="metric-value text-data-m tnum text-ink-900"
+                    >
+                      {fmtPrice(index.close)}
+                    </TickPrice>
                   </span>
                   <span className="flex items-center gap-3">
                     <span className="w-[88px] shrink-0">
-                      <InsightLineChart
-                        data={index.sparkline}
-                        height={32}
-                        change={index.change_pct ?? 0}
-                        interactive={false}
-                        showLiveDot
-                        ariaLabel={`${index.name} ${t('趋势快照')}`}
-                      />
+                      {index.sparkline.length > 1 ? (
+                        <Sparkline
+                          data={index.sparkline}
+                          width={88}
+                          height={32}
+                          change={index.change_pct ?? 0}
+                        />
+                      ) : null}
                     </span>
                     <span className="flex flex-col items-end gap-0.5">
                       <ChangeBadge value={index.change_pct} size="sm" />
@@ -237,11 +351,14 @@ export default function Market() {
           </div>
 
           {/* 板块透视：热力砖（当日/近20日/今日领涨同砖）+ 列表视图 */}
-          <section className="card-surface rounded-lg p-4">
+          <section className="card-surface p-4 md:p-6">
             <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="eyebrow">{t('SECTOR MATRIX · 33 業種')}</p>
-                <h2 className="mt-0.5 text-h3 text-ink-900">{t('板块透视')}</h2>
+                <h2 className="mt-0.5 inline-flex items-center text-h3 text-ink-900">
+                  {t('板块透视')}
+                  <InfoHint hint={MARKET_HINTS.sectorMedian} side="bottom" size={12} className="ml-1" />
+                </h2>
                 <p className="mt-0.5 text-micro text-ink-400">
                   {tileSource === 'intraday' && liveByCode.size
                     ? t('1日=盘中延迟{n}分（{q}/{u} 只覆盖）· 20日=官方日线 {date}', {
@@ -290,22 +407,42 @@ export default function Market() {
 
             {sectorsSorted.length === 0 ? (
               <HeatMatrixSkeleton />
-            ) : sectorView === 'heat' ? (
-              <HeatMatrix
-                sectors={sectorsSorted}
-                metric={heatMetric}
-                selectedCode={selectedSector}
-                onSelect={setSelectedSector}
-              />
             ) : (
-              <DataTable
-                columns={sectorColumns}
-                rows={sectorsSorted}
-                rowKey={(row) => row.sector33_code}
-                rowHeight={44}
-                defaultSort={{ key: heatMetric === 'r1' ? 'r1' : 'r20', desc: true }}
-                onRowClick={(row) => setSelectedSector(row.sector33_code)}
-              />
+              <AnimatePresence mode="wait">
+                {sectorView === 'heat' ? (
+                  <motion.div
+                    key="heat"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <HeatMatrix
+                      sectors={sectorsSorted}
+                      metric={heatMetric}
+                      selectedCode={selectedSector}
+                      onSelect={setSelectedSector}
+                    />
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="list"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <DataTable
+                      columns={sectorColumns}
+                      rows={sectorsSorted}
+                      rowKey={(row) => row.sector33_code}
+                      rowHeight={44}
+                      defaultSort={{ key: heatMetric === 'r1' ? 'r1' : 'r20', desc: true }}
+                      onRowClick={(row) => setSelectedSector(row.sector33_code)}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             )}
           </section>
 
@@ -320,6 +457,7 @@ export default function Market() {
           />
         </>
       )}
+      <SourceNote className="mt-8" text={t('指数与 33 业种为官方日线，收盘后更新')} />
     </div>
   );
 }
@@ -364,40 +502,47 @@ function IndexTrendPanel({
   }, [scrub, points, changePct]);
 
   return (
-    <section className="card-surface flex flex-col overflow-hidden rounded-xl p-0 lg:col-span-2">
+    <section className="card-surface flex flex-col overflow-hidden p-0 lg:col-span-2">
       <header className="flex items-center justify-between gap-3 px-4 pt-3">
-        <h2 className="text-body text-ink-500">{t('趋势快照')}</h2>
+        <div className="min-w-0">
+          <p className="eyebrow">INDEX TREND · DAILY</p>
+          <h2 className="mt-0.5 text-h3 text-ink-900">{t('趋势快照')}</h2>
+        </div>
         <span className="rounded-full bg-paper-2 px-2.5 py-0.5 text-micro text-ink-500">{t('快照')}</span>
       </header>
       <div className="mt-3 border-t border-line px-4 pt-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="min-w-0 truncate text-body-s text-ink-700">{name}</h3>
+          <h3 className="min-w-0 truncate text-h3 text-ink-900">{name}</h3>
           <Segmented options={options} value={indexCode} onChange={onIndexChange} />
         </div>
-        {loading ? (
-          <SkeletonCard className="h-64" />
-        ) : points.length === 0 ? (
-          <EmptyState title={t('暂无数据')} />
-        ) : (
-          <InsightLineChart
-            key={seriesCode}
-            data={points}
-            height={228}
-            change={changePct ?? 0}
-            interactive
-            showLiveDot
-            showCursorValue
-            showGrid
-            showAxis
-            formatValue={(value) => fmtPrice(value)}
-            onScrub={setScrub}
-            ariaLabel={`${name} ${t('趋势快照')}`}
-          />
-        )}
+        <SkeletonReveal
+          loading={loading}
+          className="min-h-64"
+          skeleton={<SkeletonCard className="h-64 w-full" />}
+        >
+          {points.length === 0 ? (
+            <EmptyState image="/empty-chart.svg" title={t('暂无数据')} />
+          ) : (
+            <InsightLineChart
+              key={seriesCode}
+              data={points}
+              height={228}
+              change={changePct ?? 0}
+              interactive
+              showLiveDot
+              showCursorValue
+              showGrid
+              showAxis
+              formatValue={(value) => fmtPrice(value)}
+              onScrub={setScrub}
+              ariaLabel={`${name} ${t('趋势快照')}`}
+            />
+          )}
+        </SkeletonReveal>
       </div>
       <div className="flex items-baseline justify-between gap-3 px-4 pb-4 pt-2">
         <div>
-          <p className="font-mono text-data-xl tnum text-ink-900">{fmtPrice(shown?.value)}</p>
+          <p className="metric-value text-data-xl tnum text-ink-900">{fmtPrice(shown?.value)}</p>
           <p className="mt-0.5 text-micro text-ink-400">
             {shown?.label ?? '—'} · {t('收盘')}
           </p>

@@ -7,8 +7,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate } from 'react-router';
 import { cn } from '@/lib/utils';
+import { DUR_SECTION } from '@/lib/motion';
 import Icon from '@/components/icons';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import type { EarningsUpcomingItem } from '@/api/types';
+import { EarningsChipContent, earningsChipLabel } from './chipTip';
 import { addDays, fmtMDCN, jstToday, statusMeta, weekStartMonday } from './types';
 import { t, getLocale } from '@/i18n/core';
 
@@ -16,6 +19,8 @@ interface MonthCalendarProps {
   items: EarningsUpcomingItem[];
   selectedDay: string | null;
   onSelectDay: (date: string | null) => void;
+  /** 周历锚点。查看下周等动作清掉日期筛选后，月历仍跟到新的一周。 */
+  anchorDate?: string;
 }
 
 const WEEKDAYS = [t('周一'), t('周二'), t('周三'), t('周四'), t('周五'), t('周六'), t('周日')] as const;
@@ -39,15 +44,37 @@ function monthTitle(key: string): string {
   return `${year} 年 ${month} 月`;
 }
 
-export default function MonthCalendar({ items, selectedDay, onSelectDay }: MonthCalendarProps) {
+function monthKeyOf(date: string | null | undefined, fallback: string): string {
+  const key = date?.slice(0, 7);
+  return key && key.length === 7 ? key : fallback;
+}
+
+function clampMonth(key: string, minMonth: string, maxMonth: string): string {
+  if (key < minMonth) return minMonth;
+  if (key > maxMonth) return maxMonth;
+  return key;
+}
+
+export default function MonthCalendar({ items, selectedDay, onSelectDay, anchorDate }: MonthCalendarProps) {
   const navigate = useNavigate();
   const today = jstToday();
   const currentMonth = today.slice(0, 7);
   const minMonth = shiftMonth(currentMonth, -1);
   const maxMonth = shiftMonth(currentMonth, 1);
 
-  const [cursor, setCursor] = useState(currentMonth);
+  const [cursor, setCursor] = useState(() =>
+    clampMonth(monthKeyOf(selectedDay ?? anchorDate, currentMonth), minMonth, maxMonth),
+  );
   const [dir, setDir] = useState(0);
+
+  useEffect(() => {
+    const next = clampMonth(monthKeyOf(selectedDay ?? anchorDate, currentMonth), minMonth, maxMonth);
+    setCursor((prev) => {
+      if (prev === next) return prev;
+      setDir(next > prev ? 1 : -1);
+      return next;
+    });
+  }, [selectedDay, anchorDate, currentMonth, minMonth, maxMonth]);
 
   const byDate = useMemo(() => {
     const map = new Map<string, EarningsUpcomingItem[]>();
@@ -107,7 +134,7 @@ export default function MonthCalendar({ items, selectedDay, onSelectDay }: Month
           type="button"
           onClick={() => goMonth(-1)}
           disabled={cursor <= minMonth}
-          className="flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-500 transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-500 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line disabled:hover:text-ink-500"
           aria-label={t('上个月')}
         >
           <Icon name="chevron-right" size={14} className="rotate-180" />
@@ -117,7 +144,7 @@ export default function MonthCalendar({ items, selectedDay, onSelectDay }: Month
           <button
             type="button"
             onClick={goToday}
-            className="rounded-sm border border-line bg-card px-2 py-1 text-caption text-ink-500 transition-colors duration-fast hover:border-brand-400 hover:text-brand-600"
+            className="rounded-sm border border-line bg-card px-2 py-1 text-caption text-ink-500 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600"
           >
             {t('今天')}
           </button>
@@ -126,7 +153,7 @@ export default function MonthCalendar({ items, selectedDay, onSelectDay }: Month
           type="button"
           onClick={() => goMonth(1)}
           disabled={cursor >= maxMonth}
-          className="flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-500 transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-500 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line disabled:hover:text-ink-500"
           aria-label={t('下个月')}
         >
           <Icon name="chevron-right" size={14} />
@@ -179,7 +206,7 @@ export default function MonthCalendar({ items, selectedDay, onSelectDay }: Month
                 }}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.48, ease: EASE_PAPER, delay: enteredRef.current ? 0 : cellIndex * 0.025 }}
+                transition={{ duration: DUR_SECTION, ease: EASE_PAPER, delay: enteredRef.current ? 0 : cellIndex * 0.025 }}
                 className={cn(
                   'flex min-h-[64px] cursor-pointer flex-col border-r border-line p-1.5 text-left transition-colors duration-fast sm:min-h-[104px] sm:p-2',
                   '[&:nth-child(7n)]:border-r-0',
@@ -211,20 +238,28 @@ export default function MonthCalendar({ items, selectedDay, onSelectDay }: Month
                   {shown.map((item) => {
                     const meta = statusMeta(item.status);
                     return (
-                      <motion.button
+                      <PointerTooltip
                         key={`${item.canonical_code}-${item.period_type}`}
-                        type="button"
-                        whileTap={{ scale: 0.96 }}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          navigate(`/stock/${item.display_code}`);
-                        }}
-                        title={`${item.name_ja ?? item.display_code} · ${item.quarter_label ?? ''} · ${meta.label}`}
-                        className="flex h-5 items-center gap-1 rounded-xs px-1 transition-colors duration-fast hover:bg-brand-50"
+                        passthrough
+                        label={earningsChipLabel(item)}
+                        width={220}
+                        contentClassName="p-2.5"
+                        className="block w-full"
+                        content={<EarningsChipContent item={item} />}
                       >
-                        <span className={cn('size-1.5 shrink-0 rounded-full', meta.dotClass)} aria-hidden="true" />
-                        <span className="truncate font-mono text-[10px] font-medium leading-4 text-ink-800">{item.display_code}</span>
-                      </motion.button>
+                        <motion.button
+                          type="button"
+                          whileTap={{ scale: 0.96 }}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            navigate(`/stock/${item.display_code}`);
+                          }}
+                          className="flex h-5 w-full items-center gap-1 rounded-xs px-1 transition-colors duration-fast hover:bg-brand-50"
+                        >
+                          <span className={cn('size-1.5 shrink-0 rounded-full', meta.dotClass)} aria-hidden="true" />
+                          <span className="truncate font-mono text-[10px] font-medium leading-4 text-ink-800">{item.display_code}</span>
+                        </motion.button>
+                      </PointerTooltip>
                     );
                   })}
                   {extra > 0 && <span className="px-1 font-mono text-[10px] leading-4 text-ink-400 tnum">+{extra}</span>}

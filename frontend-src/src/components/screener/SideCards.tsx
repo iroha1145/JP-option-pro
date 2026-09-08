@@ -4,30 +4,34 @@
  * 2. TierHistogram：本次命中（实心）vs 已评分候选池（斜纹参照），点击联动分档
  * 3. MethodCard：六族权重 + 排序合成说明（可折叠）
  */
-import { useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { useId, useState } from 'react';
+import { motion } from 'framer-motion';
 import type { MarketRegime, StrengthProfilesMeta, TierDistribution } from '@/api/types';
 import { cn } from '@/lib/utils';
 import Icon from '@/components/icons';
+import HatchLegend from '@/components/shared/HatchLegend';
 import InfoHint from '@/components/shared/InfoHint';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import SourceNote from '@/components/shared/SourceNote';
-import { STRENGTH_HINTS } from '@/lib/indicatorHints';
+import SoftBadge from '@/components/shared/SoftBadge';
+import EmptyState from '@/components/shared/EmptyState';
+import { SkeletonBlock } from '@/components/shared/Skeleton';
+import { REGIME_DIM_HINTS, STRENGTH_HINTS } from '@/lib/indicatorHints';
 import { FAMILY_META, type Tier, type TierFilter } from './types';
 import { t } from '@/i18n/core';
 
-const EASE_PAPER = [0.16, 1, 0.3, 1] as [number, number, number, number];
 const SPRING_POP = { type: 'spring', stiffness: 520, damping: 32 } as const;
 const TIERS: Tier[] = ['S', 'A', 'B', 'C', 'D'];
 
 /* ---------------- 市场形态 6 维 ---------------- */
 
-const REGIME_DIMS: { key: keyof MarketRegime['dims']; label: string; en: string; hint: string }[] = [
-  { key: 'index_trend', label: t('指数趋势'), en: 'INDEX TREND', hint: t('TOPIX 相对 25/75/200 日均线的位置与斜率。') },
-  { key: 'momentum', label: t('市场动量'), en: 'MOMENTUM', hint: t('TOPIX 近 20 日收益的强弱。') },
-  { key: 'breadth', label: t('市场广度'), en: 'BREADTH', hint: t('全市场收于 200 日线上方的个股占比。') },
-  { key: 'volume', label: t('量能配合'), en: 'VOLUME', hint: t('成交额高于自身 20 日均额的个股占比。') },
-  { key: 'risk_appetite', label: t('风险偏好'), en: 'RISK APPETITE', hint: t('全市场 20 日收益中位数的强弱。') },
-  { key: 'risk_on_spread', label: t('强弱价差'), en: 'RISK-ON SPREAD', hint: t('グロース与プライム市场 20 日收益中位数之差。') },
+const REGIME_DIMS: { key: keyof MarketRegime['dims']; label: string; en: string }[] = [
+  { key: 'index_trend', label: t('指数趋势'), en: 'INDEX TREND' },
+  { key: 'momentum', label: t('市场动量'), en: 'MOMENTUM' },
+  { key: 'breadth', label: t('市场广度'), en: 'BREADTH' },
+  { key: 'volume', label: t('量能配合'), en: 'VOLUME' },
+  { key: 'risk_appetite', label: t('风险偏好'), en: 'RISK APPETITE' },
+  { key: 'risk_on_spread', label: t('强弱价差'), en: 'RISK-ON SPREAD' },
 ];
 
 export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
@@ -39,7 +43,7 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
           <InfoHint hint={STRENGTH_HINTS.marketRegime} side="bottom" size={12} className="ml-1" />
         </p>
         {regime.score !== null ? (
-          <span className="font-mono text-data-m text-ink-900 tnum">{regime.score}</span>
+          <span className="metric-value text-data-m text-ink-900 tnum">{regime.score}</span>
         ) : (
           <span className="font-mono text-micro text-ink-300 tnum">{t('6 维')}</span>
         )}
@@ -47,44 +51,54 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
       {(regime.label || regime.spread_label) && (
         <p className="mt-1.5 flex flex-wrap items-center gap-1.5">
           {regime.label && (
-            <span className="rounded-xs bg-brand-50 px-1.5 py-px text-micro font-medium text-brand-700">{t(regime.label)}</span>
+            <SoftBadge tone="brand">{t(regime.label)}</SoftBadge>
           )}
           {regime.spread_label && (
-            <span className="rounded-xs border border-line bg-card-warm px-1.5 py-px text-micro text-ink-500">{t(regime.spread_label)}</span>
+            <SoftBadge>{t(regime.spread_label)}</SoftBadge>
           )}
         </p>
       )}
       <div className="mt-4 grid grid-cols-[max-content_minmax(0,1fr)_max-content] gap-y-3">
-        {REGIME_DIMS.map((dim, index) => {
+        {REGIME_DIMS.map((dim) => {
           const value = regime.dims[dim.key];
+          const hint = REGIME_DIM_HINTS[dim.key];
           return (
-            <div key={dim.key} className="group relative col-span-3 grid grid-cols-subgrid items-center gap-x-3">
-              <span className="whitespace-nowrap text-caption text-ink-500">{dim.label}</span>
-              <span className="relative h-1.5 flex-1 overflow-hidden rounded-pill bg-line" role="presentation">
-                {value !== null && (
-                  <motion.span
-                    className="block h-full origin-left rounded-pill bg-brand-500"
-                    initial={{ scaleX: 0 }}
-                    whileInView={{ scaleX: 1 }}
-                    viewport={{ once: true, amount: 0.4 }}
-                    transition={{ duration: 0.7, ease: EASE_PAPER, delay: index * 0.045 }}
-                    style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
-                  />
-                )}
+            <div key={dim.key} className="col-span-3 grid grid-cols-subgrid items-center gap-x-3">
+              <span className="whitespace-nowrap text-caption text-ink-500">
+                {dim.label}
+                {hint && <InfoHint hint={hint} side="bottom" size={11} className="ml-0.5" />}
               </span>
-              <span className="text-right font-mono text-caption text-ink-800 tnum">
+              <PointerTooltip
+                label={dim.label}
+                side="top"
+                width={224}
+                className="min-w-0 w-full"
+                contentClassName="p-3"
+                content={
+                  <>
+                    <span className="flex items-baseline justify-between">
+                      <span className="text-caption font-semibold text-ink-800">{dim.label}</span>
+                      <span className="font-mono text-micro text-ink-400">{dim.en}</span>
+                    </span>
+                    {hint && <span className="mt-1.5 block text-micro leading-[16px] text-ink-500">{hint.body}</span>}
+                    <span className="mt-1.5 block font-mono text-caption text-brand-600 tnum">
+                      {value !== null ? `${Math.round(value * 10) / 10} / 100` : t('暂无数据')}
+                    </span>
+                  </>
+                }
+              >
+                <span className="strength-track relative h-1.5 w-full overflow-hidden rounded-pill bg-paper" role="presentation">
+                  {value !== null && (
+                    <span
+                      className="block h-full origin-left rounded-pill bg-brand-500"
+                      style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
+                    />
+                  )}
+                </span>
+              </PointerTooltip>
+              <span className="metric-value text-right text-caption text-ink-800 tnum">
                 {value !== null ? Math.round(value) : '—'}
               </span>
-              <div className="glass pointer-events-none absolute -top-2 left-16 z-20 hidden w-56 -translate-y-full rounded-md border border-line p-3 shadow-sh-2 group-hover:block">
-                <p className="flex items-baseline justify-between">
-                  <span className="text-caption font-semibold text-ink-800">{dim.label}</span>
-                  <span className="font-mono text-micro text-ink-400">{dim.en}</span>
-                </p>
-                <p className="mt-1.5 text-micro leading-[16px] text-ink-500">{dim.hint}</p>
-                <p className="mt-1.5 font-mono text-caption text-brand-600 tnum">
-                  {value !== null ? `${Math.round(value * 10) / 10} / 100` : t('暂无数据')}
-                </p>
-              </div>
             </div>
           );
         })}
@@ -92,9 +106,11 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
       {regime.warnings.length > 0 && (
         <ul className="mt-3.5 space-y-1 border-t border-line pt-3">
           {regime.warnings.map((warning, index) => (
-            <li key={index} className="flex items-start gap-1.5 text-micro leading-[16px] text-warn-600">
-              <span className="mt-px shrink-0" aria-hidden="true">⚠</span>
-              {t(warning)}
+            <li key={index}>
+              <SoftBadge tone="warn" className="items-start whitespace-normal">
+                <span className="mt-px shrink-0" aria-hidden="true">⚠</span>
+                {t(warning)}
+              </SoftBadge>
             </li>
           ))}
         </ul>
@@ -128,7 +144,7 @@ export function TierHistogram({
     <div className="card-surface p-5">
       <p className="eyebrow">{t('强度剖面 · 分档命中')}</p>
       <div className="mt-4 flex h-28 items-end gap-2.5">
-        {TIERS.map((tier, index) => {
+        {TIERS.map((tier) => {
           const hit = hits?.[tier] ?? 0;
           const refN = ref?.[tier] ?? 0;
           const selectable = tier !== 'D';
@@ -142,36 +158,27 @@ export function TierHistogram({
               animate={{ scale: active ? 1.04 : 1 }}
               transition={SPRING_POP}
               aria-pressed={active}
-              title={selectable ? t('只看 {tier} 档', { tier }) : t('D 档（<60）计入「全部」')}
+              aria-label={selectable ? t('只看 {tier} 档', { tier }) : t('D 档（<60）计入「全部」')}
               className={cn(
                 'group relative flex h-full flex-1 flex-col items-center justify-end gap-1 rounded-t-[4px] border-b-2 pb-0.5 transition-colors duration-fast',
-                active ? 'border-brand-600 bg-brand-50' : 'border-transparent hover:bg-paper-2',
+                active ? 'border-brand-400 bg-paper-2' : 'border-transparent hover:bg-paper-2',
                 !selectable && 'cursor-default opacity-70',
               )}
             >
-              <span className="font-mono text-[10px] leading-none text-ink-400 tnum">{hit}</span>
+              <span className="metric-value text-[11px] leading-none text-ink-500 tnum">{hit}</span>
               {ref !== null && (
-                <motion.span
-                  className="w-full max-w-[26px] rounded-t-[3px] border border-ink-300/60"
-                  initial={{ scaleY: 0 }}
-                  whileInView={{ scaleY: 1 }}
-                  viewport={{ once: true, amount: 0.3 }}
-                  transition={{ duration: 0.7, ease: EASE_PAPER, delay: index * 0.05 }}
+                <span
+                  className="w-full max-w-[26px] rounded-t-[3px] border border-ink-300/30"
                   style={{
                     height: `${Math.max(4, (refN / maxRef) * 72)}px`,
-                    transformOrigin: 'bottom',
                     backgroundImage: 'repeating-linear-gradient(45deg, rgba(138,148,176,.45) 0 1.2px, transparent 1.2px 4px)',
                   }}
                   aria-hidden="true"
                 />
               )}
-              <motion.span
+              <span
                 className={cn('-mt-1 w-full max-w-[26px] rounded-t-[3px]', active ? 'bg-brand-600' : 'bg-brand-600/85')}
-                initial={{ scaleY: 0 }}
-                whileInView={{ scaleY: 1 }}
-                viewport={{ once: true, amount: 0.3 }}
-                transition={{ duration: 0.7, ease: EASE_PAPER, delay: 0.08 + index * 0.05 }}
-                style={{ height: `${Math.max(hit > 0 ? 5 : 2, (hit / maxHit) * 56)}px`, transformOrigin: 'bottom' }}
+                style={{ height: `${Math.max(hit > 0 ? 5 : 2, (hit / maxHit) * 56)}px` }}
                 aria-hidden="true"
               />
             </motion.button>
@@ -185,9 +192,11 @@ export function TierHistogram({
           </span>
         ))}
       </div>
-      <p className="mt-3.5 text-micro text-ink-400">
-        {ref !== null ? t('实心=本次命中 · 斜纹=已评分候选池') : t('仅统计本次筛选命中的标的')}
-      </p>
+      {ref !== null ? (
+        <HatchLegend className="mt-3.5" actual={t('本次命中')} estimate={t('全市场参照')} />
+      ) : (
+        <p className="mt-3.5 text-micro text-ink-400">{t('仅统计本次筛选命中的标的')}</p>
+      )}
     </div>
   );
 }
@@ -207,86 +216,91 @@ export function MethodCard({
   error?: boolean;
   onRetry?: () => void;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
   const profile = meta?.profiles.find((item) => item.id === profileId) ?? null;
   return (
-    <div className="card-surface p-5">
-      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full items-center justify-between">
+    <div className="card-surface t-acc p-5" data-open={open ? 'true' : 'false'}>
+      <button
+        type="button"
+        className="t-acc-head flex w-full items-center justify-between gap-3 text-left"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-controls={panelId}
+      >
         <span className="eyebrow">
           {t('评分方法 ·')} {profile ? profile.name : loading ? t('读取中') : error ? t('档位未知') : t('默认权重')}
         </span>
-        <Icon name="chevron-down" size={14} className={cn('text-ink-400 transition-transform duration-200', open && 'rotate-180')} />
+        <span className="t-acc-chevron text-ink-400">
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+            <path d="M4 6.5L8 10.5L12 6.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          </svg>
+        </span>
       </button>
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            key="body"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.26, ease: EASE_PAPER }}
-            className="overflow-hidden"
-          >
-            {!meta && loading ? (
-              <div className="mt-4 space-y-2.5" aria-hidden="true">
+      <div id={panelId} className="t-acc-panel" aria-hidden={!open} inert={!open}>
+        <div className="t-acc-panel-inner">
+          {!meta && loading ? (
+            <div className="t-skel mt-4 space-y-2.5" data-state="loading" aria-hidden="true">
+              <div className="t-skel-skeleton is-pulsing space-y-2.5">
                 {FAMILY_META.map(({ key }) => (
-                  <span key={key} className="skeleton-shimmer block h-3 w-full rounded-xs" />
+                  <SkeletonBlock key={key} className="h-3 w-full rounded-xs" />
                 ))}
               </div>
-            ) : !meta && error ? (
-              <div className="mt-4">
-                <p className="text-caption leading-[18px] text-ink-500">{t('评分档位读取失败，无法显示当前权重。')}</p>
-                {onRetry && (
+              <div className="t-skel-content" />
+            </div>
+          ) : !meta && error ? (
+            <EmptyState
+              size="compact"
+              image="/empty-chart.svg"
+              title={t('评分档位读取失败，无法显示当前权重。')}
+              action={
+                onRetry ? (
                   <button
                     type="button"
                     onClick={onRetry}
-                    className="mt-2 flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-caption text-ink-600 transition-colors hover:border-brand-400 hover:text-brand-600"
+                    className="mt-2 flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-caption text-ink-600 shadow-btn transition-colors hover:border-brand-400 hover:text-brand-600"
                   >
                     <Icon name="refresh" size={12} />
                     {t('重试')}
                   </button>
-                )}
+                ) : undefined
+              }
+            />
+          ) : (
+            <>
+              <div className="mt-4 grid grid-cols-[max-content_minmax(0,1fr)_max-content] gap-y-2.5">
+                {FAMILY_META.map(({ key, label }) => {
+                  const weight = meta?.family_weights[key] ?? null;
+                  return (
+                    <div key={key} className="col-span-3 grid grid-cols-subgrid items-center gap-x-2.5">
+                      <span className="text-caption text-ink-500">{label}</span>
+                      <span className="strength-track h-1.5 overflow-hidden rounded-pill bg-paper" role="presentation">
+                        {weight !== null && (
+                          <span
+                            className="block h-full origin-left rounded-pill bg-brand-500"
+                            style={{ width: `${weight * 100 * 4}%` }}
+                          />
+                        )}
+                      </span>
+                      <span className="text-right font-mono text-caption text-ink-800 tnum">
+                        {weight !== null ? `${Math.round(weight * 100)}%` : '—'}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
-            ) : (
-              <>
-                <div className="mt-4 grid grid-cols-[max-content_minmax(0,1fr)_max-content] gap-y-2.5">
-                  {FAMILY_META.map(({ key, label }, index) => {
-                    const weight = meta?.family_weights[key] ?? null;
-                    return (
-                      <div key={key} className="col-span-3 grid grid-cols-subgrid items-center gap-x-2.5">
-                        <span className="text-caption text-ink-500">{label}</span>
-                        <span className="h-1.5 overflow-hidden rounded-pill bg-line" role="presentation">
-                          {weight !== null && (
-                            <motion.span
-                              className="block h-full origin-left rounded-pill bg-brand-500"
-                              initial={{ scaleX: 0 }}
-                              whileInView={{ scaleX: 1 }}
-                              viewport={{ once: true, amount: 0.4 }}
-                              transition={{ duration: 0.7, ease: EASE_PAPER, delay: index * 0.05 }}
-                              style={{ width: `${weight * 100 * 4}%` }}
-                            />
-                          )}
-                        </span>
-                        <span className="text-right font-mono text-caption text-ink-800 tnum">
-                          {weight !== null ? `${Math.round(weight * 100)}%` : '—'}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <p className="mt-3 text-caption leading-[18px] text-ink-500">
-                  {profile?.description
-                    ? t(profile.description)
-                    : t('内在强度为六族加权合成（0–100，缺失重新配权）。')}
-                </p>
-                <p className="mt-1.5 text-micro leading-[16px] text-ink-400">
-                  {t('最终排序分 = 内在 78% + 市场形态 8% + 偏好适配 14%（置信度加权）。')}
-                </p>
-              </>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+              <p className="mt-3 text-caption leading-[18px] text-ink-500">
+                {profile?.description
+                  ? t(profile.description)
+                  : t('内在强度为六族加权合成（0–100，缺失重新配权）。')}
+              </p>
+              <p className="mt-1.5 text-micro leading-[16px] text-ink-400">
+                {t('最终排序分 = 内在 78% + 市场形态 8% + 偏好适配 14%（置信度加权）。')}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

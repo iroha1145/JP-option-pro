@@ -1,212 +1,189 @@
-import { useEffect, useRef, useState } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Icon } from '@/components/icons';
-import { LOCALES, getLocale, setLocale, t } from '@/i18n/core';
-import { stocksApi } from '@/api/modules';
-import type { SearchResult } from '@/api/types';
+/**
+ * Header：Logo | 编号导航（滑行下划线） | ⌘K | 时段LED+JST时钟 | 语言/涨跌色 | 登录
+ */
+import { useLayoutEffect, useRef, useState } from 'react';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router';
+import { cn, isNavPathActive } from '@/lib/utils';
+import { useNow } from '@/hooks/useNow';
 import { useAccess } from '@/hooks/useAccess';
-import { cn } from '@/lib/utils';
-import { popoverReduced, popoverVariants, springSoft } from '@/lib/motion';
-import Segmented from '@/components/shared/Segmented';
+import { useToast } from '@/hooks/useToast';
+import { fmtJstClock } from '@/lib/format';
+import { placeGlide } from '@/lib/transitions';
+import { tokyoSession, tokyoSessionLabel } from '@/lib/tokyoSession';
+import Icon from '@/components/icons';
+import { SessionDot } from '@/components/shared/SessionLED';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
+import ColorModeSwitcher from '@/components/ColorModeSwitcher';
+import { t } from '@/i18n/core';
 
-/* 导航用短标签，不用页面全称：全称的日文译文（ブレイクアウトレーダー 等）
-   在 8 项并排时必然折行（用户实拍）。页面标题仍用全称。 */
-export const NAV_ITEMS: { path: string; label: string; index: string }[] = [
-  { path: '/', label: '首页', index: '01' },
-  { path: '/market', label: '市场', index: '02' },
-  { path: '/radar', label: '雷达', index: '03' },
-  { path: '/screener', label: '筛选', index: '04' },
-  { path: '/watchlist', label: '自选', index: '05' },
-  { path: '/earnings', label: '决算', index: '06' },
-  { path: '/news', label: '新闻', index: '07' },
-  { path: '/data-status', label: '数据', index: '08' },
-  { path: '/short-monitor', label: '空卖', index: '09' },
-  { path: '/research', label: '验证', index: '10' },
-];
+export const NAV_ITEMS = [
+  { no: '01', label: t('首页'), path: '/' },
+  { no: '02', label: t('自选'), path: '/watchlist' },
+  { no: '03', label: t('筛选'), path: '/screener' },
+  { no: '04', label: t('雷达'), path: '/radar' },
+  { no: '05', label: t('市场'), path: '/market' },
+  { no: '06', label: t('决算'), path: '/earnings' },
+  { no: '07', label: t('新闻'), path: '/news' },
+  { no: '08', label: t('空卖'), path: '/short-monitor' },
+] as const;
 
-export default function Navbar() {
-  const { isOwner, mode, logout, accountUsername } = useAccess();
+function JstClock({ className }: { className?: string }) {
+  const now = useNow(1000);
+  return (
+    <span className={cn('font-mono text-micro text-ink-500 tnum', className)} suppressHydrationWarning>
+      {fmtJstClock(now)} JST
+    </span>
+  );
+}
+
+export default function Navbar({ onOpenPalette }: { onOpenPalette: () => void }) {
+  const { isOwner, isSignedIn, username, logout } = useAccess();
+  const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
-  const reduceMotion = useReducedMotion();
-  const [hovered, setHovered] = useState<string | null>(null);
+  const now = useNow(30_000);
+  const session = tokyoSession(now);
+
+  const navRef = useRef<HTMLElement>(null);
+  const glideRef = useRef<HTMLSpanElement>(null);
+  const glideReadyRef = useRef(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const activePath = NAV_ITEMS.find((item) => isNavPathActive(location.pathname, item.path))?.path ?? '';
+
+  const alignRef = useRef<(animate: boolean) => void>(() => undefined);
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    const bar = glideRef.current;
+    if (!nav || !bar) return;
+    alignRef.current = (animate: boolean) => {
+      const label = nav.querySelector('[data-active="true"] [data-nav-label]') as HTMLElement | null;
+      if (!label) {
+        bar.style.width = '0px';
+        return;
+      }
+      const navBox = nav.getBoundingClientRect();
+      const box = label.getBoundingClientRect();
+      placeGlide(bar, { offset: box.left - navBox.left, size: box.width }, { axis: 'x', animate });
+    };
+    let primed = false;
+    const ro = new ResizeObserver(() => {
+      if (!primed) {
+        primed = true;
+        return;
+      }
+      alignRef.current(false);
+    });
+    ro.observe(nav);
+    return () => ro.disconnect();
+  }, []);
+  useLayoutEffect(() => {
+    alignRef.current(glideReadyRef.current);
+    glideReadyRef.current = true;
+  }, [activePath]);
+
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await logout();
+      toast.info(
+        isOwner ? t('已退出 Owner 模式') : t('已退出登录'),
+        t('当前为访客只读模式'),
+      );
+      navigate('/watchlist');
+    } catch (error) {
+      toast.error(t('退出失败'), error instanceof Error ? error.message : t('请稍后再试'));
+    } finally {
+      setLoggingOut(false);
+    }
+  };
+
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-overlay backdrop-blur-md">
-      <div className="mx-auto flex h-12 max-w-shell items-center gap-3 px-4 md:h-14 md:gap-4 md:px-8">
-        <NavLink to="/" className="flex shrink-0 items-baseline gap-2 press-spring">
-          <span className="font-display text-h3 font-semibold text-ink-900">Optix</span>
-          <span className="rounded-sm bg-brand-600 px-1.5 py-0.5 text-micro font-bold uppercase tracking-wider text-white">
-            Japan
+    <header className="glass sticky top-0 z-50 border-b border-line">
+      <div className="mx-auto flex h-12 max-w-shell items-center gap-3 px-4 md:h-16 md:gap-5 md:px-8">
+        <Link to="/" className="flex shrink-0 items-center gap-2.5" aria-label={t('Optix Japan 首页')}>
+          <img src="/logo.svg" alt="" className="size-7 md:size-8" />
+          <span className="hidden flex-col leading-none sm:flex">
+            <span className="font-display text-[17px] font-bold text-ink-900">Optix Japan</span>
+            <span className="eyebrow mt-0.5 text-[9px]">JAPAN EQUITY DESK</span>
           </span>
-        </NavLink>
+        </Link>
+
         <nav
+          ref={navRef}
+          className="relative mx-auto hidden h-full items-center gap-1 xl:flex"
           aria-label={t('主导航')}
-          className="hidden flex-1 items-center gap-0.5 xl:flex"
-          onMouseLeave={() => setHovered(null)}
         >
+          <span ref={glideRef} data-nav-glide="" aria-hidden="true" className="nav-glide" />
           {NAV_ITEMS.map((item) => {
-            const active =
-              item.path === '/'
-                ? location.pathname === '/'
-                : location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+            const active = isNavPathActive(location.pathname, item.path);
             return (
               <NavLink
                 key={item.path}
                 to={item.path}
                 end={item.path === '/'}
-                onMouseEnter={() => setHovered(item.path)}
+                data-active={active}
                 className={cn(
-                  'relative isolate whitespace-nowrap rounded-md px-2.5 py-1.5 text-body-s text-ink-600 transition-colors hover:text-ink-900',
-                  active && 'font-medium text-brand-700',
+                  'flex h-full items-center gap-1.5 whitespace-nowrap px-2 text-body-s transition-colors duration-fast min-[1680px]:px-3.5',
+                  active ? 'font-medium text-brand-600' : 'text-ink-500 hover:text-ink-800',
                 )}
               >
-                {active && (
-                  <motion.span
-                    layoutId="nav-active"
-                    className="absolute inset-0 -z-10 rounded-md bg-brand-50"
-                    transition={reduceMotion ? { duration: 0 } : springSoft}
-                  />
-                )}
-                {!active && hovered === item.path && (
-                  <motion.span
-                    layoutId="nav-hover"
-                    className="absolute inset-0 -z-10 rounded-md bg-ink-900/[0.04]"
-                    transition={reduceMotion ? { duration: 0 } : springSoft}
-                  />
-                )}
-                <span className="mr-1 font-mono text-micro text-ink-300">{item.index}</span>
-                {t(item.label)}
+                <span className="hidden font-mono text-[11px] text-ink-400 min-[1680px]:inline">{item.no}</span>
+                <span data-nav-label className="relative flex h-full items-center">
+                  {item.label}
+                </span>
               </NavLink>
             );
           })}
         </nav>
-        <div className="ml-auto flex min-w-0 items-center gap-2">
-          <SearchBox onPick={(code) => navigate(`/stock/${code}`)} />
-          {/* 手机上语言切换收进 Dock 的「更多」sheet，顶栏只留搜索与登录 */}
-          <span className="hidden sm:block">
-            <LanguageSwitcher />
+
+        <div className="ml-auto flex items-center gap-2.5 md:gap-3.5 xl:ml-0">
+          <button
+            onClick={onOpenPalette}
+            className="hidden h-8 w-44 items-center gap-2 rounded-md border border-line bg-card-warm px-3 text-caption text-ink-400 transition-[border-color,box-shadow,color] duration-fast hover:border-line-strong hover:text-ink-500 focus-visible:border-brand-500 focus-visible:shadow-focus-ring md:flex xl:hidden min-[1680px]:flex min-[1680px]:w-[220px]"
+            aria-label={t('打开命令面板')}
+          >
+            <Icon name="search" size={14} />
+            <span className="flex-1 truncate text-left">{t('搜索代码或功能…')}</span>
+            <kbd className="flex items-center gap-0.5 font-mono text-[10px] text-ink-400">
+              <Icon name="command" size={11} />K
+            </kbd>
+          </button>
+          <button
+            onClick={onOpenPalette}
+            className="flex size-9 items-center justify-center rounded-md border border-line bg-card-warm text-ink-500 shadow-btn md:hidden xl:flex min-[1680px]:hidden"
+            aria-label={t('搜索')}
+          >
+            <Icon name="search" size={16} />
+          </button>
+
+          <span className="hidden items-center gap-2 md:flex" aria-label={t('市场时段：{label}', { label: t(tokyoSessionLabel(session)) })}>
+            <SessionDot session={session} />
+            <JstClock />
           </span>
-          {accountUsername && (
-            <span
-              className="hidden items-center gap-1.5 rounded-pill border border-line bg-card px-2.5 py-1 text-caption text-ink-600 sm:inline-flex"
-              title={t('账号与美股版通用 · admin 为所有者')}
+
+          <LanguageSwitcher className="hidden md:block" />
+          <ColorModeSwitcher className="hidden xl:flex" />
+
+          {isSignedIn ? (
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="flex h-8 max-w-[140px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-line bg-card px-3 text-caption text-ink-500 shadow-btn transition-colors hover:text-ink-800 disabled:cursor-wait disabled:opacity-60 md:max-w-none"
             >
-              <Icon name="command" size={12} className="text-brand-600" />
-              {accountUsername}
-            </span>
+              <Icon name="logout" size={14} className="shrink-0" />
+              <span className="truncate">{username ? t('退出 {name}', { name: username }) : t('退出')}</span>
+            </button>
+          ) : (
+            <Link
+              to="/login"
+              className="flex h-8 shrink-0 items-center whitespace-nowrap rounded-md bg-brand-600 px-3.5 text-caption font-medium text-white shadow-btn-hi transition-[transform,background-color] duration-fast hover:bg-brand-700 active:scale-[0.98]"
+            >
+              {t('登录')}
+            </Link>
           )}
-          {mode === 'password' &&
-            (isOwner || accountUsername ? (
-              <button
-                type="button"
-                onClick={() => void logout()}
-                className="press-spring flex items-center gap-1 rounded-md px-2 py-1.5 text-body-s text-ink-500 hover:bg-brand-50 hover:text-ink-900"
-                title={t('登出')}
-              >
-                <Icon name="logout" size={16} />
-              </button>
-            ) : (
-              <NavLink to="/login" className="text-body-s text-brand-700 hover:underline">
-                {t('登录')}
-              </NavLink>
-            ))}
         </div>
       </div>
     </header>
-  );
-}
-
-function LanguageSwitcher() {
-  const current = getLocale();
-  return (
-    <Segmented
-      ariaLabel={t('切换语言')}
-      options={LOCALES.map((locale) => ({ value: locale.code, label: locale.short }))}
-      value={current}
-      onChange={(code) => setLocale(code)}
-    />
-  );
-}
-
-function SearchBox({ onPick }: { onPick: (code: string) => void }) {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [open, setOpen] = useState(false);
-  const timer = useRef<number | null>(null);
-  const boxRef = useRef<HTMLDivElement>(null);
-  const reduceMotion = useReducedMotion();
-  const variants = reduceMotion ? popoverReduced : popoverVariants;
-
-  useEffect(() => {
-    if (timer.current) window.clearTimeout(timer.current);
-    if (!query.trim()) {
-      setResults([]);
-      return;
-    }
-    timer.current = window.setTimeout(async () => {
-      try {
-        const response = await stocksApi.search(query.trim());
-        setResults(response.results.slice(0, 8));
-        setOpen(true);
-      } catch {
-        setResults([]);
-      }
-    }, 220);
-    return () => {
-      if (timer.current) window.clearTimeout(timer.current);
-    };
-  }, [query]);
-
-  useEffect(() => {
-    const onClick = (event: MouseEvent) => {
-      if (boxRef.current && !boxRef.current.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, []);
-
-  return (
-    <div ref={boxRef} className="relative min-w-0">
-      <div className="flex items-center gap-1.5 rounded-md border border-line bg-card px-2 py-1.5 transition-[box-shadow,border-color] duration-fast ease-paper focus-within:border-brand-300 focus-within:shadow-focus-ring">
-        <Icon name="search" size={14} className="text-ink-400" />
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          onFocus={() => results.length > 0 && setOpen(true)}
-          placeholder={t('搜索代码或公司名')}
-          className="w-28 bg-transparent text-body-s text-ink-900 outline-none placeholder:text-ink-300 sm:w-40"
-        />
-      </div>
-      <AnimatePresence>
-        {open && results.length > 0 && (
-          <motion.ul
-            variants={variants}
-            initial="hidden"
-            animate="show"
-            exit="exit"
-            className="absolute right-0 top-full z-50 mt-1 w-72 origin-top-right overflow-hidden rounded-lg border border-line bg-card shadow-sh-2"
-          >
-            {results.map((item) => (
-              <li key={item.canonical_code}>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors duration-fast hover:bg-brand-50"
-                  onClick={() => {
-                    setOpen(false);
-                    setQuery('');
-                    onPick(item.display_code);
-                  }}
-                >
-                  <span className="font-mono text-body-s font-medium text-ink-900">{item.display_code}</span>
-                  <span className="min-w-0 flex-1 truncate text-body-s text-ink-600">{item.name_ja ?? item.name_en ?? '—'}</span>
-                  <span className="text-micro text-ink-400">{item.market_name ?? ''}</span>
-                </button>
-              </li>
-            ))}
-          </motion.ul>
-        )}
-      </AnimatePresence>
-    </div>
   );
 }

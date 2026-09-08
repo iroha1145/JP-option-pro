@@ -8,6 +8,8 @@
  * - マイナスは U+2212 を使う（ハイフンより判読しやすい）。
  */
 
+import { localeTag, t } from '@/i18n/core';
+
 const MINUS = '−';
 
 export function fmtPrice(value: number | null | undefined, digits?: number): string {
@@ -79,9 +81,39 @@ export function fmtDateShort(isoDate: string | null | undefined): string {
   return `${Number(parts[1])}/${Number(parts[2])}`;
 }
 
+const JST_DATE_SHORT_FMT = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Asia/Tokyo',
+  month: 'numeric',
+  day: 'numeric',
+});
+
+/** ISO タイムスタンプ → JST 'M/D'。UTC 日付を切らない。 */
+export function fmtJstDateShort(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return JST_DATE_SHORT_FMT.format(date);
+}
+
 export function fmtDate(isoDate: string | null | undefined): string {
   if (!isoDate) return '—';
   return isoDate.slice(0, 10);
+}
+
+/** 电报行日期锚：日数字 + 本地化短月。ISO 日历日原样拆，不做 TZ 换算。 */
+export function dateAnchorParts(iso: string | null | undefined): { day: number; monthShort: string } | null {
+  if (!iso) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!match) return null;
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!month || !day) return null;
+  return {
+    day,
+    monthShort: new Intl.DateTimeFormat(localeTag(), { month: 'short' }).format(
+      new Date(Number(match[1]), month - 1, 1),
+    ),
+  };
 }
 
 const JST_TIME_FMT = new Intl.DateTimeFormat('ja-JP', {
@@ -115,6 +147,19 @@ export function fmtJstTime(iso: string | null | undefined): string {
   return JST_TIME_FMT.format(date);
 }
 
+/** 相対時刻の通常形（刚刚 / 5 分钟前 / 3 小时前 / 2 天前）。 */
+export function fmtRelative(iso: string | null | undefined, now: number = Date.now()): string {
+  if (!iso) return '—';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '—';
+  const min = Math.floor((now - then) / 60_000);
+  if (min < 1) return t('刚刚');
+  if (min < 60) return t('{n} 分钟前', { n: min });
+  const hours = Math.floor(min / 60);
+  if (hours < 24) return t('{n} 小时前', { n: hours });
+  return t('{n} 天前', { n: Math.floor(hours / 24) });
+}
+
 /** 相対時刻の短縮形（5分 / 3時間 / 2日）— 言語非依存の狭い列用。 */
 export function fmtRelativeShort(iso: string | null | undefined, now: number = Date.now()): string {
   if (!iso) return '—';
@@ -140,4 +185,19 @@ export function fmtTimeJst(epochSeconds: number): string {
   return new Intl.DateTimeFormat('ja-JP', {
     timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false,
   }).format(new Date(epochSeconds * 1000));
+}
+
+/** 顶栏时钟：当前瞬间的 JST HH:mm。 */
+export function fmtJstClock(date: Date | number): string {
+  return JST_TIME_FMT.format(new Date(date));
+}
+
+export function fmtTimeHHMMSS(epochMs: number): string {
+  return new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date(epochMs));
 }

@@ -7,19 +7,16 @@
  */
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { motion } from 'framer-motion';
 import { watchlistApi } from '@/api/modules';
 import type { StrengthRow } from '@/api/types';
 import { cn } from '@/lib/utils';
 import { fmtYenCompact } from '@/lib/format';
 import Icon from '@/components/icons';
 import InfoHint from '@/components/shared/InfoHint';
-import { STRENGTH_HINTS } from '@/lib/indicatorHints';
+import { FAMILY_HINTS, STRENGTH_HINTS, STRUCTURE_HINTS, TECHNICAL_HINTS, type ScoreHint } from '@/lib/indicatorHints';
 import { explanationLines } from '@/lib/explainText';
 import { FAMILY_META } from './types';
 import { t } from '@/i18n/core';
-
-const EASE_PAPER = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
 function barClass(value: number): string {
   return value >= 70 ? 'bg-brand-600' : value >= 45 ? 'bg-brand-400' : 'bg-warn-600';
@@ -51,19 +48,19 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
           <InfoHint hint={STRENGTH_HINTS.families} side="bottom" size={11} className="ml-1" />
         </p>
         <div className="mt-3 grid grid-cols-[max-content_minmax(0,1fr)_max-content] gap-y-2.5">
-          {FAMILY_META.map(({ key, label }, index) => {
+          {FAMILY_META.map(({ key, label }) => {
             const value = row.families[key] ?? null;
             const weight = weights?.[key] ?? null;
             return (
               <div key={key} className="col-span-3 grid grid-cols-subgrid items-center gap-x-2.5">
-                <span className="whitespace-nowrap text-caption text-ink-500">{label}</span>
-                <span className="h-1.5 overflow-hidden rounded-pill bg-line" role="presentation">
+                <span className="whitespace-nowrap text-caption text-ink-500">
+                  {label}
+                  {FAMILY_HINTS[key] && <InfoHint hint={FAMILY_HINTS[key]} side="bottom" size={11} className="ml-0.5" />}
+                </span>
+                <span className="strength-track h-1.5 overflow-hidden rounded-pill bg-paper" role="presentation">
                   {value !== null && (
-                    <motion.span
+                    <span
                       className={cn('block h-full origin-left rounded-pill', barClass(value))}
-                      initial={{ scaleX: 0 }}
-                      animate={{ scaleX: 1 }}
-                      transition={{ duration: 0.7, ease: EASE_PAPER, delay: index * 0.05 }}
                       style={{ width: `${Math.max(2, Math.min(100, value))}%` }}
                     />
                   )}
@@ -95,11 +92,15 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
 
       {/* ② 结构信号（夜间结构分析，随行返回） */}
       <div>
-        <p className="eyebrow">{t('结构信号 · STRUCTURE')}</p>
+        <p className="eyebrow">
+          {t('结构信号 · STRUCTURE')}
+          <InfoHint hint={STRUCTURE_HINTS.market_structure} side="bottom" size={11} className="ml-1" />
+        </p>
         <div className="mt-3 space-y-2 text-caption">
           <StructLine
             label={t('价格结构')}
             value={priceAction.structure_label ? t(priceAction.structure_label) : '—'}
+            hint={STRUCTURE_HINTS.price_action_score}
           />
           {(priceAction.pattern_labels?.length ?? 0) > 0 && (
             <StructLine
@@ -113,10 +114,15 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
               value={[priceAction.spring ? 'Spring' : null, priceAction.upthrust ? 'Upthrust' : null].filter(Boolean).join(' · ')}
             />
           )}
-          <StructLine label={t('量价关系')} value={volPrice.setup_label ? t(volPrice.setup_label) : '—'} />
+          <StructLine
+            label={t('量价关系')}
+            value={volPrice.setup_label ? t(volPrice.setup_label) : '—'}
+            hint={STRUCTURE_HINTS.vol_price}
+          />
           <StructLine
             label="RSI14"
             value={technicals.rsi14 !== null && technicals.rsi14 !== undefined ? technicals.rsi14.toFixed(1) : '—'}
+            hint={TECHNICAL_HINTS.rsi14}
           />
           <StructLine
             label={t('MACD 动向')}
@@ -125,6 +131,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
                 ? `${technicals.macd_direction_pct >= 0 ? '+' : ''}${technicals.macd_direction_pct.toFixed(2)}%`
                 : '—'
             }
+            hint={TECHNICAL_HINTS.macd}
           />
           <StructLine
             label={t('趋势效率')}
@@ -133,6 +140,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
                 ? technicals.trend_efficiency_63d.toFixed(2)
                 : '—'
             }
+            hint={TECHNICAL_HINTS.trend_efficiency}
           />
         </div>
         {reasons.length > 0 && (
@@ -153,7 +161,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
         <div className="mt-3 flex flex-col items-start gap-2">
           <Link
             to={`/stock/${row.canonical_code}`}
-            className="flex items-center gap-1.5 rounded-md border border-line bg-card px-3 py-1.5 text-caption text-ink-600 transition-colors duration-fast hover:border-brand-400 hover:text-brand-600"
+            className="flex items-center gap-1.5 rounded-md border border-line bg-card px-3 py-1.5 text-caption text-ink-600 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600"
           >
             <Icon name="arrow-up-right" size={13} />
             {t('打开详情')}
@@ -170,7 +178,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
                   /* 已在自选等情况静默 */
                 }
               }}
-              className="flex items-center gap-1.5 rounded-md border border-line bg-card px-3 py-1.5 text-caption text-ink-600 transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
+              className="flex items-center gap-1.5 rounded-md border border-line bg-card px-3 py-1.5 text-caption text-ink-600 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
             >
               <Icon name={added ? 'check' : 'plus'} size={13} />
               {added ? t('已加入自选') : t('加入自选')}
@@ -240,10 +248,13 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
   );
 }
 
-function StructLine({ label, value }: { label: string; value: string }) {
+function StructLine({ label, value, hint }: { label: string; value: string; hint?: ScoreHint }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="shrink-0 text-ink-400">{label}</span>
+      <span className="flex shrink-0 items-center gap-0.5 text-ink-400">
+        {label}
+        {hint && <InfoHint hint={hint} size={11} side="bottom" />}
+      </span>
       <span className="truncate text-right text-ink-700">{value}</span>
     </div>
   );

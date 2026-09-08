@@ -23,6 +23,7 @@ import type {
   MarkPointComponentOption,
   TooltipComponentOption,
 } from 'echarts/components';
+import { directionColors, getColorMode } from './colorPreference.ts';
 
 echarts.use([
   LineChart, BarChart, CandlestickChart, PieChart,
@@ -49,20 +50,23 @@ export type ChartOption = ComposeOption<
 /** echarts.init 返回的实例类型（供交互层 convertFromPixel/zr 事件使用） */
 export type EChartsInstance = ReturnType<typeof echarts.init>;
 
-/* ---------- 调色（与 CSS 变量一致） ---------- */
+/* ---------- 调色（与 CSS 变量一致；up/down 随涨跌色彩习惯） ---------- */
 export const CH = {
-  ink400: '#8A94B0',
+  ink400: '#626F8B',
   ink300: '#B7BFD3',
-  lineChart: '#EDF0F4', // v8.1 随纸面降温
+  lineChart: '#EDF0F4',
   brand600: '#2E46E0',
   brand500: '#3B59F2',
   brand400: '#6B82FF',
-  /* 日本・中華圏の慣習: 上昇=赤 / 下落=緑（index.css と一致） */
-  up600: '#E5484D',
-  down600: '#0E9F6E',
+  get up600() {
+    return directionColors().up600;
+  },
+  get down600() {
+    return directionColors().down600;
+  },
   warn600: '#E8930C',
-  ai600: '#0B7285', // v8.1 弃 AI 紫 → 青瓷 teal（与 CSS 变量一致）
-} as const;
+  ai600: '#0B7285',
+};
 
 /* ---------- 通用配置 ---------- */
 /* 数据是读的：入场/更新动画统一 300ms cubicOut，range 切换不重复播长动画 */
@@ -167,23 +171,23 @@ export function insightLineSeries(options: {
   };
 }
 
-/** 毛玻璃 tooltip（§6：overlay + blur(14px) + sh-2 + r-md） */
+/** 图表 hover 小窗：白底、细边、克制阴影（与美版 cloud-chart-tooltip 同口径） */
 export function glassTooltip(overrides: Record<string, unknown> = {}) {
   return {
     trigger: 'axis' as const,
-    backgroundColor: 'rgba(250,251,253,0.88)',
-    /* tooltip 为 DOM 渲染：边框跟随 --line 令牌（线条细化后自动同步） */
+    transitionDuration: 0,
+    className: 'cloud-chart-tooltip',
+    backgroundColor: '#FFFFFF',
     borderColor: 'var(--line)',
     borderWidth: 1,
     padding: [8, 12],
     textStyle: { color: '#3D4A68', fontSize: 12, fontFamily: 'Inter, sans-serif' },
     extraCssText:
-      'backdrop-filter:blur(14px) saturate(1.5);-webkit-backdrop-filter:blur(14px) saturate(1.5);' +
-      'box-shadow:0 1px 2px rgba(13,22,38,.04),0 8px 24px -12px rgba(13,22,38,.12);border-radius:8px;',
+      'box-shadow:var(--popover-shadow);border-radius:9px;font-variant-numeric:tabular-nums;transition:opacity 140ms ease-out;',
     axisPointer: {
       type: 'line' as const,
       snap: true,
-      lineStyle: { color: CH.ink300, width: 1, type: 'solid' as const },
+      lineStyle: { color: CH.ink300, width: 1, type: [3, 3] as number[] },
     },
     ...overrides,
   };
@@ -229,18 +233,19 @@ export function hatchDecal(color = CH.brand600) {
 }
 
 /* ---------- 涨跌热力色阶（§1.7 连续映射） ----------
-   日本・中華圏の慣習: 上昇=赤 / 下落=緑。米版から移植した際に色順が
-   そのまま（緑が上昇）だったのを反転済み —— 全站の up-600/down-600 と一致。 */
+   色阶两端是「涨/跌」不是固定绿/红。基表按西方习惯（绿涨红跌）；
+   亚洲习惯下翻转符号，与 ColorModeSwitcher / CH.up600 共用同一快照。 */
 const HEAT_STOPS: { pct: number; rgb: [number, number, number] }[] = [
-  { pct: -3, rgb: [14, 159, 110] },
-  { pct: -1.5, rgb: [124, 207, 169] },
+  { pct: -3, rgb: [214, 53, 59] },
+  { pct: -1.5, rgb: [240, 131, 127] },
   { pct: 0, rgb: [241, 239, 232] },
-  { pct: 1.5, rgb: [240, 131, 127] },
-  { pct: 3, rgb: [214, 53, 59] },
+  { pct: 1.5, rgb: [124, 207, 169] },
+  { pct: 3, rgb: [14, 159, 110] },
 ];
 
 export function heatColor(pct: number): string {
-  const clamped = Math.max(-3, Math.min(3, pct));
+  const signed = getColorMode() === 'asian' ? -pct : pct;
+  const clamped = Math.max(-3, Math.min(3, signed));
   for (let i = 0; i < HEAT_STOPS.length - 1; i++) {
     const a = HEAT_STOPS[i];
     const b = HEAT_STOPS[i + 1];

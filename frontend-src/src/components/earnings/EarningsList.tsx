@@ -10,6 +10,9 @@ import { cn } from '@/lib/utils';
 import { fmtPrice, fmtYenCompact } from '@/lib/format';
 import EmptyState from '@/components/shared/EmptyState';
 import ChangeBadge from '@/components/shared/ChangeBadge';
+import PointerTooltip from '@/components/shared/PointerTooltip';
+import SoftBadge from '@/components/shared/SoftBadge';
+import Icon from '@/components/icons';
 import type { EarningsUpcomingItem } from '@/api/types';
 import { daysUntil, fmtMDCN, relativeDayCN, statusMeta, weekdayCN } from './types';
 import { t } from '@/i18n/core';
@@ -127,18 +130,26 @@ export function StatusChip({ item }: { item: EarningsUpcomingItem }) {
   const meta = statusMeta(item.status);
   return (
     <span className="flex flex-wrap items-center gap-1">
-      <span className="whitespace-nowrap rounded-sm bg-paper-2 px-1.5 py-0.5 text-micro text-ink-600">
-        {item.quarter_label ?? '—'}
-      </span>
-      <span
-        className={cn('whitespace-nowrap rounded-sm px-1.5 py-0.5 text-micro', meta.chipClass)}
-        title={item.status === 'estimated' ? t('前年同期开示日推导的目安，以公司正式公告为准') : undefined}
-      >
-        {meta.label}
-      </span>
-      {item.actual?.is_revision && (
-        <span className="whitespace-nowrap rounded-sm bg-warn-50 px-1.5 py-0.5 text-micro text-warn-700">{t('业绩预想修正')}</span>
+      <SoftBadge>{item.quarter_label ?? '—'}</SoftBadge>
+      {item.status === 'estimated' ? (
+        <PointerTooltip
+          label={t('前年同期开示日推导的目安，以公司正式公告为准')}
+          width={240}
+          contentClassName="p-2.5"
+          content={
+            <span className="block text-micro leading-[16px] text-ink-600">
+              {t('前年同期开示日推导的目安，以公司正式公告为准')}
+            </span>
+          }
+        >
+          <span className={cn('whitespace-nowrap rounded-sm px-1.5 py-0.5 text-micro', meta.chipClass)}>
+            {meta.label}
+          </span>
+        </PointerTooltip>
+      ) : (
+        <SoftBadge tone={item.status === 'confirmed' ? 'brand' : 'neutral'}>{meta.label}</SoftBadge>
       )}
+      {item.actual?.is_revision && <SoftBadge tone="warn">{t('业绩预想修正')}</SoftBadge>}
     </span>
   );
 }
@@ -149,6 +160,7 @@ interface EarningsListProps {
   filteredByDay: boolean;
   featuredFilteredEmpty?: boolean;
   onShowAll?: () => void;
+  onNextWeek?: () => void;
 }
 
 /* 実績列は 3 値（前期→予想→実績）を持つので、旧配分（198px 実測）では
@@ -156,13 +168,14 @@ interface EarningsListProps {
 const GRID =
   'md:grid-cols-[minmax(150px,1.1fr)_minmax(108px,0.7fr)_minmax(210px,1.8fr)_100px_88px_56px] 2xl:grid-cols-[minmax(170px,1.1fr)_minmax(118px,0.7fr)_minmax(232px,1.8fr)_110px_96px_60px]';
 
-export default function EarningsList({ items, filteredByDay, featuredFilteredEmpty = false, onShowAll }: EarningsListProps) {
+export default function EarningsList({ items, filteredByDay, featuredFilteredEmpty = false, onShowAll, onNextWeek }: EarningsListProps) {
   const navigate = useNavigate();
 
   if (items.length === 0) {
     return (
       <section className="card-surface" aria-label={t('决算列表')}>
         <EmptyState
+          image="/empty-chart.svg"
           title={
             featuredFilteredEmpty
               ? filteredByDay ? t('当日没有重点公司决算') : t('当前范围内没有重点公司决算')
@@ -171,16 +184,28 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
           description={
             featuredFilteredEmpty
               ? t('切到「全部公司」查看全市场日历。')
-              : t('选中的日期没有决算安排，切换日格试试。')
+              : filteredByDay
+                ? t('选中的日期没有决算安排，切换日格或查看下周。')
+                : t('选中的日期没有决算安排，切换日格试试。')
           }
           action={
             featuredFilteredEmpty && onShowAll ? (
               <button
                 type="button"
                 onClick={onShowAll}
-                className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white transition-[filter] hover:brightness-105"
+                className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105"
               >
                 {t('查看全部公司')}
+                <Icon name="chevron-right" size={13} />
+              </button>
+            ) : filteredByDay && onNextWeek ? (
+              <button
+                type="button"
+                onClick={onNextWeek}
+                className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105"
+              >
+                {t('查看下周')}
+                <Icon name="chevron-right" size={13} />
               </button>
             ) : undefined
           }
@@ -266,9 +291,9 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                     }}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: Math.min(index * 0.035, 0.5) }}
+                    transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: Math.min(index * 0.04, 0.6) }}
                     className={cn(
-                      'hidden cursor-pointer items-center border-b border-line px-4 py-2.5 transition-colors duration-fast last:border-b-0 md:grid md:gap-3',
+                      'hidden cursor-pointer items-center border-b border-line px-4 py-3 transition-colors duration-fast last:border-b-0 md:grid md:gap-3',
                       GRID,
                       'hover:bg-paper-2',
                       row.status === 'estimated' && 'opacity-[0.92]',
@@ -280,7 +305,13 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                       </span>
                       <span className="min-w-0">
                         <span className="block truncate text-body-s text-ink-800">{row.name_ja ?? '—'}</span>
-                        <span className="block truncate text-micro text-ink-400">{row.sector33_name ?? '—'}</span>
+                        {row.sector33_name ? (
+                          <SoftBadge className="mt-0.5 max-w-[11rem]" title={row.sector33_name}>
+                            <span className="truncate">{row.sector33_name}</span>
+                          </SoftBadge>
+                        ) : (
+                          <span className="block truncate text-micro text-ink-400">—</span>
+                        )}
                       </span>
                     </span>
                     <StatusChip item={row} />
@@ -334,7 +365,16 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                     <span className="text-right font-mono text-caption text-ink-600 tnum">{fmtYenCompact(row.avg_turnover_20d)}</span>
                     <span className="text-right">
                       {row.in_watchlist && <span className="text-warn-600">★</span>}
-                      {row.radar_state && <span className="ml-1 inline-block size-1.5 rounded-full bg-brand-600 align-middle" title={t('雷达信号')} />}
+                      {row.radar_state && (
+                        <PointerTooltip
+                          label={t('雷达信号')}
+                          width={140}
+                          contentClassName="p-2"
+                          content={<span className="text-micro text-ink-600">{t('雷达信号')}</span>}
+                        >
+                          <span className="ml-1 inline-block size-1.5 rounded-full bg-brand-600 align-middle" />
+                        </PointerTooltip>
+                      )}
                     </span>
                   </motion.div>
 
@@ -343,7 +383,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                     type="button"
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: Math.min(index * 0.035, 0.5) }}
+                    transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: Math.min(index * 0.04, 0.6) }}
                     onClick={open}
                     className="block w-full border-b border-line px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-paper-2 md:hidden"
                   >
@@ -353,7 +393,13 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-body-s text-ink-800">{row.name_ja ?? '—'}</span>
-                        <span className="block truncate text-micro text-ink-400">{row.sector33_name ?? '—'}</span>
+                        {row.sector33_name ? (
+                          <SoftBadge className="mt-0.5 max-w-[11rem]" title={row.sector33_name}>
+                            <span className="truncate">{row.sector33_name}</span>
+                          </SoftBadge>
+                        ) : (
+                          <span className="block truncate text-micro text-ink-400">—</span>
+                        )}
                       </span>
                       <span className="shrink-0 text-right">
                         <span className="block font-mono text-body-s text-ink-900 tnum">{fmtPrice(row.close)}</span>
@@ -412,7 +458,14 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                       <span>
                         {row.in_watchlist && <span className="text-warn-600">★</span>}
                         {row.radar_state && (
-                          <span className="ml-1 inline-block size-1.5 rounded-full bg-brand-600 align-middle" title={t('雷达信号')} />
+                          <PointerTooltip
+                            label={t('雷达信号')}
+                            width={140}
+                            contentClassName="p-2"
+                            content={<span className="text-micro text-ink-600">{t('雷达信号')}</span>}
+                          >
+                            <span className="ml-1 inline-block size-1.5 rounded-full bg-brand-600 align-middle" />
+                          </PointerTooltip>
                         )}
                       </span>
                     </span>

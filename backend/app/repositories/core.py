@@ -14,6 +14,17 @@ from typing import Any
 from app.domain.constants import EQUITY_TRADING_DIVISIONS
 from app.domain.symbols import display_code
 
+from app.services.publication import (
+    OUTCOME_ALREADY_CURRENT,
+    OUTCOME_PUBLISHED,
+    OUTCOME_RETAINED,
+    PublicationResult,
+    previous_publication_usable,
+    REASON_EMPTY_INPUT,
+    REASON_INCOMPLETE_COVERAGE,
+    REASON_INPUT_REGRESSION,
+)
+
 from .base import SQLiteRepository, utc_now_iso
 from .core_schema import CORE_DDL, CORE_MIGRATIONS, CORE_SCHEMA_VERSION
 
@@ -1372,7 +1383,7 @@ class CoreRepository(SQLiteRepository):
         """Execute an allowlisted screener filter. ``where_sql``/``order_sql``
         must be built exclusively by the screener service's filter compiler."""
 
-        with self.read() as connection:
+        with self.snapshot_read() as connection:
             total = connection.execute(
                 f"SELECT COUNT(*) FROM screener_rows WHERE {where_sql}", tuple(params)
             ).fetchone()[0]
@@ -1419,8 +1430,23 @@ class CoreRepository(SQLiteRepository):
         *,
         trade_date: str,
         regime: Mapping[str, Any],
-    ) -> int:
+        score_version: str | None = None,
+        expected_trade_date: str | None = None,
+        input_data_through: str | None = None,
+        coverage: Mapping[str, Any] | None = None,
+        index_input_date: str | None = None,
+        universe_version: str | None = None,
+        input_fingerprint: str | None = None,
+        publication_id: str | None = None,
+        today: str | None = None,
+    ) -> PublicationResult:
+        import uuid
+
         now = utc_now_iso()
+        if score_version is None:
+            from app.services.strength_scan import STRENGTH_SCORE_VERSION
+
+            score_version = STRENGTH_SCORE_VERSION
         prepared = []
         for row in rows:
             if not row.get("canonical_code"):
@@ -1431,10 +1457,81 @@ class CoreRepository(SQLiteRepository):
             )
             values["built_at"] = now
             prepared.append(tuple(values[column] for column in self._STRENGTH_COLUMNS))
-        if not prepared:
-            # Empty input must not wipe the last good snapshot (rows + meta).
-            return 0
+        coverage_dict = dict(coverage) if coverage else {}
+        allows_complete = bool(coverage_dict.get("allows_complete_publish", True)) if coverage else True
+        through = input_data_through or trade_date
+
         with self.write() as connection:
+            previous = self._strength_meta_from_connection(connection)
+            previous_id = (previous or {}).get("publication_id")
+            usable = previous_publication_usable(previous, today=today or trade_date)
+
+            if not prepared:
+                return PublicationResult(
+                    outcome=OUTCOME_RETAINED,
+                    rows_written=0,
+                    publication_id=previous_id,
+                    built_at=(previous or {}).get("built_at"),
+                    trade_date=(previous or {}).get("trade_date"),
+                    score_version=(previous or {}).get("score_version"),
+                    reason=REASON_EMPTY_INPUT,
+                    previous_publication_id=previous_id,
+                    input_data_through=(previous or {}).get("input_data_through"),
+                    coverage=coverage_dict or None,
+                )
+
+            if coverage and not allows_complete and usable:
+                return PublicationResult(
+                    outcome=OUTCOME_RETAINED,
+                    rows_written=0,
+                    publication_id=previous_id,
+                    built_at=(previous or {}).get("built_at"),
+                    trade_date=(previous or {}).get("trade_date"),
+                    score_version=(previous or {}).get("score_version"),
+                    reason=REASON_INCOMPLETE_COVERAGE,
+                    previous_publication_id=previous_id,
+                    input_data_through=(previous or {}).get("input_data_through"),
+                    coverage=coverage_dict,
+                )
+
+            prev_through = (previous or {}).get("input_data_through") or (previous or {}).get("trade_date")
+            if usable and prev_through and through and through < prev_through:
+                return PublicationResult(
+                    outcome=OUTCOME_RETAINED,
+                    rows_written=0,
+                    publication_id=previous_id,
+                    built_at=(previous or {}).get("built_at"),
+                    trade_date=(previous or {}).get("trade_date"),
+                    score_version=(previous or {}).get("score_version"),
+                    reason=REASON_INPUT_REGRESSION,
+                    previous_publication_id=previous_id,
+                    input_data_through=prev_through,
+                    coverage=coverage_dict or None,
+                )
+
+            prev_fp = (previous or {}).get("input_fingerprint")
+            prev_version = (previous or {}).get("score_version")
+            if (
+                usable
+                and input_fingerprint
+                and prev_fp == input_fingerprint
+                and prev_version
+                and prev_version == score_version
+                and (previous or {}).get("trade_date") == trade_date
+            ):
+                return PublicationResult(
+                    outcome=OUTCOME_ALREADY_CURRENT,
+                    rows_written=0,
+                    publication_id=previous_id,
+                    built_at=(previous or {}).get("built_at"),
+                    trade_date=(previous or {}).get("trade_date"),
+                    score_version=prev_version,
+                    previous_publication_id=previous_id,
+                    input_data_through=(previous or {}).get("input_data_through"),
+                    coverage=coverage_dict or None,
+                )
+
+            new_id = publication_id or f"pub_{uuid.uuid4().hex}"
             connection.execute("DELETE FROM strength_rows")
             connection.executemany(
                 f"INSERT OR IGNORE INTO strength_rows ({', '.join(self._STRENGTH_COLUMNS)}) "
@@ -1442,50 +1539,100 @@ class CoreRepository(SQLiteRepository):
                 prepared,
             )
             connection.execute(
-                "INSERT INTO strength_meta (id, trade_date, regime_json, universe_count, built_at) "
-                "VALUES (1, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET trade_date=excluded.trade_date, "
+                "INSERT INTO strength_meta (id, trade_date, regime_json, universe_count, built_at, "
+                "publication_id, score_version, expected_trade_date, input_data_through, "
+                "coverage_json, index_input_date, universe_version, input_fingerprint) "
+                "VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT (id) DO UPDATE SET trade_date=excluded.trade_date, "
                 "regime_json=excluded.regime_json, universe_count=excluded.universe_count, "
-                "built_at=excluded.built_at",
+                "built_at=excluded.built_at, publication_id=excluded.publication_id, "
+                "score_version=excluded.score_version, "
+                "expected_trade_date=excluded.expected_trade_date, "
+                "input_data_through=excluded.input_data_through, "
+                "coverage_json=excluded.coverage_json, "
+                "index_input_date=excluded.index_input_date, "
+                "universe_version=excluded.universe_version, "
+                "input_fingerprint=excluded.input_fingerprint",
                 (
                     trade_date,
                     json.dumps(dict(regime), ensure_ascii=False, sort_keys=True),
                     len(prepared),
                     now,
+                    new_id,
+                    score_version,
+                    expected_trade_date or trade_date,
+                    through,
+                    json.dumps(coverage_dict, ensure_ascii=False, sort_keys=True),
+                    index_input_date,
+                    universe_version,
+                    input_fingerprint,
                 ),
             )
-        return len(prepared)
+        return PublicationResult(
+            outcome=OUTCOME_PUBLISHED,
+            rows_written=len(prepared),
+            publication_id=new_id,
+            built_at=now,
+            trade_date=trade_date,
+            score_version=score_version,
+            previous_publication_id=previous_id,
+            input_data_through=through,
+            coverage=coverage_dict or None,
+        )
+
+    def _decode_strength_row(self, row: Any) -> dict[str, Any]:
+        item = dict(row)
+        raw = item.pop("details_json", None)
+        try:
+            item["details"] = json.loads(raw) if raw else {}
+        except ValueError:
+            item["details"] = {}
+        return item
+
+    def _strength_meta_from_connection(self, connection: Any) -> dict[str, Any] | None:
+        try:
+            row = connection.execute("SELECT * FROM strength_meta WHERE id=1").fetchone()
+        except Exception:  # noqa: BLE001 — missing table on half-migrated test fixtures
+            return None
+        if row is None:
+            return None
+        item = dict(row)
+        try:
+            regime = json.loads(item.pop("regime_json") or "{}")
+        except ValueError:
+            regime = {}
+        try:
+            coverage = json.loads(item.get("coverage_json") or "{}")
+        except ValueError:
+            coverage = {}
+        item.pop("coverage_json", None)
+        item["regime"] = regime
+        item["coverage"] = coverage
+        item["universe_count"] = int(item.get("universe_count") or 0)
+        item["stored_score_version"] = item.get("score_version")
+        return item
 
     def strength_rows_all(self) -> list[dict[str, Any]]:
         with self.read() as connection:
             rows = connection.execute("SELECT * FROM strength_rows").fetchall()
-        results = []
-        for row in rows:
-            item = dict(row)
-            raw = item.pop("details_json", None)
-            try:
-                item["details"] = json.loads(raw) if raw else {}
-            except ValueError:
-                item["details"] = {}
-            results.append(item)
-        return results
+        return [self._decode_strength_row(row) for row in rows]
 
     def strength_meta(self) -> dict[str, Any] | None:
         with self.read() as connection:
-            row = connection.execute(
-                "SELECT trade_date, regime_json, universe_count, built_at FROM strength_meta WHERE id=1"
-            ).fetchone()
-        if row is None:
-            return None
-        try:
-            regime = json.loads(row["regime_json"]) if row["regime_json"] else {}
-        except ValueError:
-            regime = {}
-        return {
-            "trade_date": row["trade_date"],
-            "regime": regime,
-            "universe_count": int(row["universe_count"] or 0),
-            "built_at": row["built_at"],
-        }
+            return self._strength_meta_from_connection(connection)
+
+    def strength_snapshot(self) -> tuple[list[dict[str, Any]], dict[str, Any]] | None:
+        """Meta and rows from one explicit read transaction."""
+
+        with self.snapshot_read() as connection:
+            meta = self._strength_meta_from_connection(connection)
+            if meta is None:
+                return None
+            rows = [
+                self._decode_strength_row(row)
+                for row in connection.execute("SELECT * FROM strength_rows").fetchall()
+            ]
+        return rows, meta
 
     # ------------------------------------------------------------------
     # sync state

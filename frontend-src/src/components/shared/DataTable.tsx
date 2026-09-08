@@ -1,13 +1,16 @@
 /** DataTable：发丝线行、r-lg 容器、表头 Eyebrow 化、行 hover paper-2 底、可排序 */
-import { useMemo, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { useMemo, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import Icon from '@/components/icons';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 
 export interface Column<T> {
   key: string;
   /** 列头内容；th 内层是 inline-flex gap-1，可携带 InfoHint 等行内小件 */
   title: ReactNode;
+  /** 排序按钮外的兄弟节点（如 InfoHint），避免把可交互 ⓘ 嵌进排序 button */
+  hint?: ReactNode;
   align?: 'left' | 'right' | 'center';
   width?: string;
   sortable?: boolean;
@@ -33,6 +36,8 @@ interface DataTableProps<T> {
   onSortChange?: (s: SortState | null) => void;
   className?: string;
   rowClassName?: (row: T) => string;
+  /** 行已在外部排好（例如自选先全量排序再渐进挂载），表头只负责改状态。 */
+  preSorted?: boolean;
 }
 
 export default function DataTable<T>({
@@ -46,7 +51,9 @@ export default function DataTable<T>({
   onSortChange,
   className,
   rowClassName,
+  preSorted = false,
 }: DataTableProps<T>) {
+  const reducedMotion = usePrefersReducedMotion();
   const [innerSort, setInnerSort] = useState(defaultSort);
   const sort = sortProp !== undefined ? sortProp : innerSort;
   const setSort = (s: SortState | null) => {
@@ -55,7 +62,7 @@ export default function DataTable<T>({
   };
 
   const sorted = useMemo(() => {
-    if (!sort) return rows;
+    if (preSorted || !sort) return rows;
     const col = columns.find((c) => c.key === sort.key);
     if (!col?.sortValue) return rows;
     const dir = sort.desc ? -1 : 1;
@@ -86,6 +93,7 @@ export default function DataTable<T>({
             {columns.map((c) => (
               <th
                 key={c.key}
+                scope="col"
                 style={c.width ? { width: c.width } : undefined}
                 className={cn(
                   'border-b border-line px-4 py-2.5 text-eyebrow font-sans uppercase tracking-[0.14em] text-ink-400',
@@ -96,20 +104,23 @@ export default function DataTable<T>({
               >
                 {/* 排序必须是真正的按钮（审计 P3-1）：旧实现把 onClick 绑在 <th> 上，
                     既不可聚焦也没有键盘事件，纯鼠标操作。 */}
-                {c.sortable ? (
-                  <button
-                    type="button"
-                    onClick={() => toggleSort(c.key)}
-                    className="inline-flex items-center gap-1 rounded-xs transition-colors duration-fast hover:text-ink-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
-                  >
-                    {c.title}
-                    <span className={cn('inline-flex transition-transform duration-200', sort?.key === c.key && !sort.desc && 'rotate-180', sort?.key !== c.key && 'opacity-30')}>
-                      <Icon name="chevron-down" size={11} />
-                    </span>
-                  </button>
-                ) : (
-                  <span className="inline-flex items-center gap-1">{c.title}</span>
-                )}
+                <span className="inline-flex items-center gap-1">
+                  {c.sortable ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleSort(c.key)}
+                      className="inline-flex items-center gap-1 rounded-xs transition-colors duration-fast hover:text-ink-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
+                    >
+                      {c.title}
+                      <span className={cn('inline-flex transition-transform duration-200', sort?.key === c.key && !sort.desc && 'rotate-180', sort?.key !== c.key && 'opacity-30')}>
+                        <Icon name="chevron-down" size={11} />
+                      </span>
+                    </button>
+                  ) : (
+                    <span className="inline-flex items-center gap-1">{c.title}</span>
+                  )}
+                  {c.hint}
+                </span>
               </th>
             ))}
           </tr>
@@ -120,9 +131,18 @@ export default function DataTable<T>({
             return (
               <motion.tr
                 key={key}
-                layout="position"
-                transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                layout={reducedMotion ? false : 'position'}
+                transition={{ duration: reducedMotion ? 0 : 0.24, ease: [0.16, 1, 0.3, 1] }}
+                onClick={
+                  onRowClick
+                    ? (event: ReactMouseEvent<HTMLTableRowElement>) => {
+                        const hit = (event.target as Element).closest('a, button, input, select, [role="button"]');
+                        /* 行自己带 role=button，closest 会命中当前行；只有点到行内控件才拦截。 */
+                        if (hit && hit !== event.currentTarget) return;
+                        onRowClick(row);
+                      }
+                    : undefined
+                }
                 /* 可点击行同时可聚焦、可回车/空格触发（审计 P3-1）。 */
                 {...(onRowClick
                   ? {

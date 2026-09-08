@@ -11,11 +11,14 @@ import { fmtPrice, fmtYenCompact } from '@/lib/format';
 import Icon from '@/components/icons';
 import ChangeBadge from '@/components/shared/ChangeBadge';
 import InfoHint from '@/components/shared/InfoHint';
+import SoftBadge from '@/components/shared/SoftBadge';
+import TickPrice from '@/components/shared/TickPrice';
 import { CodeCell } from '@/components/domain';
 import { STRENGTH_HINTS } from '@/lib/indicatorHints';
 import RowExpansion from './RowExpansion';
 import { NewsBadge, ScoreCell, SubscoreTicks } from './cells';
 import { tierOf, TIER_RANGE, type NewsSummaryMap } from './types';
+import { quotePair } from './quotePair';
 import { t } from '@/i18n/core';
 
 const EASE_PAPER = [0.16, 1, 0.3, 1] as [number, number, number, number];
@@ -35,6 +38,8 @@ export interface ResultTableProps {
   animKey: string;
   /** 盘中叠加（表示専用）。夜間断面のスコアは書き換えない。 */
   overlay?: Record<string, { live_price: number; live_change_pct?: number; live_pct_from_high_252?: number | null }>;
+  flashes?: Record<string, 'up' | 'down'>;
+  stale?: boolean;
 }
 
 export default function ResultTable({
@@ -51,9 +56,11 @@ export default function ResultTable({
   canManageWatchlist,
   animKey,
   overlay,
+  flashes = {},
+  stale = false,
 }: ResultTableProps) {
   return (
-    <div className="card-surface overflow-x-auto overscroll-x-contain">
+    <div className={cn('card-surface overflow-x-auto overscroll-x-contain', stale && 'opacity-60')}>
       <table className="w-full border-collapse">
         <thead>
           <tr className="bg-card-warm">
@@ -63,11 +70,25 @@ export default function ResultTable({
               {t('强度分')}
               <InfoHint hint={STRENGTH_HINTS.composite} side="bottom" size={11} className="ml-1" />
             </Th>
-            <Th>{t('分类')}</Th>
-            <Th>{t('分项')}</Th>
-            <Th align="right">{t('收盘 / 涨跌')}</Th>
-            <Th>{t('新闻 · 72H')}</Th>
-            <Th align="right">{t('20日均额')}</Th>
+            <Th>
+              {t('分类')}
+              <InfoHint hint={STRENGTH_HINTS.classification} side="bottom" size={11} className="ml-1" />
+            </Th>
+            <Th>
+              {t('分项')}
+              <InfoHint hint={STRENGTH_HINTS.families} side="bottom" size={11} className="ml-1" />
+            </Th>
+            <Th align="right">
+              {rows.some((row) => quotePair(row, overlay).live) ? t('现价 / 涨跌') : t('收盘 / 涨跌')}
+            </Th>
+            <Th>
+              {t('新闻 · 72H')}
+              <InfoHint hint={STRENGTH_HINTS.news72h} side="bottom" size={11} className="ml-1" />
+            </Th>
+            <Th align="right">
+              {t('20日均额')}
+              <InfoHint hint={STRENGTH_HINTS.avgTurnover} side="bottom" size={11} className="ml-1" />
+            </Th>
             <Th width="40px"> </Th>
           </tr>
         </thead>
@@ -75,6 +96,7 @@ export default function ResultTable({
           {rows.map((row, index) => {
             const isOpen = expanded === row.canonical_code;
             const score = row.ranking_score;
+            const quote = quotePair(row, overlay);
             return (
               <Fragment key={row.canonical_code}>
                 <motion.tr
@@ -106,16 +128,20 @@ export default function ResultTable({
                   <td className="px-3 py-2 font-mono text-caption text-ink-400 tnum">{startIndex + index + 1}</td>
                   <td className="px-3 py-2">
                     <CodeCell displayCode={row.display_code} nameJa={row.name_ja} />
-                    <span className="block max-w-[180px] truncate pl-0.5 text-micro text-ink-400">
-                      {row.sector33_name ?? '—'}
-                    </span>
+                    {row.sector33_name ? (
+                      <SoftBadge className="mt-0.5 max-w-[11rem]" title={row.sector33_name}>
+                        <span className="truncate">{row.sector33_name}</span>
+                      </SoftBadge>
+                    ) : (
+                      <span className="block max-w-[180px] truncate pl-0.5 text-micro text-ink-400">—</span>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <ScoreCell score={score} index={index} />
                   </td>
                   <td className="px-3 py-2">
                     {row.classification ? (
-                      <span className="whitespace-nowrap rounded-xs bg-paper-2 px-1.5 py-0.5 text-micro text-ink-600">{t(row.classification)}</span>
+                      <SoftBadge>{t(row.classification)}</SoftBadge>
                     ) : (
                       <span className="text-ink-300">—</span>
                     )}
@@ -124,9 +150,14 @@ export default function ResultTable({
                     <SubscoreTicks row={row} tipSide={index < 3 ? 'bottom' : 'top'} />
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <span className="inline-block font-mono text-body-s text-ink-900 tnum">{fmtPrice(row.close)}</span>
+                    <TickPrice
+                      flash={flashes[row.canonical_code]}
+                      className="font-mono text-body-s text-ink-900"
+                    >
+                      {fmtPrice(quote.price)}
+                    </TickPrice>
                     <span className="ml-1.5 align-middle">
-                      <ChangeBadge value={row.change_pct !== null ? row.change_pct / 100 : null} size="sm" />
+                      <ChangeBadge value={quote.change} size="sm" />
                     </span>
                   </td>
                   <td className="px-3 py-2">
@@ -188,7 +219,7 @@ export default function ResultTable({
               className={cn(
                 'flex size-7 items-center justify-center rounded-sm border font-mono text-caption tnum transition-colors duration-fast',
                 p === page
-                  ? 'border-brand-600 bg-brand-600 text-white'
+                  ? 'border-brand-600 bg-brand-600 text-white shadow-chip'
                   : 'border-line text-ink-500 hover:border-brand-400 hover:text-brand-600',
               )}
             >
@@ -243,7 +274,7 @@ function PageButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
-      className="flex size-7 items-center justify-center rounded-sm border border-line text-ink-500 transition-colors hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
+      className="flex size-7 items-center justify-center rounded-sm border border-line text-ink-500 shadow-btn transition-colors hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
     >
       {children}
     </button>

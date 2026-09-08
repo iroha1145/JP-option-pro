@@ -21,7 +21,7 @@
     --ink-700: #2A3550;
     --ink-600: #3D4A68;
     --ink-500: #5A6788;
-    --ink-400: #8A94B0;
+    --ink-400: #626F8B;
     --ink-300: #B7BFD3;
     /* §1.3 发丝线（v8 更淡；v8.1 随纸面降温——冷纸面配暖灰线会显脏，同族蓝灰 hue≈218°） */
     --line: #E9ECF1;
@@ -32,17 +32,15 @@
     --brand-600: #2E46E0;
     --brand-500: #3B59F2;
     --brand-400: #6B82FF;
-    --brand-300: #96A7FF;
     --brand-100: #E4E9FF;
     --brand-50: #F0F3FF;
     /* §1.5 语义 */
-    /* 日本・中華圏の慣習: 上昇=赤 / 下落=緑。全站一致で反転禁止。 */
-    --up-600: #E5484D;
-    --up-700: #C4302B;
-    --up-50: #FCECEC;
-    --down-600: #0E9F6E;
-    --down-700: #0B7A55;
-    --down-50: #E5F6EF;
+    --up-600: #0E9F6E;
+    --up-700: #0B7A55;
+    --up-50: #E5F6EF;
+    --down-600: #E5484D;
+    --down-700: #C4302B;
+    --down-50: #FCECEC;
     --warn-600: #E8930C;
     --warn-50: #FCF3E2;
     /* v8.1：AI 语义色弃紫。「紫 + AI」是 2024–26 最烂大街的生成式设计签名；
@@ -54,12 +52,15 @@
     --ease-paper: cubic-bezier(.16, 1, .3, 1);
     --ease-snap: cubic-bezier(.22, 1, .36, 1);
     --ease-inout: cubic-bezier(.45, 0, .15, 1);
-    /* transitions.dev / beUI：滑块与指示条的过冲，比 paper 多一点回弹 */
-    --ease-spring: cubic-bezier(.22, 1.15, .36, 1);
     /* v8 阴影三层制：更柔更大（rgba(16,24,40,*)），内高光 .7 保持 */
     --shadow-sh-1: 0 1px 2px rgba(16, 24, 40, .03);
     --shadow-sh-2: 0 1px 2px rgba(16, 24, 40, .03), 0 12px 32px -14px rgba(16, 24, 40, .10);
     --shadow-sh-3: 0 2px 4px rgba(16, 24, 40, .04), 0 24px 56px -16px rgba(16, 24, 40, .16);
+    /* Cloud Monitor 的细节层次，保留 Optix 的纸面与群青。 */
+    --control-track: #F2F4F7;
+    --control-selected-shadow: 0 2px 4px rgba(24, 43, 68, .045), 0 5px 12px -4px rgba(24, 43, 68, .09);
+    --card-shadow: 0 2px 4px rgba(24, 43, 68, .02), 0 9px 25px -12px rgba(24, 43, 68, .12);
+    --popover-shadow: 0 2px 5px rgba(24, 43, 68, .045), 0 10px 28px -10px rgba(24, 43, 68, .15);
 
     /* shadcn/ui 基座变量（亮纸面映射；v8.1 hue 44°→220° 随纸面降温，杜绝冷暖混用） */
     --background: 220 20% 97%;
@@ -78,10 +79,23 @@
     --accent-foreground: 232 74% 53%;
     --destructive: 359 75% 59%;
     --destructive-foreground: 0 0% 98%;
-    --border: 218 16% 91%;
-    --input: 218 14% 84%;
+    --border: 220 22% 89%;
+    --input: 220 18% 80%;
     --ring: 232 74% 53%;
     --radius: 12px; /* v8 圆角回暖：r-lg 8→12 */
+    /* Catalog paint 重映射只有一份，在 transitions-catalog.css 的适配区——
+       这里 @layer base 的副本在层叠里永远输给未分层的 transitions-root.css，
+       是死代码还会误导改错地方。 */
+  }
+
+  /* 亚洲市场偏好模式（红涨绿跌）：通过 html[data-color-mode="asian"] 挂载 */
+  html[data-color-mode="asian"] {
+    --up-600: #E5484D;
+    --up-700: #C4302B;
+    --up-50: #FCECEC;
+    --down-600: #0E9F6E;
+    --down-700: #0B7A55;
+    --down-50: #E5F6EF;
   }
 
   html {
@@ -102,7 +116,7 @@
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    background-image: radial-gradient(circle, rgba(13, 22, 38, .035) 1px, transparent 1px);
+    background-image: radial-gradient(circle, rgba(13, 22, 38, .02) 1px, transparent 1px);
     background-size: 22px 22px;
   }
 
@@ -111,15 +125,13 @@
     color: var(--brand-700);
   }
 
-  /* 聚焦环即时出现：禁过渡动画（polish-brief §B/§C.8；shadcn ring） */
+  /* 聚焦环即时出现：禁过渡动画（polish-brief §B/§C.8） */
   :focus-visible {
-    outline: none;
+    outline: 2px solid var(--brand-600);
+    outline-offset: 3px;
     box-shadow: 0 0 0 3px rgba(46, 70, 224, .18);
     border-radius: 6px;
     transition: none;
-  }
-  .focus-ring:focus-visible {
-    box-shadow: 0 0 0 3px rgba(46, 70, 224, .18);
   }
 
   * {
@@ -129,6 +141,42 @@
 }
 
 @layer components {
+  .skip-link {
+    position: fixed;
+    top: .75rem;
+    left: 1rem;
+    z-index: 100;
+    transform: translateY(-200%);
+    border-radius: 8px;
+    padding: .75rem 1rem;
+    background: var(--ink-900);
+    color: white;
+  }
+  .skip-link:focus { transform: none; }
+
+  /* shadcn Select portal: origin follows the collision-resolved placement.
+     Same entry/exit clock as transitions.dev menus, without a hidden focus tail. */
+  .select-surface {
+    transform-origin: var(--radix-select-content-transform-origin);
+    max-height: min(20rem, var(--radix-select-content-available-height));
+    min-width: var(--radix-select-trigger-width);
+    max-width: calc(100vw - 24px);
+  }
+  .select-surface[data-state="open"] {
+    animation: select-enter var(--dropdown-open-dur, 200ms) var(--ease-paper);
+  }
+  .select-surface[data-state="closed"] {
+    pointer-events: none;
+    animation: select-exit var(--dropdown-close-dur, 150ms) ease-in;
+  }
+  @keyframes select-enter {
+    from { opacity: 0; transform: scale(.97); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes select-exit {
+    to { opacity: 0; transform: scale(.98); }
+  }
+
   /* 发丝线工具类 */
   .hairline-b { border-bottom: 1px solid var(--line); }
   .hairline-t { border-top: 1px solid var(--line); }
@@ -148,26 +196,124 @@
     background: var(--card);
     border: 1px solid var(--line);
     border-radius: 12px;
-    box-shadow: var(--shadow-sh-1), inset 0 1px 0 rgba(255, 255, 255, .7);
+    box-shadow: var(--card-shadow);
+  }
+
+  /* shadcn Button + beUI spring-press：主操作统一皮。调用点只写 btn-primary，
+     hover / active / disabled / focus 由这里收口，避免各页 brightness-105 漂移。 */
+  .btn-primary {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 8px;
+    background: var(--brand-600);
+    padding: 0.5rem 1rem;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.25;
+    color: #fff;
+    box-shadow: var(--shadow-sh-1), 0 1px 0 rgba(255, 255, 255, .18) inset;
+    transition:
+      transform var(--duration-quick) var(--ease-smooth-out),
+      background-color var(--duration-quick) var(--ease-smooth-out),
+      filter var(--duration-quick) var(--ease-smooth-out);
+  }
+  .btn-primary:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    box-shadow: none;
+  }
+  .btn-primary:not(:disabled):active {
+    transform: scale(0.98);
+    box-shadow: inset 0 1.5px 3px rgba(13, 22, 38, .28), 0 1px 2px rgba(16, 24, 40, .10);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .btn-primary:not(:disabled):hover {
+      background: var(--brand-700);
+    }
+  }
+
+  /* transitions.dev 23 Learn more：文字旁的 chevron 悬停平移 2px */
+  .link-learn {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .link-learn .link-learn-chevron {
+    display: inline-flex;
+    transition: transform var(--learn-in) var(--learn-ease);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .link-learn:hover .link-learn-chevron {
+      transform: translateX(var(--learn-shift));
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .link-learn .link-learn-chevron { transition: none; }
+  }
+
+  /* beUI / rareui tilt-lite：卡片悬停一层对角高光，不做 3D 翻面（数据卡要稳） */
+  .card-glare {
+    position: relative;
+    isolation: isolate;
+  }
+  .card-glare::after {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    opacity: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.55), transparent 46%);
+    transition: opacity var(--tilt-glare-fade) var(--tilt-glare-ease);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .card-glare:hover::after {
+      opacity: var(--tilt-glare-opacity);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card-glare::after { transition: none; }
+  }
+
+  /* 主导航滑行下划线（beUI tabs + transitions.dev tabs-sliding） */
+  .nav-glide {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    width: 0;
+    border-radius: 999px;
+    background: var(--brand-600);
+    pointer-events: none;
+    will-change: transform, width;
+    transition:
+      transform var(--tabs-dur) var(--tabs-ease),
+      width var(--tabs-dur) var(--tabs-ease);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .nav-glide { transition: none !important; }
   }
   .card-hover {
-    transition: transform 260ms var(--ease-spring), box-shadow 260ms var(--ease-paper);
-  }
-  .card-hover:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--shadow-sh-2), inset 0 1px 0 rgba(255, 255, 255, .7);
-  }
-  .card-hover:active {
-    transform: translateY(-1px);
-    transition-duration: 90ms;
+    transition: transform 260ms var(--ease-paper), box-shadow 260ms var(--ease-paper);
   }
   /* v8 清新上浮卡：hover 抬升 3px + sh-2 */
   .card-lift {
     transition: transform .24s cubic-bezier(.23, 1, .32, 1), box-shadow .24s cubic-bezier(.23, 1, .32, 1);
   }
-  .card-lift:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--shadow-sh-2);
+  /* v8.3 触屏 hover 粘滞全局修：:hover 上浮/阴影只在「可悬停的精确指针」
+     （鼠标/触控板）下生效；触屏 tap 后 :hover 会粘住不解除，卡片一直浮着。 */
+  @media (hover: hover) and (pointer: fine) {
+    .card-hover:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-sh-2), inset 0 1px 0 rgba(255, 255, 255, .7);
+    }
+    .card-lift:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-sh-2);
+    }
   }
 
   /* 表格数字 */
@@ -179,6 +325,8 @@
   /* 眉题 Eyebrow（仅拉丁文） */
   .eyebrow {
     @apply font-sans text-eyebrow uppercase text-ink-400;
+    letter-spacing: .035em;
+    font-weight: 500;
   }
 
   /* v8 内容节奏：页内区块间距 32→36（作用于 Layout main 内的 mt-8 区块，不改页面结构） */
@@ -205,6 +353,215 @@
   .marquee-track:hover .marquee-inner {
     animation-play-state: paused;
   }
+
+  /* v8.3 tick-flash 可中断化：原 keyframes 闪烁（tailwind config 已删）→
+     常驻 base 类做 600ms 回落 transition；闪烁态 transition:none 瞬时上色，
+     再次闪烁可从任意中间色瞬时重上色——天然可中断。
+     reduced-motion 由全局 transition-duration:160ms 覆盖，无需额外处理。 */
+  .tick-flash { transition: background-color 600ms cubic-bezier(.22,1,.36,1); }
+  .tick-flash-up { background-color: var(--up-50); transition: none; }
+  .tick-flash-down { background-color: var(--down-50); transition: none; }
+}
+
+/* 浅色轨道与白色浮片，承接 Cloud Monitor 的范围选择器。
+   保留按压/键盘语义和原有滑行逻辑，只统一呈现。 */
+.control-button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--card);
+  color: var(--ink-600);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+  transition: color 150ms var(--ease-snap), background-color 150ms var(--ease-snap), border-color 150ms var(--ease-snap), box-shadow 150ms var(--ease-snap);
+}
+.control-button[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--brand-50);
+  color: var(--brand-700);
+  font-weight: 500;
+}
+.control-button:disabled { cursor: not-allowed; opacity: .5; }
+.control-button:focus-visible {
+  outline: 2px solid var(--brand-600);
+  outline-offset: 2px;
+}
+.filter-group {
+  display: inline-flex;
+  max-width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--control-track);
+}
+.filter-group .control-button {
+  min-height: 28px;
+  padding: 4px 10px;
+  border-color: transparent;
+  border-radius: 7px;
+  background: transparent;
+}
+.filter-group .control-button[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--card);
+  color: var(--brand-700);
+  box-shadow: var(--control-selected-shadow);
+}
+.t-tabs.selection-group {
+  padding: 3px;
+  border-radius: 10px;
+  border-color: var(--line);
+  background: var(--control-track);
+}
+@layer components {
+  /* 移动导航可通过已有 bg-brand-50 / shadow-none 保留自身的选中底色。 */
+  .selection-indicator {
+    border-radius: 7px;
+    background: var(--card);
+    box-shadow: var(--control-selected-shadow);
+  }
+}
+.t-tabs.selection-group .t-tab {
+  height: auto;
+  min-height: 28px;
+  border-radius: 7px;
+  padding: 4px 10px;
+  color: var(--ink-600);
+}
+.t-tabs.selection-group .t-tab[aria-selected="true"] { color: var(--brand-700); font-weight: 500; }
+@media (hover: hover) and (pointer: fine) {
+  .control-button:not(:disabled):not([aria-pressed="true"]):hover { background: var(--paper-2); border-color: var(--line-strong); color: var(--ink-800); }
+  .filter-group .control-button:not(:disabled):not([aria-pressed="true"]):hover { border-color: transparent; }
+  .t-tabs.selection-group .t-tab:not([aria-selected="true"]):hover { color: var(--ink-900); background: var(--paper-2); }
+}
+@media (pointer: coarse) {
+  .control-button, .filter-group .control-button, .t-tabs.selection-group .t-tab { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) { .control-button { transition: none; } }
+
+/* Phone selectors mirror the narrow rail and raised selection in Cloud Monitor.
+   The separate scrolling viewport retains room for the full touch target/shadow. */
+.selection-viewport { display: contents; }
+@media (max-width: 767px) {
+  .selection-viewport {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    width: fit-content;
+    padding: 14px 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .selection-viewport-full { width: 100%; }
+  .t-tabs.selection-group,
+  .filter-group,
+  .mobile-selection-rail {
+    display: inline-flex;
+    position: relative;
+    width: max-content;
+    max-width: none;
+    height: 34px;
+    min-height: 34px;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 2px;
+    padding: 2px;
+    overflow: visible;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--control-track);
+  }
+  .selection-viewport-full > .mobile-selection-rail { width: 100%; }
+  .selection-viewport-full > .mobile-selection-rail > button { flex: 1; }
+  .t-tabs.selection-group > div { flex-shrink: 0; }
+  .t-tabs.selection-group .t-tab,
+  .filter-group > .control-button,
+  .mobile-selection-rail > button,
+  .mobile-selection-rail .mobile-selection-option {
+    position: relative;
+    flex-shrink: 0;
+    height: 44px;
+    min-height: 44px;
+    min-width: 44px;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--ink-600);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 20px;
+    white-space: nowrap;
+  }
+  .t-tabs.selection-group .selection-indicator {
+    border-radius: 9px;
+    background: var(--card);
+    box-shadow: 0 3px 12px rgb(28 42 68 / 7%);
+  }
+  .filter-group > .control-button[aria-pressed="true"],
+  .mobile-selection-rail > button:is([aria-selected="true"], [aria-pressed="true"]),
+  .mobile-selection-rail .mobile-selection-option[aria-pressed="true"] {
+    background: var(--card);
+    color: var(--brand-700);
+    box-shadow: 0 3px 12px rgb(28 42 68 / 7%);
+  }
+  .mobile-selection-rail [data-selection-decoration] { display: none; }
+  .mobile-selection-rail > button:focus-visible,
+  .mobile-selection-rail .mobile-selection-option:focus-visible {
+    outline: 2px solid var(--brand-600);
+    outline-offset: 2px;
+  }
+}
+
+/* 数据读数与小标签：代码仍使用等宽字体，主要数值使用等宽数字的正文字体。 */
+.metric-value {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -.035em;
+}
+.soft-badge { border-radius: 5px; }
+
+/* Read-only floating details share one surface; coordinates never animate. */
+.cloud-popover {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card);
+  box-shadow: var(--popover-shadow);
+  animation: cloud-popover-enter 140ms ease-out both;
+}
+@keyframes cloud-popover-enter { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .cloud-popover { animation: none; }
+  .cloud-chart-tooltip { transition: none !important; }
+}
+@media (pointer: coarse) {
+  .color-mode-control { min-height: 44px; }
+}
+.change-badge { font-family: inherit; font-weight: 500; white-space: nowrap; letter-spacing: -.015em; }
+.strength-track { background: var(--control-track); }
+.strength-fill { opacity: .78; }
+.menu-select-trigger {
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(24, 43, 68, .025);
+}
+@media (pointer: coarse) {
+  .menu-select-trigger,
+  .scan-trigger,
+  .screener-price-input,
+  .disclosure-trigger,
+  details.radar-disclosure > summary { min-height: 44px; }
 }
 
 /* §3.6 按钮立体层级的全局状态物理（token 见 tailwind.config boxShadow.btn/btn-hi/
@@ -226,8 +583,63 @@
    动画运行期间 from 帧就是当前值：任何形式的 from{opacity:0}（JS 或 CSS）
    在动画时钟被饿死/冻结时都表现为「内容已挂载的全白页」；transform 的
    from 帧最坏也只是停在 6px 偏移，内容始终可读。 */
+/* 算法与图层的精修滑杆（Fine-tune Card 语言）：原生 range 保住 role=slider，
+   外观全换——轨道用 --fill 百分比染进度，拇指白底描边悬浮。fill 由组件按
+   value 内联写入；聚焦环走全站 focus-visible 约定。 */
+.ft-range {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--brand-600) var(--fill, 0%), var(--line) var(--fill, 0%));
+  outline: none;
+}
+/* Firefox 不把元素背景当轨道画：轨道/进度必须落在 ::-moz-range-* 伪元素上，
+   否则 FF 里 --fill 渐变被 UA 轨道盖住；::-moz-range-progress 是原生进度染色，
+   正好顶替 WebKit 的渐变方案，两边视觉一致。 */
+.ft-range::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+}
+.ft-range::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--brand-600);
+}
+.ft-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 1px 2px rgba(13, 22, 38, 0.18);
+  cursor: pointer;
+  transition: transform 150ms var(--ease-snap);
+}
+.ft-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 1px 2px rgba(13, 22, 38, 0.18);
+  cursor: pointer;
+  transition: transform 150ms var(--ease-snap);
+}
+.ft-range:active::-webkit-slider-thumb { transform: scale(1.12); }
+.ft-range:active::-moz-range-thumb { transform: scale(1.12); }
+.ft-range:focus-visible {
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 4px rgba(59, 89, 242, 0.3);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ft-range::-webkit-slider-thumb, .ft-range::-moz-range-thumb { transition: none; }
+}
+
 .page-enter {
-  animation: page-enter 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: page-enter var(--page-slide-dur) var(--page-slide-ease);
 }
 @media (prefers-reduced-motion: reduce) {
   .page-enter {
@@ -236,77 +648,8 @@
 }
 @keyframes page-enter {
   from {
-    transform: translateY(6px);
+    transform: translateY(var(--page-slide-distance));
   }
-}
-
-/* beUI / transitions.dev：子项错峰上浮（仍只动 transform） */
-.stagger-in > * {
-  animation: page-enter 0.36s var(--ease-paper) both;
-}
-.stagger-in > *:nth-child(1) { animation-delay: 0ms; }
-.stagger-in > *:nth-child(2) { animation-delay: 28ms; }
-.stagger-in > *:nth-child(3) { animation-delay: 52ms; }
-.stagger-in > *:nth-child(4) { animation-delay: 76ms; }
-.stagger-in > *:nth-child(5) { animation-delay: 100ms; }
-.stagger-in > *:nth-child(6) { animation-delay: 120ms; }
-.stagger-in > *:nth-child(7) { animation-delay: 140ms; }
-.stagger-in > *:nth-child(8) { animation-delay: 156ms; }
-.stagger-in > *:nth-child(n + 9) { animation-delay: 168ms; }
-
-/* beUI spring-pressed 按钮：按下微缩，不改阴影语义 */
-.press-spring {
-  transition: transform 160ms var(--ease-spring);
-}
-.press-spring:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-/* transitions.dev number pop */
-.badge-pop {
-  animation: badge-pop 320ms var(--ease-spring);
-}
-@keyframes badge-pop {
-  from { transform: scale(0.86); }
-  to { transform: scale(1); }
-}
-
-/* beautifului 三点加载 */
-.dots-loader {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-.dots-loader > i {
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: var(--brand-600);
-  animation: dot-pulse 1s var(--ease-inout) infinite;
-}
-.dots-loader > i:nth-child(2) { animation-delay: 120ms; }
-.dots-loader > i:nth-child(3) { animation-delay: 240ms; }
-@keyframes dot-pulse {
-  0%, 80%, 100% { transform: translateY(0); opacity: .35; }
-  40% { transform: translateY(-3px); opacity: 1; }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  @view-transition {
-    navigation: auto;
-  }
-}
-::view-transition-old(root) {
-  animation: vt-out 180ms var(--ease-inout) both;
-}
-::view-transition-new(root) {
-  animation: vt-in 280ms var(--ease-paper) both;
-}
-@keyframes vt-out {
-  to { transform: translateY(-4px); opacity: 0; }
-}
-@keyframes vt-in {
-  from { transform: translateY(8px); }
 }
 
 @keyframes spark-draw {
@@ -316,32 +659,15 @@
   animation: spark-draw 700ms cubic-bezier(.16, 1, .3, 1) forwards;
 }
 
-/* beautifului Insight Cards：刮擦读数 pill（终点用白圈实心点，不再呼吸） */
-.insight-chart-interactive {
-  touch-action: none;
-  cursor: crosshair;
-  outline: none;
+/* beautifului Search 的纯淡入（清除钮/空态/结果批）：150–250ms ease-out */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
-.insight-chart-interactive:focus-visible {
-  box-shadow: 0 0 0 3px rgba(46, 70, 224, .18);
-  border-radius: 8px;
-}
-.insight-live-ring {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: insight-live 1.8s var(--ease-inout) infinite;
-}
-@keyframes insight-live {
-  0% { transform: scale(1); opacity: .5; }
-  70% { transform: scale(2.35); opacity: 0; }
-  100% { transform: scale(2.35); opacity: 0; }
-}
-.insight-cursor-pill {
-  background: var(--overlay);
-  backdrop-filter: blur(14px) saturate(1.5);
-  -webkit-backdrop-filter: blur(14px) saturate(1.5);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-sh-1);
+/* 不用 tailwindcss-animate 的 animate-in fade-in：本文件底部的减少动态钳制
+   只认这里的类名，插件工具类会漏过那一条。 */
+.anim-fade-in {
+  animation: fade-in 180ms ease-out both;
 }
 
 @layer utilities {
@@ -372,19 +698,13 @@
   .skeleton-shimmer::after,
   .animate-shimmer,
   .spark-draw,
-  .animate-led-pulse,
-  .stagger-in > *,
-  .badge-pop,
-  .dots-loader > i,
-  .insight-live-ring {
+  .animate-led-pulse {
     animation: none !important;
   }
   .spark-draw {
     stroke-dashoffset: 0 !important;
   }
-  .dots-loader > i {
-    opacity: .7;
-  }
+  .anim-fade-in,
   .animate-rise-in,
   .animate-page-fade-in {
     animation-duration: 160ms !important;
@@ -392,8 +712,56 @@
   *, *::before, *::after {
     transition-duration: 160ms !important;
   }
-  ::view-transition-old(root),
-  ::view-transition-new(root) {
+}
+
+/* Keep keyboard focus visible when the operating system replaces page colors. */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 3px;
+    box-shadow: none !important;
+  }
+}
+
+/* 三点加载 / 洞察图刮擦 */
+.dots-loader {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.dots-loader > i {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--brand-600);
+  animation: dot-pulse 1s var(--ease-inout) infinite;
+}
+.dots-loader > i:nth-child(2) { animation-delay: 120ms; }
+.dots-loader > i:nth-child(3) { animation-delay: 240ms; }
+@keyframes dot-pulse {
+  0%, 80%, 100% { transform: translateY(0); opacity: .35; }
+  40% { transform: translateY(-3px); opacity: 1; }
+}
+
+.insight-chart-interactive {
+  touch-action: none;
+  cursor: crosshair;
+  outline: none;
+}
+.insight-chart-interactive:focus-visible {
+  box-shadow: 0 0 0 3px rgba(46, 70, 224, .18);
+  border-radius: 8px;
+}
+.insight-cursor-pill {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  box-shadow: var(--popover-shadow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dots-loader > i {
     animation: none !important;
+    opacity: .7;
   }
 }

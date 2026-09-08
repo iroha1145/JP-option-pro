@@ -12,25 +12,54 @@ interface EmptyStateProps {
   action?: ReactNode;      // 主按钮
   footnote?: string;       // 访客提示等 Caption
   variant?: 'empty' | 'error';
+  /** 侧栏/内嵌卡用 compact，避免 220px 插画撑破纸面。 */
+  size?: 'default' | 'compact';
   className?: string;
 }
 
-export default function EmptyState({ image, icon, title, description, action, footnote, variant = 'empty', className }: EmptyStateProps) {
+export default function EmptyState({
+  image,
+  icon,
+  title,
+  description,
+  action,
+  footnote,
+  variant = 'empty',
+  size = 'default',
+  className,
+}: EmptyStateProps) {
+  const compact = size === 'compact';
   return (
-    <div className={cn('flex flex-col items-center px-6 py-12 text-center', className)}>
+    <div className={cn('flex flex-col items-center text-center', compact ? 'px-2 py-4' : 'px-6 py-12', className)}>
       {image ? (
-        <img src={image} alt="" width={220} height={165} className="mb-5 h-auto w-[220px] max-w-full opacity-95" loading="lazy" />
+        <img
+          src={image}
+          alt=""
+          width={compact ? 96 : 220}
+          height={compact ? 72 : 165}
+          className={cn('h-auto max-w-full opacity-95', compact ? 'mb-2 w-[96px]' : 'mb-5 w-[220px]')}
+          loading="lazy"
+        />
       ) : (
-        <span className="mb-4 flex size-14 items-center justify-center rounded-lg border border-line bg-card-warm text-ink-400">
-          <Icon name={icon ?? 'doc-quote'} size={26} />
+        <span
+          className={cn(
+            'flex items-center justify-center rounded-lg border border-line bg-card-warm text-ink-400',
+            compact ? 'mb-2 size-10' : 'mb-4 size-14',
+          )}
+        >
+          <Icon name={icon ?? 'doc-quote'} size={compact ? 18 : 26} />
         </span>
       )}
-      <h3 className="text-h3 text-ink-800">{title}</h3>
-      {description && <p className="mt-1.5 max-w-[340px] text-body-s text-ink-500">{description}</p>}
+      <h3 className={cn(compact ? 'text-caption font-medium text-ink-600' : 'text-h3 text-ink-800')}>{title}</h3>
+      {description && (
+        <p className={cn(compact ? 'mt-1 max-w-[240px] text-micro text-ink-400' : 'mt-1.5 max-w-[340px] text-body-s text-ink-500')}>
+          {description}
+        </p>
+      )}
       {variant === 'error' && (
         <p className="mt-1 text-micro text-ink-400">{t('稍后刷新再试')}</p>
       )}
-      {action && <div className="mt-5">{action}</div>}
+      {action && <div className={cn(compact ? 'mt-3' : 'mt-5')}>{action}</div>}
       {footnote && <p className="mt-3 text-caption text-ink-400">{footnote}</p>}
     </div>
   );

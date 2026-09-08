@@ -736,7 +736,7 @@ def build_strength_rows(
         rows.append(
             {
                 "canonical_code": code,
-                "trade_date": trade_date,
+                "trade_date": str(features.get("trade_date") or trade_date),
                 "intrinsic_score": intrinsic["score"],
                 "confidence": intrinsic["confidence"],
                 "score_short": intrinsic["score_short"],

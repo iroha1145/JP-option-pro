@@ -23,6 +23,10 @@ export interface PollingOptions<T> {
    * fetcher 一旦兑现,以网络结果为准。resolve null 表示没有可恢复的数据。
    */
   restore?: () => Promise<T | null>;
+  /** When this identity changes, drop previous data so another security cannot reuse it. */
+  identity?: string;
+  /** Reject a response that does not belong to the current identity. */
+  belongsTo?: (data: T) => boolean;
 }
 
 /**
@@ -45,6 +49,10 @@ export function usePolling<T>(
   fetcherRef.current = fetcher;
   const restoreRef = useRef(options?.restore);
   restoreRef.current = options?.restore;
+  const belongsToRef = useRef(options?.belongsTo);
+  belongsToRef.current = options?.belongsTo;
+  const identity = options?.identity;
+  const identityRef = useRef(identity);
   const generationRef = useRef(0);
   const activeGenerationsRef = useRef(new Set<number>());
   const inFlightGenerationsRef = useRef(new Set<number>());
@@ -59,6 +67,8 @@ export function usePolling<T>(
     try {
       const result = await fetcherRef.current();
       if (!activeGenerationsRef.current.has(generation) || generation !== generationRef.current) return;
+      const belongsTo = belongsToRef.current;
+      if (belongsTo && result != null && !belongsTo(result)) return;
       settledGenerationsRef.current.add(generation);
       setData(result);
       setError(null);
@@ -90,6 +100,14 @@ export function usePolling<T>(
   }, [tick]);
 
   useEffect(() => {
+    if (identity !== undefined && identity !== identityRef.current) {
+      identityRef.current = identity;
+      setData(null);
+      setError(null);
+      setLastUpdatedAt(null);
+    } else if (identity !== undefined) {
+      identityRef.current = identity;
+    }
     const generation = generationRef.current + 1;
     generationRef.current = generation;
     const activeGenerations = activeGenerationsRef.current;
@@ -133,7 +151,7 @@ export function usePolling<T>(
       document.removeEventListener('visibilitychange', onVisible);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [intervalMs, tick, ...deps]);
+  }, [intervalMs, tick, identity, ...deps]);
 
   return { data, error, loading, refreshing, lastUpdatedAt, refresh };
 }

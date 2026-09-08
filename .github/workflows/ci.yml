@@ -42,7 +42,11 @@ jobs:
           result = json.load(open('/tmp/fixture.json'))
           assert result['radar']['events_written'] >= 1, result
           assert result['screener_rows'] >= 10, result
-          print('fixture ok:', result['target_date'])
+          pub = result.get('publication') or {}
+          assert pub.get('outcome') == 'published', result
+          assert pub.get('publication_id'), result
+          assert pub.get('score_version'), result
+          print('fixture ok:', result['target_date'], pub['publication_id'])
           EOF
         working-directory: backend
 
@@ -59,6 +63,12 @@ jobs:
       # grep では見つからず、静かに片方が消える。
       - name: i18n dictionary duplicate gate
         run: node --experimental-strip-types frontend-src/tests/dict_no_duplicates.mjs
+
+      - name: Color-mode preference gate
+        run: node --experimental-strip-types --test frontend-src/tests/color-preference.mjs
+
+      - name: Screener freshness gate
+        run: node --experimental-strip-types --test frontend-src/tests/screener-freshness.mjs
 
       # 後端が組み立てた文（テンプレート + パラメータ）を 3 言語で描画できるか。
       # 辞書に載っていても引き方を間違えれば画面には出ない ——「載っているか」の

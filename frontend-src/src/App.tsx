@@ -1,8 +1,13 @@
-import { lazy, Suspense } from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
+import { Suspense, lazy } from 'react';
+import { MotionConfig } from 'framer-motion';
+import { Navigate, Route, Routes } from 'react-router';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import Layout from '@/components/Layout';
 import { AccessProvider } from '@/hooks/useAccess';
-import { PageFallback } from '@/components/shared/Fallbacks';
+import { ToastProvider } from '@/components/Toast';
+import AppErrorBoundary from '@/components/shared/AppErrorBoundary';
+import PageFallback from '@/components/shared/PageFallback';
+import NotFound from '@/pages/NotFound';
 
 const Home = lazy(() => import('@/pages/Home'));
 const Market = lazy(() => import('@/pages/Market'));
@@ -16,33 +21,37 @@ const DataStatus = lazy(() => import('@/pages/DataStatus'));
 const Research = lazy(() => import('@/pages/Research'));
 const ShortMonitor = lazy(() => import('@/pages/ShortMonitor'));
 const Login = lazy(() => import('@/pages/Login'));
-const NotFound = lazy(() => import('@/pages/NotFound'));
 
 export default function App() {
+  const reducedMotion = usePrefersReducedMotion();
   return (
-    <BrowserRouter>
-      <AccessProvider>
-        <Suspense fallback={<PageFallback />}>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route element={<Layout />}>
-              <Route path="/" element={<Home />} />
-              <Route path="/market" element={<Market />} />
-              <Route path="/radar" element={<Radar />} />
-              <Route path="/screener" element={<Screener />} />
-              <Route path="/watchlist" element={<Watchlist />} />
-              <Route path="/earnings" element={<Earnings />} />
-              <Route path="/news" element={<News />} />
-              <Route path="/stock/:code" element={<StockDetail />} />
-              <Route path="/data-status" element={<DataStatus />} />
-              <Route path="/research" element={<Research />} />
-              <Route path="/short-monitor" element={<ShortMonitor />} />
-              <Route path="/home" element={<Navigate to="/" replace />} />
-              <Route path="*" element={<NotFound />} />
-            </Route>
-          </Routes>
-        </Suspense>
-      </AccessProvider>
-    </BrowserRouter>
+    <AppErrorBoundary>
+      <MotionConfig reducedMotion={reducedMotion ? 'always' : 'never'}>
+        <AccessProvider>
+          <ToastProvider>
+            <Suspense fallback={<PageFallback />}>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route element={<Layout />}>
+                  <Route index element={<Home />} />
+                  <Route path="/home" element={<Navigate to="/" replace />} />
+                  <Route path="/watchlist" element={<Watchlist />} />
+                  <Route path="/screener" element={<Screener />} />
+                  <Route path="/radar" element={<Radar />} />
+                  <Route path="/market" element={<Market />} />
+                  <Route path="/earnings" element={<Earnings />} />
+                  <Route path="/news" element={<News />} />
+                  <Route path="/short-monitor" element={<ShortMonitor />} />
+                  <Route path="/data-status" element={<DataStatus />} />
+                  <Route path="/research" element={<Research />} />
+                  <Route path="/stock/:code" element={<StockDetail />} />
+                  <Route path="*" element={<NotFound />} />
+                </Route>
+              </Routes>
+            </Suspense>
+          </ToastProvider>
+        </AccessProvider>
+      </MotionConfig>
+    </AppErrorBoundary>
   );
 }

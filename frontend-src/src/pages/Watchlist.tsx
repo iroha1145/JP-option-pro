@@ -4,46 +4,178 @@
  * 卡片：右上角悬浮 ×（触屏常驻）；表格：行内 ★/×。
  * 主体：owner 或访客账号（账号与美股版通用）；匿名显示登录引导。
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { motion } from 'framer-motion';
 import { stocksApi, watchlistApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
+import { useProgressiveList } from '@/hooks/useProgressiveList';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
+import EmptyRetryButton from '@/components/shared/EmptyRetryButton';
 import ChangeBadge from '@/components/shared/ChangeBadge';
 import Segmented from '@/components/shared/Segmented';
-import DataTable, { type Column } from '@/components/shared/DataTable';
-import { SkeletonRows } from '@/components/shared/Skeleton';
+import DataTable, { type Column, type SortState } from '@/components/shared/DataTable';
+import { SkeletonCard, SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
+import StatCard from '@/components/shared/StatCard';
+import HorizontalScroller from '@/components/shared/HorizontalScroller';
+import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
+import SessionLED from '@/components/shared/SessionLED';
+import MenuSelect from '@/components/shared/MenuSelect';
+import AdvanceDeclineBar from '@/components/shared/AdvanceDeclineBar';
+import SourceNote from '@/components/shared/SourceNote';
 import { CodeCell, DataThrough } from '@/components/domain';
 import Icon from '@/components/icons';
 import { useAccess } from '@/hooks/useAccess';
+import { useNow } from '@/hooks/useNow';
+import { useTickFlash } from '@/hooks/useTickFlash';
+import { useToast } from '@/hooks/useToast';
+import { tokyoSession } from '@/lib/tokyoSession';
+import TickPrice from '@/components/shared/TickPrice';
+import SoftBadge from '@/components/shared/SoftBadge';
+import StaleStrip from '@/components/shared/StaleStrip';
+import CodeMark from '@/components/shared/CodeMark';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import { t } from '@/i18n/core';
 import { cn } from '@/lib/utils';
-import { fmtPrice, fmtYenCompact } from '@/lib/format';
+import { fmtPrice, fmtTimeHHMMSS, fmtYenCompact } from '@/lib/format';
+import { EASE_PAPER } from '@/lib/motion';
 import { ApiError } from '@/api/client';
 import type { SearchResult, WatchlistItem } from '@/api/types';
 
-export default function Watchlist() {
-  const { canManageWatchlist, accountUsername, isOwner } = useAccess();
-  const query = usePolling(() => watchlistApi.list(), 120_000);
-  const [view, setView] = useState<'cards' | 'table'>('cards');
-  const [busy, setBusy] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+const EMPTY_WATCHLIST: WatchlistItem[] = [];
 
-  const items = query.data?.items ?? [];
+const STAT_ENTER = {
+  hidden: { opacity: 0, y: 14 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.48, ease: EASE_PAPER } },
+};
+
+type WatchSortId = 'default' | 'gain' | 'loss' | 'turnover' | 'code' | 'close';
+
+const WATCH_SORTS: { id: WatchSortId; label: string }[] = [
+  { id: 'default', label: t('默认排序') },
+  { id: 'gain', label: t('涨幅优先') },
+  { id: 'loss', label: t('跌幅优先') },
+  { id: 'turnover', label: t('成交额优先') },
+  { id: 'code', label: t('按代码 A–Z') },
+  { id: 'close', label: t('收盘优先') },
+];
+
+function sortFromId(id: WatchSortId): SortState | null {
+  if (id === 'gain') return { key: 'change', desc: true };
+  if (id === 'loss') return { key: 'change', desc: false };
+  if (id === 'turnover') return { key: 'turnover', desc: true };
+  if (id === 'code') return { key: 'code', desc: false };
+  if (id === 'close') return { key: 'close', desc: true };
+  return null;
+}
+
+function idFromSort(sort: SortState | null): WatchSortId {
+  if (!sort) return 'default';
+  if (sort.key === 'change') return sort.desc ? 'gain' : 'loss';
+  if (sort.key === 'turnover') return 'turnover';
+  if (sort.key === 'code') return 'code';
+  if (sort.key === 'close') return 'close';
+  return 'default';
+}
+
+function sortWatchlist(items: WatchlistItem[], sort: SortState | null): WatchlistItem[] {
+  if (!sort) return items;
+  const out = [...items];
+  const missing = (value: unknown) =>
+    value === null || value === undefined || (typeof value === 'number' && !Number.isFinite(value));
+  const valueOf = (item: WatchlistItem): number | string => {
+    if (sort.key === 'change') return item.quote?.change_pct ?? Number.NEGATIVE_INFINITY;
+    if (sort.key === 'turnover') return item.quote?.turnover_value ?? Number.NEGATIVE_INFINITY;
+    if (sort.key === 'close') return item.quote?.close ?? Number.NEGATIVE_INFINITY;
+    return item.display_code;
+  };
+  const dir = sort.desc ? -1 : 1;
+  out.sort((a, b) => {
+    const va = valueOf(a);
+    const vb = valueOf(b);
+    const ma = missing(va);
+    const mb = missing(vb);
+    if (ma || mb) return ma && mb ? 0 : ma ? 1 : -1;
+    if (typeof va === 'string' || typeof vb === 'string') return String(va).localeCompare(String(vb)) * dir;
+    return ((va as number) - (vb as number)) * dir || a.canonical_code.localeCompare(b.canonical_code);
+  });
+  return out;
+}
+
+export default function Watchlist() {
+  const navigate = useNavigate();
+  const { canManageWatchlist, accountUsername, isOwner } = useAccess();
+  const toast = useToast();
+  const now = useNow(30_000);
+  const session = tokyoSession(now);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const query = usePolling(() => watchlistApi.list(), 120_000);
+  const refreshWatchlist = query.refresh;
+  const [view, setView] = useState<'cards' | 'table'>('cards');
+  const [sort, setSort] = useState<SortState | null>(null);
+  const sortId = idFromSort(sort);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const onForceRefresh = useCallback(() => {
+    refreshWatchlist({ force: true });
+  }, [refreshWatchlist]);
+
+  useEffect(() => {
+    if (searchParams.get('force') !== '1') return;
+    onForceRefresh();
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('force');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [onForceRefresh, searchParams, setSearchParams]);
+
+  const items = useMemo(
+    () => sortWatchlist(query.data?.items ?? EMPTY_WATCHLIST, sort),
+    [query.data?.items, sort],
+  );
+  const FIRST_BATCH = 24;
+  const progressive = useProgressiveList(items, { initial: FIRST_BATCH, step: 24 });
+  const renderedItems = progressive.visible;
+  const { prepareForPrint, restoreAfterPrint } = progressive;
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.addEventListener('beforeprint', prepareForPrint);
+    window.addEventListener('afterprint', restoreAfterPrint);
+    return () => {
+      window.removeEventListener('beforeprint', prepareForPrint);
+      window.removeEventListener('afterprint', restoreAfterPrint);
+    };
+  }, [prepareForPrint, restoreAfterPrint]);
+  const breadth = useMemo(() => {
+    let advancers = 0;
+    let decliners = 0;
+    let unchanged = 0;
+    for (const item of items) {
+      const pct = item.quote?.change_pct;
+      if (pct == null || !Number.isFinite(pct)) continue;
+      if (pct > 0) advancers += 1;
+      else if (pct < 0) decliners += 1;
+      else unchanged += 1;
+    }
+    return { advancers, decliners, unchanged };
+  }, [items]);
+  const flashes = useTickFlash(items, (row) => row.canonical_code, (row) => row.quote?.close ?? null);
   const maxItems = query.data?.max_items ?? null;
   const anonymous =
     query.error instanceof ApiError && query.error.bizCode === 'account_login_required';
 
   const doRemove = async (code: string) => {
     setBusy(code);
-    setNotice(null);
     try {
       await watchlistApi.remove(code);
       query.refresh({ force: true });
     } catch (error) {
-      setNotice(error instanceof ApiError ? error.message : t('移除失败'));
+      toast.error(t('移除失败'), error instanceof ApiError ? error.message : String(error));
     } finally {
       setBusy(null);
     }
@@ -65,6 +197,8 @@ export default function Watchlist() {
         key: 'code',
         title: t('代码'),
         width: '30%',
+        sortable: true,
+        sortValue: (row) => row.display_code,
         render: (row) => (
           <span className="flex items-center gap-1.5">
             {row.marked_important && <span className="text-warn-600">★</span>}
@@ -75,7 +209,20 @@ export default function Watchlist() {
       {
         key: 'sector',
         title: t('行业'),
-        render: (row) => <span className="text-caption text-ink-500">{row.sector33_name ?? '—'}</span>,
+        render: (row) =>
+          row.sector33_name ? (
+            <PointerTooltip
+              passthrough
+              label={row.sector33_name}
+              content={<span className="text-micro leading-[16px] text-ink-600">{row.sector33_name}</span>}
+            >
+              <SoftBadge className="max-w-[7.5rem]">
+                <span className="truncate">{row.sector33_name}</span>
+              </SoftBadge>
+            </PointerTooltip>
+          ) : (
+            <span className="text-caption text-ink-400">—</span>
+          ),
       },
       {
         key: 'close',
@@ -83,7 +230,11 @@ export default function Watchlist() {
         align: 'right',
         sortable: true,
         sortValue: (row) => row.quote?.close ?? Number.NEGATIVE_INFINITY,
-        render: (row) => <span className="font-mono text-body-s tnum">{fmtPrice(row.quote?.close)}</span>,
+        render: (row) => (
+          <TickPrice flash={flashes[row.canonical_code]} className="font-mono text-[15px] leading-6 text-ink-900">
+            {fmtPrice(row.quote?.close)}
+          </TickPrice>
+        ),
       },
       {
         key: 'change',
@@ -109,69 +260,156 @@ export default function Watchlist() {
         render: (row) => <span className="truncate text-caption text-ink-500">{row.note ?? '—'}</span>,
       },
     ];
-    if (canManageWatchlist) {
-      base.push({
-        key: 'actions',
-        title: '',
-        align: 'right',
-        render: (row) => (
-          <span className="flex items-center justify-end gap-1.5">
-            <button
-              type="button"
-              disabled={busy === row.canonical_code}
-              title={t('标记重点')}
-              className={cn(
-                'rounded-md border border-line px-2 py-0.5 text-micro hover:bg-brand-50',
-                row.marked_important ? 'text-warn-600' : 'text-ink-400',
-              )}
-              onClick={(event) => {
-                event.stopPropagation();
-                void doToggleStar(row);
-              }}
-            >
-              ★
-            </button>
-            <button
-              type="button"
-              disabled={busy === row.canonical_code}
-              title={t('从自选移除 {code}', { code: row.display_code })}
-              aria-label={t('从自选移除 {code}', { code: row.display_code })}
-              className="rounded-md border border-line px-2 py-0.5 text-micro text-down-700 hover:bg-down-50"
-              onClick={(event) => {
-                event.stopPropagation();
-                void doRemove(row.canonical_code);
-              }}
-            >
-              <Icon name="x" size={12} />
-            </button>
+    base.push({
+      key: 'actions',
+      title: '',
+      align: 'right',
+      render: (row) => (
+        <span className="flex items-center justify-end gap-1.5">
+          {canManageWatchlist && (
+            <>
+              <PointerTooltip
+                passthrough
+                label={t('标记重点')}
+                content={<span className="text-micro leading-[16px] text-ink-600">{t('标记重点')}</span>}
+              >
+                <button
+                  type="button"
+                  disabled={busy === row.canonical_code}
+                  aria-label={t('标记重点')}
+                  className={cn(
+                    'rounded-md border border-line px-2 py-0.5 text-micro shadow-btn opacity-0 transition-[opacity,color] duration-fast hover:bg-brand-50 focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100',
+                    row.marked_important ? 'text-warn-600' : 'text-ink-400',
+                  )}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void doToggleStar(row);
+                  }}
+                >
+                  ★
+                </button>
+              </PointerTooltip>
+              <PointerTooltip
+                passthrough
+                label={t('从自选移除 {code}', { code: row.display_code })}
+                content={<span className="text-micro leading-[16px] text-ink-600">{t('移出自选')}</span>}
+              >
+                <button
+                  type="button"
+                  disabled={busy === row.canonical_code}
+                  aria-label={t('从自选移除 {code}', { code: row.display_code })}
+                  className="rounded-md border border-line px-2 py-0.5 text-micro text-down-700 shadow-btn opacity-0 transition-[opacity,color] duration-fast hover:bg-down-50 focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void doRemove(row.canonical_code);
+                  }}
+                >
+                  <Icon name="x" size={12} />
+                </button>
+              </PointerTooltip>
+            </>
+          )}
+          <span className="inline-flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-400 opacity-0 transition-opacity duration-fast group-hover:opacity-100 [@media(hover:none)]:opacity-100">
+            <Icon name="arrow-up-right" size={14} />
           </span>
-        ),
-      });
-    }
+        </span>
+      ),
+    });
     return base;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canManageWatchlist, busy]);
+  }, [canManageWatchlist, busy, flashes]);
 
   return (
-    <div className="space-y-6">
+    <div>
       <PageHeader
-        section="05"
+        section="02"
         eyebrow="WATCHLIST · PERSONAL"
         title={t('自选股')}
         description={t('本页为日线数据，收盘后更新')}
         meta={
           <>
             {accountUsername && (
-              <span className="hidden items-center gap-1.5 rounded-pill border border-line bg-card px-2.5 py-1 text-caption text-ink-600 sm:inline-flex">
+              <span className="hidden items-center gap-1.5 rounded-pill border border-line-strong bg-card px-2.5 py-1 text-caption text-ink-600 sm:inline-flex">
                 <Icon name="command" size={12} className="text-brand-600" />
                 {accountUsername}
               </span>
             )}
+            <SessionLED session={session} />
             <DataThrough date={items.find((item) => item.quote?.trade_date)?.quote?.trade_date} />
+            <ForceRefreshButton
+              onClick={onForceRefresh}
+              spinning={query.refreshing}
+              title={t('重新获取自选行情')}
+            />
           </>
         }
       />
 
+      {(query.loading && !query.data) || items.length > 0 ? (
+        <section className="mt-6" aria-label={t('自选统计')}>
+          {query.loading && !query.data ? (
+            <HorizontalScroller className="-mx-1 sm:mx-0" scrollerClassName="px-1 sm:px-0" label={t('自选统计')}>
+              <div className="flex snap-x snap-mandatory gap-4 pb-1 sm:grid sm:grid-cols-3">
+                <SkeletonCard className="min-w-[240px] sm:min-w-0" />
+                <SkeletonCard className="min-w-[240px] sm:min-w-0" />
+                <SkeletonCard className="min-w-[240px] sm:min-w-0" />
+              </div>
+            </HorizontalScroller>
+          ) : (
+            <HorizontalScroller className="-mx-1 sm:mx-0" scrollerClassName="px-1 sm:px-0" label={t('自选统计')}>
+              <motion.div
+                initial="hidden"
+                animate="show"
+                variants={{ hidden: {}, show: { transition: { staggerChildren: 0.045 } } }}
+                className="flex snap-x snap-mandatory gap-4 pb-1 sm:grid sm:grid-cols-3"
+              >
+                <motion.div variants={STAT_ENTER} className="min-w-[240px] snap-start sm:min-w-0">
+                  <StatCard label={t('只标的')} icon="list" value={items.length} />
+                </motion.div>
+                <motion.div variants={STAT_ENTER} className="min-w-[240px] snap-start sm:min-w-0">
+                  <div className="card-surface metric-card p-5">
+                    <div className="flex items-start justify-between">
+                      <p className="eyebrow">{t('上涨 / 下跌')}</p>
+                      <Icon name="candle" size={18} className="text-ink-400" />
+                    </div>
+                    <AdvanceDeclineBar
+                      advancers={breadth.advancers}
+                      decliners={breadth.decliners}
+                      unchanged={breadth.unchanged}
+                    />
+                  </div>
+                </motion.div>
+                <motion.div variants={STAT_ENTER} className="min-w-[240px] snap-start sm:min-w-0">
+                  <StatCard
+                    label={t('重点标记')}
+                    icon="flag"
+                    value={items.filter((item) => item.marked_important).length}
+                  />
+                </motion.div>
+              </motion.div>
+            </HorizontalScroller>
+          )}
+        </section>
+      ) : null}
+
+      {anonymous ? (
+        <section className="mt-8 card-surface">
+          <EmptyState
+            image="/empty-watchlist.svg"
+            title={t('登录后可以把自选股保存在账号里')}
+            description={t('账号与美股版通用，换设备也还在')}
+            action={
+              <Link
+                to="/login"
+                className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105"
+              >
+                {t('去登录 / 注册')}
+              </Link>
+            }
+          />
+        </section>
+      ) : (
+        <div className="mt-8">
       {/* 工具行：视图切换 + 添加表单 + 计数 */}
       <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 border-b border-line py-1.5">
         <div className="flex min-w-0 flex-wrap items-center gap-2.5">
@@ -185,64 +423,127 @@ export default function Watchlist() {
           />
           {canManageWatchlist && (
             <AddStockForm
-              onAdded={() => {
-                setNotice(null);
-                query.refresh({ force: true });
-              }}
-              onError={setNotice}
+              onAdded={() => query.refresh({ force: true })}
+              onError={(message) => toast.error(t('添加失败'), message)}
             />
           )}
+          <MenuSelect<WatchSortId>
+            value={sortId}
+            onChange={(id) => setSort(sortFromId(id))}
+            options={WATCH_SORTS.map((option) => ({ value: option.id, label: option.label }))}
+            ariaLabel={t('默认排序')}
+            align="right"
+            leading={<Icon name="filter-funnel" size={13} />}
+            triggerClassName="px-2.5 text-ink-500 hover:text-ink-800"
+          />
         </div>
-        <p className="text-right text-caption text-ink-400">
-          <span className="font-mono tnum">{items.length}</span> {t('只标的')}
-          {maxItems !== null && <span className="ml-1 text-ink-300">{t('/ 上限')} {maxItems}</span>}
-          {isOwner && <span className="ml-1 text-ink-300">· {t('所有者清单')}</span>}
-        </p>
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {query.lastUpdatedAt && (
+            <span className="font-mono text-caption text-ink-400 tnum">
+              {t('更新')} {fmtTimeHHMMSS(query.lastUpdatedAt)}
+            </span>
+          )}
+          <p className="text-right text-caption text-ink-400">
+            <span className="font-mono tnum">{items.length}</span> {t('只标的')}
+            {maxItems !== null && <span className="ml-1 text-ink-300">{t('/ 上限')} {maxItems}</span>}
+            {isOwner && <span className="ml-1 text-ink-300">· {t('所有者清单')}</span>}
+          </p>
+        </div>
       </div>
 
-      {notice && (
-        <p className="rounded-md border border-warn-600/25 bg-warn-50 px-3 py-2 text-caption text-warn-600" role="status">
-          {notice}
-        </p>
+      {query.error && query.data && (
+        <StaleStrip onRetry={() => query.refresh()} refreshing={query.refreshing} />
       )}
 
-      {anonymous ? (
-        <EmptyState
-          title={t('登录后可以把自选股保存在账号里')}
-          description={t('账号与美股版通用，换设备也还在')}
-          action={
-            <Link
-              to="/login"
-              className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white transition-[filter] hover:brightness-105"
-            >
-              {t('去登录 / 注册')}
-            </Link>
-          }
-        />
-      ) : query.loading && !query.data ? (
-        <SkeletonRows rows={8} />
-      ) : query.error && !query.data ? (
-        <EmptyState variant="error" title={t('加载失败')} description={String(query.error?.message ?? '')} />
-      ) : items.length === 0 ? (
-        <EmptyState
-          title={t('清单还是空的')}
-          description={canManageWatchlist ? t('在上方搜索代码或公司名，加入第一只自选') : t('在筛选器中添加')}
-        />
-      ) : view === 'table' ? (
-        <DataTable columns={columns} rows={items} rowKey={(row) => row.canonical_code} rowHeight={44} />
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {items.map((item, index) => (
-            <WatchCard
-              key={item.canonical_code}
-              item={item}
-              index={index}
-              onRemove={canManageWatchlist ? () => void doRemove(item.canonical_code) : undefined}
-              onToggleStar={canManageWatchlist ? () => void doToggleStar(item) : undefined}
-            />
-          ))}
+        <div className="mt-4 min-h-[70vh]">
+          <SkeletonReveal
+            loading={query.loading && !query.data}
+            skeleton={
+              <section className="card-surface">
+                <SkeletonRows rows={8} />
+              </section>
+            }
+          >
+            {query.error && !query.data ? (
+              <section className="card-surface">
+                <EmptyState
+                  variant="error"
+                  image="/empty-chart.svg"
+                  title={t('加载失败')}
+                  description={String(query.error?.message ?? '')}
+                  action={<EmptyRetryButton onClick={() => query.refresh({ force: true })} refreshing={query.refreshing} />}
+                />
+              </section>
+            ) : items.length === 0 ? (
+              <section className="card-surface">
+                <EmptyState
+                  image="/empty-watchlist.svg"
+                  title={t('清单还是空的')}
+                  description={canManageWatchlist ? t('在上方搜索代码或公司名，加入第一只自选') : t('在筛选器中添加')}
+                />
+              </section>
+            ) : view === 'table' ? (
+              <>
+                <div className="hidden md:block">
+                  <DataTable
+                    columns={columns}
+                    rows={renderedItems}
+                    rowKey={(row) => row.canonical_code}
+                    rowHeight={44}
+                    sort={sort}
+                    onSortChange={setSort}
+                    preSorted
+                    onRowClick={(row) => navigate(`/stock/${row.display_code}`)}
+                  />
+                </div>
+                <div className="grid grid-cols-1 gap-4 md:hidden">
+                  {renderedItems.map((item, index) => (
+                    <WatchCard
+                      key={item.canonical_code}
+                      item={item}
+                      index={index}
+                      flash={flashes[item.canonical_code]}
+                      animateIn={index < FIRST_BATCH}
+                      onRemove={canManageWatchlist ? () => void doRemove(item.canonical_code) : undefined}
+                      onToggleStar={canManageWatchlist ? () => void doToggleStar(item) : undefined}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {renderedItems.map((item, index) => (
+                  <WatchCard
+                    key={item.canonical_code}
+                    item={item}
+                    index={index}
+                    flash={flashes[item.canonical_code]}
+                    animateIn={index < FIRST_BATCH}
+                    onRemove={canManageWatchlist ? () => void doRemove(item.canonical_code) : undefined}
+                    onToggleStar={canManageWatchlist ? () => void doToggleStar(item) : undefined}
+                  />
+                ))}
+              </div>
+            )}
+          </SkeletonReveal>
+            {progressive.hasMore && (
+              <div ref={progressive.sentinelRef} className="mt-4 flex justify-center">
+                <button
+                  type="button"
+                  onClick={progressive.loadMore}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line-strong bg-card px-4 py-2 text-caption text-ink-600 shadow-btn transition-colors hover:bg-paper-2"
+                >
+                  {t('加载更多')}
+                  <span className="font-mono text-micro text-ink-400 tnum">
+                    {t('还有 {n} 只', { n: progressive.remaining })}
+                  </span>
+                </button>
+              </div>
+            )}
+        </div>
         </div>
       )}
+      <SourceNote className="mt-8" text={t('本页为日线数据，收盘后更新 · 仅供研究参考，不构成投资建议')} />
     </div>
   );
 }
@@ -288,6 +589,18 @@ function AddStockForm({ onAdded, onError }: { onAdded: () => void; onError: (mes
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
+
   const add = async (code: string) => {
     if (!code || saving) return;
     setSaving(true);
@@ -325,7 +638,7 @@ function AddStockForm({ onAdded, onError }: { onAdded: () => void; onError: (mes
         <button
           type="submit"
           disabled={saving || !input.trim()}
-          className="flex h-8 items-center gap-1 rounded-sm border border-line-strong bg-card px-2.5 text-caption text-ink-600 transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-8 items-center gap-1 rounded-sm border border-line-strong bg-card px-2.5 text-caption text-ink-600 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Icon name="plus" size={13} />
           {t('添加')}
@@ -340,11 +653,14 @@ function AddStockForm({ onAdded, onError }: { onAdded: () => void; onError: (mes
               onClick={() => void add(result.canonical_code)}
               className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-brand-50"
             >
-              <span className="rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-caption font-semibold text-brand-700">
-                {result.display_code}
-              </span>
+              <CodeMark code={result.display_code} size={22} />
+              <span className="font-mono text-caption font-semibold text-brand-700">{result.display_code}</span>
               <span className="min-w-0 flex-1 truncate text-caption text-ink-700">{result.name_ja ?? result.name_en ?? '—'}</span>
-              <span className="shrink-0 text-micro text-ink-400">{result.sector33_name ?? ''}</span>
+              {result.sector33_name ? (
+                <SoftBadge className="max-w-[7.5rem]" title={result.sector33_name}>
+                  <span className="truncate">{result.sector33_name}</span>
+                </SoftBadge>
+              ) : null}
             </button>
           ))}
         </div>
@@ -358,25 +674,32 @@ function AddStockForm({ onAdded, onError }: { onAdded: () => void; onError: (mes
 function WatchCard({
   item,
   index,
+  flash,
   onRemove,
   onToggleStar,
+  animateIn,
 }: {
   item: WatchlistItem;
   index: number;
+  flash?: 'up' | 'down';
   onRemove?: () => void;
   onToggleStar?: () => void;
+  animateIn: boolean;
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: Math.min(index * 0.04, 0.4) }}
-      whileHover={{ y: -3, transition: { duration: 0.24, ease: 'easeOut' } }}
+      initial={animateIn ? { opacity: 0, y: 14 } : false}
+      animate={animateIn ? { opacity: 1, y: 0 } : undefined}
+      transition={
+        animateIn
+          ? { duration: 0.48, ease: EASE_PAPER, delay: Math.min(index * 0.045, 0.5) }
+          : undefined
+      }
       className="group/card relative"
     >
       <Link
         to={`/stock/${item.display_code}`}
-        className="card-surface flex w-full flex-col p-4 text-left transition-shadow duration-fast hover:shadow-sh-2"
+        className="card-surface card-lift flex w-full flex-col p-4 pr-24 text-left"
       >
         <span className="flex items-center gap-2.5">
           {item.marked_important && <span className="shrink-0 text-warn-600">★</span>}
@@ -385,12 +708,26 @@ function WatchCard({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-body-s text-ink-800">{item.name_ja ?? '—'}</span>
-            <span className="block truncate text-micro text-ink-400">{item.sector33_name ?? '—'}</span>
+            {item.sector33_name ? (
+              <PointerTooltip
+                passthrough
+                label={item.sector33_name}
+                content={<span className="text-micro leading-[16px] text-ink-600">{item.sector33_name}</span>}
+              >
+                <SoftBadge className="mt-0.5 max-w-[8rem]">
+                  <span className="truncate">{item.sector33_name}</span>
+                </SoftBadge>
+              </PointerTooltip>
+            ) : (
+              <span className="block truncate text-micro text-ink-400">—</span>
+            )}
           </span>
           <ChangeBadge value={item.quote?.change_pct} size="sm" />
         </span>
         <span className="mt-3 flex items-end justify-between">
-          <span className="font-mono text-data-l text-ink-900 tnum">{fmtPrice(item.quote?.close)}</span>
+          <TickPrice flash={flash} className="metric-value text-data-l text-ink-900 tnum">
+            {fmtPrice(item.quote?.close)}
+          </TickPrice>
           <span className="font-mono text-caption text-ink-500 tnum">{fmtYenCompact(item.quote?.turnover_value)}</span>
         </span>
         {item.note && (
@@ -402,12 +739,11 @@ function WatchCard({
         <button
           type="button"
           aria-label={t('从自选移除 {code}', { code: item.display_code })}
-          title={t('移出自选')}
           onClick={(event) => {
             event.stopPropagation();
             onRemove();
           }}
-          className="pointer-events-none absolute right-2 top-2 z-10 inline-flex size-6 cursor-pointer items-center justify-center rounded-xs text-ink-300 opacity-0 outline-none transition-[opacity,color] duration-fast hover:bg-paper-2 hover:text-down-700 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/card:pointer-events-auto group-hover/card:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:text-ink-400"
+          className="pointer-events-none absolute right-1 top-1 z-10 inline-flex size-11 cursor-pointer items-center justify-center rounded-xs text-ink-300 opacity-0 outline-none transition-[opacity,color] duration-fast hover:bg-paper-2 hover:text-down-700 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/card:pointer-events-auto group-hover/card:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:text-ink-400"
         >
           <Icon name="x" size={13} />
         </button>
@@ -416,13 +752,12 @@ function WatchCard({
         <button
           type="button"
           aria-label={t('标记重点')}
-          title={t('标记重点')}
           onClick={(event) => {
             event.stopPropagation();
             onToggleStar();
           }}
           className={cn(
-            'pointer-events-none absolute right-9 top-2 z-10 inline-flex size-6 cursor-pointer items-center justify-center rounded-xs opacity-0 outline-none transition-[opacity,color] duration-fast hover:bg-paper-2 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/card:pointer-events-auto group-hover/card:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100',
+            'pointer-events-none absolute right-12 top-1 z-10 inline-flex size-11 cursor-pointer items-center justify-center rounded-xs opacity-0 outline-none transition-[opacity,color] duration-fast hover:bg-paper-2 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/card:pointer-events-auto group-hover/card:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100',
             item.marked_important ? 'text-warn-600' : 'text-ink-300 hover:text-warn-600',
           )}
         >

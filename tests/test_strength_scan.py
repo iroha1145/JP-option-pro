@@ -150,7 +150,7 @@ def test_build_and_view_rows(tmp_path):
     repo = CoreRepository(tmp_path / "core.db")
     repo.initialize()
     written = repo.replace_strength_rows(rows, trade_date="2026-07-31", regime=regime)
-    assert written == 2
+    assert written.rows_written == 2 and written.outcome == "published"
     stored = repo.strength_rows_all()
     assert len(stored) == 2
     assert stored[0]["details"]["families"]

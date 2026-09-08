@@ -49,16 +49,18 @@ export interface StrengthPresentation {
   label: string;
   barClass: string;
   textClass: string;
+  /** SoftBadge 色：走 brand/warn，不借用涨跌 up/down。 */
+  badgeTone: 'brand' | 'warn' | 'neutral';
 }
 
 /** 固定分数区间着色（不随结果集漂移）；A 档在 85 细分，避免 Top20 单色。 */
 export function strengthPresentation(score: number): StrengthPresentation {
-  if (score >= 90) return { band: 'S', label: t('顶尖'), barClass: 'bg-brand-700', textClass: 'text-brand-700' };
-  if (score >= 85) return { band: 'A', label: t('极强'), barClass: 'bg-brand-600', textClass: 'text-brand-700' };
-  if (score >= 80) return { band: 'A', label: t('强势'), barClass: 'bg-brand-500', textClass: 'text-brand-600' };
-  if (score >= 70) return { band: 'B', label: t('较强'), barClass: 'bg-brand-400', textClass: 'text-brand-600' };
-  if (score >= 60) return { band: 'C', label: t('观察'), barClass: 'bg-warn-600', textClass: 'text-warn-600' };
-  return { band: 'D', label: t('偏弱'), barClass: 'bg-ink-300', textClass: 'text-ink-500' };
+  if (score >= 90) return { band: 'S', label: t('顶尖'), barClass: 'bg-brand-700', textClass: 'text-brand-700', badgeTone: 'brand' };
+  if (score >= 85) return { band: 'A', label: t('极强'), barClass: 'bg-brand-600', textClass: 'text-brand-700', badgeTone: 'brand' };
+  if (score >= 80) return { band: 'A', label: t('强势'), barClass: 'bg-brand-500', textClass: 'text-brand-600', badgeTone: 'brand' };
+  if (score >= 70) return { band: 'B', label: t('较强'), barClass: 'bg-brand-400', textClass: 'text-brand-600', badgeTone: 'brand' };
+  if (score >= 60) return { band: 'C', label: t('观察'), barClass: 'bg-warn-600', textClass: 'text-warn-600', badgeTone: 'warn' };
+  return { band: 'D', label: t('偏弱'), barClass: 'bg-ink-300', textClass: 'text-ink-500', badgeTone: 'neutral' };
 }
 
 /** 筛选条件（draft = 工作台编辑中；applied = 上次扫描快照）。全部服务端生效。 */
@@ -131,6 +133,7 @@ export interface ScanHistoryEntry {
   count: number;
   durationMs: number;
   summary: string;
+  kind: 'filter' | 'refresh';
 }
 
 /** 分项微条与展开区共用的六族定义（与后端 FAMILY_WEIGHTS 同源）。 */

@@ -17,19 +17,27 @@
  * 一览表已废止（信息密度过高）。**所有字段都在卡片里出**，卡片是唯一的
  * 呈现形式 —— 这里没出的值，页面上就没有。 */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useColorMode } from '@/hooks/useColorMode';
 import { Link } from 'react-router';
+import { motion } from 'framer-motion';
 import PageHeader from '@/components/shared/PageHeader';
 import Segmented from '@/components/shared/Segmented';
+import MenuSelect from '@/components/shared/MenuSelect';
 import EmptyState from '@/components/shared/EmptyState';
+import EmptyRetryButton from '@/components/shared/EmptyRetryButton';
 import StatCard from '@/components/shared/StatCard';
-import { SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
+import PriorityRing from '@/components/shared/PriorityRing';
+import { SkeletonBlock, SkeletonCard, SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
 import { CodeCell, DataThrough } from '@/components/domain';
 import ReactECharts from '@/components/charts/ReactECharts';
 import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart';
 import { shortMonitorApi, stocksApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { remoteState } from '@/hooks/remoteState';
+import { DUR_SECTION, EASE_PAPER } from '@/lib/motion';
+import Icon from '@/components/icons';
+import '@/components/radar.css';
 import type {
   ShortMonitorDetail,
   ShortMonitorEvent,
@@ -37,8 +45,16 @@ import type {
   ShortMonitorRow,
   StockBar,
 } from '@/api/types';
-import { fmtDate, fmtDateShort, fmtPct, fmtPctLevel, fmtPrice, fmtScore, fmtShares } from '@/lib/format';
+import { fmtDate, fmtDateShort, fmtPct, fmtPctLevel, fmtPrice, fmtScore, fmtShares, fmtTimeHHMMSS } from '@/lib/format';
 import { explanationLine } from '@/lib/explainText';
+import SoftBadge from '@/components/shared/SoftBadge';
+import StaleStrip from '@/components/shared/StaleStrip';
+import StatusNotice from '@/components/shared/StatusNotice';
+import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
+import SourceNote from '@/components/shared/SourceNote';
+import InfoHint from '@/components/shared/InfoHint';
+import PointerTooltip from '@/components/shared/PointerTooltip';
+import { SHORT_HINTS, shortScoreHint } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { cn } from '@/lib/utils';
 
@@ -145,30 +161,48 @@ export default function ShortMonitor() {
   // 「还没验证」和「验证过但没通过」要分开说。
   const validation = overview?.validation;
   const unvalidated = overview?.validated && !overview.validated.score;
+  const refreshOverview = overviewQuery.refresh;
+  const refreshRanking = rankingQuery.refresh;
+  const refreshingMonitor = overviewQuery.refreshing || rankingQuery.refreshing;
+  const onRefreshMonitor = useCallback(() => {
+    refreshOverview({ force: true });
+    refreshRanking({ force: true });
+  }, [refreshOverview, refreshRanking]);
 
   return (
     <div className="space-y-6">
       <PageHeader
-        section="09"
+        section="08"
         eyebrow="SHORT MONITOR · POST-CLOSE"
         title={t('机构空卖行为监控')}
         description={t('公开披露的机构空卖持仓发生了什么变化，股价对这部分压力作出了什么反应')}
-        meta={<DataThrough date={overview?.as_of_date} />}
+        meta={
+          <>
+            <DataThrough date={overview?.as_of_date} />
+            {overviewQuery.lastUpdatedAt && (
+              <span className="font-mono text-caption text-ink-400 tnum">
+                {t('更新')} {fmtTimeHHMMSS(overviewQuery.lastUpdatedAt)}
+              </span>
+            )}
+            <ForceRefreshButton
+              onClick={onRefreshMonitor}
+              spinning={refreshingMonitor}
+              label={t('刷新监控')}
+              title={t('重新读取空卖监控快照')}
+            />
+          </>
+        }
       />
 
-      {/* 语义提示常驻。这一句不能因为版面紧张就删掉。 */}
-      <p className="flex items-start gap-2 text-caption text-ink-500">
-        <span className="mt-1.5 inline-block size-1.5 shrink-0 rounded-full bg-ink-300" aria-hidden />
+      <StatusNotice>
         {t('本页面展示达到公开披露条件的机构空卖持仓，不代表市场全部空头仓位。跌破公开门槛不代表仓位归零。')}
-      </p>
+      </StatusNotice>
 
       {validation?.status === 'failed' ? (
-        <section className="card-surface border-warn-200 bg-warn-50/60 p-4">
+        <section className="card-surface p-4">
           <p className="flex items-center gap-2">
-            <span className="eyebrow text-warn-700">{t('历史验证结果')}</span>
-            <span className="rounded-xs bg-warn-600/10 px-1.5 py-px font-mono text-micro text-warn-700">
-              {t('未通过')}
-            </span>
+            <span className="eyebrow">{t('历史验证结果')}</span>
+            <SoftBadge tone="warn">{t('未通过')}</SoftBadge>
           </p>
           <p className="mt-2 text-body-s text-ink-700">{t(validation.summary)}</p>
           {validation.run && (
@@ -184,10 +218,14 @@ export default function ShortMonitor() {
           )}
         </section>
       ) : unvalidated ? (
-        <p className="rounded-md border border-warn-200 bg-warn-50 px-3 py-2 text-caption text-warn-700">
+        <StatusNotice>
           {t('当前门槛与权重为初始参数，尚未通过历史验证，仅作研究排序使用。')}
-        </p>
+        </StatusNotice>
       ) : null}
+
+      {state === 'stale' && (
+        <StaleStrip onRetry={() => rankingQuery.refresh()} refreshing={rankingQuery.refreshing} />
+      )}
 
       {overview ? <OverviewCards overview={overview} onPickView={setView} /> : <OverviewSkeleton />}
 
@@ -199,78 +237,90 @@ export default function ShortMonitor() {
         />
         <label className="ml-auto flex items-center gap-1.5 text-caption text-ink-400">
           {t('最低数据置信度')}
-          <select
+          <MenuSelect<number>
             value={minConfidence}
-            onChange={(e) => setMinConfidence(Number(e.target.value))}
-            className="rounded-md border border-line bg-card px-2 py-1 font-mono text-caption tnum text-ink-800"
-          >
-            <option value={0}>{t('不限')}</option>
-            <option value={0.35}>0.35</option>
-            <option value={0.6}>0.60</option>
-            <option value={0.8}>0.80</option>
-          </select>
+            onChange={setMinConfidence}
+            ariaLabel={t('最低数据置信度')}
+            options={[
+              { value: 0, label: t('不限') },
+              { value: 0.35, label: '0.35' },
+              { value: 0.6, label: '0.60' },
+              { value: 0.8, label: '0.80' },
+            ]}
+          />
         </label>
       </div>
       <p className="-mt-3 text-micro text-ink-400">{t(activeView.hint)}</p>
 
-      {state === 'loading' ? (
-        <>
-          <SkeletonCard className="h-80" />
-          <SkeletonRows rows={6} />
-        </>
-      ) : state === 'error' ? (
+      {state === 'error' ? (
         <div className="card-surface">
           <EmptyState
             variant="error"
+            image="/empty-chart.svg"
             title={t('读取失败')}
             description={String(rankingQuery.error?.message ?? '')}
-          />
-        </div>
-      ) : state === 'empty' ? (
-        <div className="card-surface">
-          <EmptyState
-            title={t('该视图当前没有符合条件的股票')}
-            description={minConfidence > 0 ? t('可以把最低数据置信度放宽到「不限」再看一次') : undefined}
+            action={<EmptyRetryButton onClick={() => rankingQuery.refresh({ force: true })} refreshing={rankingQuery.refreshing} />}
           />
         </div>
       ) : (
-        <>
-          {lead && <LeadCard key={lead.canonical_code} row={lead} />}
-          {/* 2 列。1 枚に全項目を載せるので、3 列に詰めると数字が折り返す。 */}
-          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-            {rows
-              .filter((row) => row.canonical_code !== lead?.canonical_code)
-              .map((row) => (
-                <StockCard
-                  key={row.canonical_code}
-                  row={row}
-                  onSelect={() => {
-                    setLeadCode(row.canonical_code);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                />
-              ))}
-          </div>
-          <div className="space-y-1 text-micro text-ink-400">
-            <p>
-              {t('机构数后的 +N? 是实际持仓不可见的机构家数（跌破门槛，或未跌破但报告长期停止），均不计入合计')}
-            </p>
-            {/* 同一页上「空头变化」和「相对收益」用同一组红绿，含义却不同 ——
-                不写清楚，+0.71% 是绿、+11.94% 是红这件事就只能靠猜。 */}
-            <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="inline-flex items-center gap-1 text-down-600">
-                <span className="inline-block size-1.5 rounded-full bg-down-600" aria-hidden />
-                {t('公开空头增加（卖压增强）')}
-              </span>
-              <span className="inline-flex items-center gap-1 text-up-600">
-                <span className="inline-block size-1.5 rounded-full bg-up-600" aria-hidden />
-                {t('公开空头减少（买方回补）')}
-              </span>
-              <span>{t('空头变化按对股价的方向着色；相对收益仍是红涨绿跌')}</span>
-            </p>
-          </div>
-        </>
+        <SkeletonReveal
+          loading={state === 'loading'}
+          skeleton={
+            <>
+              <SkeletonCard className="h-80" />
+              <SkeletonRows rows={6} />
+            </>
+          }
+        >
+          {state === 'empty' ? (
+            <div className="card-surface">
+              <EmptyState
+                image="/empty-scan.svg"
+                title={t('该视图当前没有符合条件的股票')}
+                description={minConfidence > 0 ? t('可以把最低数据置信度放宽到「不限」再看一次') : undefined}
+              />
+            </div>
+          ) : (
+            <>
+              {lead && <LeadCard key={lead.canonical_code} row={lead} />}
+              {/* 2 列。1 枚に全項目を載せるので、3 列に詰めると数字が折り返す。 */}
+              <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+                {rows
+                  .filter((row) => row.canonical_code !== lead?.canonical_code)
+                  .map((row) => (
+                    <StockCard
+                      key={row.canonical_code}
+                      row={row}
+                      onSelect={() => {
+                        setLeadCode(row.canonical_code);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                    />
+                  ))}
+              </div>
+              <div className="space-y-1 text-micro text-ink-400">
+                <p>
+                  {t('机构数后的 +N? 是实际持仓不可见的机构家数（跌破门槛，或未跌破但报告长期停止），均不计入合计')}
+                </p>
+                {/* 同一页上「空头变化」和「相对收益」用同一组红绿，含义却不同 ——
+                    不写清楚，+0.71% 是绿、+11.94% 是红这件事就只能靠猜。 */}
+                <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="inline-flex items-center gap-1 text-down-600">
+                    <span className="inline-block size-1.5 rounded-full bg-down-600" aria-hidden />
+                    {t('公开空头增加（卖压增强）')}
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-up-600">
+                    <span className="inline-block size-1.5 rounded-full bg-up-600" aria-hidden />
+                    {t('公开空头减少（买方回补）')}
+                  </span>
+                  <span>{t('空头变化按对股价的方向着色；相对收益仍是红涨绿跌')}</span>
+                </p>
+              </div>
+            </>
+          )}
+        </SkeletonReveal>
       )}
+      <SourceNote className="mt-8" text={t('公开披露的机构空卖持仓 · 非全市场空头')} />
     </div>
   );
 }
@@ -354,7 +404,7 @@ function StateDistribution({
                 <span className="w-16 shrink-0 truncate text-caption text-ink-500 group-hover:text-ink-800">
                   {t(STATE_LABELS[item.state] ?? item.state)}
                 </span>
-                <span className="relative h-1 flex-1 overflow-hidden rounded-pill bg-line">
+                <span className="strength-track relative h-1 flex-1 overflow-hidden rounded-pill">
                   <span
                     className={cn('absolute inset-y-0 left-0 rounded-pill', STATE_DOTS[item.state] ?? 'bg-ink-300')}
                     style={{ width: `${Math.max(2, (count / max) * 100)}%` }}
@@ -389,45 +439,73 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
   const invisible = row.below_threshold_count + (row.stale_reporting_count ?? 0);
 
   return (
-    <section className="card-surface overflow-hidden rounded-xl">
+    <motion.article
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: DUR_SECTION, ease: EASE_PAPER }}
+      className="radar-lead-card card-surface overflow-hidden p-5"
+    >
       <div className="grid grid-cols-1 lg:grid-cols-3">
         {/* 左 2/3：标题 + 事实 + K 线（机构事件标在图上） */}
-        <div className="border-line p-4 lg:col-span-2 lg:border-r">
-          <header className="mb-2 flex flex-wrap items-center gap-2">
-            <CodeCell displayCode={row.display_code} nameJa={row.name} to={`/stock/${row.display_code}`} />
+        <div className="border-line lg:col-span-2 lg:border-r lg:pr-5">
+          <div className="mb-2 flex flex-wrap items-center gap-1.5">
             <ShortStateChip state={row.primary_state} />
-            <span className="ml-auto flex items-baseline gap-1.5">
-              <span className="text-micro text-ink-400">{t('行为分')}</span>
-              <span className="font-mono text-display-m tnum text-ink-900">{fmtScore(row.behavior_score)}</span>
-            </span>
-          </header>
-          <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-caption text-ink-500">
-            <span>
+            <span className="radar-chip radar-chip-neutral">
               {row.sector33_name ?? '—'} · {row.market_name ?? '—'}
             </span>
-            <span>
-              {t('收盘')} <span className="font-mono tnum text-ink-800">{fmtPrice(row.close)}</span>
+            <span className="radar-chip radar-chip-brand ml-auto">
+              <Icon name="flag" size={12} />
+              {t('首要监视')}
             </span>
-            <span>
-              {t('公开可见空头')}{' '}
-              <span className="font-mono tnum text-ink-800">{fmtPctLevel(row.visible_short_ratio)}</span>
-            </span>
+          </div>
+          <h3 className="font-display text-display-m text-ink-900">
+            {row.name ?? '—'}{' '}
+            <Link
+              to={`/stock/${row.display_code}`}
+              className="text-brand-600 underline-offset-4 transition-colors hover:text-brand-700 hover:underline"
+            >
+              {row.display_code}
+            </Link>
+          </h3>
+          <div className="mt-3 flex flex-col gap-2.5 sm:flex-row sm:items-stretch">
+            <div className="grid flex-1 grid-cols-1 gap-2.5 sm:grid-cols-3">
+              <div className="radar-value-cell px-3 py-2.5">
+                <p className="text-micro text-ink-400">{t('收盘')}</p>
+                <p className="mt-0.5 font-mono text-data-l text-ink-900 tnum">{fmtPrice(row.close)}</p>
+              </div>
+              <div className="radar-value-cell px-3 py-2.5">
+                <p className="text-micro text-ink-400">{t('公开可见空头')}</p>
+                <p className="mt-0.5 font-mono text-data-l text-ink-900 tnum">{fmtPctLevel(row.visible_short_ratio)}</p>
+              </div>
+              <div className="radar-value-cell px-3 py-2.5">
+                <p className="text-micro text-ink-400">{t('机构数')}</p>
+                <p className="mt-0.5 font-mono text-data-l text-ink-900 tnum">
+                  {row.visible_institution_count}
+                  {invisible > 0 && <span className="text-ink-400"> +{invisible}?</span>}
+                </p>
+              </div>
+            </div>
+            <div className="radar-value-cell radar-priority-cell flex flex-col items-center justify-center px-3 py-1.5">
+              <PriorityRing
+                score={row.behavior_score}
+                label={t('行为分')}
+                hint={SHORT_HINTS.behavior}
+                emptyLabel={t('行为分数据不足')}
+              />
+            </div>
+          </div>
+          <div className="mb-3 mt-3 flex flex-wrap gap-x-4 gap-y-1 text-caption text-ink-500">
             {row.reported_in_scope_ratio != null &&
               row.reported_in_scope_ratio - (row.visible_short_ratio ?? 0) > 0.0005 && (
-                <span title={t('最后报告仍在公开范围内的全部机构之和，含报告已长期停更者。官方规则没有失效期限')}>
-                  {t('在册合计')}{' '}
+                <span className="inline-flex items-center gap-0.5">
+                  {t('在册合计')}
+                  <InfoHint hint={SHORT_HINTS.inScope} size={11} />
+                  {' '}
                   <span className="font-mono tnum text-ink-800">
                     {fmtPctLevel(row.reported_in_scope_ratio)}
                   </span>
                 </span>
               )}
-            <span>
-              {t('机构数')}{' '}
-              <span className="font-mono tnum text-ink-800">
-                {row.visible_institution_count}
-                {invisible > 0 && <span className="text-ink-400"> +{invisible}?</span>}
-              </span>
-            </span>
             <span>
               {t('公开可见回补天数')}{' '}
               <span className="font-mono tnum text-ink-800">
@@ -454,7 +532,7 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
           </p>
 
           {events.length > 0 && (
-            <ul className="mt-3 divide-y divide-line border-t border-line">
+            <ul className="mt-3 border-t border-line">
               {events.slice(0, 4).map((event) => (
                 <EventLine key={event.event_id} event={event} />
               ))}
@@ -491,21 +569,25 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
           {detail ? (
             <Explanation detail={detail} />
           ) : (
-            <div className="space-y-1.5 border-t border-line pt-2.5">
-              <span className="skeleton-shimmer block h-3 w-full rounded-sm" aria-hidden />
-              <span className="skeleton-shimmer block h-3 w-4/5 rounded-sm" aria-hidden />
+            <div className="t-skel space-y-1.5 border-t border-line pt-2.5" data-state="loading" aria-hidden="true">
+              <div className="t-skel-skeleton is-pulsing space-y-1.5">
+                <SkeletonBlock className="h-3 w-full" />
+                <SkeletonBlock className="h-3 w-4/5" />
+              </div>
+              <div className="t-skel-content" />
             </div>
           )}
 
           <Link
             to={`/stock/${row.display_code}`}
-            className="mt-auto rounded-md border border-line py-1.5 text-center text-body-s text-brand-700 hover:bg-brand-50"
+            className="mt-auto flex items-center justify-center gap-1.5 rounded-md bg-brand-600 px-3.5 py-2 text-caption font-medium text-white shadow-btn-hi transition-[transform,background-color] duration-fast hover:bg-brand-700 active:scale-[0.98]"
           >
-            {t('个股研究')} →
+            {t('打开研究页')}
+            <Icon name="arrow-up-right" size={13} />
           </Link>
         </div>
       </div>
-    </section>
+    </motion.article>
   );
 }
 
@@ -541,7 +623,9 @@ function Explanation({ detail }: { detail: ShortMonitorDetail }) {
  *  标记打在 `effective_trade_date`（公开日之后的首个交易日）而不是仓位日：
  *  市场在公开之前不可能知道这件事，标在仓位日等于把未来信息画进过去。 */
 function LeadChart({ bars, events, code }: { bars: StockBar[]; events: ShortMonitorEvent[]; code: string }) {
+  const colorMode = useColorMode();
   const option = useMemo(() => {
+    void colorMode;
     const dates = bars.map((bar) => bar.trade_date.slice(5));
     const candles = bars.map((bar) => [
       bar.adj_open ?? bar.open,
@@ -593,17 +677,22 @@ function LeadChart({ bars, events, code }: { bars: StockBar[]; events: ShortMoni
         },
       ],
     };
-  }, [bars, events]);
+  }, [bars, colorMode, events]);
   return <ReactECharts className="h-64 w-full" option={option} ariaLabel={`${code} short monitor chart`} />;
 }
 
 function EventLine({ event }: { event: ShortMonitorEvent }) {
   const delta = event.ratio_delta;
   return (
-    <li className="flex items-baseline gap-2 py-1 text-caption">
-      <span className="font-mono text-micro tnum text-ink-400">{fmtDateShort(event.effective_trade_date)}</span>
-      <span className="min-w-0 flex-1 truncate text-ink-600">{event.institution}</span>
-      <span className="shrink-0 font-mono tnum text-ink-500">{fmtPctLevel(event.short_ratio)}</span>
+    <li className="flex min-h-[60px] items-center gap-3 px-1 py-[14px] transition-colors duration-fast hover:bg-paper-2/70">
+      <div className="flex w-11 shrink-0 flex-col items-center pt-0.5">
+        <span className="font-mono text-[11px] leading-[14px] text-ink-400 tnum">
+          {fmtDateShort(event.effective_trade_date)}
+        </span>
+        <span className="mt-1.5 hidden w-[2px] flex-1 rounded-full bg-line sm:block" aria-hidden="true" />
+      </div>
+      <span className="min-w-0 flex-1 truncate text-body-s text-ink-700">{event.institution}</span>
+      <span className="shrink-0 font-mono text-caption tnum text-ink-500">{fmtPctLevel(event.short_ratio)}</span>
       <ShortDelta value={delta} className="w-16 shrink-0 text-right" />
     </li>
   );
@@ -620,16 +709,16 @@ function StockCard({ row, onSelect }: { row: ShortMonitorRow; onSelect: () => vo
   // 公式ルール口径が新鮮な合計より大きいときだけ差が意味を持つ
   const inScope = row.reported_in_scope_ratio;
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className="card-surface card-hover flex flex-col gap-2.5 rounded-lg p-4 text-left"
-    >
+    <button type="button" onClick={onSelect} className="card-surface card-lift flex w-full flex-col gap-2.5 p-4 text-left">
+      <div className="contents">
       <div className="flex items-baseline gap-2">
         <CodeCell displayCode={row.display_code} nameJa={row.name} />
         <span className="ml-auto flex shrink-0 items-baseline gap-1.5">
-          <span className="text-micro text-ink-400">{t('行为分')}</span>
-          <span className="font-mono text-data-l tnum text-ink-900">{fmtScore(row.behavior_score)}</span>
+          <span className="text-micro text-ink-400">
+            {t('行为分')}
+            <InfoHint hint={SHORT_HINTS.behavior} size={11} className="ml-0.5" />
+          </span>
+          <span className="metric-value text-data-l tnum text-ink-900">{fmtScore(row.behavior_score)}</span>
         </span>
       </div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-micro text-ink-400">
@@ -716,7 +805,10 @@ function StockCard({ row, onSelect }: { row: ShortMonitorRow; onSelect: () => vo
       />
 
       <div>
-        <p className="mb-1 text-micro text-ink-400">{t('分项评分')}</p>
+        <p className="mb-1 flex items-center gap-0.5 text-micro text-ink-400">
+          {t('分项评分')}
+          <InfoHint hint={SHORT_HINTS.behavior} size={11} />
+        </p>
         <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
           <MiniScore label="低位" value={row.scores.low_position} />
           <MiniScore label="空头压力" value={row.scores.short_pressure} />
@@ -730,13 +822,16 @@ function StockCard({ row, onSelect }: { row: ShortMonitorRow; onSelect: () => vo
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-2 font-mono text-micro tnum text-ink-400">
-        <span>
-          {t('数据置信度')} <span className="text-ink-700">{row.data_confidence?.toFixed(2) ?? '—'}</span>
+        <span className="inline-flex items-center gap-0.5">
+          {t('数据置信度')}
+          <InfoHint hint={SHORT_HINTS.confidence} size={11} />
+          <span className="text-ink-700">{row.data_confidence?.toFixed(2) ?? '—'}</span>
         </span>
         <span>
           {t('监视优先级')} <span className="text-ink-700">{fmtScore(row.monitor_priority)}</span>
         </span>
         <span className="ml-auto">{fmtDate(row.as_of_date)}</span>
+      </div>
       </div>
     </button>
   );
@@ -756,7 +851,15 @@ function FactBlock({ title, facts }: { title: string; facts: Fact[] }) {
       <dl className="grid grid-cols-2 gap-1 sm:grid-cols-4">
         {facts.map((fact) => (
           <div key={fact.label} className="rounded-md bg-paper-2 px-1.5 py-1">
-            <dt className="truncate text-micro text-ink-400" title={fact.label}>{fact.label}</dt>
+            <dt className="truncate text-micro text-ink-400">
+              <PointerTooltip
+                passthrough
+                label={fact.label}
+                content={<span className="text-micro leading-[16px] text-ink-600">{fact.label}</span>}
+              >
+                <span className="truncate">{fact.label}</span>
+              </PointerTooltip>
+            </dt>
             <dd className={cn('font-mono text-body-s tnum', fact.muted ? 'text-ink-400' : 'text-ink-800')}>
               {fact.value}
             </dd>
@@ -783,12 +886,14 @@ function MiniScore({
   tone?: 'factor' | 'risk';
 }) {
   const number = value ?? null;
+  const hint = shortScoreHint(label);
   return (
     <span className="flex items-center gap-1.5">
-      <span className="w-16 shrink-0 truncate text-micro text-ink-500" title={t(label)}>
-        {t(label)}
+      <span className="flex w-[4.75rem] shrink-0 items-center gap-0.5 text-micro text-ink-500">
+        <span className="truncate">{t(label)}</span>
+        {hint && <InfoHint hint={hint} size={11} />}
       </span>
-      <span className="relative h-1 flex-1 overflow-hidden rounded-pill bg-line">
+      <span className="strength-track relative h-1 flex-1 overflow-hidden rounded-pill">
         {number !== null && (
           <span
             className={cn(
@@ -811,10 +916,10 @@ function MiniScore({
 /** 状态徽章。点是分类色，**不是涨跌色** —— 详见文件头第 4 条。 */
 function ShortStateChip({ state, label }: { state: string; label?: string }) {
   return (
-    <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-pill border border-line bg-card px-2 py-0.5 text-micro text-ink-700">
+    <SoftBadge>
       <span className={cn('size-1.5 rounded-full', STATE_DOTS[state] ?? 'bg-ink-300')} aria-hidden />
       {t(label ?? STATE_LABELS[state] ?? state)}
-    </span>
+    </SoftBadge>
   );
 }
 
@@ -834,23 +939,22 @@ function FlagList({
   return (
     <span className={cn('inline-flex flex-wrap items-center gap-1', className)}>
       {shown.map((flag) => (
-        <span
-          key={flag}
-          className={cn(
-            'whitespace-nowrap rounded-xs px-1.5 py-0.5 text-micro',
-            RISK_FLAGS.has(flag) ? 'bg-warn-50 text-warn-700' : 'bg-paper-2 text-ink-500',
-          )}
-        >
+        <SoftBadge key={flag} tone={RISK_FLAGS.has(flag) ? 'warn' : 'neutral'}>
           {t(FLAG_LABELS[flag] ?? flag)}
-        </span>
+        </SoftBadge>
       ))}
       {rest.length > 0 && (
-        <span
-          className="whitespace-nowrap rounded-xs bg-paper-2 px-1 py-0.5 text-micro text-ink-400"
-          title={rest.map((flag) => t(FLAG_LABELS[flag] ?? flag)).join(' · ')}
+        <PointerTooltip
+          passthrough
+          label={rest.map((flag) => t(FLAG_LABELS[flag] ?? flag)).join(' · ')}
+          content={
+            <span className="text-micro leading-[16px] text-ink-600">
+              {rest.map((flag) => t(FLAG_LABELS[flag] ?? flag)).join(' · ')}
+            </span>
+          }
         >
-          +{rest.length}
-        </span>
+          <SoftBadge>+{rest.length}</SoftBadge>
+        </PointerTooltip>
       )}
     </span>
   );
@@ -873,16 +977,28 @@ function RelSigned({ value }: { value: number | null }) {
  *  在两个页面上是相反的颜色，比任何一种约定都糟。 */
 function ShortDelta({ value, className }: { value: number | null; className?: string }) {
   if (value == null) return <span className={cn('font-mono tnum text-ink-400', className)}>—</span>;
-  return (
+  const tip =
+    value > 0 ? t('公开空头增加（卖压增强）') : value < 0 ? t('公开空头减少（买方回补）') : null;
+  const node = (
     <span
       className={cn(
         'font-mono tnum',
         value > 0 ? 'text-down-600' : value < 0 ? 'text-up-600' : 'text-ink-400',
         className,
       )}
-      title={value > 0 ? t('公开空头增加（卖压增强）') : value < 0 ? t('公开空头减少（买方回补）') : undefined}
     >
       {fmtPct(value)}
     </span>
+  );
+  return tip ? (
+    <PointerTooltip
+      passthrough
+      label={tip}
+      content={<span className="text-micro leading-[16px] text-ink-600">{tip}</span>}
+    >
+      {node}
+    </PointerTooltip>
+  ) : (
+    node
   );
 }

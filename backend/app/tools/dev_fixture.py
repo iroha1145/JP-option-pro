@@ -383,7 +383,7 @@ def build_fixture(data_dir: str | None = None, *, days: int = 320, end_date: dat
 
     # 強度スキャン断面（本番の post_close と同じ流れ）
     from app.domain.constants import TOPIX_INDEX_CODE
-    from app.services.strength_scan import build_strength_rows, compute_market_regime_jp
+    from app.services.strength_scan import STRENGTH_SCORE_VERSION, build_strength_rows, compute_market_regime_jp
 
     topix_series = repository.index_series(TOPIX_INDEX_CODE, start_date=lookback_start)
     regime = compute_market_regime_jp(
@@ -397,19 +397,36 @@ def build_fixture(data_dir: str | None = None, *, days: int = 320, end_date: dat
         securities=securities,
         topix_return_63d=rs_context.get("topix_return_63d"),
     )
-    repository.replace_strength_rows(strength_rows, trade_date=target, regime=regime)
-    repository.record_sync_success(
-        "strength_snapshot", rows_total=len(strength_rows), data_through=target
+    publication = repository.replace_strength_rows(
+        strength_rows,
+        trade_date=target,
+        regime=regime,
+        score_version=STRENGTH_SCORE_VERSION,
+        expected_trade_date=target,
+        input_data_through=summary.get("input_data_through") or target,
+        coverage=summary.get("coverage"),
+        index_input_date=(rs_context or {}).get("index_input_date"),
+        universe_version=(summary.get("coverage") or {}).get("universe_version"),
+        input_fingerprint=summary.get("input_fingerprint"),
+        today=target,
     )
+    if publication.outcome == "published":
+        repository.record_sync_success(
+            "strength_snapshot",
+            rows_total=publication.rows_written,
+            data_through=publication.input_data_through or target,
+            checkpoint={"publication_id": publication.publication_id},
+        )
 
     return {
         "data_dir": str(paths.root),
         "target_date": target,
         "securities": len(master_rows),
         "bars": len(bar_rows),
-        "radar": {k: v for k, v in summary.items() if k != "sector_fit"},
+        "radar": {k: v for k, v in summary.items() if k not in {"sector_fit", "valid_inputs"}},
         "screener_rows": len(screener_rows),
-        "strength_rows": len(strength_rows),
+        "strength_rows": publication.rows_written or len(strength_rows),
+        "publication": publication.as_dict(),
     }
 
 

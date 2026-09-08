@@ -47,3 +47,14 @@ def request_action(
         action_type, idempotency_key=secrets.token_hex(8), payload=payload
     )
     return {"action_type": action_type, **outcome}
+
+
+@router.get("/actions/{action_id}")
+def get_action(action_id: int) -> dict:
+    repository = worker_state_read()
+    if not repository.exists():
+        raise HTTPException(status_code=404, detail={"code": "action_not_found"})
+    item = repository.get_action(action_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail={"code": "action_not_found"})
+    return item
