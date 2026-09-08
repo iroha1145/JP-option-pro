@@ -22,7 +22,10 @@ export default function ReactECharts({ option, className, style, onClick, onInit
     if (!ref.current) return;
     const chart = echarts.init(ref.current, undefined, { renderer: 'canvas' });
     chartRef.current = chart;
-    const ro = new ResizeObserver(() => chart.resize());
+    const ro = new ResizeObserver(() => {
+      if (chart.isDisposed()) return;
+      chart.resize();
+    });
     ro.observe(ref.current);
     onInitRef.current?.(chart);
     return () => {

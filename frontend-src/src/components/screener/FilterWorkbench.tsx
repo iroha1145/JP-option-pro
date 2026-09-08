@@ -44,19 +44,24 @@ const TIER_OPTIONS: { value: TierFilter; label: string }[] = [
 function TierSegmented({
   value,
   counts,
+  coversPool,
   onChange,
 }: {
   value: TierFilter;
   counts: Record<TierFilter, number> | null;
+  /** 有服务端 tier_distribution 时计数覆盖整个候选池；否则只描述当前快照。 */
+  coversPool: boolean;
   onChange: (v: TierFilter) => void;
 }) {
+  const scopeNote = coversPool ? t('已评分候选池') : t('当前快照返回的行');
   return (
     <Segmented<TierFilter>
       options={TIER_OPTIONS}
       value={value}
       onChange={onChange}
       scrollable
-      ariaLabel={t('强度分档 · 计数基于已评分候选池')}
+      ariaLabel={t('强度分档 · 计数基于{scope}', { scope: scopeNote })}
+      title={t('分档计数基于{scope}', { scope: scopeNote })}
       renderLabel={(option, active) => (
         <span className="flex items-center gap-1.5">
           {option.label}
@@ -301,7 +306,8 @@ export default function FilterWorkbench({
           <TierSegmented
             value={draft.tier}
             counts={tierCounts}
-            onChange={(tier) => patch({ tier, presetId: null })}
+            coversPool={tierCounts !== null}
+            onChange={(tier) => patch({ tier, presetId: null, minScore: null })}
           />
         </div>
         <div className="w-full min-w-0 sm:w-auto">

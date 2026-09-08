@@ -255,6 +255,10 @@ export const DICT: Record<string, [string, string]> = {
   '强度分 {score}': ['Strength {score}', '強度 {score}'],
   '强度分 ·': ['Strength ·', '強度 ·'],
   强度分档: ['Strength tier', '強度ティア'],
+  已评分候选池: ['the scored candidate pool', 'スコア済みの候補プール'],
+  当前快照返回的行: ['the rows returned in the current snapshot', '今回のスナップショットで返された行'],
+  '强度分档 · 计数基于{scope}': ['Strength tier · count based on {scope}', '強度ランク · カウント基準：{scope}'],
+  '分档计数基于{scope}': ['Tier counts based on {scope}', 'ランク別カウント基準：{scope}'],
   '分档计数基于已评分候选池': ['Tier counts cover the scored pool', 'ティア件数は評価済み母集団基準'],
   '强度分档 · 计数基于已评分候选池': ['Strength tier · counts cover the scored pool', '強度ティア · 件数は評価済み母集団基準'],
   预设策略: ['Presets', 'プリセット'],
@@ -1569,6 +1573,7 @@ export const DICT: Record<string, [string, string]> = {
     '日足データ、大引け後更新 · 研究用途であり投資助言ではありません',
   ],
   '查看市场 · {code}': ['Open market · {code}', '市場を見る · {code}'],
+  '查看大盘强弱 · {code}': ['View market strength · {code}', '市場の強弱を見る · {code}'],
   '查看大盘强弱，{code} 最新价 {price}，{flat}': [
     'Open market, {code} last {price}, {flat}',
     '市場を見る、{code} 終値 {price}、{flat}',

@@ -168,7 +168,7 @@ export function TierHistogram({
               <span className="metric-value text-[11px] leading-none text-ink-500 tnum">{hit}</span>
               {ref !== null && (
                 <span
-                  className="w-full max-w-[26px] rounded-t-[3px] border border-ink-300/60"
+                  className="w-full max-w-[26px] rounded-t-[3px] border border-ink-300/30"
                   style={{
                     height: `${Math.max(4, (refN / maxRef) * 72)}px`,
                     backgroundImage: 'repeating-linear-gradient(45deg, rgba(138,148,176,.45) 0 1.2px, transparent 1.2px 4px)',
@@ -258,7 +258,7 @@ export function MethodCard({
                   <button
                     type="button"
                     onClick={onRetry}
-                    className="mt-2 flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-caption text-ink-600 transition-colors hover:border-brand-400 hover:text-brand-600"
+                    className="mt-2 flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-caption text-ink-600 shadow-btn transition-colors hover:border-brand-400 hover:text-brand-600"
                   >
                     <Icon name="refresh" size={12} />
                     {t('重试')}
