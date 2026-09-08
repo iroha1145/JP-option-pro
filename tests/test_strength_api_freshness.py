@@ -54,6 +54,9 @@ def test_h01_scan_is_read_only_and_visitor_cannot_update(tmp_path, monkeypatch):
 
 def test_h02_action_requires_json_and_same_origin(tmp_path, monkeypatch):
     client, _main, deps = _client(tmp_path / "data", monkeypatch)
+    # This test checks request admission with an initialized worker. The API
+    # no longer creates its schema; startup unavailability has separate coverage.
+    deps.worker_state_write().initialize()
     # Missing JSON / custom header is rejected by the owner-action dependency.
     response = client.post("/api/worker/actions/post_close_batch")
     assert response.status_code in {403, 415, 422}
