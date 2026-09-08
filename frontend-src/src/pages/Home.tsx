@@ -107,7 +107,7 @@ function ListBody({
 function SignalGridSkeleton({ cards }: { cards: number }) {
   return (
     <div
-      className="grid grid-cols-1 gap-2.5 px-4 pb-4 pt-3 sm:grid-cols-2 md:px-5 md:pb-5"
+      className="grid grid-cols-1 gap-2.5 px-4 pb-4 pt-3 sm:grid-cols-2 md:px-5 md:pb-5 xl:grid-cols-2"
       aria-hidden="true"
     >
       {Array.from({ length: cards }, (_, index) => (
@@ -122,7 +122,7 @@ function SignalGridSkeleton({ cards }: { cards: number }) {
             <SkeletonBlock className="h-3 w-24" />
             <SkeletonBlock className="ml-auto h-3 w-12" />
           </div>
-          <SkeletonBlock className="mt-2 h-1 w-full rounded-pill" />
+          <SkeletonBlock className="mt-2.5 h-[3px] w-14 rounded-pill" />
         </div>
       ))}
     </div>
@@ -298,7 +298,7 @@ export default function Home() {
             skeleton={<SignalGridSkeleton cards={8} />}
             rows={8}
           >
-            <div className="grid grid-cols-1 gap-2.5 px-4 pb-4 pt-3 sm:grid-cols-2 md:px-5 md:pb-5">
+            <div className="grid grid-cols-1 gap-2.5 px-4 pb-4 pt-3 sm:grid-cols-2 md:px-5 md:pb-5 xl:grid-cols-2">
               {events.map((event, index) => (
                 <RadarSignalCard key={event.event_id} event={event} index={index} />
               ))}

@@ -78,7 +78,7 @@ export default function News() {
   }, [econ, feed, hotspots, refreshingNews, securities, status, tab]);
 
   return (
-    <div className="space-y-5">
+    <div>
       <PageHeader
         section="07"
         eyebrow="NEWS & CATALYSTS · JAPAN EQUITIES"
@@ -102,9 +102,11 @@ export default function News() {
         }
       />
 
-      <StatusHero status={status.data ?? null} loading={status.loading && !status.data} />
+      <div className="mt-6">
+        <StatusHero status={status.data ?? null} loading={status.loading && !status.data} />
+      </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-2">
         <Segmented<Tab>
           options={[
             { value: 'feed', label: t('信息流') },
@@ -128,6 +130,7 @@ export default function News() {
         )}
       </div>
 
+      <div className="mt-6 space-y-5">
       {tab === 'feed' && (
         <>
           {feedState === 'stale' && (
@@ -214,6 +217,7 @@ export default function News() {
       )}
 
       {tab === 'sources' && <SourcesPanel status={status.data ?? null} loading={status.loading} />}
+      </div>
     </div>
   );
 }

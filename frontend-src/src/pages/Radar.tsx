@@ -143,7 +143,7 @@ export default function Radar() {
   );
 
   return (
-    <div className="space-y-6">
+    <div>
       <PageHeader
         section="04"
         eyebrow="BREAKOUT RADAR · POST-CLOSE SCAN"
@@ -181,7 +181,7 @@ export default function Radar() {
         }
       />
 
-      <div className="radar-filterbar flex flex-wrap items-center gap-x-5 gap-y-3 pb-4">
+      <div className="radar-filterbar mt-6 flex flex-wrap items-center gap-x-5 gap-y-3 pb-4">
         <Segmented<StateGroup>
           options={[
             { value: 'active', label: t('已触发') },
@@ -268,21 +268,23 @@ export default function Radar() {
         </span>
       </div>
 
-      <section aria-label={t('当日信号')}>
+      <section className="mt-8" aria-label={t('当日信号')}>
         <div className="radar-section-heading mb-4 flex flex-wrap items-end justify-between gap-2 pb-1">
           <div>
             <p className="eyebrow">TODAY&apos;S SIGNALS</p>
             <h2 className="mt-1 text-h2 text-ink-900">{t('当日信号')}</h2>
-            <p className="mt-1 text-caption text-ink-400">
+          </div>
+          <div className="text-right">
+            <p className="font-mono text-caption text-ink-400 tnum">
               {t('{n} 个活跃', { n: events.length })}
               {onlyWatch && !watchFilterPending ? t(' · 只看自选') : ''}
             </p>
+            {query.lastUpdatedAt && (
+              <span className="font-mono text-micro text-ink-400 tnum">
+                {t('更新')} {fmtTimeHHMMSS(query.lastUpdatedAt)}
+              </span>
+            )}
           </div>
-          {query.lastUpdatedAt && (
-            <span className="font-mono text-micro text-ink-400 tnum">
-              {t('更新')} {fmtTimeHHMMSS(query.lastUpdatedAt)}
-            </span>
-          )}
         </div>
 
       {state === 'loading' ? (
@@ -291,7 +293,7 @@ export default function Radar() {
             <SkeletonCard className="h-[380px]" />
             <SkeletonCard className="h-[420px]" />
           </div>
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <SkeletonCard className="h-[220px]" />
             <SkeletonCard className="h-[220px]" />
             <SkeletonCard className="h-[220px]" />
@@ -350,14 +352,14 @@ export default function Radar() {
             </div>
           )}
           {view === 'cards' ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {restEvents
                 .map((event, index) => (
                   <motion.div
                     key={event.event_id}
-                    initial={{ opacity: 0, y: 10 }}
+                    initial={{ opacity: 0, y: 14 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, ease: EASE_PAPER, delay: index * 0.04 }}
+                    transition={{ duration: DUR_SECTION, ease: EASE_PAPER, delay: Math.min(index * 0.045, 0.5) }}
                   >
                     <EventCard
                       event={event}

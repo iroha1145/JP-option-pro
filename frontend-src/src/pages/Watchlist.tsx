@@ -44,8 +44,8 @@ import type { SearchResult, WatchlistItem } from '@/api/types';
 const EMPTY_WATCHLIST: WatchlistItem[] = [];
 
 const STAT_ENTER = {
-  hidden: { opacity: 0, y: 10 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE_PAPER } },
+  hidden: { opacity: 0, y: 14 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.48, ease: EASE_PAPER } },
 };
 
 type WatchSortId = 'default' | 'gain' | 'loss' | 'turnover' | 'code';
@@ -273,7 +273,7 @@ export default function Watchlist() {
   }, [canManageWatchlist, busy, flashes]);
 
   return (
-    <div className="space-y-6">
+    <div>
       <PageHeader
         section="02"
         eyebrow="WATCHLIST · PERSONAL"
@@ -298,6 +298,71 @@ export default function Watchlist() {
         }
       />
 
+      {(query.loading && !query.data) || items.length > 0 ? (
+        <section className="mt-6" aria-label={t('自选统计')}>
+          {query.loading && !query.data ? (
+            <HorizontalScroller className="-mx-1 sm:mx-0" scrollerClassName="px-1 sm:px-0" label={t('自选统计')}>
+              <div className="flex snap-x snap-mandatory gap-4 pb-1 sm:grid sm:grid-cols-3">
+                <SkeletonCard className="min-w-[240px] sm:min-w-0" />
+                <SkeletonCard className="min-w-[240px] sm:min-w-0" />
+                <SkeletonCard className="min-w-[240px] sm:min-w-0" />
+              </div>
+            </HorizontalScroller>
+          ) : (
+            <HorizontalScroller className="-mx-1 sm:mx-0" scrollerClassName="px-1 sm:px-0" label={t('自选统计')}>
+              <motion.div
+                initial="hidden"
+                animate="show"
+                variants={{ hidden: {}, show: { transition: { staggerChildren: 0.045 } } }}
+                className="flex snap-x snap-mandatory gap-4 pb-1 sm:grid sm:grid-cols-3"
+              >
+                <motion.div variants={STAT_ENTER} className="min-w-[240px] snap-start sm:min-w-0">
+                  <StatCard label={t('只标的')} icon="list" value={items.length} />
+                </motion.div>
+                <motion.div variants={STAT_ENTER} className="min-w-[240px] snap-start sm:min-w-0">
+                  <div className="card-surface metric-card p-5">
+                    <div className="flex items-start justify-between">
+                      <p className="eyebrow">{t('上涨 / 下跌')}</p>
+                      <Icon name="candle" size={18} className="text-ink-400" />
+                    </div>
+                    <AdvanceDeclineBar
+                      advancers={breadth.advancers}
+                      decliners={breadth.decliners}
+                      unchanged={breadth.unchanged}
+                    />
+                  </div>
+                </motion.div>
+                <motion.div variants={STAT_ENTER} className="min-w-[240px] snap-start sm:min-w-0">
+                  <StatCard
+                    label={t('重点标记')}
+                    icon="flag"
+                    value={items.filter((item) => item.marked_important).length}
+                  />
+                </motion.div>
+              </motion.div>
+            </HorizontalScroller>
+          )}
+        </section>
+      ) : null}
+
+      {anonymous ? (
+        <section className="mt-8 card-surface">
+          <EmptyState
+            image="/empty-watchlist.svg"
+            title={t('登录后可以把自选股保存在账号里')}
+            description={t('账号与美股版通用，换设备也还在')}
+            action={
+              <Link
+                to="/login"
+                className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105"
+              >
+                {t('去登录 / 注册')}
+              </Link>
+            }
+          />
+        </section>
+      ) : (
+        <div className="mt-8">
       {/* 工具行：视图切换 + 添加表单 + 计数 */}
       <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 border-b border-line py-1.5">
         <div className="flex min-w-0 flex-wrap items-center gap-2.5">
@@ -343,69 +408,7 @@ export default function Watchlist() {
         <StaleStrip onRetry={() => query.refresh()} refreshing={query.refreshing} />
       )}
 
-      {query.loading && !query.data && (
-        <HorizontalScroller className="-mx-1 sm:mx-0" scrollerClassName="px-1 sm:px-0" label={t('自选统计')}>
-          <div className="flex gap-3 sm:grid sm:grid-cols-3">
-            <SkeletonCard className="min-w-[240px] sm:min-w-0" />
-            <SkeletonCard className="min-w-[240px] sm:min-w-0" />
-            <SkeletonCard className="min-w-[240px] sm:min-w-0" />
-          </div>
-        </HorizontalScroller>
-      )}
-
-      {items.length > 0 && (
-        <HorizontalScroller className="-mx-1 sm:mx-0" scrollerClassName="px-1 sm:px-0" label={t('自选统计')}>
-          <motion.div
-            initial="hidden"
-            animate="show"
-            variants={{ hidden: {}, show: { transition: { staggerChildren: 0.045 } } }}
-            className="flex gap-3 sm:grid sm:grid-cols-3"
-          >
-            <motion.div variants={STAT_ENTER} className="min-w-[240px] snap-start sm:min-w-0">
-              <StatCard label={t('只标的')} icon="list" value={items.length} />
-            </motion.div>
-            <motion.div variants={STAT_ENTER} className="min-w-[240px] snap-start sm:min-w-0">
-              <div className="card-surface metric-card p-5">
-                <div className="flex items-start justify-between">
-                  <p className="eyebrow">{t('上涨 / 下跌')}</p>
-                  <Icon name="candle" size={18} className="text-ink-400" />
-                </div>
-                <AdvanceDeclineBar
-                  advancers={breadth.advancers}
-                  decliners={breadth.decliners}
-                  unchanged={breadth.unchanged}
-                />
-              </div>
-            </motion.div>
-            <motion.div variants={STAT_ENTER} className="min-w-[240px] snap-start sm:min-w-0">
-              <StatCard
-                label={t('重点标记')}
-                icon="flag"
-                value={items.filter((item) => item.marked_important).length}
-              />
-            </motion.div>
-          </motion.div>
-        </HorizontalScroller>
-      )}
-
-      {anonymous ? (
-        <section className="card-surface">
-          <EmptyState
-            image="/empty-watchlist.svg"
-            title={t('登录后可以把自选股保存在账号里')}
-            description={t('账号与美股版通用，换设备也还在')}
-            action={
-              <Link
-                to="/login"
-                className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105"
-              >
-                {t('去登录 / 注册')}
-              </Link>
-            }
-          />
-        </section>
-      ) : (
-        <div className="min-h-[70vh]">
+        <div className="mt-4 min-h-[70vh]">
           <SkeletonReveal
             loading={query.loading && !query.data}
             skeleton={
@@ -477,6 +480,7 @@ export default function Watchlist() {
               </div>
             )}
           </SkeletonReveal>
+        </div>
         </div>
       )}
       <SourceNote className="mt-8" text={t('本页为日线数据，收盘后更新 · 仅供研究参考，不构成投资建议')} />
@@ -628,7 +632,7 @@ function WatchCard({
       animate={animateIn ? { opacity: 1, y: 0 } : undefined}
       transition={
         animateIn
-          ? { duration: 0.48, ease: EASE_PAPER, delay: Math.min(index * 0.04, 0.4) }
+          ? { duration: 0.48, ease: EASE_PAPER, delay: Math.min(index * 0.045, 0.5) }
           : undefined
       }
       className="group/card relative"

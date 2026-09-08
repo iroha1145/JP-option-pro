@@ -251,7 +251,7 @@ export default function Earnings() {
 
       {/* B2 列表（8 列）· B3 右栏（4 列） */}
       <div className="mt-6 grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-12" aria-label={t('决算主体')}>
-        <div className="min-w-0 space-y-4 xl:col-span-8">
+        <div className="min-w-0 space-y-6 xl:col-span-8">
           {error503 ? null : (
             <SkeletonReveal
               loading={loading}
@@ -309,6 +309,17 @@ export default function Earnings() {
                     className="h-8 rounded-md border border-line bg-card-warm px-3 text-caption text-ink-600 shadow-btn transition-colors hover:border-brand-400 hover:text-brand-600"
                   >
                     {t('显示更多 ·')} {Math.min(LIST_PAGE_SIZE, listState.listItems.length - listState.visibleItems.length)} {t('件')}
+                  </button>
+                </div>
+              )}
+              {visibleLimit > LIST_PAGE_SIZE && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setVisibleLimit(LIST_PAGE_SIZE)}
+                    className="h-8 px-2 text-caption text-ink-400 transition-colors hover:text-brand-600"
+                  >
+                    {t('收起至前')} {LIST_PAGE_SIZE} {t('件')}
                   </button>
                 </div>
               )}

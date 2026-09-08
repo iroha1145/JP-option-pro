@@ -145,9 +145,9 @@ export default function StockDetail() {
           <span className="eyebrow">STOCK · {code}</span>
         </div>
         <SkeletonCard className="h-24" />
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-          <SkeletonCard className="h-96 xl:col-span-8" />
-          <div className="grid content-start gap-4 xl:col-span-4">
+        <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
+          <SkeletonCard className="h-[420px] xl:col-span-8" />
+          <div className="grid content-start gap-6 xl:col-span-4">
             <SkeletonCard className="h-48" />
             <SkeletonCard className="h-32" />
             <SkeletonCard className="h-32" />
@@ -188,7 +188,7 @@ export default function StockDetail() {
   const security = data.security;
 
   return (
-    <div className="space-y-5">
+    <div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           {backButton}
@@ -304,7 +304,7 @@ export default function StockDetail() {
       </motion.header>
 
       {/* 行1: K線 + 右侧紧凑栏 */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+      <div className="mt-8 grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
         <StockChart
           displayCode={security.display_code}
           interval={interval}
@@ -359,7 +359,7 @@ export default function StockDetail() {
           )}
         </StockChart>
 
-        <div className="grid content-start gap-4 xl:col-span-4">
+        <div className="grid content-start gap-6 xl:col-span-4">
           <KeyStats code={code} quote={data.quote} />
           {/* 雷达 */}
           <section className="card-surface p-5">
@@ -399,7 +399,7 @@ export default function StockDetail() {
       </div>
 
       {/* 行2: 决算时间线 + 技术结构 */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+      <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
         <section className="card-surface p-5 xl:col-span-7">
           <p className="eyebrow">EARNINGS TIMELINE</p>
           <h2 className="mb-3 mt-1 text-h3 text-ink-900">{t('决算时间线')}</h2>
@@ -415,14 +415,14 @@ export default function StockDetail() {
       </div>
 
       {/* 机构空卖行为：报告本身在下面的「空卖残高报告」，这里是行为分析 */}
-      <section className="card-surface p-5">
+      <section className="mt-6 card-surface p-5">
         <p className="eyebrow">SHORT BEHAVIOR</p>
         <h2 className="mb-3 mt-1 text-h3 text-ink-900">{t('机构空卖行为')}</h2>
         <ShortBehaviorPanel code={security.canonical_code} />
       </section>
 
       {/* 行3: 空卖 + 发表预定 */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
         <section className="card-surface p-5">
           <p className="eyebrow">SHORT INTEREST</p>
           <h2 className="mb-3 mt-1 text-h3 text-ink-900">{t('空卖残高报告')}</h2>

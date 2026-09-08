@@ -527,6 +527,7 @@ export const DICT: Record<string, [string, string]> = {
   清除筛选: ['Clear filter', '絞り込み解除'],
   已显示: ['Showing', '表示中'],
   '显示更多 ·': ['Show more ·', 'さらに表示 ·'],
+  收起至前: ['Collapse to first', '折りたたみ: 先頭'],
   日期未定: ['Date TBD', '日付未定'],
   当日无决算安排: ['No earnings that day', 'その日の決算はありません'],
   窗口内暂无决算: ['No earnings in window', 'ウィンドウ内に決算なし'],
