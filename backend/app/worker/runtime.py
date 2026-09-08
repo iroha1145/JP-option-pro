@@ -274,10 +274,27 @@ class WorkerSupervisor:
         lookup = getattr(self._state, "pending_retries_for_task", None)
         if lookup is not None:
             pending = lookup(task_name)
+        details = result.details or {}
+        current_target = ""
+        if isinstance(retry, dict):
+            current_target = str(retry.get("target_trade_date") or "")
+        if not current_target:
+            current_target = str(details.get("target_date") or "")
+        radar = details.get("radar")
+        if not current_target and isinstance(radar, dict):
+            current_target = str(radar.get("target_date") or "")
         for item in pending:
             deadline = item.get("next_retry_at")
-            if deadline:
-                delay = min(delay, seconds_until_deadline(str(deadline)))
+            if not deadline:
+                continue
+            remaining = seconds_until_deadline(str(deadline))
+            item_target = str(item.get("target_trade_date") or "")
+            if current_target and item_target and item_target != current_target:
+                # Expired rows for another session must not spin today's loop.
+                if remaining > 0.5:
+                    delay = min(delay, remaining)
+                continue
+            delay = min(delay, remaining)
         return max(0.5, delay)
 
     async def _wait(self, task_name: str, delay: float) -> bool:

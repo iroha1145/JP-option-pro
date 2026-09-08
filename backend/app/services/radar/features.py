@@ -246,6 +246,7 @@ def compute_features_from_series(series: dict[str, list] | None) -> dict[str, An
     return {
         "feature_version": FEATURE_VERSION,
         "trade_date": dates[-1],
+        "open": series["opens"][-1] if series.get("opens") else None,
         "close": close,
         "high": high,
         "low": low,

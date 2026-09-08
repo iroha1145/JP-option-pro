@@ -44,6 +44,7 @@ def _expected_trade_date(repository) -> str | None:
         now=now_jst(),
         batch_hhmm=config.sync.daily_batch_time_jst,
         latest_trading_day=repository.latest_trading_day,
+        session_status=repository.is_trading_day,
     )
 
 

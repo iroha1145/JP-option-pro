@@ -146,6 +146,7 @@ class TaskContext:
             now=now_jst(),
             batch_hhmm=self.config.sync.daily_batch_time_jst,
             latest_trading_day=self.repository.latest_trading_day,
+            session_status=self.repository.is_trading_day,
         )
 
 
@@ -238,6 +239,10 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
         if pending_bars and not failed:
             next_delay = min(next_delay, POST_CLOSE_RETRY_SECONDS)
         retry: dict[str, Any] | None = None
+        radar_complete = (
+            radar_outcome in {OUTCOME_PUBLISHED, OUTCOME_ALREADY_CURRENT}
+            and scan_summary.get("status") != "error"
+        )
         if not radar_only and pending_bars and not failed:
             retry = {
                 "task_name": TASK_POST_CLOSE,
@@ -246,7 +251,7 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
                 "reason": REASON_NOT_PUBLISHED,
                 "next_retry_at": absolute_retry_iso(delay_seconds=POST_CLOSE_RETRY_SECONDS),
             }
-        elif not radar_only and radar_outcome == OUTCOME_PUBLISHED:
+        elif not radar_only and radar_complete:
             retry = {
                 "clear": True,
                 "task_name": TASK_POST_CLOSE,
@@ -263,6 +268,14 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
                 "target_trade_date": target,
                 "dataset_scope": "daily_bars",
                 "reason": scan_summary.get("reason") or radar_outcome,
+                "next_retry_at": absolute_retry_iso(delay_seconds=POST_CLOSE_RETRY_SECONDS),
+            }
+        elif not radar_only and scan_summary.get("status") == "error":
+            retry = {
+                "task_name": TASK_POST_CLOSE,
+                "target_trade_date": target,
+                "dataset_scope": "daily_bars",
+                "reason": scan_summary.get("reason") or "radar_or_screener_error",
                 "next_retry_at": absolute_retry_iso(delay_seconds=POST_CLOSE_RETRY_SECONDS),
             }
         if failed:
@@ -736,6 +749,73 @@ def _run_short_monitor(context: TaskContext, target_date: str) -> dict[str, Any]
     return {"status": "ok", "rebuild": rebuilt.as_dict(), "refresh": refreshed.as_dict()}
 
 
+def _dataset_through(repository: CoreRepository, dataset: str) -> str | None:
+    state = repository.sync_state(dataset) or {}
+    return state.get("data_through")
+
+
+def _needs_strength_receipt(
+    repository: CoreRepository, target_date: str, publication_id: str | None
+) -> bool:
+    state = repository.sync_state("strength_snapshot") or {}
+    if state.get("data_through") != target_date:
+        return True
+    return (state.get("checkpoint") or {}).get("publication_id") != publication_id
+
+
+def _needs_screener_repair(repository: CoreRepository, target_date: str) -> bool:
+    if _dataset_through(repository, "screener_snapshot") != target_date:
+        return True
+    return repository.screener_trade_date() != target_date
+
+
+def _write_screener_followup(
+    context: TaskContext,
+    target_date: str,
+    rows: list[dict[str, Any]],
+    summary: dict[str, Any],
+    *,
+    record_strength: bool,
+    publication: Any,
+) -> dict[str, Any]:
+    if record_strength:
+        context.repository.record_sync_success(
+            "radar_scan", rows_total=summary.get("events_written"), data_through=target_date
+        )
+        context.repository.record_sync_success(
+            "strength_snapshot",
+            rows_total=publication.rows_written or 0,
+            data_through=publication.input_data_through or target_date,
+            checkpoint={"publication_id": publication.publication_id},
+        )
+    try:
+        written = context.repository.replace_screener_rows(rows)
+    except Exception as exc:  # noqa: BLE001 — 强度已提交；筛选失败不能抹掉发布凭证
+        summary["screener_rows"] = 0
+        summary["screener_outcome"] = "failed"
+        summary["screener_error"] = type(exc).__name__
+        summary["status"] = "error"
+        summary["reason"] = f"screener_write_failed:{type(exc).__name__}"
+        return summary
+    if written:
+        context.repository.record_sync_success(
+            "screener_snapshot", rows_total=written, data_through=target_date
+        )
+        summary["screener_rows"] = written
+        summary["screener_outcome"] = OUTCOME_PUBLISHED
+        summary["status"] = "ok"
+        return summary
+    summary["screener_rows"] = 0
+    if context.repository.screener_trade_date() == target_date:
+        summary["screener_outcome"] = OUTCOME_ALREADY_CURRENT
+        summary["status"] = "ok"
+        return summary
+    summary["screener_outcome"] = "failed"
+    summary["status"] = "error"
+    summary["reason"] = "screener_write_empty"
+    return summary
+
+
 def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str, Any]:
     if not context.config.features.radar_enabled:
         return {"status": "disabled", "outcome": OUTCOME_SKIPPED, "target_date": target_date}
@@ -830,34 +910,41 @@ def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str,
     summary["outcome"] = publication.outcome
     summary["strength_rows"] = publication.rows_written
     if publication.outcome == OUTCOME_PUBLISHED:
-        context.repository.record_sync_success(
-            "radar_scan", rows_total=summary.get("events_written"), data_through=target_date
+        return _write_screener_followup(
+            context,
+            target_date,
+            rows,
+            summary,
+            record_strength=True,
+            publication=publication,
         )
-        context.repository.record_sync_success(
-            "strength_snapshot",
-            rows_total=publication.rows_written,
-            data_through=publication.input_data_through or target_date,
-            checkpoint={"publication_id": publication.publication_id},
-        )
-        try:
-            written = context.repository.replace_screener_rows(rows)
-        except Exception as exc:  # noqa: BLE001 — 强度已提交；筛选失败不能抹掉发布凭证
-            summary["screener_rows"] = 0
-            summary["screener_outcome"] = "failed"
-            summary["screener_error"] = type(exc).__name__
-            summary["status"] = "error"
-            summary["reason"] = f"screener_write_failed:{type(exc).__name__}"
-            return summary
-        context.repository.record_sync_success(
-            "screener_snapshot", rows_total=written, data_through=target_date
-        )
-        summary["screener_rows"] = written
-        summary["screener_outcome"] = OUTCOME_PUBLISHED
-        summary["status"] = "ok"
-    else:
+    if publication.outcome == OUTCOME_ALREADY_CURRENT:
+        if _needs_strength_receipt(context.repository, target_date, publication.publication_id):
+            context.repository.record_sync_success(
+                "radar_scan", rows_total=summary.get("events_written"), data_through=target_date
+            )
+            context.repository.record_sync_success(
+                "strength_snapshot",
+                rows_total=publication.rows_written or 0,
+                data_through=publication.input_data_through or target_date,
+                checkpoint={"publication_id": publication.publication_id},
+            )
+        if _needs_screener_repair(context.repository, target_date):
+            return _write_screener_followup(
+                context,
+                target_date,
+                rows,
+                summary,
+                record_strength=False,
+                publication=publication,
+            )
         summary["screener_rows"] = 0
-        summary["status"] = "skipped" if publication.outcome != OUTCOME_ALREADY_CURRENT else "ok"
-        summary["reason"] = publication.reason
+        summary["screener_outcome"] = OUTCOME_ALREADY_CURRENT
+        summary["status"] = "ok"
+        return summary
+    summary["screener_rows"] = 0
+    summary["status"] = "skipped" if publication.outcome != OUTCOME_ALREADY_CURRENT else "ok"
+    summary["reason"] = publication.reason
     return summary
 
 

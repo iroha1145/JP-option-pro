@@ -1,7 +1,8 @@
-"""H03/F01: production frontend build + real local API process.
+"""HTTP + committed frontend bundle checks (not a browser, not a worker).
 
-This starts the committed frontend directory through the real ASGI app.
+Starts one uvicorn process serving the committed frontend directory.
 Vendor calls are not made; scan is read-only against a fixture publication.
+Independent worker + owner action flow lives in test_screener_dual_process.py.
 """
 
 from __future__ import annotations
@@ -108,6 +109,17 @@ def test_h03_f01_production_frontend_serves_filter_not_update(dual_service):
     assert "盘中价较新不等于日线评分已更新" in bundle
     assert "快照日期早于当前目标交易日" in bundle
     assert js == ""
+
+
+def test_r08_r09_source_keeps_home_alias_and_radar_empty():
+    app = (REPO / "frontend-src" / "src" / "App.tsx").read_text(encoding="utf-8")
+    assert 'path="/home"' in app
+    radar = (REPO / "frontend-src" / "src" / "pages" / "Radar.tsx").read_text(encoding="utf-8")
+    assert "radar-filter-empty" in radar
+    screener = (REPO / "frontend-src" / "src" / "pages" / "Screener.tsx").read_text(encoding="utf-8")
+    assert "interpretOwnerRefresh" in screener
+    assert "refreshMayCommitResults" in screener
+    assert "silentScanMayCommit" in screener
 
 
 def test_g07_g08_bundle_keeps_quote_and_score_copy():

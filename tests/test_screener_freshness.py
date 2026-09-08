@@ -17,6 +17,7 @@ from app.services.publication import (
     OUTCOME_WAITING_INPUT,
     classify_equity_input,
     clip_rows_through,
+    evaluate_freshness,
     expected_trade_date,
 )
 from app.services.radar.engine import RadarEngine
@@ -680,3 +681,194 @@ def test_g05_missing_calendar_is_unknown():
         latest_trading_day=lambda _day: None,
     )
     assert unknown is None
+
+
+def test_r06_stale_calendar_gap_is_unknown_not_long_holiday():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    def latest(day: str) -> str | None:
+        return "2026-07-31" if day >= "2026-07-31" else None
+
+    def status(day: str) -> bool | None:
+        return True if day == "2026-07-31" else None
+
+    expected = expected_trade_date(
+        today="2026-09-08",
+        now=datetime(2026, 9, 8, 17, 30, tzinfo=ZoneInfo("Asia/Tokyo")),
+        batch_hhmm="17:00",
+        latest_trading_day=latest,
+        session_status=status,
+    )
+    assert expected is None
+    freshness = evaluate_freshness(
+        stored_trade_date="2026-07-31",
+        expected=expected,
+        stored_score_version=STRENGTH_SCORE_VERSION,
+        current_score_version=STRENGTH_SCORE_VERSION,
+        coverage={"allows_complete_publish": True},
+    )
+    assert freshness["freshness"] == "unknown"
+
+
+def test_r06_known_weekend_keeps_previous_session():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    def latest(day: str) -> str | None:
+        return {
+            "2026-09-04": "2026-09-04",
+            "2026-09-05": "2026-09-04",
+        }.get(day)
+
+    def status(day: str) -> bool | None:
+        return False if day == "2026-09-05" else True
+
+    saturday = expected_trade_date(
+        today="2026-09-05",
+        now=datetime(2026, 9, 5, 17, 30, tzinfo=ZoneInfo("Asia/Tokyo")),
+        batch_hhmm="17:00",
+        latest_trading_day=latest,
+        session_status=status,
+    )
+    assert saturday == "2026-09-04"
+
+
+def test_r06_incomplete_coverage_is_partial_not_current():
+    freshness = evaluate_freshness(
+        stored_trade_date="2026-09-08",
+        expected="2026-09-08",
+        stored_score_version=STRENGTH_SCORE_VERSION,
+        current_score_version=STRENGTH_SCORE_VERSION,
+        coverage={"allows_complete_publish": False},
+    )
+    assert freshness["freshness"] == "partial"
+
+
+def test_r06_index_stale_is_degraded_not_current():
+    freshness = evaluate_freshness(
+        stored_trade_date="2026-09-08",
+        expected="2026-09-08",
+        stored_score_version=STRENGTH_SCORE_VERSION,
+        current_score_version=STRENGTH_SCORE_VERSION,
+        coverage={"allows_complete_publish": True, "index_stale": True},
+    )
+    assert freshness["freshness"] == "degraded"
+    assert freshness["index_stale"] is True
+
+
+def test_r02_same_close_turnover_correction_publishes(tmp_path):
+    repo = _seed(tmp_path, ["72030"], "2026-09-08", last_bars={"72030": {"turnover_value": 1e7}})
+    engine = RadarEngine(repo, _config())
+    first_scan = engine.scan("2026-09-08", lookback_start="2026-01-01")
+    first = repo.replace_strength_rows(
+        build_strength_rows(
+            trade_date="2026-09-08",
+            features_by_code=first_scan["features_by_code"],
+            structure_by_code=first_scan["structure_by_code"],
+            securities={"72030": repo.get_security("72030")},
+            topix_return_63d=None,
+        ),
+        trade_date="2026-09-08",
+        regime={},
+        score_version=STRENGTH_SCORE_VERSION,
+        coverage=first_scan["coverage"],
+        input_fingerprint=first_scan["input_fingerprint"],
+        input_data_through="2026-09-08",
+    )
+    last = repo.bars_for_code("72030")[-1]
+    repo.upsert_daily_bars(
+        [
+            {
+                **last,
+                "turnover_value": 9e8,
+                "adj_close": last.get("close"),
+            }
+        ]
+    )
+    second_scan = engine.scan("2026-09-08", lookback_start="2026-01-01")
+    second = repo.replace_strength_rows(
+        build_strength_rows(
+            trade_date="2026-09-08",
+            features_by_code=second_scan["features_by_code"],
+            structure_by_code=second_scan["structure_by_code"],
+            securities={"72030": repo.get_security("72030")},
+            topix_return_63d=None,
+        ),
+        trade_date="2026-09-08",
+        regime={},
+        score_version=STRENGTH_SCORE_VERSION,
+        coverage=second_scan["coverage"],
+        input_fingerprint=second_scan["input_fingerprint"],
+        input_data_through="2026-09-08",
+    )
+    assert first.outcome == OUTCOME_PUBLISHED
+    assert second_scan["input_fingerprint"] != first_scan["input_fingerprint"]
+    assert second.outcome == OUTCOME_PUBLISHED
+    assert second.publication_id != first.publication_id
+
+
+def test_r03_already_current_repairs_screener(tmp_path):
+    repo = _seed(tmp_path, ["72030"], "2026-09-08")
+
+    class _Ctx:
+        config = type(
+            "C",
+            (),
+            {
+                "features": type("F", (), {"radar_enabled": True})(),
+                "radar": _config(),
+            },
+        )()
+        repository = repo
+
+    first = _run_radar_and_screener(_Ctx(), "2026-09-08")
+    assert first["outcome"] == OUTCOME_PUBLISHED
+    assert repo.screener_trade_date() == "2026-09-08"
+    with repo.write() as connection:
+        connection.execute("DELETE FROM screener_rows")
+        connection.execute(
+            "UPDATE sync_state SET data_through='2026-09-07' WHERE dataset='screener_snapshot'"
+        )
+    assert repo.screener_trade_date() is None
+    second = _run_radar_and_screener(_Ctx(), "2026-09-08")
+    assert second["outcome"] == OUTCOME_ALREADY_CURRENT
+    assert second["status"] == "ok"
+    assert second.get("screener_outcome") == OUTCOME_PUBLISHED
+    assert repo.screener_trade_date() == "2026-09-08"
+    assert repo.sync_state("screener_snapshot")["data_through"] == "2026-09-08"
+
+
+def test_r03_screener_write_failure_is_repaired_next_round(tmp_path):
+    repo = _seed(tmp_path, ["72030"], "2026-09-08")
+    original = repo.replace_screener_rows
+    calls = {"n": 0}
+
+    def flaky(rows):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("screener down")
+        return original(rows)
+
+    repo.replace_screener_rows = flaky  # type: ignore[method-assign]
+
+    class _Ctx:
+        config = type(
+            "C",
+            (),
+            {
+                "features": type("F", (), {"radar_enabled": True})(),
+                "radar": _config(),
+            },
+        )()
+        repository = repo
+
+    first = _run_radar_and_screener(_Ctx(), "2026-09-08")
+    assert first["status"] == "error"
+    assert first["outcome"] == OUTCOME_PUBLISHED
+    assert repo.screener_trade_date() is None
+    second = _run_radar_and_screener(_Ctx(), "2026-09-08")
+    assert second["outcome"] == OUTCOME_ALREADY_CURRENT
+    assert second["status"] == "ok"
+    assert repo.screener_trade_date() == "2026-09-08"
+    assert calls["n"] == 2

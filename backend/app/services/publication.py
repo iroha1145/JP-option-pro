@@ -10,12 +10,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable, Mapping, Sequence
 from zoneinfo import ZoneInfo
 
 from app.domain.timeutil import JST, add_days, iso_date, parse_hhmm
+
+# Weekend / Golden Week / New Year can leave a short gap of trading-day
+# rows. A multi-week hole means the calendar file itself is stale.
+CALENDAR_COVER_GAP_DAYS = 15
 
 OUTCOME_PUBLISHED = "published"
 OUTCOME_ALREADY_CURRENT = "already_current"
@@ -141,22 +146,82 @@ def universe_version(
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
 
+def _quantize(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    return round(number, 6)
+
+
+def _normalize_fingerprint_row(item: Sequence[Any]) -> list[Any]:
+    values = list(item)
+    normalized: list[Any] = []
+    for index, value in enumerate(values):
+        if index <= 1:
+            normalized.append("" if value is None else str(value))
+        else:
+            normalized.append(_quantize(value))
+    return normalized
+
+
+def regulation_input_fingerprint(
+    regulation_map: Mapping[str, Any],
+    codes: Sequence[str],
+) -> str:
+    rows = []
+    for code in sorted(codes):
+        state = regulation_map.get(code)
+        if state is None:
+            rows.append([code, None, None, None])
+            continue
+        rows.append(
+            [
+                code,
+                getattr(state, "level", None),
+                getattr(state, "severity", None),
+                bool(getattr(state, "stale", False)),
+            ]
+        )
+    blob = json.dumps(rows, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+
+
 def input_fingerprint(
-    valid_inputs: Sequence[tuple[str, str, float | None]],
+    valid_inputs: Sequence[Sequence[Any]],
     *,
     score_version: str,
     universe_version_value: str,
+    index_input_date: str | None = None,
+    index_close: float | None = None,
+    market_fit: float | None = None,
+    regulation_fingerprint: str | None = None,
 ) -> str:
     blob = json.dumps(
         {
-            "inputs": [list(item) for item in sorted(valid_inputs)],
+            "inputs": sorted(_normalize_fingerprint_row(item) for item in valid_inputs),
             "score_version": score_version,
             "universe_version": universe_version_value,
+            "index_input_date": index_input_date or "",
+            "index_close": _quantize(index_close),
+            "market_fit": _quantize(market_fit),
+            "regulation_fingerprint": regulation_fingerprint or "",
         },
         ensure_ascii=False,
         sort_keys=True,
     )
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _date_gap_days(later: str, earlier: str) -> int | None:
+    try:
+        return (date.fromisoformat(later) - date.fromisoformat(earlier)).days
+    except ValueError:
+        return None
 
 
 def expected_trade_date(
@@ -165,16 +230,23 @@ def expected_trade_date(
     now: datetime,
     batch_hhmm: str,
     latest_trading_day: Callable[[str], str | None],
+    session_status: Callable[[str], bool | None] | None = None,
+    max_cover_gap_days: int = CALENDAR_COVER_GAP_DAYS,
 ) -> str | None:
     """Target session whose official daily batch should exist *now*.
 
     Boundary comes from configuration, not a hardcoded 15:30 close.
+    A calendar that stops weeks before ``today`` is unknown, not a long holiday.
     """
 
     moment = now.astimezone(JST) if now.tzinfo else now.replace(tzinfo=JST)
     latest = latest_trading_day(today)
     if latest is None:
         return None
+    if session_status is not None and session_status(today) is None:
+        gap = _date_gap_days(today, latest)
+        if gap is None or gap > max_cover_gap_days:
+            return None
     if latest == today:
         boundary = parse_hhmm(batch_hhmm)
         if moment.hour * 60 + moment.minute < boundary:
@@ -231,14 +303,19 @@ def evaluate_freshness(
         calendar_state = "ahead"
 
     complete = bool((coverage or {}).get("allows_complete_publish", True))
+    index_stale = bool((coverage or {}).get("index_stale"))
     if calendar_state == "unknown":
         freshness = "unknown"
-    elif calendar_state == "current" and compatible and complete:
+    elif calendar_state == "current" and compatible and complete and not index_stale:
         freshness = "current"
     elif calendar_state == "stale":
         freshness = "stale"
     elif not compatible:
         freshness = "incompatible"
+    elif calendar_state == "current" and not complete:
+        freshness = "partial"
+    elif calendar_state == "current" and index_stale:
+        freshness = "degraded"
     else:
         freshness = calendar_state
 
@@ -247,6 +324,8 @@ def evaluate_freshness(
         "version_state": version_state,
         "score_compatible": compatible,
         "freshness": freshness,
+        "index_stale": index_stale,
+        "complete": complete,
     }
 
 
@@ -279,6 +358,14 @@ def parse_aware_datetime(value: str) -> datetime:
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=JST)
     return moment
+
+
+def deadline_is_due(deadline_iso: str, *, now: datetime | None = None) -> bool:
+    target = parse_aware_datetime(deadline_iso)
+    moment = now or datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return target.astimezone(timezone.utc) <= moment.astimezone(timezone.utc)
 
 
 def seconds_until_deadline(deadline_iso: str, *, now: datetime | None = None) -> float:
@@ -314,14 +401,17 @@ __all__ = [
     "REASON_INPUT_REGRESSION",
     "REASON_NOT_PUBLISHED",
     "REASON_PREVIOUS_UNUSABLE",
+    "CALENDAR_COVER_GAP_DAYS",
     "absolute_retry_iso",
     "classify_equity_input",
     "clip_rows_through",
+    "deadline_is_due",
     "evaluate_freshness",
     "expected_trade_date",
     "input_fingerprint",
     "parse_aware_datetime",
     "previous_publication_usable",
+    "regulation_input_fingerprint",
     "seconds_until_deadline",
     "strength_etag",
     "universe_version",

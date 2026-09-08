@@ -20,7 +20,9 @@
 | `input_data_through` | 全池清洗后有效输入的最末日。每只股票另有自己的有效末条日；基准指数有 `index_input_date`。 |
 | `trade_date`（行/元数据） | 该发布所代表的评分截面日，必须等于清洗后的有效输入日，禁止把目标日回填到昨天的输入上。 |
 
-日历缺失时 `expected_trade_date` 为未知，不得用系统工作日伪造「今天应更新」。
+日历缺失时 `expected_trade_date` 为未知，不得用系统工作日伪造「今天应更新」。日历最后交易日距今天超过约两周且当天没有日历行时，视为覆盖缺失（unknown），不能解释成整月休市。已知休日、周末、发布边界前仍接受上一完整交易日。
+
+`freshness` 不是只有 current/stale：覆盖不完整为 `partial`，指数输入偏旧为 `degraded`，日历未知为 `unknown`。股票覆盖完整但指数陈旧时仍可评分，不得宣称全部输入都是 current。
 
 ## 计算版本
 
@@ -37,12 +39,12 @@
 | 字段 | 含义 |
 |---|---|
 | `publication_id` | 一次成功提交的发布标识，与行、元数据、覆盖摘要、评分版本同事务写入。 |
-| `input_fingerprint` | 有效输入（代码、日期、收盘价）+ 范围版本 + 评分版本的摘要。用于核实「已是当前」而不是比较行数。 |
+| `input_fingerprint` | 有效输入（代码、日期、OHLC、成交额）+ 指数输入日/收盘 + 市场环境 + 监管指纹 + 范围版本 + 评分版本的摘要。用于核实「已是当前」而不是比较行数。同日成交量、高低价、指数或复权更正必须改变指纹。 |
 | `universe_version` | 本次预期输入集合（上市主数据 ∩ 市场范围 ∩ 扫描配置）的版本。 |
 
 `published` 只表示「本次提交了新发布」。库里曾经有快照不等于本次 published。
 
-`already_current` 仅当输入指纹、评分版本、完整性均核过才成立，且不得改写上次 `built_at` / `publication_id`。
+`already_current` 仅当输入指纹、评分版本、完整性均核过才成立，且不得改写上次 `built_at` / `publication_id`。强度已提交但普通筛选或成功记账未完成时，后续 `already_current` 仍须补齐未完成项，不能跳过。
 
 ## 覆盖度
 
@@ -75,7 +77,7 @@
 | `skipped` | 禁用、未配置、非交易日等 |
 | `failed` | 错误 |
 
-`record_sync_success` 的 `data_through` / `last_success_at` 只在 `published` 时推进。尝试可以更新 `last_attempt_at`。
+`record_sync_success` 的 `data_through` / `last_success_at` 在 `published` 时推进；`already_current` 只用于补齐缺失的成功记账，不得改写发布编号。尝试可以更新 `last_attempt_at`。
 
 ## 补拉期限
 
@@ -83,7 +85,9 @@
 
 - 目标交易日、数据集范围、首次失败、最近原因、次数、绝对 `next_retry_at`（带时区）
 - 手动 `radar_refresh` 不算行情同步，不得取消或推迟仍欠缺的日线补拉
-- 只有同一目标日、同一缺失范围拿到有效发布凭证后才清除对应待补项
+- 未到期且本次无关的触发保留原期限、不消耗次数；实际到期失败按策略写入下一期限
+- 同一目标日、同一缺失范围在 `published` 或已核实的 `already_current`（筛选与记账也完整）后才清除对应待补项
+- 过期的历史目标不得把今天的等待压成 0.5 秒忙循环
 - 进程内等待用单调时钟；持久期限用绝对时间
 
 ## 读取一致性

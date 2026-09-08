@@ -560,8 +560,13 @@ class WorkerStateRepository(SQLiteRepository):
         reason: str,
         next_retry_at: str,
         max_attempts: int = 12,
+        now: datetime | None = None,
+        advance: bool | None = None,
     ) -> dict[str, Any]:
-        now = utc_now_iso()
+        from app.services.publication import deadline_is_due
+
+        recorded_at = utc_now_iso()
+        clock = now or datetime.now(timezone.utc)
         with self.write() as connection:
             existing = connection.execute(
                 "SELECT first_failed_at, attempt_count, next_retry_at, exhausted "
@@ -575,7 +580,7 @@ class WorkerStateRepository(SQLiteRepository):
                     "(task_name, target_trade_date, dataset_scope, first_failed_at, "
                     "last_reason, attempt_count, next_retry_at, exhausted) "
                     "VALUES (?, ?, ?, ?, ?, 1, ?, 0)",
-                    (task_name, target_trade_date, dataset_scope, now, reason, next_retry_at),
+                    (task_name, target_trade_date, dataset_scope, recorded_at, reason, next_retry_at),
                 )
                 return {
                     "task_name": task_name,
@@ -584,23 +589,52 @@ class WorkerStateRepository(SQLiteRepository):
                     "attempt_count": 1,
                     "next_retry_at": next_retry_at,
                     "exhausted": False,
-                    "first_failed_at": now,
+                    "first_failed_at": recorded_at,
+                    "last_reason": reason,
+                }
+            due = (
+                deadline_is_due(str(existing["next_retry_at"]), now=clock)
+                if advance is None
+                else bool(advance)
+            )
+            if not due:
+                connection.execute(
+                    "UPDATE worker_retry_deadlines SET last_reason=? "
+                    "WHERE task_name=? AND target_trade_date=? AND dataset_scope=?",
+                    (reason, task_name, target_trade_date, dataset_scope),
+                )
+                return {
+                    "task_name": task_name,
+                    "target_trade_date": target_trade_date,
+                    "dataset_scope": dataset_scope,
+                    "attempt_count": int(existing["attempt_count"] or 0),
+                    "next_retry_at": existing["next_retry_at"],
+                    "exhausted": bool(existing["exhausted"]),
+                    "first_failed_at": existing["first_failed_at"],
                     "last_reason": reason,
                 }
             attempts = int(existing["attempt_count"] or 0) + 1
             exhausted = 1 if attempts >= max_attempts else 0
-            kept_deadline = existing["next_retry_at"]
             connection.execute(
                 "UPDATE worker_retry_deadlines SET last_reason=?, attempt_count=?, "
-                "exhausted=? WHERE task_name=? AND target_trade_date=? AND dataset_scope=?",
-                (reason, attempts, exhausted, task_name, target_trade_date, dataset_scope),
+                "next_retry_at=?, exhausted=? "
+                "WHERE task_name=? AND target_trade_date=? AND dataset_scope=?",
+                (
+                    reason,
+                    attempts,
+                    next_retry_at,
+                    exhausted,
+                    task_name,
+                    target_trade_date,
+                    dataset_scope,
+                ),
             )
             return {
                 "task_name": task_name,
                 "target_trade_date": target_trade_date,
                 "dataset_scope": dataset_scope,
                 "attempt_count": attempts,
-                "next_retry_at": kept_deadline,
+                "next_retry_at": next_retry_at,
                 "exhausted": bool(exhausted),
                 "first_failed_at": existing["first_failed_at"],
                 "last_reason": reason,

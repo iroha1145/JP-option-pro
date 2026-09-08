@@ -21,6 +21,7 @@ from app.services.publication import (
     classify_equity_input,
     clip_rows_through,
     input_fingerprint,
+    regulation_input_fingerprint,
     universe_version,
 )
 
@@ -431,6 +432,15 @@ class RadarEngine:
         topix_r63 = index_return(topix, 63)
         market_fit = market_fit_score(topix)
         index_input_date = str(topix[-1]["trade_date"]) if topix else None
+        index_close = None
+        if topix:
+            raw_index_close = topix[-1].get("close")
+            if raw_index_close is None:
+                raw_index_close = topix[-1].get("adj_close")
+            try:
+                index_close = float(raw_index_close) if raw_index_close is not None else None
+            except (TypeError, ValueError):
+                index_close = None
         margin_map = self._repository.latest_margin_map()
         regulation_map = self._build_regulation_map(target_date, equities.keys())
 
@@ -445,7 +455,7 @@ class RadarEngine:
                 min_avg_turnover_jpy=self._config.min_avg_turnover_jpy,
             ),
         )
-        valid_inputs: list[tuple[str, str, float | None]] = []
+        valid_inputs: list[tuple[Any, ...]] = []
         features_by_code: dict[str, dict[str, Any]] = {}
         structure_by_code: dict[str, dict[str, Any]] = {}
         sector_returns: dict[str, list[float]] = {}
@@ -474,9 +484,16 @@ class RadarEngine:
                 coverage.invalid += 1
                 coverage.add_reason("features_unavailable")
                 continue
-            close = features.get("close")
             valid_inputs.append(
-                (code, str(features.get("trade_date") or target_date), float(close) if close is not None else None)
+                (
+                    code,
+                    str(features.get("trade_date") or target_date),
+                    features.get("open"),
+                    features.get("high"),
+                    features.get("low"),
+                    features.get("close"),
+                    features.get("turnover_today"),
+                )
             )
             if features.get("data_days", 0) < self._config.min_listed_days:
                 coverage.filtered += 1
@@ -690,6 +707,12 @@ class RadarEngine:
             valid_inputs,
             score_version=STRENGTH_SCORE_VERSION,
             universe_version_value=coverage.universe_version,
+            index_input_date=index_input_date,
+            index_close=index_close,
+            market_fit=market_fit,
+            regulation_fingerprint=regulation_input_fingerprint(
+                regulation_map, features_by_code.keys()
+            ),
         )
         input_dates = [item[1] for item in valid_inputs]
         input_data_through = max(input_dates) if input_dates else None

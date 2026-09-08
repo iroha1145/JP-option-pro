@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from app.services.publication import absolute_retry_iso, seconds_until_deadline
@@ -102,21 +102,36 @@ def test_d03_same_target_publish_clears_retry(tmp_path):
     assert repo.pending_retries_for_task(TASK_POST_CLOSE) == []
 
 
-def test_d05_retry_attempts_exhaust(tmp_path):
+def test_d05_retry_attempts_exhaust_after_due_failures(tmp_path):
     repo = WorkerStateRepository(tmp_path / "worker.db")
     repo.initialize()
-    last = None
-    for _ in range(12):
+    jst = ZoneInfo("Asia/Tokyo")
+    first_deadline = "2026-09-08T17:20:00+09:00"
+    first = repo.upsert_retry(
+        task_name=TASK_POST_CLOSE,
+        target_trade_date="2026-09-08",
+        dataset_scope="daily_bars",
+        reason="not_published",
+        next_retry_at=first_deadline,
+        max_attempts=12,
+        now=datetime(2026, 9, 8, 17, 0, tzinfo=jst),
+    )
+    assert first["attempt_count"] == 1
+    last = first
+    for index in range(11):
+        due_at = datetime(2026, 9, 8, 17, 20, tzinfo=jst) + timedelta(minutes=20 * index, seconds=1)
+        nxt = absolute_retry_iso(now=due_at, delay_seconds=POST_CLOSE_RETRY_SECONDS)
         last = repo.upsert_retry(
             task_name=TASK_POST_CLOSE,
             target_trade_date="2026-09-08",
             dataset_scope="daily_bars",
             reason="not_published",
-            next_retry_at="2026-09-08T17:20:00+09:00",
+            next_retry_at=nxt,
             max_attempts=12,
+            now=due_at,
         )
     assert last is not None and last["exhausted"] is True
-    assert last["next_retry_at"] == "2026-09-08T17:20:00+09:00"
+    assert last["next_retry_at"] != first_deadline
     assert repo.pending_retries_for_task(TASK_POST_CLOSE) == []
 
 
@@ -153,3 +168,115 @@ def test_d06_retry_survives_supervisor_restart(tmp_path):
     assert restarted.pending_retries_for_task(TASK_POST_CLOSE)[0]["next_retry_at"] == (
         "2026-09-08T17:20:00+09:00"
     )
+
+
+def test_d04_due_failure_advances_deadline(tmp_path):
+    repo = WorkerStateRepository(tmp_path / "worker.db")
+    repo.initialize()
+    jst = ZoneInfo("Asia/Tokyo")
+    first = repo.upsert_retry(
+        task_name=TASK_POST_CLOSE,
+        target_trade_date="2026-09-08",
+        dataset_scope="daily_bars",
+        reason="not_published",
+        next_retry_at="2026-09-08T17:20:00+09:00",
+        now=datetime(2026, 9, 8, 17, 0, tzinfo=jst),
+    )
+    due_at = datetime(2026, 9, 8, 17, 20, 1, tzinfo=jst)
+    nxt = absolute_retry_iso(now=due_at, delay_seconds=POST_CLOSE_RETRY_SECONDS)
+    second = repo.upsert_retry(
+        task_name=TASK_POST_CLOSE,
+        target_trade_date="2026-09-08",
+        dataset_scope="daily_bars",
+        reason="not_published",
+        next_retry_at=nxt,
+        now=due_at,
+    )
+    assert first["next_retry_at"] == "2026-09-08T17:20:00+09:00"
+    assert second["next_retry_at"] == nxt
+    assert second["attempt_count"] == 2
+
+
+def test_d01b_unrelated_before_deadline_does_not_consume_attempt(tmp_path):
+    repo = WorkerStateRepository(tmp_path / "worker.db")
+    repo.initialize()
+    jst = ZoneInfo("Asia/Tokyo")
+    repo.upsert_retry(
+        task_name=TASK_POST_CLOSE,
+        target_trade_date="2026-09-08",
+        dataset_scope="daily_bars",
+        reason="not_published",
+        next_retry_at="2026-09-08T17:20:00+09:00",
+        now=datetime(2026, 9, 8, 17, 0, tzinfo=jst),
+    )
+    kept = repo.upsert_retry(
+        task_name=TASK_POST_CLOSE,
+        target_trade_date="2026-09-08",
+        dataset_scope="daily_bars",
+        reason="manual_radar",
+        next_retry_at="2026-09-08T17:40:00+09:00",
+        now=datetime(2026, 9, 8, 17, 5, tzinfo=jst),
+    )
+    assert kept["attempt_count"] == 1
+    assert kept["next_retry_at"] == "2026-09-08T17:20:00+09:00"
+
+
+def test_r01_already_current_clears_same_target_retry(tmp_path):
+    repo = WorkerStateRepository(tmp_path / "worker.db")
+    repo.initialize()
+    supervisor = WorkerSupervisor(repo, [], owner_id="owner")
+    supervisor._fencing_token = repo.acquire_lease("owner")
+    repo.upsert_retry(
+        task_name=TASK_POST_CLOSE,
+        target_trade_date="2026-09-08",
+        dataset_scope="daily_bars",
+        reason="not_published",
+        next_retry_at="2026-09-08T17:20:00+09:00",
+    )
+    done = TaskResult(
+        status="completed",
+        next_delay_seconds=86400,
+        outcome="already_current",
+        details={
+            "retry": {
+                "clear": True,
+                "task_name": TASK_POST_CLOSE,
+                "target_trade_date": "2026-09-08",
+                "dataset_scope": "daily_bars",
+            }
+        },
+    )
+    supervisor._apply_retry_policy(TASK_POST_CLOSE, done, 86400)
+    assert repo.pending_retries_for_task(TASK_POST_CLOSE) == []
+
+
+def test_d07_expired_other_target_does_not_busy_loop_today(tmp_path):
+    repo = WorkerStateRepository(tmp_path / "worker.db")
+    repo.initialize()
+    supervisor = WorkerSupervisor(repo, [], owner_id="owner")
+    supervisor._fencing_token = repo.acquire_lease("owner")
+    repo.upsert_retry(
+        task_name=TASK_POST_CLOSE,
+        target_trade_date="2026-09-07",
+        dataset_scope="daily_bars",
+        reason="not_published",
+        next_retry_at="2020-01-01T00:00:00+09:00",
+    )
+    today = TaskResult(
+        status="completed",
+        next_delay_seconds=86400,
+        outcome="published",
+        details={
+            "target_date": "2026-09-08",
+            "retry": {
+                "clear": True,
+                "task_name": TASK_POST_CLOSE,
+                "target_trade_date": "2026-09-08",
+                "dataset_scope": "daily_bars",
+            },
+        },
+    )
+    delay = supervisor._apply_retry_policy(TASK_POST_CLOSE, today, 86400)
+    assert delay >= 60
+    leftover = repo.pending_retries_for_task(TASK_POST_CLOSE)
+    assert leftover and leftover[0]["target_trade_date"] == "2026-09-07"
