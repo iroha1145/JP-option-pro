@@ -1,6 +1,7 @@
 /** 日本市场页：指数走势 + 全部33业种强弱 + 广度与空卖。 */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { AnimatePresence, motion } from 'framer-motion';
 import { marketApi, stocksApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
@@ -24,17 +25,51 @@ import InfoHint from '@/components/shared/InfoHint';
 import { MARKET_HINTS } from '@/lib/indicatorHints';
 import { tokyoSession } from '@/lib/tokyoSession';
 import { useNow } from '@/hooks/useNow';
+import { useTickFlash } from '@/hooks/useTickFlash';
+import TickPrice from '@/components/shared/TickPrice';
 import { t } from '@/i18n/core';
 import { quoteSourceLabel } from '@/lib/quoteSource';
 import { fmtPct, fmtPrice, fmtTimeHHMMSS, fmtTimeJst, fmtYenCompact } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import type { IntradayQuote, SectorMemberSort, SectorStrength } from '@/api/types';
+
+/** 与后端 `HOME_INDEX_CODES` 对齐：首页指数卡 / 顶部 tape 写入的 `?index=`。 */
+const HOME_INDEX_CODES = new Set(['0000', '0500', '0501', '0502', '0028', '002D']);
+const DEFAULT_INDEX = '0000';
+
+function parseMarketIndex(sp: URLSearchParams): string {
+  const raw = (sp.get('index') ?? '').trim();
+  return HOME_INDEX_CODES.has(raw) ? raw : DEFAULT_INDEX;
+}
 
 export default function Market() {
   const now = useNow(30_000);
   const session = tokyoSession(now);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const indexCode = parseMarketIndex(searchParams);
+  const setIndexCode = useCallback(
+    (code: string) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (HOME_INDEX_CODES.has(code) && code !== DEFAULT_INDEX) next.set('index', code);
+          else next.delete('index');
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
   const market = usePolling(() => marketApi.overview(), 120_000);
-  const [indexCode, setIndexCode] = useState('0000');
   const series = usePolling(() => marketApi.indexSeries(indexCode, 250), null, [indexCode]);
+  const indexCardRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const scrolledForRef = useRef<string | null>(null);
+  const indexFlashes = useTickFlash(
+    market.data?.indices,
+    (row) => row.index_code,
+    (row) => row.close ?? null,
+  );
   const state = remoteState(market, (d) => d.indices.length === 0);
 
   const [heatMetric, setHeatMetric] = useState<HeatMetric>('r1');
@@ -122,6 +157,16 @@ export default function Market() {
   }, [refreshLive, refreshLiveSectors, refreshMarket, refreshMembers, refreshSeries]);
   const refreshingMarket =
     market.refreshing || series.refreshing || liveSectors.refreshing || members.refreshing || live.refreshing;
+
+  /* ?index= 只滚动一次：overview 轮询换新引用时不要把页面拽回这张卡。 */
+  useEffect(() => {
+    if (!market.data || !HOME_INDEX_CODES.has(indexCode)) return;
+    if (scrolledForRef.current === indexCode) return;
+    const el = indexCardRefs.current[indexCode];
+    if (!el) return;
+    scrolledForRef.current = indexCode;
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [indexCode, market.data]);
 
   const sectorColumns: Column<SectorStrength>[] = [
     {
@@ -258,14 +303,27 @@ export default function Market() {
                 <button
                   key={index.index_code}
                   type="button"
+                  ref={(el) => {
+                    indexCardRefs.current[index.index_code] = el;
+                  }}
+                  data-index-code={index.index_code}
+                  aria-pressed={index.index_code === indexCode}
                   onClick={() => setIndexCode(index.index_code)}
-                  className={`card-surface flex w-full items-center justify-between px-3 py-2 text-left transition-shadow duration-240 ease-out hover:shadow-sh-2 ${
-                    index.index_code === indexCode ? 'bg-paper-2 ring-1 ring-brand-100' : 'hover:bg-paper-2'
-                  }`}
+                  className={cn(
+                    'card-surface flex w-full items-center justify-between px-3 py-2 text-left',
+                    'transition-shadow duration-240 ease-out hover:shadow-sh-2',
+                    'focus-visible:outline-none focus-visible:shadow-focus-ring',
+                    index.index_code === indexCode ? 'bg-paper-2 ring-1 ring-brand-100' : 'hover:bg-paper-2',
+                  )}
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-body-s text-ink-700">{index.name}</span>
-                    <span className="metric-value text-data-m tnum text-ink-900">{fmtPrice(index.close)}</span>
+                    <TickPrice
+                      flash={indexFlashes[index.index_code]}
+                      className="metric-value text-data-m tnum text-ink-900"
+                    >
+                      {fmtPrice(index.close)}
+                    </TickPrice>
                   </span>
                   <span className="flex items-center gap-3">
                     <span className="w-[88px] shrink-0">

@@ -236,7 +236,7 @@ export default function News() {
           ) : (
             <ul className="card-surface divide-y divide-line overflow-hidden">
               {feed.data!.items.map((item, index) => (
-                <NewsRow key={item.news_id} item={item} index={index} />
+                <NewsRow key={item.news_id} item={item} index={index} animate={index < 24} />
               ))}
             </ul>
           )}
@@ -566,15 +566,15 @@ function HotspotCard({ group, index }: { group: NewsHotspotGroup; index: number 
   );
 }
 
-function NewsRow({ item, index }: { item: NewsItem; index: number }) {
+function NewsRow({ item, index, animate = true }: { item: NewsItem; index: number; animate?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const title = item.translated_title_ja ?? item.original_title ?? '—';
   const toggle = () => setExpanded((value) => !value);
   return (
     <motion.li
-      initial={{ opacity: 0, y: 14 }}
+      initial={animate ? { opacity: 0, y: 14 } : false}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: EASE_PAPER, delay: Math.min(index * 0.03, 0.3) }}
+      transition={{ duration: 0.4, ease: EASE_PAPER, delay: animate ? Math.min(index * 0.03, 0.3) : 0 }}
       className="group relative flex gap-3 px-4 py-[18px] transition-colors duration-fast hover:bg-paper-2/70 sm:px-5"
     >
       <button
