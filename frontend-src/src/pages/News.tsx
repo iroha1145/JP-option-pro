@@ -9,6 +9,7 @@ import { usePolling } from '@/hooks/usePolling';
 import { remoteState } from '@/hooks/remoteState';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
+import EmptyRetryButton from '@/components/shared/EmptyRetryButton';
 import Segmented from '@/components/shared/Segmented';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import { SkeletonBlock, SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
@@ -209,6 +210,7 @@ export default function News() {
             loading={hotspots.loading && !hotspots.data}
             error={hotspots.error}
             onRetry={() => hotspots.refresh()}
+            refreshing={hotspots.refreshing}
           />
 
           {feedState === 'loading' ? (
@@ -223,9 +225,7 @@ export default function News() {
                 title={t('加载失败')}
                 description={String(feed.error?.message ?? '')}
                 action={
-                  <button type="button" onClick={() => feed.refresh({ force: true })} className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105">
-                    {t('重试')}
-                  </button>
+                  <EmptyRetryButton onClick={() => feed.refresh({ force: true })} refreshing={feed.refreshing} />
                 }
               />
             </section>
@@ -482,11 +482,13 @@ function HotspotStrip({
   loading,
   error,
   onRetry,
+  refreshing,
 }: {
   groups: NewsHotspotGroup[];
   loading: boolean;
   error: unknown;
   onRetry: () => void;
+  refreshing?: boolean;
 }) {
   return (
     <section aria-label={t('热点主题')}>
@@ -508,9 +510,7 @@ function HotspotStrip({
             image="/empty-news.svg"
             title={t('加载失败')}
             action={
-              <button type="button" onClick={onRetry} className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105">
-                {t('重试')}
-              </button>
+              <EmptyRetryButton onClick={onRetry} refreshing={refreshing} />
             }
           />
         </section>

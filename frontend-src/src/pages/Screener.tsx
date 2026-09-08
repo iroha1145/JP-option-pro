@@ -16,6 +16,7 @@ import { useAccess } from '@/hooks/useAccess';
 import PageHeader from '@/components/shared/PageHeader';
 import Segmented from '@/components/shared/Segmented';
 import EmptyState from '@/components/shared/EmptyState';
+import EmptyRetryButton from '@/components/shared/EmptyRetryButton';
 import SoftBadge from '@/components/shared/SoftBadge';
 import { SkeletonCard, SkeletonRows } from '@/components/shared/Skeleton';
 import { DataThrough } from '@/components/domain';
@@ -404,9 +405,7 @@ export default function Screener() {
                   title={scanError?.code === 503 ? t('扫描数据不可用') : t('扫描失败')}
                   description={scanError?.code === 503 ? t('收盘后批处理完成前暂无强度快照') : scanError?.message}
                   action={
-                    <button type="button" onClick={() => void runScan(applied)} className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105">
-                      {t('重试')}
-                    </button>
+                    <EmptyRetryButton onClick={() => void runScan(applied)} />
                   }
                 />
               </div>

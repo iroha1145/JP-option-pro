@@ -25,6 +25,7 @@ import PageHeader from '@/components/shared/PageHeader';
 import Segmented from '@/components/shared/Segmented';
 import MenuSelect from '@/components/shared/MenuSelect';
 import EmptyState from '@/components/shared/EmptyState';
+import EmptyRetryButton from '@/components/shared/EmptyRetryButton';
 import StatCard from '@/components/shared/StatCard';
 import PriorityRing from '@/components/shared/PriorityRing';
 import { SkeletonBlock, SkeletonCard, SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
@@ -258,11 +259,7 @@ export default function ShortMonitor() {
             image="/empty-chart.svg"
             title={t('读取失败')}
             description={String(rankingQuery.error?.message ?? '')}
-            action={
-              <button type="button" onClick={() => rankingQuery.refresh({ force: true })} className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105">
-                {t('重试')}
-              </button>
-            }
+            action={<EmptyRetryButton onClick={() => rankingQuery.refresh({ force: true })} refreshing={rankingQuery.refreshing} />}
           />
         </div>
       ) : (

@@ -8,6 +8,7 @@ import { usePolling } from '@/hooks/usePolling';
 import { remoteState } from '@/hooks/remoteState';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
+import EmptyRetryButton from '@/components/shared/EmptyRetryButton';
 import ChangeBadge from '@/components/shared/ChangeBadge';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import Segmented from '@/components/shared/Segmented';
@@ -250,11 +251,7 @@ export default function Market() {
             image="/empty-chart.svg"
             title={t('加载失败')}
             description={String(market.error?.message ?? '')}
-            action={
-              <button type="button" onClick={() => market.refresh({ force: true })} className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105">
-                {t('重试')}
-              </button>
-            }
+            action={<EmptyRetryButton onClick={() => market.refresh({ force: true })} refreshing={market.refreshing} />}
           />
         </div>
       ) : (

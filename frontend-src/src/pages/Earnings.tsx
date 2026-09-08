@@ -13,6 +13,7 @@ import { earningsApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
+import EmptyRetryButton from '@/components/shared/EmptyRetryButton';
 import Segmented from '@/components/shared/Segmented';
 import SourceNote from '@/components/shared/SourceNote';
 import { SkeletonBlock, SkeletonCard, SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
@@ -192,11 +193,7 @@ export default function Earnings() {
               image="/empty-chart.svg"
               title={t('日历数据不可用')}
               description={q.error?.message || t('稍后刷新再试')}
-              action={
-                <button type="button" onClick={() => q.refresh({ force: true })} className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105">
-                  {t('重试')}
-                </button>
-              }
+              action={<EmptyRetryButton onClick={() => q.refresh({ force: true })} refreshing={q.refreshing} />}
             />
           </section>
         ) : (

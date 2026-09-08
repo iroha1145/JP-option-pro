@@ -18,6 +18,7 @@ import TickPrice from '@/components/shared/TickPrice';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import { remoteState } from '@/hooks/remoteState';
 import EmptyState from '@/components/shared/EmptyState';
+import EmptyRetryButton from '@/components/shared/EmptyRetryButton';
 import SourceNote from '@/components/shared/SourceNote';
 import { InsightValue } from '@/components/shared/InsightCard';
 import WatchlistToggle from '@/components/shared/WatchlistToggle';
@@ -173,11 +174,7 @@ export default function StockDetail() {
             image="/empty-chart.svg"
             title={t('加载失败')}
             description={String(overview.error?.message ?? '')}
-            action={
-              <button type="button" onClick={() => overview.refresh({ force: true })} className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105">
-                {t('重试')}
-              </button>
-            }
+            action={<EmptyRetryButton onClick={() => overview.refresh({ force: true })} refreshing={overview.refreshing} />}
           />
         </section>
       </div>

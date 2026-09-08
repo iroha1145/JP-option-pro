@@ -16,6 +16,7 @@ import type { ResearchReport } from '@/api/types';
 import { ApiError } from '@/api/client';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
+import EmptyRetryButton from '@/components/shared/EmptyRetryButton';
 import SoftBadge, { type BadgeTone } from '@/components/shared/SoftBadge';
 import { SkeletonCard } from '@/components/shared/Skeleton';
 import StatCard from '@/components/shared/StatCard';
@@ -52,9 +53,11 @@ function pct(value: number | null | undefined, digits = 2): string {
 export default function Research() {
   const [report, setReport] = useState<ResearchReport | null>(null);
   const [state, setState] = useState<'loading' | 'done' | 'empty' | 'running' | 'error'>('loading');
+  const [retrying, setRetrying] = useState(false);
 
-  const load = useCallback(() => {
-    setState('loading');
+  const load = useCallback((opts?: { retry?: boolean }) => {
+    if (opts?.retry) setRetrying(true);
+    else setState('loading');
     researchApi
       .report()
       .then((data) => {
@@ -65,7 +68,8 @@ export default function Research() {
         const status = error instanceof ApiError ? error.code : 0;
         // 「まだ走っている」と「一度も走っていない」を区別して出す。
         setState(status === 409 ? 'running' : status === 503 || status === 404 ? 'empty' : 'error');
-      });
+      })
+      .finally(() => setRetrying(false));
   }, []);
 
   useEffect(() => {
@@ -124,11 +128,7 @@ export default function Research() {
             image="/empty-chart.svg"
             title={t('读取失败')}
             description={t('请稍后重试')}
-            action={
-              <button type="button" onClick={load} className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105">
-                {t('重试')}
-              </button>
-            }
+            action={<EmptyRetryButton onClick={() => load({ retry: true })} refreshing={retrying} />}
           />
         </section>
       )}

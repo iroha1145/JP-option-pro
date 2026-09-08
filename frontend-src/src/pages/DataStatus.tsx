@@ -6,6 +6,7 @@ import { usePolling } from '@/hooks/usePolling';
 import { remoteState } from '@/hooks/remoteState';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
+import EmptyRetryButton from '@/components/shared/EmptyRetryButton';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import { SkeletonCard, SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
 import SoftBadge from '@/components/shared/SoftBadge';
@@ -133,11 +134,7 @@ export default function DataStatus() {
             image="/empty-chart.svg"
             title={t('加载失败')}
             description={String(query.error?.message ?? '')}
-            action={
-              <button type="button" onClick={() => query.refresh({ force: true })} className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105">
-                {t('重试')}
-              </button>
-            }
+            action={<EmptyRetryButton onClick={() => query.refresh({ force: true })} refreshing={query.refreshing} />}
           />
         </section>
       ) : (
