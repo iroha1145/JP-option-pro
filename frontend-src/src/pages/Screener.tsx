@@ -91,13 +91,13 @@ function summarizeFilters(filters: ScanFilters): string {
 }
 
 export default function Screener() {
-  const { canManageWatchlist, isOwner, accountUsername } = useAccess();
+  const { canManageWatchlist, isOwner, accountUsername, loading: accessLoading } = useAccess();
 
   const [meta, setMeta] = useState<StrengthProfilesMeta | null>(null);
   const [metaFailed, setMetaFailed] = useState(false);
   const [draft, setDraft] = useState<ScanFilters>(DEFAULT_FILTERS);
   const [applied, setApplied] = useState<ScanFilters>(DEFAULT_FILTERS);
-  const [scanState, setScanState] = useState<ScanState>('idle');
+  const [scanState, setScanState] = useState<ScanState>('scanning');
   const [scanError, setScanError] = useState<ApiError | null>(null);
   const [response, setResponse] = useState<StrengthScanResponse | null>(null);
   const [scanDurationMs, setScanDurationMs] = useState(0);
@@ -159,6 +159,10 @@ export default function Screener() {
     sessionKeyRef.current = sessionKey;
     sessionGen.current += 1;
     refreshSeq.current += 1;
+    requestSeq.current += 1;
+    verifySeq.current += 1;
+    setRefreshState('idle');
+    setRefreshMessage(null);
   }, [sessionKey]);
 
   useEffect(
@@ -201,6 +205,9 @@ export default function Screener() {
       }
       if (requestSeq.current !== requestAtStart) return false;
       if (sessionGen.current !== sessionAtStart) return false;
+      // A silent read may have started during this query with the same filters.
+      // Once the explicit result lands, that older read must not replace it.
+      verifySeq.current += 1;
       setResponse(result);
       setUnverified(false);
       setApplied(filters);
@@ -232,11 +239,13 @@ export default function Screener() {
     }
   }, []);
 
-  /* 首次进入自动跑一次默认扫描（读取夜间快照，成本低）。 */
+  /* Wait for the first identity, then also restart reads after an account
+     change. Otherwise its generation guard drops the initial pending result
+     without ever settling the page's scanning state. */
   useEffect(() => {
-    void runScan(DEFAULT_FILTERS);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (accessLoading) return;
+    void runScan(appliedRef.current, { cache: 'reload' });
+  }, [accessLoading, sessionKey, runScan]);
 
   const onScanClick = useCallback(() => void runScan(draft), [draft, runScan]);
 
@@ -246,6 +255,7 @@ export default function Screener() {
     while (Date.now() < deadline) {
       if (refreshSeq.current !== seq) return { item: null, timedOut: false };
       const item = await workerApi.action(actionId);
+      if (refreshSeq.current !== seq) return { item: null, timedOut: false };
       last = item as Record<string, unknown>;
       const status = String(item.status);
       if (status === 'completed' || status === 'failed') return { item, timedOut: false };
@@ -259,10 +269,12 @@ export default function Screener() {
     const seq = ++refreshSeq.current;
     const sessionAtStart = sessionGen.current;
     const requestAtStart = requestSeq.current;
+    verifySeq.current += 1;
     setRefreshState('queued');
     setRefreshMessage(null);
     try {
       const accepted = await workerApi.trigger('post_close_batch');
+      if (refreshSeq.current !== seq || sessionGen.current !== sessionAtStart) return;
       const actionId = accepted.action_id;
       if (actionId == null) {
         setRefreshState('error');
@@ -300,7 +312,13 @@ export default function Screener() {
         currentRequestSeq: requestSeq.current,
       });
       if (verdict.commitResponse && mayCommit) {
+        // Only replace an earlier query after a usable readback. Failed owner
+        // updates must leave an unfinished initial query able to settle.
+        requestSeq.current += 1;
+        verifySeq.current += 1;
         setResponse(verified);
+        setScanState('done');
+        setScanError(null);
         setUnverified(false);
         if (verdict.state === 'done' && promised.outcome === 'published') {
           setHistory((prev) =>
@@ -317,7 +335,7 @@ export default function Screener() {
       setRefreshState('error');
       setRefreshMessage(error instanceof ApiError ? error.message : t('更新失败，已保留上次结果'));
     }
-  }, [pollAction, response?.publication_id]);
+  }, [pollAction, response]);
 
   useEffect(() => {
     const onVisible = () => {

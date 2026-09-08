@@ -190,7 +190,11 @@ class JQuantsSyncEngine:
         last = checkpoint.get("last_synced_date")
         if not last:
             return []
-        start = add_days(last, 1)
+        # A non-empty first response can still omit securities or TOPIX, and
+        # J-Quants may correct the same session later. Re-read the target when
+        # it is the checkpoint itself; otherwise post-close retries only scan
+        # the partial stored input forever. Older targets must not rewind it.
+        start = last if last == target_date else add_days(last, 1)
         if start > target_date:
             return []
         days = self._repository.trading_days_between(start, target_date)

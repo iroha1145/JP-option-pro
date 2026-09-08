@@ -749,11 +749,6 @@ def _run_short_monitor(context: TaskContext, target_date: str) -> dict[str, Any]
     return {"status": "ok", "rebuild": rebuilt.as_dict(), "refresh": refreshed.as_dict()}
 
 
-def _dataset_through(repository: CoreRepository, dataset: str) -> str | None:
-    state = repository.sync_state(dataset) or {}
-    return state.get("data_through")
-
-
 def _needs_strength_receipt(
     repository: CoreRepository, target_date: str, publication_id: str | None
 ) -> bool:
@@ -763,8 +758,16 @@ def _needs_strength_receipt(
     return (state.get("checkpoint") or {}).get("publication_id") != publication_id
 
 
-def _needs_screener_repair(repository: CoreRepository, target_date: str) -> bool:
-    if _dataset_through(repository, "screener_snapshot") != target_date:
+def _needs_screener_repair(
+    repository: CoreRepository, target_date: str, publication_id: str | None
+) -> bool:
+    state = repository.sync_state("screener_snapshot") or {}
+    if state.get("data_through") != target_date:
+        return True
+    # A same-session correction can publish strength before the ordinary table
+    # write fails. Dates still agree; only the publication receipt identifies
+    # which snapshot actually completed the follow-up write.
+    if not publication_id or (state.get("checkpoint") or {}).get("publication_id") != publication_id:
         return True
     return repository.screener_trade_date() != target_date
 
@@ -799,14 +802,15 @@ def _write_screener_followup(
         return summary
     if written:
         context.repository.record_sync_success(
-            "screener_snapshot", rows_total=written, data_through=target_date
+            "screener_snapshot", rows_total=written, data_through=target_date,
+            checkpoint={"publication_id": publication.publication_id},
         )
         summary["screener_rows"] = written
         summary["screener_outcome"] = OUTCOME_PUBLISHED
         summary["status"] = "ok"
         return summary
     summary["screener_rows"] = 0
-    if context.repository.screener_trade_date() == target_date:
+    if not _needs_screener_repair(context.repository, target_date, publication.publication_id):
         summary["screener_outcome"] = OUTCOME_ALREADY_CURRENT
         summary["status"] = "ok"
         return summary
@@ -929,7 +933,7 @@ def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str,
                 data_through=publication.input_data_through or target_date,
                 checkpoint={"publication_id": publication.publication_id},
             )
-        if _needs_screener_repair(context.repository, target_date):
+        if _needs_screener_repair(context.repository, target_date, publication.publication_id):
             return _write_screener_followup(
                 context,
                 target_date,

@@ -1,15 +1,15 @@
-export function digitsOf(code: string | null | undefined): string {
-  return String(code || '').replace(/\D/g, '');
+/** Keep the same identity rules as backend/app/domain/symbols.py. */
+function canonicalCode(code: string | null | undefined): string | null {
+  const text = String(code ?? '').trim().toUpperCase().split('.', 1)[0];
+  if (!/^[0-9][0-9A-Z]{3,4}$/.test(text)) return null;
+  return text.length === 4 ? `${text}0` : text;
 }
 
-/** Match 4-digit display codes with 5-digit canonical codes. Do not compare raw strings only. */
+/** Four-character display codes append 0; letters and other fifth characters remain significant. */
 export function codesMatch(left?: string | null, right?: string | null): boolean {
-  const a = digitsOf(left);
-  const b = digitsOf(right);
-  if (!a || !b) return false;
-  if (a === b) return true;
-  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
-  return short.length >= 4 && long.length <= 5 && long.startsWith(short);
+  const a = canonicalCode(left);
+  const b = canonicalCode(right);
+  return a !== null && a === b;
 }
 
 export function payloadMatchesCode(actual: string | null | undefined, expected: string): boolean {
@@ -20,12 +20,13 @@ export function pickQuoteForCode<T>(
   quotes: Record<string, T> | null | undefined,
   code: string,
 ): T | null {
-  if (!quotes) return null;
+  const expected = canonicalCode(code);
+  if (!quotes || expected === null) return null;
   if (Object.prototype.hasOwnProperty.call(quotes, code) && quotes[code] != null) {
     return quotes[code];
   }
   for (const [key, value] of Object.entries(quotes)) {
-    if (codesMatch(key, code)) return value;
+    if (value != null && canonicalCode(key) === expected) return value;
   }
   return null;
 }

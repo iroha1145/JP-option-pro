@@ -11,7 +11,7 @@ import {
   refreshMayCommitResults,
   actionStillRunning,
 } from '../src/components/screener/freshness.ts';
-import { codesMatch, pickQuoteForCode } from '../src/lib/securityIdentity.ts';
+import { codesMatch, payloadMatchesCode, pickQuoteForCode } from '../src/lib/securityIdentity.ts';
 
 const filtersA = { tier: 'all', minScore: null, sectors: [], topN: 20 };
 const filtersB = { tier: 'A', minScore: 80, sectors: [], topN: 20 };
@@ -181,4 +181,55 @@ test('R07 four-digit and five-digit codes match; quotes bind by code', () => {
   const quotes = { 72030: { price: 12 }, 67580: { price: 99 } };
   assert.equal(pickQuoteForCode(quotes, '7203').price, 12);
   assert.equal(pickQuoteForCode(quotes, '9984'), null);
+});
+
+test('R07 alphanumeric display codes bind to their complete canonical identity', () => {
+  for (const [display, canonical] of [['285A', '285A0'], ['130A', '130A0'], ['7203', '72030']]) {
+    assert.equal(codesMatch(display, canonical), true);
+    assert.equal(codesMatch(canonical, display), true);
+    assert.equal(payloadMatchesCode(canonical, display), true);
+  }
+  assert.equal(codesMatch(' 285a ', '285A0'), true);
+  assert.equal(codesMatch('285A.T', '285A0'), true);
+  assert.equal(codesMatch('7203.JP', '72030'), true);
+});
+
+test('R07 letters and meaningful fifth characters distinguish different securities', () => {
+  for (const [left, right] of [
+    ['285A', '285B'],
+    ['285A0', '285B0'],
+    ['285A0', '2850'],
+    ['130A0', '1300'],
+    ['7203', '72031'],
+    ['285A', '285A1'],
+    ['285A0', '285A1'],
+  ]) {
+    assert.equal(codesMatch(left, right), false, `${left} must not match ${right}`);
+    assert.equal(codesMatch(right, left), false, `${right} must not match ${left}`);
+    assert.equal(payloadMatchesCode(left, right), false);
+  }
+  assert.equal(codesMatch('285A1', '285A1'), true);
+});
+
+test('R07 malformed codes cannot acquire another security identity by losing characters', () => {
+  for (const code of [null, undefined, '', '285', '285A00', 'TOYOTA', 'x72030', '72-03', '72 03']) {
+    assert.equal(codesMatch(code, '72030'), false);
+    assert.equal(codesMatch(code, code), false);
+  }
+});
+
+test('R07 quote selection ignores digit collisions and preserves alphanumeric aliases', () => {
+  const expected = { price: 1234 };
+  const quotes = {
+    '285B0': { price: 9876 },
+    '2850': { price: 9999 },
+    '285A1': { price: 8888 },
+    '285A0': expected,
+  };
+  assert.equal(pickQuoteForCode(quotes, '285A'), expected);
+  assert.equal(pickQuoteForCode(quotes, ' 285a '), expected);
+  assert.equal(pickQuoteForCode({ '285B0': quotes['285B0'], '2850': quotes['2850'] }, '285A0'), null);
+  assert.equal(pickQuoteForCode({ '72031': { price: 5678 } }, '7203'), null);
+  assert.equal(pickQuoteForCode({ '285A': null, '285A0': expected }, '285A'), expected);
+  assert.equal(pickQuoteForCode({ '72-03': expected }, '72-03'), null);
 });
