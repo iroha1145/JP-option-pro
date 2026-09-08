@@ -470,7 +470,7 @@ export default function Screener() {
   const animKey = `${requestSeq.current}:${safePage}`;
 
   return (
-    <div className="space-y-0">
+    <div>
       {/* B0 页头带 */}
       <PageHeader
         section="03"
