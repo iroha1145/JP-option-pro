@@ -791,10 +791,38 @@ export interface TierDistribution {
   unscored: number; scored: number; total: number;
 }
 
+export interface StrengthCoverage {
+  expected?: number;
+  arrived?: number;
+  valid?: number;
+  invalid?: number;
+  unknown_missing?: number;
+  excluded?: number;
+  filtered?: number;
+  allows_complete_publish?: boolean;
+  index_input_date?: string | null;
+  index_stale?: boolean;
+  universe_version?: string;
+  reasons?: Record<string, number>;
+}
+
 export interface StrengthScanResponse {
   trade_date: string;
   built_at: string;
-  score_version: string;
+  score_version: string | null;
+  stored_score_version?: string | null;
+  expected_score_version?: string;
+  score_compatible?: boolean;
+  queried_at?: string;
+  publication_id?: string | null;
+  expected_trade_date?: string | null;
+  input_data_through?: string | null;
+  index_input_date?: string | null;
+  coverage?: StrengthCoverage;
+  freshness?: string;
+  calendar_state?: string;
+  version_state?: string;
+  query_kind?: string;
   params: Record<string, unknown>;
   market_regime: MarketRegime;
   universe_count: number;

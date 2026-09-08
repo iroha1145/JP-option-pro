@@ -10,6 +10,7 @@ export default function ForceRefreshButton({
   busyLabel,
   title,
   disabled,
+  testId,
 }: {
   onClick: () => void;
   spinning?: boolean;
@@ -17,6 +18,7 @@ export default function ForceRefreshButton({
   busyLabel?: string;
   title?: string;
   disabled?: boolean;
+  testId?: string;
 }) {
   const blocked = Boolean(disabled || spinning);
   return (
@@ -25,6 +27,7 @@ export default function ForceRefreshButton({
       onClick={onClick}
       disabled={blocked}
       title={title}
+      data-testid={testId}
       className={cn(
         'flex h-9 items-center gap-2 rounded-md border px-3 text-caption shadow-btn transition-colors duration-fast',
         blocked

@@ -133,6 +133,7 @@ export interface ScanHistoryEntry {
   count: number;
   durationMs: number;
   summary: string;
+  kind: 'filter' | 'refresh';
 }
 
 /** 分项微条与展开区共用的六族定义（与后端 FAMILY_WEIGHTS 同源）。 */

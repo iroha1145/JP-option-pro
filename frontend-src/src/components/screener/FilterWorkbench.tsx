@@ -174,6 +174,7 @@ export function ScanButton({
       )}
       aria-live="polite"
       aria-busy={scanning}
+      data-testid="screener-apply-filters"
     >
       {scanning && (
         <motion.span

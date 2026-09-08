@@ -96,8 +96,8 @@ export default function ScanHistoryPopover({ history }: { history: ScanHistoryEn
                     >
                       <span className="min-w-0 flex-1 truncate text-micro text-ink-500">{entry.summary}</span>
                     </PointerTooltip>
-                    <SoftBadge tone="brand" className="shrink-0 font-mono tnum">
-                      {entry.count} {t('只')}
+                    <SoftBadge tone={entry.kind === 'refresh' ? 'warn' : 'brand'} className="shrink-0 font-mono tnum">
+                      {entry.kind === 'refresh' ? t('更新读回') : t('条件筛选')} · {entry.count} {t('只')}
                     </SoftBadge>
                   </li>
                 ))}
