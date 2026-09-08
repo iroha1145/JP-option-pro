@@ -2,7 +2,7 @@
  *  信息流（过滤+热点条+重要度+AI状态） / 个股影响 / 经济日历 / 数据源。 */
 
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { motion } from 'framer-motion';
 import { newsApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
@@ -46,12 +46,49 @@ type Tab = 'feed' | 'stocks' | 'econ' | 'sources';
 /** 値は API に渡す絞り込みキー（後端 `classify.CATEGORY_RULES` の日本語 taxonomy）。
  *  **表示のときだけ `t()` を通す** —— ここで訳した文字列を送ると何も引っかからない。 */
 const CATEGORY_FILTERS = ['決算', '業績予想修正', 'M&A・TOB', '自社株買い', '配当', '日銀・金利', '規制・政策'];
+const TABS: Tab[] = ['feed', 'stocks', 'econ', 'sources'];
+const HOURS = [24, 72, 168] as const;
+
+function parseNewsSearch(sp: URLSearchParams): {
+  tab: Tab;
+  hours: 24 | 72 | 168;
+  category: string | null;
+  onlySecurities: boolean;
+} {
+  const rawTab = sp.get('tab');
+  const tab = TABS.includes(rawTab as Tab) ? (rawTab as Tab) : 'feed';
+  const rawHours = Number(sp.get('window'));
+  const hours = (HOURS as readonly number[]).includes(rawHours) ? (rawHours as 24 | 72 | 168) : 72;
+  const cat = sp.get('cls');
+  const category = cat && CATEGORY_FILTERS.includes(cat) ? cat : null;
+  return { tab, hours, category, onlySecurities: sp.get('sec') === '1' };
+}
 
 export default function News() {
-  const [tab, setTab] = useState<Tab>('feed');
-  const [hours, setHours] = useState<24 | 72 | 168>(72);
-  const [category, setCategory] = useState<string | null>(null);
-  const [onlySecurities, setOnlySecurities] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { tab, hours, category, onlySecurities } = useMemo(
+    () => parseNewsSearch(searchParams),
+    [searchParams],
+  );
+  const syncUrl = useCallback(
+    (next: Partial<{ tab: Tab; hours: 24 | 72 | 168; category: string | null; onlySecurities: boolean }>) => {
+      const current = parseNewsSearch(searchParams);
+      const nextTab = next.tab ?? current.tab;
+      const nextHours = next.hours ?? current.hours;
+      const nextCategory = next.category !== undefined ? next.category : current.category;
+      const nextOnly = next.onlySecurities ?? current.onlySecurities;
+      const params = new URLSearchParams();
+      if (nextTab !== 'feed') params.set('tab', nextTab);
+      if (nextHours !== 72) params.set('window', String(nextHours));
+      if (nextCategory) params.set('cls', nextCategory);
+      if (nextOnly) params.set('sec', '1');
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+  const setTab = useCallback((value: Tab) => syncUrl({ tab: value }), [syncUrl]);
+  const setHours = useCallback((value: 24 | 72 | 168) => syncUrl({ hours: value }), [syncUrl]);
+  const setCategory = useCallback((value: string | null) => syncUrl({ category: value }), [syncUrl]);
 
   const feed = usePolling(
     () => newsApi.feed({ hours, category: category ?? undefined, only_securities: onlySecurities }),
@@ -156,7 +193,7 @@ export default function News() {
             <label className="ml-auto flex items-center gap-2 text-caption text-ink-600">
               <Switch
                 checked={onlySecurities}
-                onToggle={() => setOnlySecurities((v) => !v)}
+                onToggle={() => syncUrl({ onlySecurities: !onlySecurities })}
                 label={t('仅看关联个股')}
                 size="sm"
               />

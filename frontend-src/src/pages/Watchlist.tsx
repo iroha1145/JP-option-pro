@@ -9,6 +9,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 import { motion } from 'framer-motion';
 import { stocksApi, watchlistApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
+import { useProgressiveList } from '@/hooks/useProgressiveList';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
 import ChangeBadge from '@/components/shared/ChangeBadge';
@@ -106,6 +107,19 @@ export default function Watchlist() {
     () => sortWatchlist(query.data?.items ?? EMPTY_WATCHLIST, sortId),
     [query.data?.items, sortId],
   );
+  const FIRST_BATCH = 24;
+  const progressive = useProgressiveList(items, { initial: FIRST_BATCH, step: 24 });
+  const renderedItems = progressive.visible;
+  const { prepareForPrint, restoreAfterPrint } = progressive;
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.addEventListener('beforeprint', prepareForPrint);
+    window.addEventListener('afterprint', restoreAfterPrint);
+    return () => {
+      window.removeEventListener('beforeprint', prepareForPrint);
+      window.removeEventListener('afterprint', restoreAfterPrint);
+    };
+  }, [prepareForPrint, restoreAfterPrint]);
   const breadth = useMemo(() => {
     let advancers = 0;
     let decliners = 0;
@@ -444,20 +458,20 @@ export default function Watchlist() {
                 <div className="hidden md:block">
                   <DataTable
                     columns={columns}
-                    rows={items}
+                    rows={renderedItems}
                     rowKey={(row) => row.canonical_code}
                     rowHeight={44}
                     onRowClick={(row) => navigate(`/stock/${row.display_code}`)}
                   />
                 </div>
                 <div className="grid grid-cols-1 gap-4 md:hidden">
-                  {items.map((item, index) => (
+                  {renderedItems.map((item, index) => (
                     <WatchCard
                       key={item.canonical_code}
                       item={item}
                       index={index}
                       flash={flashes[item.canonical_code]}
-                      animateIn={index < 9}
+                      animateIn={index < FIRST_BATCH}
                       onRemove={canManageWatchlist ? () => void doRemove(item.canonical_code) : undefined}
                       onToggleStar={canManageWatchlist ? () => void doToggleStar(item) : undefined}
                     />
@@ -466,13 +480,13 @@ export default function Watchlist() {
               </>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {items.map((item, index) => (
+                {renderedItems.map((item, index) => (
                   <WatchCard
                     key={item.canonical_code}
                     item={item}
                     index={index}
                     flash={flashes[item.canonical_code]}
-                    animateIn={index < 9}
+                    animateIn={index < FIRST_BATCH}
                     onRemove={canManageWatchlist ? () => void doRemove(item.canonical_code) : undefined}
                     onToggleStar={canManageWatchlist ? () => void doToggleStar(item) : undefined}
                   />
@@ -480,6 +494,20 @@ export default function Watchlist() {
               </div>
             )}
           </SkeletonReveal>
+            {progressive.hasMore && (
+              <div ref={progressive.sentinelRef} className="mt-4 flex justify-center">
+                <button
+                  type="button"
+                  onClick={progressive.loadMore}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line-strong bg-card px-4 py-2 text-caption text-ink-600 shadow-btn transition-colors hover:bg-paper-2"
+                >
+                  {t('加载更多')}
+                  <span className="font-mono text-micro text-ink-400 tnum">
+                    {t('还有 {n} 只', { n: progressive.remaining })}
+                  </span>
+                </button>
+              </div>
+            )}
         </div>
         </div>
       )}
