@@ -33,7 +33,7 @@ export default function ColorModeSwitcher({ className }: { className?: string })
         <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="shrink-0">
           <path d="M6 15V4m0 0L3 7m3-3 3 3M14 5v11m0 0 3-3m-3 3-3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        <span className="whitespace-nowrap text-[11px] font-medium leading-4">
+        <span className="hidden whitespace-nowrap text-[11px] font-medium leading-4 min-[1680px]:inline">
           {asian ? t('红涨绿跌') : t('绿涨红跌')}
         </span>
       </button>

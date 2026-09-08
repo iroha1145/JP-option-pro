@@ -41,6 +41,7 @@ interface Entry {
   title: string;
   mono?: boolean;
   hint?: string;
+  keywords?: string;
   ticker?: string;
   sector?: string;
   icon: IconName;
@@ -148,9 +149,104 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
     [onClose, onOpenTicker],
   );
 
+  const featureEntries = useMemo<Entry[]>(() => {
+    const list: Entry[] = [];
+    NAV_ITEMS.forEach((n) =>
+      list.push({
+        id: `f-${n.path}`,
+        group: t('功能'),
+        no: n.no,
+        title: n.label,
+        hint: t('前往{label}', { label: n.label }),
+        keywords: `${n.no} ${n.path}`,
+        icon: 'chevron-right',
+        action: () => {
+          onClose();
+          navigate(n.path);
+        },
+      }),
+    );
+    list.push(
+      {
+        id: 'f-data',
+        group: t('功能'),
+        title: t('数据状态'),
+        hint: t('同步进度 · 数据覆盖'),
+        keywords: '数据状态 data-status',
+        icon: 'wallet-gauge',
+        action: () => {
+          onClose();
+          navigate('/data-status');
+        },
+      },
+      {
+        id: 'f-research',
+        group: t('功能'),
+        title: t('历史验证'),
+        hint: t('走步验证 · 分层收益'),
+        keywords: '历史验证 research',
+        icon: 'wallet-gauge',
+        action: () => {
+          onClose();
+          navigate('/research');
+        },
+      },
+    );
+    if (isOwner) {
+      list.push({
+        id: 'f-refresh',
+        group: t('功能'),
+        title: t('强制刷新自选'),
+        hint: t('重新获取自选行情'),
+        icon: 'refresh',
+        action: () => {
+          onClose();
+          onForceRefresh?.();
+        },
+      });
+      list.push({
+        id: 'f-logout',
+        group: t('功能'),
+        title: t('退出 Owner 登录'),
+        hint: t('结束本机会话'),
+        icon: 'shield',
+        action: () => {
+          onClose();
+          void logout();
+        },
+      });
+    } else if (isSignedIn) {
+      list.push({
+        id: 'f-logout',
+        group: t('功能'),
+        title: username ? t('退出 {name}', { name: username }) : t('退出登录'),
+        hint: t('结束本机会话'),
+        icon: 'shield',
+        action: () => {
+          onClose();
+          void logout();
+        },
+      });
+    } else {
+      list.push({
+        id: 'f-login',
+        group: t('功能'),
+        title: t('登录'),
+        hint: t('Owner 或访客账号'),
+        icon: 'shield',
+        action: () => {
+          onClose();
+          navigate('/login');
+        },
+      });
+    }
+    return list;
+  }, [navigate, onClose, onForceRefresh, isOwner, isSignedIn, username, logout]);
+
   const entries = useMemo<Entry[]>(() => {
     const list: Entry[] = [];
-    if (query.trim()) {
+    const q = query.trim().toLocaleLowerCase();
+    if (q) {
       results.forEach((r) =>
         list.push({
           id: `s-${r.canonical_code}`,
@@ -164,6 +260,10 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
           action: () => pickTicker(r.display_code),
         }),
       );
+      for (const item of featureEntries) {
+        const hay = [item.title, item.hint, item.no, item.keywords].filter(Boolean).join('\n').toLocaleLowerCase();
+        if (hay.includes(q)) list.push(item);
+      }
     } else {
       readRecent().forEach((code) =>
         list.push({
@@ -177,95 +277,10 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
           action: () => pickTicker(code),
         }),
       );
-      NAV_ITEMS.forEach((n) =>
-        list.push({
-          id: `f-${n.path}`,
-          group: t('功能'),
-          no: n.no,
-          title: n.label,
-          hint: t('前往{label}', { label: n.label }),
-          icon: 'chevron-right',
-          action: () => {
-            onClose();
-            navigate(n.path);
-          },
-        }),
-      );
-      list.push(
-        {
-          id: 'f-data',
-          group: t('功能'),
-          title: t('数据状态'),
-          hint: t('同步进度 · 数据覆盖'),
-          icon: 'wallet-gauge',
-          action: () => {
-            onClose();
-            navigate('/data-status');
-          },
-        },
-        {
-          id: 'f-research',
-          group: t('功能'),
-          title: t('历史验证'),
-          hint: t('走步验证 · 分层收益'),
-          icon: 'wallet-gauge',
-          action: () => {
-            onClose();
-            navigate('/research');
-          },
-        },
-      );
-      if (isOwner) {
-        list.push({
-          id: 'f-refresh',
-          group: t('功能'),
-          title: t('强制刷新自选'),
-          hint: t('重新获取自选行情'),
-          icon: 'refresh',
-          action: () => {
-            onClose();
-            onForceRefresh?.();
-          },
-        });
-        list.push({
-          id: 'f-logout',
-          group: t('功能'),
-          title: t('退出 Owner 登录'),
-          hint: t('结束本机会话'),
-          icon: 'shield',
-          action: () => {
-            onClose();
-            void logout();
-          },
-        });
-      } else if (isSignedIn) {
-        list.push({
-          id: 'f-logout',
-          group: t('功能'),
-          title: username ? t('退出 {name}', { name: username }) : t('退出登录'),
-          hint: t('结束本机会话'),
-          icon: 'shield',
-          action: () => {
-            onClose();
-            void logout();
-          },
-        });
-      } else {
-        list.push({
-          id: 'f-login',
-          group: t('功能'),
-          title: t('登录'),
-          hint: t('Owner 或访客账号'),
-          icon: 'shield',
-          action: () => {
-            onClose();
-            navigate('/login');
-          },
-        });
-      }
+      list.push(...featureEntries);
     }
     return list;
-  }, [query, results, navigate, onClose, onForceRefresh, pickTicker, isOwner, isSignedIn, username, logout]);
+  }, [query, results, featureEntries, pickTicker]);
 
   const flat = entries;
   const clampedActive = Math.min(active, Math.max(0, flat.length - 1));

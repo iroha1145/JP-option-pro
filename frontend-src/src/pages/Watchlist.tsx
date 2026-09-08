@@ -15,7 +15,7 @@ import EmptyState from '@/components/shared/EmptyState';
 import EmptyRetryButton from '@/components/shared/EmptyRetryButton';
 import ChangeBadge from '@/components/shared/ChangeBadge';
 import Segmented from '@/components/shared/Segmented';
-import DataTable, { type Column } from '@/components/shared/DataTable';
+import DataTable, { type Column, type SortState } from '@/components/shared/DataTable';
 import { SkeletonCard, SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
 import StatCard from '@/components/shared/StatCard';
 import HorizontalScroller from '@/components/shared/HorizontalScroller';
@@ -50,7 +50,7 @@ const STAT_ENTER = {
   show: { opacity: 1, y: 0, transition: { duration: 0.48, ease: EASE_PAPER } },
 };
 
-type WatchSortId = 'default' | 'gain' | 'loss' | 'turnover' | 'code';
+type WatchSortId = 'default' | 'gain' | 'loss' | 'turnover' | 'code' | 'close';
 
 const WATCH_SORTS: { id: WatchSortId; label: string }[] = [
   { id: 'default', label: t('默认排序') },
@@ -58,19 +58,48 @@ const WATCH_SORTS: { id: WatchSortId; label: string }[] = [
   { id: 'loss', label: t('跌幅优先') },
   { id: 'turnover', label: t('成交额优先') },
   { id: 'code', label: t('按代码 A–Z') },
+  { id: 'close', label: t('收盘优先') },
 ];
 
-function sortWatchlist(items: WatchlistItem[], sortId: WatchSortId): WatchlistItem[] {
-  if (sortId === 'default') return items;
+function sortFromId(id: WatchSortId): SortState | null {
+  if (id === 'gain') return { key: 'change', desc: true };
+  if (id === 'loss') return { key: 'change', desc: false };
+  if (id === 'turnover') return { key: 'turnover', desc: true };
+  if (id === 'code') return { key: 'code', desc: false };
+  if (id === 'close') return { key: 'close', desc: true };
+  return null;
+}
+
+function idFromSort(sort: SortState | null): WatchSortId {
+  if (!sort) return 'default';
+  if (sort.key === 'change') return sort.desc ? 'gain' : 'loss';
+  if (sort.key === 'turnover') return 'turnover';
+  if (sort.key === 'code') return 'code';
+  if (sort.key === 'close') return 'close';
+  return 'default';
+}
+
+function sortWatchlist(items: WatchlistItem[], sort: SortState | null): WatchlistItem[] {
+  if (!sort) return items;
   const out = [...items];
-  const pct = (item: WatchlistItem) => item.quote?.change_pct ?? Number.NEGATIVE_INFINITY;
-  const turnover = (item: WatchlistItem) => item.quote?.turnover_value ?? Number.NEGATIVE_INFINITY;
-  if (sortId === 'gain') out.sort((a, b) => pct(b) - pct(a) || a.canonical_code.localeCompare(b.canonical_code));
-  if (sortId === 'loss') out.sort((a, b) => pct(a) - pct(b) || a.canonical_code.localeCompare(b.canonical_code));
-  if (sortId === 'turnover') {
-    out.sort((a, b) => turnover(b) - turnover(a) || a.canonical_code.localeCompare(b.canonical_code));
-  }
-  if (sortId === 'code') out.sort((a, b) => a.display_code.localeCompare(b.display_code));
+  const missing = (value: unknown) =>
+    value === null || value === undefined || (typeof value === 'number' && !Number.isFinite(value));
+  const valueOf = (item: WatchlistItem): number | string => {
+    if (sort.key === 'change') return item.quote?.change_pct ?? Number.NEGATIVE_INFINITY;
+    if (sort.key === 'turnover') return item.quote?.turnover_value ?? Number.NEGATIVE_INFINITY;
+    if (sort.key === 'close') return item.quote?.close ?? Number.NEGATIVE_INFINITY;
+    return item.display_code;
+  };
+  const dir = sort.desc ? -1 : 1;
+  out.sort((a, b) => {
+    const va = valueOf(a);
+    const vb = valueOf(b);
+    const ma = missing(va);
+    const mb = missing(vb);
+    if (ma || mb) return ma && mb ? 0 : ma ? 1 : -1;
+    if (typeof va === 'string' || typeof vb === 'string') return String(va).localeCompare(String(vb)) * dir;
+    return ((va as number) - (vb as number)) * dir || a.canonical_code.localeCompare(b.canonical_code);
+  });
   return out;
 }
 
@@ -84,7 +113,8 @@ export default function Watchlist() {
   const query = usePolling(() => watchlistApi.list(), 120_000);
   const refreshWatchlist = query.refresh;
   const [view, setView] = useState<'cards' | 'table'>('cards');
-  const [sortId, setSortId] = useState<WatchSortId>('default');
+  const [sort, setSort] = useState<SortState | null>(null);
+  const sortId = idFromSort(sort);
   const [busy, setBusy] = useState<string | null>(null);
 
   const onForceRefresh = useCallback(() => {
@@ -105,8 +135,8 @@ export default function Watchlist() {
   }, [onForceRefresh, searchParams, setSearchParams]);
 
   const items = useMemo(
-    () => sortWatchlist(query.data?.items ?? EMPTY_WATCHLIST, sortId),
-    [query.data?.items, sortId],
+    () => sortWatchlist(query.data?.items ?? EMPTY_WATCHLIST, sort),
+    [query.data?.items, sort],
   );
   const FIRST_BATCH = 24;
   const progressive = useProgressiveList(items, { initial: FIRST_BATCH, step: 24 });
@@ -167,6 +197,8 @@ export default function Watchlist() {
         key: 'code',
         title: t('代码'),
         width: '30%',
+        sortable: true,
+        sortValue: (row) => row.display_code,
         render: (row) => (
           <span className="flex items-center gap-1.5">
             {row.marked_important && <span className="text-warn-600">★</span>}
@@ -397,7 +429,7 @@ export default function Watchlist() {
           )}
           <MenuSelect<WatchSortId>
             value={sortId}
-            onChange={setSortId}
+            onChange={(id) => setSort(sortFromId(id))}
             options={WATCH_SORTS.map((option) => ({ value: option.id, label: option.label }))}
             ariaLabel={t('默认排序')}
             align="right"
@@ -458,6 +490,9 @@ export default function Watchlist() {
                     rows={renderedItems}
                     rowKey={(row) => row.canonical_code}
                     rowHeight={44}
+                    sort={sort}
+                    onSortChange={setSort}
+                    preSorted
                     onRowClick={(row) => navigate(`/stock/${row.display_code}`)}
                   />
                 </div>

@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
+import { radarApi } from '@/api/modules';
 import { RADAR_STATE_LABELS } from '@/components/domain';
 import EmptyState from '@/components/shared/EmptyState';
 import DotsLoader from '@/components/shared/DotsLoader';
@@ -119,6 +120,9 @@ export default function HistoryRail({
   const [loadingMore, setLoadingMore] = useState(false);
   const moreTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const eventIds = useMemo(() => new Set(events.map((event) => event.event_id)), [events]);
+  const idKey = useMemo(() => events.map((event) => event.event_id).join(','), [events]);
+  const [historyState, setHistoryState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [detailed, setDetailed] = useState<RadarEvent[]>([]);
 
   useEffect(
     () => () => {
@@ -133,7 +137,32 @@ export default function HistoryRail({
     setVisible(PAGE);
   }
 
-  const rows = useMemo(() => collectRows(events), [events]);
+  useEffect(() => {
+    const ids = idKey ? idKey.split(',').slice(0, 30) : [];
+    if (ids.length === 0) {
+      setDetailed([]);
+      setHistoryState('ready');
+      return;
+    }
+    let cancelled = false;
+    setHistoryState('loading');
+    Promise.all(ids.map((id) => radarApi.event(id)))
+      .then((rows) => {
+        if (cancelled) return;
+        setDetailed(rows);
+        setHistoryState('ready');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setDetailed([]);
+        setHistoryState('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [idKey]);
+
+  const rows = useMemo(() => collectRows(detailed), [detailed]);
   const shown = rows.slice(0, visible);
   const groups = useMemo(() => {
     const map = new Map<string, HistoryRow[]>();
@@ -191,7 +220,37 @@ export default function HistoryRail({
       </div>
 
       <div className="bk-rail-scroll min-h-0 flex-1 overflow-y-auto">
-        {rows.length === 0 ? (
+        {historyState === 'loading' || historyState === 'idle' ? (
+          <div className="flex flex-col items-center gap-2 py-10" role="status">
+            <DotsLoader />
+            <p className="text-caption text-ink-400">{t('正在读取历史')}</p>
+          </div>
+        ) : historyState === 'error' ? (
+          <EmptyState
+            image="/empty-radar.svg"
+            title={t('未取得历史')}
+            description={t('事件详情暂时读不到状态变更，请稍后重试。')}
+            action={
+              <button
+                type="button"
+                onClick={() => {
+                  const ids = events.map((event) => event.event_id).slice(0, 30);
+                  setHistoryState('loading');
+                  Promise.all(ids.map((id) => radarApi.event(id)))
+                    .then((next) => {
+                      setDetailed(next);
+                      setHistoryState('ready');
+                    })
+                    .catch(() => setHistoryState('error'));
+                }}
+                className="rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi"
+              >
+                {t('重试')}
+              </button>
+            }
+            className="py-8"
+          />
+        ) : rows.length === 0 ? (
           <EmptyState
             image="/empty-radar.svg"
             title={t('暂无匹配的历史事件')}

@@ -15,6 +15,7 @@ import { STRENGTH_HINTS } from '@/lib/indicatorHints';
 import RowExpansion from './RowExpansion';
 import { NewsBadge, SubscoreTicks } from './cells';
 import { strengthPresentation, type NewsSummaryMap } from './types';
+import { quotePair } from './quotePair';
 import { t } from '@/i18n/core';
 
 const EASE_PAPER = [0.16, 1, 0.3, 1] as [number, number, number, number];
@@ -56,6 +57,7 @@ export default function ResultCards({
         const score = row.ranking_score;
         const strength = score !== null ? strengthPresentation(score) : null;
         const width = score !== null ? Math.max(2, Math.min(100, score)) : 0;
+        const quote = quotePair(row, overlay);
         return (
           <motion.div
             key={row.canonical_code}
@@ -86,7 +88,7 @@ export default function ResultCards({
                     <span className="block truncate text-micro text-ink-400">—</span>
                   )}
                 </span>
-                <ChangeBadge value={row.change_pct !== null ? row.change_pct / 100 : null} size="sm" />
+                <ChangeBadge value={quote.change} size="sm" />
                 <Icon
                   name="chevron-down"
                   size={14}
@@ -114,7 +116,7 @@ export default function ResultCards({
                     flash={flashes[row.canonical_code]}
                     className="metric-value text-data-m text-ink-800 tnum"
                   >
-                    {fmtPrice(overlay?.[row.canonical_code]?.live_price ?? row.close)}
+                    {fmtPrice(quote.price)}
                   </TickPrice>
                 </span>
               </span>

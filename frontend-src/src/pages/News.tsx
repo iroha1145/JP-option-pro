@@ -30,7 +30,7 @@ import Icon from '@/components/icons';
 import { NEWS_HINTS } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { explanationLines } from '@/lib/explainText';
-import { fmtDate, fmtDateShort, fmtJstDateTime, fmtJstTime, fmtRelative, fmtTimeHHMMSS } from '@/lib/format';
+import { fmtDate, fmtJstDateShort, fmtJstDateTime, fmtJstTime, fmtRelative, fmtTimeHHMMSS } from '@/lib/format';
 import { DUR_SECTION, EASE_PAPER } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import type {
@@ -293,6 +293,15 @@ function HeroCell({ label, index, children }: { label: string; index: number; ch
   );
 }
 
+const PENDING_AI_QUEUE = new Set(['queued', 'submitted', 'unknown', 'in_progress']);
+
+function pendingAiQueueCount(queue: Record<string, number>): number {
+  return Object.entries(queue).reduce(
+    (sum, [status, n]) => (PENDING_AI_QUEUE.has(status) ? sum + n : sum),
+    0,
+  );
+}
+
 function StatusLed({
   tone,
   pulse = false,
@@ -320,7 +329,7 @@ function StatusHero({ status, loading }: { status: NewsStatus | null; loading: b
     .filter((value): value is string => Boolean(value))
     .sort()
     .at(-1);
-  const queued = status ? Object.values(status.ai.queue).reduce((sum, value) => sum + value, 0) : 0;
+  const queued = status ? pendingAiQueueCount(status.ai.queue) : 0;
   const sourceTone: 'brand' | 'warn' | 'muted' = !status
     ? 'muted'
     : feedsOk === status.feeds.length && status.feeds.length > 0
@@ -443,7 +452,7 @@ function TimeCol({ iso }: { iso: string | null }) {
   return (
     <div className="flex w-11 shrink-0 flex-col items-center pt-0.5">
       <span className="font-mono text-[11px] leading-[14px] text-ink-400 tnum">
-        {sameDay ? fmtJstTime(iso) : fmtDateShort(iso.slice(0, 10))}
+        {sameDay ? fmtJstTime(iso) : fmtJstDateShort(iso)}
       </span>
       <span className="mt-1.5 hidden w-[2px] flex-1 rounded-full bg-line sm:block" aria-hidden="true" />
     </div>

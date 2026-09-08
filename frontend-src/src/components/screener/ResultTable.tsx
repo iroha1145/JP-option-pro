@@ -18,6 +18,7 @@ import { STRENGTH_HINTS } from '@/lib/indicatorHints';
 import RowExpansion from './RowExpansion';
 import { NewsBadge, ScoreCell, SubscoreTicks } from './cells';
 import { tierOf, TIER_RANGE, type NewsSummaryMap } from './types';
+import { quotePair } from './quotePair';
 import { t } from '@/i18n/core';
 
 const EASE_PAPER = [0.16, 1, 0.3, 1] as [number, number, number, number];
@@ -77,7 +78,9 @@ export default function ResultTable({
               {t('分项')}
               <InfoHint hint={STRENGTH_HINTS.families} side="bottom" size={11} className="ml-1" />
             </Th>
-            <Th align="right">{t('收盘 / 涨跌')}</Th>
+            <Th align="right">
+              {rows.some((row) => quotePair(row, overlay).live) ? t('现价 / 涨跌') : t('收盘 / 涨跌')}
+            </Th>
             <Th>
               {t('新闻 · 72H')}
               <InfoHint hint={STRENGTH_HINTS.news72h} side="bottom" size={11} className="ml-1" />
@@ -93,6 +96,7 @@ export default function ResultTable({
           {rows.map((row, index) => {
             const isOpen = expanded === row.canonical_code;
             const score = row.ranking_score;
+            const quote = quotePair(row, overlay);
             return (
               <Fragment key={row.canonical_code}>
                 <motion.tr
@@ -150,10 +154,10 @@ export default function ResultTable({
                       flash={flashes[row.canonical_code]}
                       className="font-mono text-body-s text-ink-900"
                     >
-                      {fmtPrice(overlay?.[row.canonical_code]?.live_price ?? row.close)}
+                      {fmtPrice(quote.price)}
                     </TickPrice>
                     <span className="ml-1.5 align-middle">
-                      <ChangeBadge value={row.change_pct !== null ? row.change_pct / 100 : null} size="sm" />
+                      <ChangeBadge value={quote.change} size="sm" />
                     </span>
                   </td>
                   <td className="px-3 py-2">

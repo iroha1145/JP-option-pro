@@ -36,6 +36,8 @@ interface DataTableProps<T> {
   onSortChange?: (s: SortState | null) => void;
   className?: string;
   rowClassName?: (row: T) => string;
+  /** 行已在外部排好（例如自选先全量排序再渐进挂载），表头只负责改状态。 */
+  preSorted?: boolean;
 }
 
 export default function DataTable<T>({
@@ -49,6 +51,7 @@ export default function DataTable<T>({
   onSortChange,
   className,
   rowClassName,
+  preSorted = false,
 }: DataTableProps<T>) {
   const reducedMotion = usePrefersReducedMotion();
   const [innerSort, setInnerSort] = useState(defaultSort);
@@ -59,7 +62,7 @@ export default function DataTable<T>({
   };
 
   const sorted = useMemo(() => {
-    if (!sort) return rows;
+    if (preSorted || !sort) return rows;
     const col = columns.find((c) => c.key === sort.key);
     if (!col?.sortValue) return rows;
     const dir = sort.desc ? -1 : 1;

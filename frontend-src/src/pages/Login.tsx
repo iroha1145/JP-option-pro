@@ -174,7 +174,16 @@ type SubmitState = 'idle' | 'verifying' | 'success' | 'error';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login, register, isOwner, isCustomer, username: signedInName, logout, loading } = useAccess();
+  const {
+    login,
+    register,
+    isOwner,
+    isCustomer,
+    mode: accessMode,
+    username: signedInName,
+    logout,
+    loading,
+  } = useAccess();
   const location = useLocation();
   /* 从别处「去登录」带来的来源页（#21）：登录成功回到出发点而不是固定 /watchlist */
   const fromPath = (location.state as { from?: string } | null)?.from ?? null;
@@ -307,7 +316,10 @@ export default function Login() {
     );
   }
 
-  if (isOwner || isCustomer) {
+  /* 私网 Owner 是网络授权，不是账号会话。退出只清 cookie，is_owner 仍为 true，
+     不能把登录表单藏掉。密码模式 Owner / 访客账号才算「已登录」。 */
+  const hasAccountSession = isCustomer || (accessMode === 'password' && isOwner);
+  if (hasAccountSession) {
     /* 已登录不再无条件弹走：客户账号此前被这里立刻 replace 回 /watchlist，
        整个 UI 没有任何地方能结束会话或换账号。 */
     return (

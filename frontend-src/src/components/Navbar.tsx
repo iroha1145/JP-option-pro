@@ -124,11 +124,11 @@ export default function Navbar({ onOpenPalette }: { onOpenPalette: () => void })
                 end={item.path === '/'}
                 data-active={active}
                 className={cn(
-                  'flex h-full items-center gap-1.5 whitespace-nowrap px-2 text-body-s transition-colors duration-fast 2xl:px-3.5',
+                  'flex h-full items-center gap-1.5 whitespace-nowrap px-2 text-body-s transition-colors duration-fast min-[1680px]:px-3.5',
                   active ? 'font-medium text-brand-600' : 'text-ink-500 hover:text-ink-800',
                 )}
               >
-                <span className="hidden font-mono text-[11px] text-ink-400 2xl:inline">{item.no}</span>
+                <span className="hidden font-mono text-[11px] text-ink-400 min-[1680px]:inline">{item.no}</span>
                 <span data-nav-label className="relative flex h-full items-center">
                   {item.label}
                 </span>
@@ -140,7 +140,7 @@ export default function Navbar({ onOpenPalette }: { onOpenPalette: () => void })
         <div className="ml-auto flex items-center gap-2.5 md:gap-3.5 xl:ml-0">
           <button
             onClick={onOpenPalette}
-            className="hidden h-8 w-44 items-center gap-2 rounded-md border border-line bg-card-warm px-3 text-caption text-ink-400 transition-[border-color,box-shadow,color] duration-fast hover:border-line-strong hover:text-ink-500 focus-visible:border-brand-500 focus-visible:shadow-focus-ring md:flex xl:hidden 2xl:flex 2xl:w-[220px]"
+            className="hidden h-8 w-44 items-center gap-2 rounded-md border border-line bg-card-warm px-3 text-caption text-ink-400 transition-[border-color,box-shadow,color] duration-fast hover:border-line-strong hover:text-ink-500 focus-visible:border-brand-500 focus-visible:shadow-focus-ring md:flex xl:hidden min-[1680px]:flex min-[1680px]:w-[220px]"
             aria-label={t('打开命令面板')}
           >
             <Icon name="search" size={14} />
@@ -151,7 +151,7 @@ export default function Navbar({ onOpenPalette }: { onOpenPalette: () => void })
           </button>
           <button
             onClick={onOpenPalette}
-            className="flex size-9 items-center justify-center rounded-md border border-line bg-card-warm text-ink-500 shadow-btn md:hidden xl:flex 2xl:hidden"
+            className="flex size-9 items-center justify-center rounded-md border border-line bg-card-warm text-ink-500 shadow-btn md:hidden xl:flex min-[1680px]:hidden"
             aria-label={t('搜索')}
           >
             <Icon name="search" size={16} />

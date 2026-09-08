@@ -20,17 +20,27 @@ function TapeItem({
   flash: 'up' | 'down' | null;
   onOpen: (code: string) => void;
 }) {
-  const change = q.change_pct ?? 0;
-  const tone = change > 0 ? 'up' : change < 0 ? 'down' : 'flat';
+  const change = typeof q.change_pct === 'number' && Number.isFinite(q.change_pct) ? q.change_pct : null;
+  const tone = change === null ? 'missing' : change > 0 ? 'up' : change < 0 ? 'down' : 'flat';
   return (
     <button
       type="button"
       onClick={() => onOpen(q.index_code)}
       title={t('查看大盘强弱 · {code}', { code: q.name })}
       aria-label={
-        tone === 'flat'
-          ? t('查看大盘强弱，{code} 最新价 {price}，{flat}', { code: q.name, price: fmtPrice(q.close), flat: t('持平') })
-          : t('查看大盘强弱，{code} 最新价 {price}，涨跌 {pct}', { code: q.name, price: fmtPrice(q.close), pct: fmtPct(q.change_pct) })
+        tone === 'missing'
+          ? t('查看大盘强弱，{code} 最新价 {price}，{flat}', {
+              code: q.name,
+              price: fmtPrice(q.close),
+              flat: t('涨跌数据缺失'),
+            })
+          : tone === 'flat'
+            ? t('查看大盘强弱，{code} 最新价 {price}，{flat}', { code: q.name, price: fmtPrice(q.close), flat: t('持平') })
+            : t('查看大盘强弱，{code} 最新价 {price}，涨跌 {pct}', {
+                code: q.name,
+                price: fmtPrice(q.close),
+                pct: fmtPct(q.change_pct),
+              })
       }
       className={cn(
         'tick-flash inline-flex cursor-pointer items-baseline gap-2 rounded-xs px-1 transition-colors duration-150 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30',
@@ -46,7 +56,7 @@ function TapeItem({
           tone === 'up' ? 'text-up-700' : tone === 'down' ? 'text-down-700' : 'text-ink-500',
         )}
       >
-        {tone === 'flat' ? '0.00%' : fmtPct(q.change_pct)}
+        {tone === 'missing' ? '—' : tone === 'flat' ? '0.00%' : fmtPct(q.change_pct)}
       </span>
       <span className="ml-2 text-[8px] text-ink-300" aria-hidden="true">◆</span>
     </button>

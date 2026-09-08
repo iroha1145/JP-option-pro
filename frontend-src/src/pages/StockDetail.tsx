@@ -1027,7 +1027,7 @@ function ShortPositionsPanel({
             {changes.map((row, index) => (
               <li
                 key={index}
-                className="flex min-h-[60px] items-center gap-3 px-1 py-[14px] transition-colors duration-fast hover:bg-paper-2/70"
+                className="flex min-h-[60px] items-start gap-3 px-1 py-[14px] transition-colors duration-fast hover:bg-paper-2/70"
               >
                 <div className="flex w-11 shrink-0 flex-col items-center self-stretch pt-0.5">
                   <span className="font-mono text-[11px] leading-[14px] text-ink-400 tnum">
@@ -1035,28 +1035,40 @@ function ShortPositionsPanel({
                   </span>
                   <span className="mt-1.5 hidden w-[2px] flex-1 rounded-full bg-line sm:block" aria-hidden="true" />
                 </div>
-                <span className="min-w-0 flex-1 truncate text-body-s text-ink-700">{row.holder_name ?? '—'}</span>
-                <span className={`shrink-0 whitespace-nowrap text-micro ${KIND_TONE[row.kind] ?? 'text-ink-400'}`}>
-                  {t(KIND_LABEL[row.kind] ?? '')}
-                </span>
-                <span className="shrink-0 font-mono text-caption tnum text-ink-900">
-                  {row.ratio != null ? `${(row.ratio * 100).toFixed(2)}%` : '—'}
-                </span>
-                <span
-                  className={`hidden shrink-0 whitespace-nowrap font-mono text-micro tnum sm:inline ${
-                    row.delta == null
-                      ? 'text-ink-400'
-                      : row.delta > 0
-                        ? 'text-up-600'
-                        : row.delta < 0
-                          ? 'text-down-600'
-                          : 'text-ink-400'
-                  }`}
-                >
-                  {row.delta != null
-                    ? `${row.delta > 0 ? '+' : row.delta < 0 ? '−' : '±'}${Math.abs(row.delta * 100).toFixed(2)}%`
-                    : '—'}
-                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate text-body-s text-ink-700">{row.holder_name ?? '—'}</span>
+                    <span className={`shrink-0 whitespace-nowrap text-micro ${KIND_TONE[row.kind] ?? 'text-ink-400'}`}>
+                      {t(KIND_LABEL[row.kind] ?? '')}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-caption tnum">
+                    <span className="text-ink-900">
+                      {row.ratio != null ? `${(row.ratio * 100).toFixed(2)}%` : '—'}
+                    </span>
+                    {row.shares != null && (
+                      <span className="text-ink-500">
+                        {fmtShares(row.shares)}
+                        {t('株')}
+                      </span>
+                    )}
+                    <span
+                      className={
+                        row.delta == null
+                          ? 'text-ink-400'
+                          : row.delta > 0
+                            ? 'text-up-600'
+                            : row.delta < 0
+                              ? 'text-down-600'
+                              : 'text-ink-400'
+                      }
+                    >
+                      {row.delta != null
+                        ? `${row.delta > 0 ? '+' : row.delta < 0 ? '−' : '±'}${Math.abs(row.delta * 100).toFixed(2)}%`
+                        : '—'}
+                    </span>
+                  </div>
+                </div>
               </li>
             ))}
           </ul>

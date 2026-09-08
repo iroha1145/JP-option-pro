@@ -47,6 +47,8 @@ export default function Market() {
   const now = useNow(30_000);
   const session = tokyoSession(now);
   const [searchParams, setSearchParams] = useSearchParams();
+  const rawIndex = (searchParams.get('index') ?? '').trim();
+  const hasExplicitIndex = HOME_INDEX_CODES.has(rawIndex);
   const indexCode = parseMarketIndex(searchParams);
   const setIndexCode = useCallback(
     (code: string) => {
@@ -159,15 +161,15 @@ export default function Market() {
   const refreshingMarket =
     market.refreshing || series.refreshing || liveSectors.refreshing || members.refreshing || live.refreshing;
 
-  /* ?index= 只滚动一次：overview 轮询换新引用时不要把页面拽回这张卡。 */
+  /* 只有 URL 明确带合法 ?index= 才定位；默认进 /market 不要把页面拽走。 */
   useEffect(() => {
-    if (!market.data || !HOME_INDEX_CODES.has(indexCode)) return;
+    if (!hasExplicitIndex || !market.data) return;
     if (scrolledForRef.current === indexCode) return;
     const el = indexCardRefs.current[indexCode];
     if (!el) return;
     scrolledForRef.current = indexCode;
     el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-  }, [indexCode, market.data]);
+  }, [hasExplicitIndex, indexCode, market.data]);
 
   const sectorColumns: Column<SectorStrength>[] = [
     {
@@ -307,7 +309,7 @@ export default function Market() {
                   aria-pressed={index.index_code === indexCode}
                   onClick={() => setIndexCode(index.index_code)}
                   className={cn(
-                    'card-surface flex w-full items-center justify-between px-3 py-2 text-left',
+                    'card-surface flex w-full scroll-mt-16 items-center justify-between px-3 py-2 text-left',
                     'transition-shadow duration-240 ease-out hover:shadow-sh-2',
                     'focus-visible:outline-none focus-visible:shadow-focus-ring',
                     index.index_code === indexCode ? 'bg-paper-2 ring-1 ring-brand-100' : 'hover:bg-paper-2',

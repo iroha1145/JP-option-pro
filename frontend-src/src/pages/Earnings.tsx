@@ -100,7 +100,7 @@ export default function Earnings() {
     if (!sawRefreshing.current) return;
     sawRefreshing.current = false;
     setPendingFlash(false);
-    if (q.error && !q.data) {
+    if (q.error) {
       toast.error(t('刷新失败'), q.error.message);
       return;
     }
@@ -238,7 +238,12 @@ export default function Earnings() {
                   transition={{ duration: 0.32, ease: EASE_PAPER }}
                   className="overflow-hidden"
                 >
-                  <MonthCalendar items={items} selectedDay={selectedDay} onSelectDay={onSelectDay} />
+                  <MonthCalendar
+                    items={items}
+                    selectedDay={selectedDay}
+                    onSelectDay={onSelectDay}
+                    anchorDate={monday}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -290,7 +295,10 @@ export default function Earnings() {
                 filteredByDay={selectedDay !== null}
                 featuredFilteredEmpty={listMode === 'featured' && listState.allCount > 0 && listState.featuredCount === 0}
                 onShowAll={() => onListModeChange('all')}
-                onNextWeek={() => onWeekChange(1)}
+                onNextWeek={() => {
+                  setSelectedDay(null);
+                  onWeekChange(1);
+                }}
               />
 
               {listState.visibleItems.length < listState.listItems.length && (

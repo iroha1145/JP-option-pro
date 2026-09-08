@@ -19,6 +19,8 @@ interface MonthCalendarProps {
   items: EarningsUpcomingItem[];
   selectedDay: string | null;
   onSelectDay: (date: string | null) => void;
+  /** 周历锚点。查看下周等动作清掉日期筛选后，月历仍跟到新的一周。 */
+  anchorDate?: string;
 }
 
 const WEEKDAYS = [t('周一'), t('周二'), t('周三'), t('周四'), t('周五'), t('周六'), t('周日')] as const;
@@ -42,15 +44,37 @@ function monthTitle(key: string): string {
   return `${year} 年 ${month} 月`;
 }
 
-export default function MonthCalendar({ items, selectedDay, onSelectDay }: MonthCalendarProps) {
+function monthKeyOf(date: string | null | undefined, fallback: string): string {
+  const key = date?.slice(0, 7);
+  return key && key.length === 7 ? key : fallback;
+}
+
+function clampMonth(key: string, minMonth: string, maxMonth: string): string {
+  if (key < minMonth) return minMonth;
+  if (key > maxMonth) return maxMonth;
+  return key;
+}
+
+export default function MonthCalendar({ items, selectedDay, onSelectDay, anchorDate }: MonthCalendarProps) {
   const navigate = useNavigate();
   const today = jstToday();
   const currentMonth = today.slice(0, 7);
   const minMonth = shiftMonth(currentMonth, -1);
   const maxMonth = shiftMonth(currentMonth, 1);
 
-  const [cursor, setCursor] = useState(currentMonth);
+  const [cursor, setCursor] = useState(() =>
+    clampMonth(monthKeyOf(selectedDay ?? anchorDate, currentMonth), minMonth, maxMonth),
+  );
   const [dir, setDir] = useState(0);
+
+  useEffect(() => {
+    const next = clampMonth(monthKeyOf(selectedDay ?? anchorDate, currentMonth), minMonth, maxMonth);
+    setCursor((prev) => {
+      if (prev === next) return prev;
+      setDir(next > prev ? 1 : -1);
+      return next;
+    });
+  }, [selectedDay, anchorDate, currentMonth, minMonth, maxMonth]);
 
   const byDate = useMemo(() => {
     const map = new Map<string, EarningsUpcomingItem[]>();

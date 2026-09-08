@@ -81,6 +81,20 @@ export function fmtDateShort(isoDate: string | null | undefined): string {
   return `${Number(parts[1])}/${Number(parts[2])}`;
 }
 
+const JST_DATE_SHORT_FMT = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Asia/Tokyo',
+  month: 'numeric',
+  day: 'numeric',
+});
+
+/** ISO タイムスタンプ → JST 'M/D'。UTC 日付を切らない。 */
+export function fmtJstDateShort(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return JST_DATE_SHORT_FMT.format(date);
+}
+
 export function fmtDate(isoDate: string | null | undefined): string {
   if (!isoDate) return '—';
   return isoDate.slice(0, 10);
