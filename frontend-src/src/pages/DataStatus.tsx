@@ -225,7 +225,7 @@ export default function DataStatus() {
             </div>
           )}
 
-          <section className="card-surface p-5">
+          <section>
             <p className="eyebrow">DATASETS · J-QUANTS</p>
             <h2 className="mb-3 mt-1 text-h3 text-ink-900">{t('数据集')}</h2>
             <DataTable columns={columns} rows={query.data.datasets} rowKey={(row) => row.key} rowHeight={56} />

@@ -7,7 +7,6 @@
  */
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { motion } from 'framer-motion';
 import { watchlistApi } from '@/api/modules';
 import type { StrengthRow } from '@/api/types';
 import { cn } from '@/lib/utils';
@@ -18,8 +17,6 @@ import { FAMILY_HINTS, STRENGTH_HINTS, STRUCTURE_HINTS, TECHNICAL_HINTS, type Sc
 import { explanationLines } from '@/lib/explainText';
 import { FAMILY_META } from './types';
 import { t } from '@/i18n/core';
-
-const EASE_PAPER = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
 function barClass(value: number): string {
   return value >= 70 ? 'bg-brand-600' : value >= 45 ? 'bg-brand-400' : 'bg-warn-600';
@@ -51,7 +48,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
           <InfoHint hint={STRENGTH_HINTS.families} side="bottom" size={11} className="ml-1" />
         </p>
         <div className="mt-3 grid grid-cols-[max-content_minmax(0,1fr)_max-content] gap-y-2.5">
-          {FAMILY_META.map(({ key, label }, index) => {
+          {FAMILY_META.map(({ key, label }) => {
             const value = row.families[key] ?? null;
             const weight = weights?.[key] ?? null;
             return (
@@ -62,11 +59,8 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
                 </span>
                 <span className="strength-track h-1.5 overflow-hidden rounded-pill bg-paper" role="presentation">
                   {value !== null && (
-                    <motion.span
+                    <span
                       className={cn('block h-full origin-left rounded-pill', barClass(value))}
-                      initial={{ scaleX: 0 }}
-                      animate={{ scaleX: 1 }}
-                      transition={{ duration: 0.7, ease: EASE_PAPER, delay: index * 0.05 }}
                       style={{ width: `${Math.max(2, Math.min(100, value))}%` }}
                     />
                   )}

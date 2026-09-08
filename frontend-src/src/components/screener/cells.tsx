@@ -2,8 +2,8 @@
  * 结果行共享单元格：强度分条 / 六族分项微条 / 新闻72h徽标。
  * 桌面表格与移动卡片流共用。hover 小窗走 PointerTooltip（portal），
  * 避免被表格 overflow 或 Layout overflow-x-clip 裁掉。
+ * 强度条首帧即完整比例（对标美站 ScoreCell），不再 scaleX 入场。
  */
-import { motion } from 'framer-motion';
 import type { NewsSecurityRow, StrengthRow } from '@/api/types';
 import { cn } from '@/lib/utils';
 import { fmtRelativeShort } from '@/lib/format';
@@ -14,10 +14,8 @@ import { SkeletonBlock } from '@/components/shared/Skeleton';
 import { FAMILY_META, strengthPresentation } from './types';
 import { t } from '@/i18n/core';
 
-const EASE_PAPER = [0.16, 1, 0.3, 1] as [number, number, number, number];
-
 /* ---------------- 强度分：Mono 15 600 + 64px 强度条（固定分档着色） ---------------- */
-export function ScoreCell({ score, index }: { score: number | null; index: number }) {
+export function ScoreCell({ score }: { score: number | null; index?: number }) {
   if (score === null) {
     return <span className="font-mono text-caption text-ink-300">—</span>;
   }
@@ -49,11 +47,8 @@ export function ScoreCell({ score, index }: { score: number | null; index: numbe
         aria-label={t('强度分 {score}', { score: score.toFixed(1) })}
         data-strength-band={strength.band}
       >
-        <motion.span
+        <span
           className={cn('block h-full origin-left rounded-pill', strength.barClass)}
-          initial={{ scaleX: 0 }}
-          animate={{ scaleX: 1 }}
-          transition={{ duration: 0.7, ease: EASE_PAPER, delay: 0.15 + index * 0.03 }}
           style={{ width: `${Math.max(2, Math.min(100, score))}%` }}
         />
       </span>
@@ -80,7 +75,7 @@ export function SubscoreTicks({ row, tipSide = 'top' }: { row: StrengthRow; tipS
       ))}
     >
       {dims.map(({ key, value }) => (
-        <span key={key} className="inline-block h-[3px] w-[11px] overflow-hidden rounded-full bg-paper" aria-hidden="true">
+        <span key={key} className="inline-block h-1 w-[15px] overflow-hidden rounded-full bg-paper" aria-hidden="true">
           {value !== null && (
             <span
               className={cn('block h-full rounded-full', value >= 70 ? 'bg-brand-600' : value >= 45 ? 'bg-brand-400' : 'bg-warn-600')}
