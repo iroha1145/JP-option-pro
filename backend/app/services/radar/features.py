@@ -47,7 +47,9 @@ def _pick_price(
     return number
 
 
-def clean_series(bars: Sequence[Mapping[str, Any]]) -> dict[str, list] | None:
+def clean_series(
+    bars: Sequence[Mapping[str, Any]], *, min_bars: int = MIN_BARS_FOR_FEATURES
+) -> dict[str, list] | None:
     dates: list[str] = []
     closes: list[float] = []
     highs: list[float] = []
@@ -78,7 +80,7 @@ def clean_series(bars: Sequence[Mapping[str, Any]]) -> dict[str, list] | None:
         opens.append(open_ or close)
         turnover.append(float(raw_turnover) if raw_turnover is not None else None)
         upper_limit.append(str(bar.get("upper_limit") or "0") in ("1", "1.0", "True", "true"))
-    if len(closes) < MIN_BARS_FOR_FEATURES:
+    if len(closes) < min_bars:
         return None
     return {
         "dates": dates,

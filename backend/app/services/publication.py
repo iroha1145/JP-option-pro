@@ -38,6 +38,13 @@ REASON_PREVIOUS_UNUSABLE = "previous_unusable"
 
 MAX_POST_CLOSE_RETRY_ATTEMPTS = 12
 
+# J-Quants V2 records an explicit row with null prices, volume and value
+# when that security had no trades: https://jpx-jquants.com/ja/spec/eq-bars-daily
+_NO_TRADE_FIELDS = (
+    "open", "high", "low", "close", "volume", "turnover_value",
+    "adj_open", "adj_high", "adj_low", "adj_close", "adj_volume",
+)
+
 
 @dataclass
 class CoverageSummary:
@@ -110,11 +117,19 @@ def classify_equity_input(
     clipped = clip_rows_through(bars, target_date)
     if not clipped:
         return "unknown_missing", None, "no_bars"
-    has_target = any(str(row.get("trade_date")) == target_date for row in clipped)
-    series = clean_series(clipped)
+    target_rows = [row for row in clipped if str(row.get("trade_date")) == target_date]
+    has_target = bool(target_rows)
+    if len(target_rows) == 1 and all(
+        field in target_rows[0] and target_rows[0][field] is None for field in _NO_TRADE_FIELDS
+    ):
+        # No price exists for this session; exclude the security from scoring.
+        # An absent row/field or a partially populated bar is not this signal.
+        return "excluded", None, "no_trades"
+    # Validate the target print before applying the history-length exclusion.
+    # A new listing with a broken current bar must not look like a harmless
+    # short history merely because the normal feature cleaner returns None.
+    series = clean_series(clipped, min_bars=1)
     if series is None:
-        if has_target and len(clipped) < min_feature_bars:
-            return "excluded", None, "insufficient_history"
         if has_target:
             return "invalid", None, "uncleanable_target_bar"
         return "unknown_missing", None, "no_target_bar"
@@ -123,6 +138,10 @@ def classify_equity_input(
         if has_target:
             return "invalid", series, "target_bar_dropped"
         return "unknown_missing", series, "no_target_bar"
+    if len(series["dates"]) < min_feature_bars:
+        if len(clipped) < min_feature_bars:
+            return "excluded", None, "insufficient_history"
+        return "invalid", None, "uncleanable_target_bar"
     return "valid", series, "ok"
 
 
