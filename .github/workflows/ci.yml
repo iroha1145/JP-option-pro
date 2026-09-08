@@ -68,7 +68,9 @@ jobs:
         run: node --experimental-strip-types --test frontend-src/tests/color-preference.mjs
 
       - name: Screener freshness gate
-        run: node --experimental-strip-types --test frontend-src/tests/screener-freshness.mjs
+        run: |
+          node --experimental-strip-types --test frontend-src/tests/screener-freshness.mjs frontend-src/tests/pr17-final-review.mjs frontend-src/tests/pr17_review_fixes.mjs
+          node --experimental-strip-types frontend-src/tests/key_stats.mjs
 
       # 後端が組み立てた文（テンプレート + パラメータ）を 3 言語で描画できるか。
       # 辞書に載っていても引き方を間違えれば画面には出ない ——「載っているか」の
@@ -87,3 +89,27 @@ jobs:
             backend/app/services backend/app/api backend/app/repositories backend/app/providers \
             frontend-src/src/pages frontend-src/src/components frontend-src/src/api \
             || (echo "US-market residue found" && exit 1)
+
+      - name: Install isolated browser test dependencies
+        run: |
+          python -m pip install -r browser-tests/requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Production browser, queue and worker regressions
+        env:
+          JP_BROWSER_EVIDENCE: ${{ github.workspace }}/browser-evidence
+        run: python -m pytest browser-tests/ -q --junitxml=browser-evidence/results.xml
+
+      - name: Isolated container boot and read-only boundaries
+        env:
+          JP_BROWSER_EVIDENCE: ${{ github.workspace }}/browser-evidence
+        run: bash browser-tests/container-smoke.sh
+
+      - name: Upload browser verification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pr17-browser-verification-${{ github.run_id }}
+          path: browser-evidence/
+          retention-days: 7
+          if-no-files-found: warn
