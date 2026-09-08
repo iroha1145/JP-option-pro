@@ -270,7 +270,7 @@ export const DICT: Record<string, [string, string]> = {
   无法提交日线更新: ['Could not queue a daily update', '日足更新を投入できません'],
   更新未完成: ['Update did not finish', '更新が完了しませんでした'],
   '更新失败，已保留上次结果': ['Update failed; last results kept', '更新失敗。前回の結果を保持'],
-  仍在等待供应商发布当日日线: ['Still waiting for the vendor to publish today’s bars', '当日の日足公開を待っています'],
+  仍在等待供应商发布当日日线: ["Still waiting for the vendor to publish today's bars", '当日の日足公開を待っています'],
   '覆盖不足，已保留上次完整发布': [
     'Coverage is incomplete; the last complete publication was kept',
     'カバレッジ不足のため前回の完全な公開を保持',
@@ -280,7 +280,7 @@ export const DICT: Record<string, [string, string]> = {
   后台更新读回: ['Background update read-back', 'バックグラウンド更新の読戻し'],
   任务已结束但读回仍是旧发布: ['Task finished but read-back still shows the old publication', 'タスクは終了しましたが読戻しは旧公開のままです'],
   已读取当前发布: ['Current publication loaded', '現在の公開を読み込みました'],
-  快照日期早于当前目标交易日，这是筛选结果不是新的日线计算: [
+  '快照日期早于当前目标交易日，这是筛选结果不是新的日线计算': [
     'Snapshot date is older than the current target session; this is a filter result, not a new daily computation',
     'スナップショット日は現在の対象営業日より古いです。これは絞り込みであり、新しい日足計算ではありません',
   ],

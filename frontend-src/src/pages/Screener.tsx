@@ -164,7 +164,7 @@ export default function Screener() {
         setScanState('done');
         setHistory((prev) =>
           [
-            { at: Date.now(), count: result.rows.length, durationMs: Date.now() - startedAt, summary: summarizeFilters(filters), kind: 'filter' },
+            { at: Date.now(), count: result.rows.length, durationMs: Date.now() - startedAt, summary: summarizeFilters(filters), kind: 'filter' as const },
             ...prev,
           ].slice(0, 5),
         );
