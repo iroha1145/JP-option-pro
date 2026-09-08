@@ -94,7 +94,7 @@ def map_daily_bar(row: Mapping[str, Any]) -> dict[str, Any] | None:
     trade_date = _text(row, "Date")
     if not code or not trade_date:
         return None
-    return {
+    mapped = {
         "canonical_code": code,
         "trade_date": trade_date,
         "open": _num(row, "O"),
@@ -112,6 +112,19 @@ def map_daily_bar(row: Mapping[str, Any]) -> dict[str, Any] | None:
         "adj_close": _num(row, "AdjC"),
         "adj_volume": _num(row, "AdjVo"),
     }
+    # The provider's no-trade signal is an explicitly empty row, not a row
+    # made empty by missing fields or failed numeric parsing. Otherwise the
+    # normalized database columns would erase that distinction at publication.
+    nullable_fields = {
+        "O": "open", "H": "high", "L": "low", "C": "close",
+        "Vo": "volume", "Va": "turnover_value", "AdjO": "adj_open",
+        "AdjH": "adj_high", "AdjL": "adj_low", "AdjC": "adj_close", "AdjVo": "adj_volume",
+    }
+    if all(mapped[field] is None for field in nullable_fields.values()) and not all(
+        key in row and row[key] in (None, "") for key in nullable_fields
+    ):
+        return None
+    return mapped
 
 
 def map_index_bar(row: Mapping[str, Any]) -> dict[str, Any] | None:
