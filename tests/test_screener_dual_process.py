@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import socket
+import sqlite3
 import subprocess
 import sys
 import time
@@ -43,7 +44,38 @@ def _wait_ready(base: str, proc: subprocess.Popen) -> None:
     raise RuntimeError(f"uvicorn did not become ready: {last_error}")
 
 
-def _spawn(data_dir: Path, *, engine: str) -> dict:
+def _wait_worker_ready(data_dir: Path, proc: subprocess.Popen) -> None:
+    """The frontend /ready contract does not promise a committed worker schema."""
+    from app.repositories.base import SchemaVersionError
+    from app.worker.state import WorkerStateRepository
+
+    repository = WorkerStateRepository(data_dir / "jp-worker.db", read_only=True)
+    for _ in range(100):
+        if proc.poll() is not None:
+            output = proc.stdout.read() if proc.stdout else ""
+            raise RuntimeError(f"worker exited {proc.returncode}: {output[-2000:]}")
+        if repository.exists():
+            try:
+                with repository.read():
+                    return
+            except (SchemaVersionError, sqlite3.OperationalError) as exc:
+                cause = exc.__cause__ if isinstance(exc, SchemaVersionError) else exc
+                code = getattr(cause, "sqlite_errorcode", None)
+                transient = isinstance(code, int) and (code & 0xFF) in (
+                    sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED,
+                )
+                initializing = (
+                    isinstance(exc, SchemaVersionError)
+                    and code == sqlite3.SQLITE_ERROR
+                    and str(cause) == "no such table: jp_worker_schema"
+                )
+                if not transient and not initializing:
+                    raise
+        time.sleep(0.1)
+    raise RuntimeError("worker schema did not become ready")
+
+
+def _spawn(data_dir: Path, *, engine: str, wait_for_worker: bool = True) -> dict:
     port = _free_port()
     env = os.environ.copy()
     env.update(
@@ -86,6 +118,8 @@ def _spawn(data_dir: Path, *, engine: str) -> dict:
     base = f"http://127.0.0.1:{port}"
     try:
         _wait_ready(base, api)
+        if wait_for_worker:
+            _wait_worker_ready(data_dir, worker)
     except Exception:
         api.kill()
         worker.kill()

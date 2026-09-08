@@ -12,6 +12,7 @@ Simplified port of the reference design:
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 import threading
 import time
 from collections import deque
@@ -22,6 +23,10 @@ from datetime import datetime, timedelta, timezone
 
 from app.services.publication import seconds_until_deadline
 from app.worker.state import WorkerLeaseLost, WorkerStateRepository
+
+
+_SQLITE_BUSY_RETRY_SECONDS = 0.5
+_STOPPED = object()
 
 
 @dataclass
@@ -133,24 +138,58 @@ class WorkerSupervisor:
 
     # -- manual actions ------------------------------------------------------
 
+    async def _wait_for_stop(self, delay: float) -> bool:
+        try:
+            await asyncio.wait_for(self._stop_event.wait(), timeout=delay)
+            return True
+        except asyncio.TimeoutError:
+            return False
+
+    async def _retry_state_call(self, operation: Callable[..., Any], *args, **kwargs) -> Any:
+        """Retry only transactional bookkeeping, retaining the same task result.
+
+        A busy transaction was rolled back by the repository. Repeating that
+        state write is safe; repeating the task body could repeat external work.
+        SQLite's existing busy_timeout bounds each attempt. Stop interrupts the
+        additional wait, and lease loss/database errors still fail fast.
+        """
+
+        while True:
+            if self._lease_lost.is_set():
+                raise WorkerLeaseLost("lease heartbeat failed")
+            try:
+                return await asyncio.to_thread(operation, *args, **kwargs)
+            except sqlite3.OperationalError as error:
+                code = getattr(error, "sqlite_errorcode", None)
+                # Extended codes (e.g. LOCKED_SHAREDCACHE) keep the primary
+                # result in the low byte. Do not infer a lock from error text.
+                if (
+                    not isinstance(code, int)
+                    or code & 0xFF not in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}
+                ):
+                    raise
+                if await self._wait_for_stop(_SQLITE_BUSY_RETRY_SECONDS):
+                    return _STOPPED
+
     async def _action_loop(self) -> None:
         while not self._stop_event.is_set():
-            try:
-                action = await asyncio.to_thread(
-                    self._state.claim_next_action, self._owner_id, self._fencing_token
-                )
-            except WorkerLeaseLost:
-                raise
+            action = await self._retry_state_call(
+                self._state.claim_next_action, self._owner_id, self._fencing_token
+            )
+            if action is _STOPPED:
+                return
             if action is None:
-                await asyncio.sleep(self._action_poll_seconds)
+                await self._wait_for_stop(self._action_poll_seconds)
                 continue
             task_name = self._action_owner.get(action["action_type"])
             if task_name is None:
-                await asyncio.to_thread(
+                completed = await self._retry_state_call(
                     self._state.complete_action,
                     self._owner_id, self._fencing_token, action["action_id"],
                     status="failed", error_code="unknown_action_type",
                 )
+                if completed is _STOPPED:
+                    return
                 continue
             payload = dict(action.get("payload") or {})
             payload["__action_id"] = action["action_id"]
@@ -179,10 +218,12 @@ class WorkerSupervisor:
             # Keep __action_type in the payload so dispatchers (e.g. post_close_dispatch
             # branching on radar_refresh) can read it; only mirror it for bookkeeping.
             payload_type = payload.get("__action_type") if payload else None
-            await asyncio.to_thread(
+            recorded = await self._retry_state_call(
                 self._state.record_task,
                 self._owner_id, self._fencing_token, spec.name, status="running",
             )
+            if recorded is _STOPPED:
+                return
             try:
                 result = await asyncio.to_thread(spec.run, payload)
             except WorkerLeaseLost:
@@ -192,18 +233,22 @@ class WorkerSupervisor:
                 backoff = min(
                     spec.max_backoff_seconds, spec.failure_backoff_seconds * (2 ** (failures - 1))
                 )
-                await asyncio.to_thread(
+                recorded = await self._retry_state_call(
                     self._state.record_task,
                     self._owner_id, self._fencing_token, spec.name,
                     status="failed", error_code=f"unexpected:{type(exc).__name__}"[:120],
                     success=False,
                 )
+                if recorded is _STOPPED:
+                    return
                 if action_id is not None:
-                    await asyncio.to_thread(
+                    completed = await self._retry_state_call(
                         self._state.complete_action,
                         self._owner_id, self._fencing_token, action_id,
                         status="failed", error_code=f"unexpected:{type(exc).__name__}"[:120],
                     )
+                    if completed is _STOPPED:
+                        return
                 delay = backoff
                 continue
 
@@ -216,7 +261,12 @@ class WorkerSupervisor:
             else:
                 failures = 0
                 delay = result.next_delay_seconds
-            delay = await asyncio.to_thread(self._apply_retry_policy, spec.name, result, delay)
+            persisted = await self._retry_state_call(self._persist_retry_policy, spec.name, result)
+            if persisted is _STOPPED:
+                return
+            delay = await self._retry_state_call(self._retry_policy_delay, spec.name, result, delay)
+            if delay is _STOPPED:
+                return
             if result.outcome is None:
                 success = result.status == "completed"
             else:
@@ -224,7 +274,7 @@ class WorkerSupervisor:
             next_run_at = (
                 datetime.now(timezone.utc) + timedelta(seconds=max(0.5, delay))
             ).strftime("%Y-%m-%dT%H:%M:%SZ")
-            await asyncio.to_thread(
+            recorded = await self._retry_state_call(
                 self._state.record_task,
                 self._owner_id, self._fencing_token, spec.name,
                 status="completed" if result.status != "failed" else "failed",
@@ -233,8 +283,10 @@ class WorkerSupervisor:
                 success=success,
                 next_run_at=next_run_at,
             )
+            if recorded is _STOPPED:
+                return
             if action_id is not None:
-                await asyncio.to_thread(
+                completed = await self._retry_state_call(
                     self._state.complete_action,
                     self._owner_id, self._fencing_token, action_id,
                     status="completed" if result.status != "failed" else "failed",
@@ -246,8 +298,14 @@ class WorkerSupervisor:
                         **result.details,
                     },
                 )
+                if completed is _STOPPED:
+                    return
 
     def _apply_retry_policy(self, task_name: str, result: TaskResult, delay: float) -> float:
+        self._persist_retry_policy(task_name, result)
+        return self._retry_policy_delay(task_name, result, delay)
+
+    def _persist_retry_policy(self, task_name: str, result: TaskResult) -> None:
         retry = (result.details or {}).get("retry")
         if isinstance(retry, dict):
             scope = str(retry.get("dataset_scope") or "daily_bars")
@@ -270,6 +328,11 @@ class WorkerSupervisor:
                         reason=str(retry.get("reason") or "waiting_input"),
                         next_retry_at=str(retry["next_retry_at"]),
                     )
+
+    def _retry_policy_delay(self, task_name: str, result: TaskResult, delay: float) -> float:
+        # Retry this read independently: a busy read after a committed deadline
+        # update must not repeat upsert_retry and consume another due attempt.
+        retry = (result.details or {}).get("retry")
         pending = []
         lookup = getattr(self._state, "pending_retries_for_task", None)
         if lookup is not None:
