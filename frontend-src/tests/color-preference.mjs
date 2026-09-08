@@ -110,15 +110,20 @@ test('健康态 SoftBadge 不借用涨跌 up/down', async () => {
   const data = codeOf(await source('pages/DataStatus.tsx'));
   const detail = codeOf(await source('pages/StockDetail.tsx'));
   const domain = codeOf(await source('components/domain.tsx'));
+  const research = codeOf(await source('pages/Research.tsx'));
   assert.match(news, /tone: 'warn',\s*label: t\('异常'\)/);
   assert.match(news, /failed: \{ label: t\('分析失败'\), tone: 'warn' \}/);
   assert.match(data, /worker\.healthy \? 'brand' : 'warn'/);
   assert.match(detail, /SoftBadge tone="warn"/);
+  assert.match(research, /label: '分层单调',\s*tone: 'brand'/);
+  assert.match(research, /label: '不单调',\s*tone: 'warn'/);
   assert.doesNotMatch(news, /tone: 'up',\s*label: t\('正常'\)/);
   assert.doesNotMatch(data, /worker\.healthy \? 'up' : 'down'/);
   assert.doesNotMatch(domain, /confirmed:\s*'up'/);
   assert.doesNotMatch(domain, /failed:\s*'down'/);
   assert.doesNotMatch(domain, /bg-up-50|bg-down-50/);
+  assert.doesNotMatch(research, /tone: 'up'/);
+  assert.doesNotMatch(research, /tone: 'down'/);
 });
 
 test('渲染期读涨跌习惯的 .tsx 必须订阅 useColorMode', async () => {

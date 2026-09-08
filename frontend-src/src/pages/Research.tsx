@@ -25,7 +25,7 @@ import { t } from '@/i18n/core';
 const VERDICT_TEXT: Record<string, { label: string; tone: BadgeTone; note: string }> = {
   monotonic: {
     label: '分层单调',
-    tone: 'up',
+    tone: 'brand',
     note: '高分层稳定优于低分层。可作为排序依据。',
   },
   weak: {
@@ -35,7 +35,7 @@ const VERDICT_TEXT: Record<string, { label: string; tone: BadgeTone; note: strin
   },
   not_monotonic: {
     label: '不单调',
-    tone: 'down',
+    tone: 'warn',
     note: '高分层未稳定优于低分层。当前分数不具备概率含义，只能当作粗排。',
   },
   insufficient_data: {
