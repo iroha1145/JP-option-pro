@@ -16,12 +16,19 @@ from app.domain.constants import TOPIX_INDEX_CODE
 from app.personal_config import RadarConfig
 from app.repositories.core import CoreRepository
 from app.services import margin_regulation as mreg
+from app.services.publication import (
+    CoverageSummary,
+    classify_equity_input,
+    clip_rows_through,
+    input_fingerprint,
+    universe_version,
+)
 
 from . import lifecycle as lc
 from .base_detector import detect_base
 from .features import (
+    MIN_BARS_FOR_FEATURES,
     _median,
-    clean_series,
     compute_features_from_series,
     index_return,
     series_excluding_last,
@@ -417,30 +424,66 @@ class RadarEngine:
             if row.get("sector33_code") and row.get("sector33_code") != "9999"
         }
         bars_by_code = self._repository.bars_matrix_since(lookback_start)
-        topix = self._repository.index_series(TOPIX_INDEX_CODE, start_date=lookback_start)
+        topix = clip_rows_through(
+            self._repository.index_series(TOPIX_INDEX_CODE, start_date=lookback_start),
+            target_date,
+        )
         topix_r63 = index_return(topix, 63)
         market_fit = market_fit_score(topix)
+        index_input_date = str(topix[-1]["trade_date"]) if topix else None
         margin_map = self._repository.latest_margin_map()
         regulation_map = self._build_regulation_map(target_date, equities.keys())
 
+        coverage = CoverageSummary(
+            expected=len(equities),
+            index_input_date=index_input_date,
+            index_stale=bool(index_input_date and index_input_date != target_date),
+            universe_version=universe_version(
+                list(equities),
+                market_codes=self._config.market_codes,
+                min_listed_days=self._config.min_listed_days,
+                min_avg_turnover_jpy=self._config.min_avg_turnover_jpy,
+            ),
+        )
+        valid_inputs: list[tuple[str, str, float | None]] = []
         features_by_code: dict[str, dict[str, Any]] = {}
         structure_by_code: dict[str, dict[str, Any]] = {}
         sector_returns: dict[str, list[float]] = {}
         sector_returns_63d: dict[str, list[float]] = {}
         for code, security in equities.items():
-            bars = bars_by_code.get(code)
-            if not bars or bars[-1].get("trade_date") != target_date:
-                continue  # 当日データの無い銘柄はスキャン対象外
-            series = clean_series(bars)
-            if series is None:
+            raw_bars = clip_rows_through(bars_by_code.get(code), target_date)
+            if raw_bars:
+                coverage.arrived += 1
+            bucket, series, reason = classify_equity_input(
+                raw_bars, target_date, min_feature_bars=MIN_BARS_FOR_FEATURES
+            )
+            coverage.add_reason(reason)
+            if bucket == "unknown_missing":
+                coverage.unknown_missing += 1
                 continue
+            if bucket == "invalid":
+                coverage.invalid += 1
+                continue
+            if bucket == "excluded":
+                coverage.excluded += 1
+                continue
+            coverage.valid += 1
             features = compute_features_from_series(series)
             if features is None:
+                coverage.valid -= 1
+                coverage.invalid += 1
+                coverage.add_reason("features_unavailable")
                 continue
+            close = features.get("close")
+            valid_inputs.append(
+                (code, str(features.get("trade_date") or target_date), float(close) if close is not None else None)
+            )
             if features.get("data_days", 0) < self._config.min_listed_days:
+                coverage.filtered += 1
                 continue
             avg_turnover = features.get("avg_turnover_20d")
             if avg_turnover is not None and avg_turnover < self._config.min_avg_turnover_jpy:
+                coverage.filtered += 1
                 continue
             # 売買代金が **取れない** 銘柄を「閾値未満ではない」として通していた。
             # 欠損は合格ではない: 流動性は判定不能なので低信頼として印を付け、
@@ -632,20 +675,36 @@ class RadarEngine:
         dropped = len(new_candidates) - len(accepted)
         updated.extend(accepted)
 
-        if updated:
+        persist_events = coverage.allows_complete_publish
+        if persist_events and updated:
             self._repository.upsert_radar_events(updated)
+        elif not persist_events:
+            updated = []
+            accepted = []
+            dropped = 0
+            transitions = 0
+
+        from app.services.strength_scan import STRENGTH_SCORE_VERSION
+
+        fingerprint = input_fingerprint(
+            valid_inputs,
+            score_version=STRENGTH_SCORE_VERSION,
+            universe_version_value=coverage.universe_version,
+        )
+        input_dates = [item[1] for item in valid_inputs]
+        input_data_through = max(input_dates) if input_dates else None
 
         return {
             "engine_version": ENGINE_VERSION,
             "target_date": target_date,
             "scanned": len(features_by_code),
-            "events_written": len(updated),
-            "events_created": len(accepted),
+            "events_written": len(updated) if persist_events else 0,
+            "events_created": len(accepted) if persist_events else 0,
             # 上限で落とした件数を黙って隠さない（0 でも必ず返す）
-            "events_detected": len(new_candidates),
+            "events_detected": len(new_candidates) if persist_events else 0,
             "events_dropped_by_cap": dropped,
             "new_event_cap": cap,
-            "state_transitions": transitions,
+            "state_transitions": transitions if persist_events else 0,
             "market_fit": market_fit,
             "sector_fit": sector_fit,
             "features_by_code": features_by_code,
@@ -653,7 +712,16 @@ class RadarEngine:
             "sector_median_returns": sector_median_returns,
             "sector_median_returns_63d": sector_median_returns_63d,
             "regulation_map": regulation_map,
-            "rs_context": {"topix_return_63d": topix_r63},
+            "rs_context": {
+                "topix_return_63d": topix_r63,
+                "index_input_date": index_input_date,
+                "index_stale": coverage.index_stale,
+            },
+            "coverage": coverage.as_dict(),
+            "input_fingerprint": fingerprint,
+            "input_data_through": input_data_through,
+            "valid_inputs": valid_inputs,
+            "persist_events": persist_events,
         }
 
     def _advance_event(

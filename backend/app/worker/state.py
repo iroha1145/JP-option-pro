@@ -22,7 +22,7 @@ from typing import Any
 
 from app.repositories.base import SQLiteRepository, utc_now_iso
 
-WORKER_SCHEMA_VERSION = "jp-worker-v2"
+WORKER_SCHEMA_VERSION = "jp-worker-v3"
 
 WORKER_DDL: tuple[str, ...] = (
     """
@@ -70,6 +70,35 @@ WORKER_DDL: tuple[str, ...] = (
         WHERE status IN ('queued', 'running')
           AND action_type NOT IN ('intraday_fetch', 'tick_fetch')
     """,
+    """
+    CREATE TABLE IF NOT EXISTS worker_retry_deadlines (
+        task_name TEXT NOT NULL,
+        target_trade_date TEXT NOT NULL,
+        dataset_scope TEXT NOT NULL,
+        first_failed_at TEXT NOT NULL,
+        last_reason TEXT,
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        next_retry_at TEXT NOT NULL,
+        exhausted INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (task_name, target_trade_date, dataset_scope)
+    ) WITHOUT ROWID
+    """,
+)
+
+_RETRY_DDL: tuple[str, ...] = (
+    """
+    CREATE TABLE IF NOT EXISTS worker_retry_deadlines (
+        task_name TEXT NOT NULL,
+        target_trade_date TEXT NOT NULL,
+        dataset_scope TEXT NOT NULL,
+        first_failed_at TEXT NOT NULL,
+        last_reason TEXT,
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        next_retry_at TEXT NOT NULL,
+        exhausted INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (task_name, target_trade_date, dataset_scope)
+    ) WITHOUT ROWID
+    """,
 )
 
 WORKER_MIGRATIONS: dict[str, tuple[tuple[str, ...], str]] = {
@@ -85,6 +114,7 @@ WORKER_MIGRATIONS: dict[str, tuple[tuple[str, ...], str]] = {
         ),
         "jp-worker-v2",
     ),
+    "jp-worker-v2": (_RETRY_DDL, WORKER_SCHEMA_VERSION),
 }
 
 _LEASE_SECONDS = 60.0
@@ -499,6 +529,96 @@ class WorkerStateRepository(SQLiteRepository):
                 "SELECT action_id, action_type, status, requested_at, started_at, completed_at, error_code "
                 "FROM worker_action_requests ORDER BY action_id DESC LIMIT ?",
                 (int(limit),),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_action(self, action_id: int) -> dict[str, Any] | None:
+        with self.read() as connection:
+            row = connection.execute(
+                "SELECT * FROM worker_action_requests WHERE action_id = ?",
+                (int(action_id),),
+            ).fetchone()
+        if row is None:
+            return None
+        item = dict(row)
+        try:
+            item["payload"] = json.loads(item.pop("payload_json") or "{}")
+        except ValueError:
+            item["payload"] = {}
+        try:
+            item["result"] = json.loads(item.pop("result_json") or "{}")
+        except ValueError:
+            item["result"] = {}
+        return item
+
+    def upsert_retry(
+        self,
+        *,
+        task_name: str,
+        target_trade_date: str,
+        dataset_scope: str,
+        reason: str,
+        next_retry_at: str,
+        max_attempts: int = 12,
+    ) -> dict[str, Any]:
+        now = utc_now_iso()
+        with self.write() as connection:
+            existing = connection.execute(
+                "SELECT first_failed_at, attempt_count, next_retry_at, exhausted "
+                "FROM worker_retry_deadlines "
+                "WHERE task_name=? AND target_trade_date=? AND dataset_scope=?",
+                (task_name, target_trade_date, dataset_scope),
+            ).fetchone()
+            if existing is None:
+                connection.execute(
+                    "INSERT INTO worker_retry_deadlines "
+                    "(task_name, target_trade_date, dataset_scope, first_failed_at, "
+                    "last_reason, attempt_count, next_retry_at, exhausted) "
+                    "VALUES (?, ?, ?, ?, ?, 1, ?, 0)",
+                    (task_name, target_trade_date, dataset_scope, now, reason, next_retry_at),
+                )
+                return {
+                    "task_name": task_name,
+                    "target_trade_date": target_trade_date,
+                    "dataset_scope": dataset_scope,
+                    "attempt_count": 1,
+                    "next_retry_at": next_retry_at,
+                    "exhausted": False,
+                    "first_failed_at": now,
+                    "last_reason": reason,
+                }
+            attempts = int(existing["attempt_count"] or 0) + 1
+            exhausted = 1 if attempts >= max_attempts else 0
+            kept_deadline = existing["next_retry_at"]
+            connection.execute(
+                "UPDATE worker_retry_deadlines SET last_reason=?, attempt_count=?, "
+                "exhausted=? WHERE task_name=? AND target_trade_date=? AND dataset_scope=?",
+                (reason, attempts, exhausted, task_name, target_trade_date, dataset_scope),
+            )
+            return {
+                "task_name": task_name,
+                "target_trade_date": target_trade_date,
+                "dataset_scope": dataset_scope,
+                "attempt_count": attempts,
+                "next_retry_at": kept_deadline,
+                "exhausted": bool(exhausted),
+                "first_failed_at": existing["first_failed_at"],
+                "last_reason": reason,
+            }
+
+    def clear_retry(self, *, task_name: str, target_trade_date: str, dataset_scope: str) -> None:
+        with self.write() as connection:
+            connection.execute(
+                "DELETE FROM worker_retry_deadlines "
+                "WHERE task_name=? AND target_trade_date=? AND dataset_scope=?",
+                (task_name, target_trade_date, dataset_scope),
+            )
+
+    def pending_retries_for_task(self, task_name: str) -> list[dict[str, Any]]:
+        with self.read() as connection:
+            rows = connection.execute(
+                "SELECT * FROM worker_retry_deadlines WHERE task_name=? AND exhausted=0",
+                (task_name,),
             ).fetchall()
         return [dict(row) for row in rows]
 

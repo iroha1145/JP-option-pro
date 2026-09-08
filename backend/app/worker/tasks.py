@@ -22,7 +22,6 @@ from app.domain.timeutil import (
     add_days,
     iso_date,
     now_jst,
-    parse_hhmm,
     seconds_until_next_jst_time,
     today_jst,
 )
@@ -33,7 +32,18 @@ from app.services import jquants_sync as sync
 from app.services.radar.engine import RadarEngine
 from app.services.radar.lifecycle import TERMINAL_STATES
 from app.services.screener import build_screener_rows
-from app.services.strength_scan import build_strength_rows, compute_market_regime_jp
+from app.services.publication import (
+    OUTCOME_ALREADY_CURRENT,
+    OUTCOME_PUBLISHED,
+    OUTCOME_RETAINED,
+    OUTCOME_SKIPPED,
+    OUTCOME_WAITING_INPUT,
+    REASON_BARS_NOT_CURRENT,
+    REASON_NOT_PUBLISHED,
+    absolute_retry_iso,
+    expected_trade_date,
+)
+from app.services.strength_scan import STRENGTH_SCORE_VERSION, build_strength_rows, compute_market_regime_jp
 from app.worker.runtime import TaskResult, TaskSpec
 
 TASK_CALENDAR_MASTER = "calendar_master_sync"
@@ -49,6 +59,8 @@ TASK_SHORT_MONITOR = "short_monitor_refresh"
 
 # 引け後バッチ時刻に J-Quants がまだ publish していない時の再試行間隔。
 POST_CLOSE_RETRY_SECONDS = 20 * 60.0
+# 只有日线/指数未发布才构成行情补拉；财报、信用等 not_published 不能推迟日线期限。
+_BAR_INPUT_STEPS = frozenset({"daily_bars", "index_bars"})
 
 DEFAULT_TASK_NAMES: tuple[str, ...] = (
     TASK_CALENDAR_MASTER,
@@ -129,20 +141,19 @@ class TaskContext:
         時刻」とズレて、当日分を一度も取りに行かない or 早すぎて空振りする。
         """
 
-        today = iso_date(today_jst())
-        latest = self.repository.latest_trading_day(today)
-        if latest == today:
-            boundary = parse_hhmm(self.config.sync.daily_batch_time_jst)
-            moment = now_jst()
-            if moment.hour * 60 + moment.minute < boundary:
-                latest = self.repository.latest_trading_day(add_days(today, -1))
-        return latest
+        return expected_trade_date(
+            today=iso_date(today_jst()),
+            now=now_jst(),
+            batch_hhmm=self.config.sync.daily_batch_time_jst,
+            latest_trading_day=self.repository.latest_trading_day,
+        )
 
 
 def _not_configured() -> TaskResult:
     return TaskResult(
         status="skipped", next_delay_seconds=1800.0,
         details={"reason": "jquants_api_key_not_configured"},
+        outcome=OUTCOME_SKIPPED,
     )
 
 
@@ -186,11 +197,31 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             )
             for name, step in steps:
                 results[name] = dict(step())
-        scan_summary = _run_radar_and_screener(context, target)
+        bar_errors = [
+            name
+            for name in _BAR_INPUT_STEPS
+            if isinstance(results.get(name), dict) and results[name].get("status") == "error"
+        ]
+        if bar_errors:
+            # 日线/指数同步失败时不能用残缺输入发布新榜，也不能继承先成功子任务的全局成功。
+            scan_summary = {
+                "status": "error",
+                "outcome": "failed",
+                "reason": f"step_failed:{bar_errors[0]}",
+                "target_date": target,
+                "strength_rows": 0,
+                "screener_rows": 0,
+                "publication": None,
+            }
+        else:
+            scan_summary = _run_radar_and_screener(context, target)
         results["radar"] = scan_summary
         # 雷達の後に回す。突破確認と出来高確認を「挤空確認」の条件に使うので、
         # その日の雷達が終わっていないと判定材料が揃わない。
-        results["short_monitor"] = _run_short_monitor(context, target)
+        if bar_errors:
+            results["short_monitor"] = {"status": "skipped", "reason": "bar_input_failed"}
+        else:
+            results["short_monitor"] = _run_short_monitor(context, target)
         failed = [
             name for name, value in results.items()
             if isinstance(value, dict) and value.get("status") == "error"
@@ -202,13 +233,55 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             name for name, value in results.items()
             if isinstance(value, dict) and value.get("status") == "not_published"
         ]
-        if pending and not failed:
+        pending_bars = [name for name in pending if name in _BAR_INPUT_STEPS]
+        radar_outcome = scan_summary.get("outcome")
+        if pending_bars and not failed:
             next_delay = min(next_delay, POST_CLOSE_RETRY_SECONDS)
+        retry: dict[str, Any] | None = None
+        if not radar_only and pending_bars and not failed:
+            retry = {
+                "task_name": TASK_POST_CLOSE,
+                "target_trade_date": target,
+                "dataset_scope": "daily_bars",
+                "reason": REASON_NOT_PUBLISHED,
+                "next_retry_at": absolute_retry_iso(delay_seconds=POST_CLOSE_RETRY_SECONDS),
+            }
+        elif not radar_only and radar_outcome == OUTCOME_PUBLISHED:
+            retry = {
+                "clear": True,
+                "task_name": TASK_POST_CLOSE,
+                "target_trade_date": target,
+                "dataset_scope": "daily_bars",
+            }
+        elif (
+            not radar_only
+            and not failed
+            and radar_outcome in {OUTCOME_RETAINED, OUTCOME_WAITING_INPUT}
+        ):
+            retry = {
+                "task_name": TASK_POST_CLOSE,
+                "target_trade_date": target,
+                "dataset_scope": "daily_bars",
+                "reason": scan_summary.get("reason") or radar_outcome,
+                "next_retry_at": absolute_retry_iso(delay_seconds=POST_CLOSE_RETRY_SECONDS),
+            }
+        if failed:
+            outcome = "failed"
+        elif pending_bars:
+            outcome = OUTCOME_WAITING_INPUT
+        elif radar_outcome in {
+            OUTCOME_PUBLISHED, OUTCOME_ALREADY_CURRENT, OUTCOME_RETAINED,
+            OUTCOME_WAITING_INPUT, OUTCOME_SKIPPED,
+        }:
+            outcome = radar_outcome
+        else:
+            outcome = OUTCOME_PUBLISHED if not failed else "failed"
         return TaskResult(
             status="failed" if failed else "completed",
             error_code=(f"step_failed:{failed[0]}" if failed else None),
             next_delay_seconds=next_delay,
-            details={**results, "pending_publish": pending},
+            details={**results, "pending_publish": pending, "retry": retry, "outcome": outcome},
+            outcome=outcome,
         )
 
     def fins_evening(_payload: dict[str, Any] | None) -> TaskResult:
@@ -665,9 +738,19 @@ def _run_short_monitor(context: TaskContext, target_date: str) -> dict[str, Any]
 
 def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str, Any]:
     if not context.config.features.radar_enabled:
-        return {"status": "disabled"}
-    if context.repository.latest_bar_date() != target_date:
-        return {"status": "skipped", "reason": "bars_not_current", "target_date": target_date}
+        return {"status": "disabled", "outcome": OUTCOME_SKIPPED, "target_date": target_date}
+    context.repository.record_sync_attempt("radar_scan")
+    context.repository.record_sync_attempt("screener_snapshot")
+    context.repository.record_sync_attempt("strength_snapshot")
+    latest = context.repository.latest_bar_date()
+    if latest is None or latest < target_date:
+        return {
+            "status": "skipped",
+            "reason": REASON_BARS_NOT_CURRENT,
+            "outcome": OUTCOME_WAITING_INPUT,
+            "target_date": target_date,
+            "latest_bar_date": latest,
+        }
     lookback_start = add_days(target_date, -context.config.radar.lookback_days * 2)
     engine = RadarEngine(context.repository, context.config.radar)
     summary = engine.scan(target_date, lookback_start=lookback_start)
@@ -677,6 +760,20 @@ def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str,
     sector_median_returns_63d = summary.pop("sector_median_returns_63d", {})
     regulation_map = summary.pop("regulation_map", {})
     rs_context = summary.pop("rs_context")
+    coverage = summary.get("coverage") or {}
+    fingerprint = summary.get("input_fingerprint")
+    input_through = summary.get("input_data_through")
+
+    if not coverage.get("allows_complete_publish"):
+        summary["outcome"] = OUTCOME_RETAINED if latest == target_date else OUTCOME_WAITING_INPUT
+        summary["status"] = "skipped"
+        summary["reason"] = (
+            REASON_BARS_NOT_CURRENT if latest != target_date else "incomplete_coverage"
+        )
+        summary["screener_rows"] = 0
+        summary["strength_rows"] = 0
+        summary["publication"] = None
+        return summary
 
     securities = {
         row["canonical_code"]: row
@@ -697,18 +794,11 @@ def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str,
         radar_state_by_code=radar_state_by_code,
         regulation_map=regulation_map,
     )
-    written = context.repository.replace_screener_rows(rows)
-    context.repository.record_sync_success(
-        "radar_scan", rows_total=summary.get("events_written"), data_through=target_date
-    )
-    context.repository.record_sync_success(
-        "screener_snapshot", rows_total=written, data_through=target_date
-    )
-    summary["screener_rows"] = written
+    from app.services.publication import clip_rows_through
 
-    # 強度スキャン断面: 同じ features / 構造分析から intrinsic を全量確定。
-    topix_series = context.repository.index_series(
-        TOPIX_INDEX_CODE, start_date=lookback_start
+    topix_series = clip_rows_through(
+        context.repository.index_series(TOPIX_INDEX_CODE, start_date=lookback_start),
+        target_date,
     )
     market_codes = {
         code: (securities.get(code) or {}).get("market_code") or ""
@@ -723,14 +813,51 @@ def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str,
         topix_return_63d=rs_context.get("topix_return_63d"),
         regulation_map=regulation_map,
     )
-    strength_written = context.repository.replace_strength_rows(
-        strength_rows, trade_date=target_date, regime=regime
+    publication = context.repository.replace_strength_rows(
+        strength_rows,
+        trade_date=target_date,
+        regime=regime,
+        score_version=STRENGTH_SCORE_VERSION,
+        expected_trade_date=target_date,
+        input_data_through=input_through or target_date,
+        coverage=coverage,
+        index_input_date=rs_context.get("index_input_date"),
+        universe_version=coverage.get("universe_version"),
+        input_fingerprint=fingerprint,
+        today=iso_date(today_jst()),
     )
-    context.repository.record_sync_success(
-        "strength_snapshot", rows_total=strength_written, data_through=target_date
-    )
-    summary["strength_rows"] = strength_written
-    summary["status"] = "ok"
+    summary["publication"] = publication.as_dict()
+    summary["outcome"] = publication.outcome
+    summary["strength_rows"] = publication.rows_written
+    if publication.outcome == OUTCOME_PUBLISHED:
+        context.repository.record_sync_success(
+            "radar_scan", rows_total=summary.get("events_written"), data_through=target_date
+        )
+        context.repository.record_sync_success(
+            "strength_snapshot",
+            rows_total=publication.rows_written,
+            data_through=publication.input_data_through or target_date,
+            checkpoint={"publication_id": publication.publication_id},
+        )
+        try:
+            written = context.repository.replace_screener_rows(rows)
+        except Exception as exc:  # noqa: BLE001 — 强度已提交；筛选失败不能抹掉发布凭证
+            summary["screener_rows"] = 0
+            summary["screener_outcome"] = "failed"
+            summary["screener_error"] = type(exc).__name__
+            summary["status"] = "error"
+            summary["reason"] = f"screener_write_failed:{type(exc).__name__}"
+            return summary
+        context.repository.record_sync_success(
+            "screener_snapshot", rows_total=written, data_through=target_date
+        )
+        summary["screener_rows"] = written
+        summary["screener_outcome"] = OUTCOME_PUBLISHED
+        summary["status"] = "ok"
+    else:
+        summary["screener_rows"] = 0
+        summary["status"] = "skipped" if publication.outcome != OUTCOME_ALREADY_CURRENT else "ok"
+        summary["reason"] = publication.reason
     return summary
 
 

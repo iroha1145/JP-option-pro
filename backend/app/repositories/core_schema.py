@@ -7,7 +7,7 @@ upserts that keep ``ingested_at`` as the revision stamp.
 
 from __future__ import annotations
 
-CORE_SCHEMA_VERSION = "jp-core-v8"
+CORE_SCHEMA_VERSION = "jp-core-v9"
 
 # -- 機関空売り行動モニター（v6 追加）--------------------------------------
 #
@@ -264,7 +264,15 @@ _STRENGTH_DDL: tuple[str, ...] = (
         trade_date TEXT NOT NULL,
         regime_json TEXT NOT NULL DEFAULT '{}',
         universe_count INTEGER NOT NULL DEFAULT 0,
-        built_at TEXT NOT NULL
+        built_at TEXT NOT NULL,
+        publication_id TEXT,
+        score_version TEXT,
+        expected_trade_date TEXT,
+        input_data_through TEXT,
+        coverage_json TEXT NOT NULL DEFAULT '{}',
+        index_input_date TEXT,
+        universe_version TEXT,
+        input_fingerprint TEXT
     )
     """,
 )
@@ -659,6 +667,17 @@ _SHORT_IDENTITY_DDL: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_smr_ready ON short_monitor_runs(as_of_date, created_at)",
 )
 
+_STRENGTH_PUBLICATION_DDL: tuple[str, ...] = (
+    "ALTER TABLE strength_meta ADD COLUMN publication_id TEXT",
+    "ALTER TABLE strength_meta ADD COLUMN score_version TEXT",
+    "ALTER TABLE strength_meta ADD COLUMN expected_trade_date TEXT",
+    "ALTER TABLE strength_meta ADD COLUMN input_data_through TEXT",
+    "ALTER TABLE strength_meta ADD COLUMN coverage_json TEXT NOT NULL DEFAULT '{}'",
+    "ALTER TABLE strength_meta ADD COLUMN index_input_date TEXT",
+    "ALTER TABLE strength_meta ADD COLUMN universe_version TEXT",
+    "ALTER TABLE strength_meta ADD COLUMN input_fingerprint TEXT",
+)
+
 CORE_MIGRATIONS: dict[str, tuple[tuple[str, ...], str]] = {
     "jp-core-v1": (_STRENGTH_DDL, "jp-core-v2"),
     "jp-core-v2": (_QUOTE_INDEX_DDL, "jp-core-v3"),
@@ -666,7 +685,8 @@ CORE_MIGRATIONS: dict[str, tuple[tuple[str, ...], str]] = {
     "jp-core-v4": (_STRENGTH_REGULATION_DDL, "jp-core-v5"),
     "jp-core-v5": (_SHORT_MONITOR_MIGRATION, "jp-core-v6"),
     "jp-core-v6": (_STALE_REPORTING_DDL, "jp-core-v7"),
-    "jp-core-v7": (_SHORT_IDENTITY_DDL, CORE_SCHEMA_VERSION),
+    "jp-core-v7": (_SHORT_IDENTITY_DDL, "jp-core-v8"),
+    "jp-core-v8": (_STRENGTH_PUBLICATION_DDL, CORE_SCHEMA_VERSION),
 }
 
 __all__ = ["CORE_DDL", "CORE_MIGRATIONS", "CORE_SCHEMA_VERSION"]

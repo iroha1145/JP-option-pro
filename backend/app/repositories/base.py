@@ -234,6 +234,30 @@ class SQLiteRepository:
         finally:
             connection.close()
 
+    @contextmanager
+    def snapshot_read(self) -> Iterator[sqlite3.Connection]:
+        """One explicit read transaction: a consistent SQLite snapshot.
+
+        ``isolation_level=None`` autocommits every statement. Putting two
+        queries on the same connection without ``BEGIN`` is not a snapshot
+        and can mix two committed publications. This context is only for
+        dedicated snapshot reads — it does not change ``read()``.
+        """
+
+        connection = self._connect_ro() if self._read_only else self._connect_rw()
+        try:
+            self.verify_schema(connection)
+            connection.execute("BEGIN")
+            try:
+                yield connection
+            finally:
+                try:
+                    connection.execute("ROLLBACK")
+                except sqlite3.Error:
+                    pass
+        finally:
+            connection.close()
+
     def exists(self) -> bool:
         return self._db_path.is_file()
 
