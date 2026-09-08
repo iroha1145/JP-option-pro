@@ -23,25 +23,31 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
-      - name: Apply exact reviewed source patch
+      - name: Apply exact reviewed source patches
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/pr17-finishing
-          git diff --exit-code fe3403875f78a41e60d74a124a627f533a73781a -- backend frontend-src frontend tests .github/workflows/ci.yml .gitignore
+          git diff --exit-code fe3403875f78a41e60d74a124a627f533a73781a -- backend frontend-src frontend tests .gitignore
+          test "$(git hash-object .github/workflows/ci.yml)" = ef5509c3fb3b987f1435cf71e749f6dd7e061b23
           python - <<'PY'
           import base64, gzip, hashlib
           from pathlib import Path
           encoded = ''.join(Path(f'.review/pr17-final-{i}.b64').read_text().strip() for i in range(5))
-          # Normalize one identified transport typo; SHA-256 rejects any other change.
           encoded = encoded.replace('sJVbsWGc8ZPu', 'sJVbsWG8ZPu')
           raw = gzip.decompress(base64.b64decode(encoded, validate=True))
           assert hashlib.sha256(raw).hexdigest() == '18e86b56c52ed6754022fe73ecafe7eed331736c651c1f3615d564e4628c63a2'
           Path('/tmp/pr17-finishing/source.patch').write_bytes(raw)
+          encoded = ''.join(Path(f'.review/pr17-followup-{i}.b64').read_text().strip() for i in range(2))
+          raw = gzip.decompress(base64.b64decode(encoded, validate=True))
+          assert hashlib.sha256(raw).hexdigest() == 'c58435eeff1512f7e25b0c889c8daa1d5d90545657150f4791f0589fe7c9dba6'
+          Path('/tmp/pr17-finishing/followup.patch').write_bytes(raw)
           PY
-          git apply --check /tmp/pr17-finishing/source.patch
-          git apply --index /tmp/pr17-finishing/source.patch
-          git rm .review/pr17-final-*.b64 .github/workflows/pr17-review-export.yml
+          git apply --check --exclude=.github/workflows/ci.yml /tmp/pr17-finishing/source.patch
+          git apply --index --exclude=.github/workflows/ci.yml /tmp/pr17-finishing/source.patch
+          git apply --check --exclude=.github/workflows/ci.yml /tmp/pr17-finishing/followup.patch
+          git apply --index --exclude=.github/workflows/ci.yml /tmp/pr17-finishing/followup.patch
+          git rm .review/pr17-final-*.b64 .review/pr17-followup-*.b64
           git diff --cached --check
       - name: Install test dependencies
         run: |
@@ -71,22 +77,28 @@ jobs:
         run: |
           set -euo pipefail
           python -m pytest browser-tests/ -q --junitxml=browser-evidence/results.xml 2>&1 | tee /tmp/pr17-finishing/browser.log
-      - name: Commit verified tree on temporary branch only
+      - name: Isolated production image and read-only container checks
         shell: bash
         run: |
           set -euo pipefail
-          git add .github/workflows/ci.yml .gitignore backend frontend-src frontend tests browser-tests
+          bash browser-tests/container-smoke.sh 2>&1 | tee /tmp/pr17-finishing/containers.log
+      - name: Save checked source without workflow writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add .gitignore backend frontend-src frontend tests browser-tests docs/PR17_FINISHING_REVIEW.md
           git diff --cached --check
+          git diff --cached --exit-code -- .github/workflows
           git fetch origin refs/heads/codex/pr17-final-verification-20260908
           test "$(git rev-parse FETCH_HEAD)" = "$GITHUB_SHA"
           git config user.name 'PR17 review'
           git config user.email '200401936+iroha1145@users.noreply.github.com'
           git commit -m 'fix(jp-screener): finish publication recovery, identity and browser verification'
-          git push origin HEAD:refs/heads/codex/pr17-final-verification-20260908
           git rev-parse HEAD > /tmp/pr17-finishing/COMMIT.txt
           git rev-parse HEAD^{tree} > /tmp/pr17-finishing/TREE.txt
-          git diff --binary fe3403875f78a41e60d74a124a627f533a73781a HEAD > /tmp/pr17-finishing/complete.patch
+          git diff --binary fe3403875f78a41e60d74a124a627f533a73781a HEAD -- . ':!.github/workflows/pr17-review-export.yml' > /tmp/pr17-finishing/complete.patch
           git archive --format=zip --output=/tmp/pr17-finishing/verified-source.zip HEAD
+          git push origin HEAD:refs/heads/codex/pr17-final-verification-20260908
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
