@@ -259,17 +259,27 @@ class WorkerSupervisor:
                         task_name=str(retry.get("task_name") or task_name),
                         target_trade_date=target,
                         dataset_scope=scope,
+                        owner_id=self._owner_id, fencing_token=self._fencing_token,
                     )
             elif retry.get("next_retry_at") and target:
                 upsert = getattr(self._state, "upsert_retry", None)
                 if upsert is not None:
-                    upsert(
+                    recorded = upsert(
                         task_name=str(retry.get("task_name") or task_name),
                         target_trade_date=target,
                         dataset_scope=scope,
                         reason=str(retry.get("reason") or "waiting_input"),
                         next_retry_at=str(retry["next_retry_at"]),
+                        owner_id=self._owner_id, fencing_token=self._fencing_token,
                     )
+                    if recorded.get("exhausted"):
+                        # The task's short delay must not bypass the persistent
+                        # retry budget. Manual recovery remains available.
+                        normal = (result.details or {}).get("normal_next_delay_seconds")
+                        if isinstance(normal, (int, float)) and normal > 0:
+                            delay = max(delay, float(normal))
+                        else:
+                            delay = max(delay, 3600.0)
         pending = []
         lookup = getattr(self._state, "pending_retries_for_task", None)
         if lookup is not None:

@@ -19,6 +19,7 @@ from app.personal_config import get_personal_config
 from app.repositories.base import utc_now_iso
 from app.services.publication import (
     evaluate_freshness,
+    previous_publication_usable,
     expected_trade_date,
     strength_etag,
 )
@@ -60,7 +61,11 @@ def _publication_fields(meta: dict, *, expected: str | None) -> dict:
         current_score_version=STRENGTH_SCORE_VERSION,
         coverage=coverage,
     )
+    metadata_valid = previous_publication_usable(meta, today=iso_date(today_jst()))
+    if meta.get("publication_id") and not metadata_valid:
+        freshness["freshness"] = "unknown"
     return {
+        "metadata_valid": metadata_valid,
         "queried_at": utc_now_iso(),
         "publication_id": meta.get("publication_id"),
         "stored_score_version": stored_version,
@@ -138,6 +143,14 @@ def strength_scan(
         expected_trade_date_value=expected,
         freshness={"freshness": extra["freshness"], "calendar_state": extra["calendar_state"]},
         universe_count=int(meta.get("universe_count") or 0),
+        representation={
+            "timeframe": timeframe, "profile": profile, "top": top,
+            "sectors": sorted(sector_ids), "min_price": min_price, "max_price": max_price,
+            "min_avg_turnover": min_avg_turnover, "tier": tier, "min_score": min_score,
+            "expected_score_version": STRENGTH_SCORE_VERSION,
+            "built_at": meta.get("built_at"), "trade_date": meta.get("trade_date"),
+            "view_contract": 2,
+        },
     )
     if _maybe_304(request, response, etag):
         return {}
@@ -176,7 +189,7 @@ def strength_scan(
         **extra,
         "params": {
             "timeframe": timeframe, "profile": profile, "top": top,
-            "sector_id": sector_id, "min_price": min_price,
+            "sector_id": sector_id, "min_price": min_price, "max_price": max_price,
             "min_avg_turnover": min_avg_turnover, "tier": tier, "min_score": min_score,
         },
         "market_regime": meta["regime"],

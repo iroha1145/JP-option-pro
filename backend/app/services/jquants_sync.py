@@ -196,7 +196,7 @@ class JQuantsSyncEngine:
         days = self._repository.trading_days_between(start, target_date)
         return days[:MAX_INCREMENTAL_DAYS]
 
-    def sync_daily_bars(self, target_date: str) -> SyncResult:
+    def sync_daily_bars(self, target_date: str, *, revalidate_target: bool = False) -> SyncResult:
         def work() -> SyncResult:
             checkpoint = self._checkpoint(DATASET_DAILY_PRICES)
             if not checkpoint.get("last_synced_date"):
@@ -205,7 +205,12 @@ class JQuantsSyncEngine:
                 )
             total = 0
             synced_through = checkpoint.get("last_synced_date")
-            for day in self._pending_trading_days(DATASET_DAILY_PRICES, target_date):
+            days = self._pending_trading_days(DATASET_DAILY_PRICES, target_date)
+            if revalidate_target and synced_through >= target_date and self._repository.is_trading_day(target_date) is True:
+                # A checkpoint means a response was ingested, not that every
+                # security arrived. Explicit batch repair must revisit that day.
+                days = [target_date]
+            for day in days:
                 rows = [
                     mapped
                     for row in self._client.fetch_rows("/equities/bars/daily", {"date": day})
@@ -223,12 +228,12 @@ class JQuantsSyncEngine:
                         data_through=synced_through,
                     )
                 total += self._repository.upsert_daily_bars(rows)
-                synced_through = day
+                synced_through = max(synced_through, day)
                 self._repository.record_sync_success(
                     DATASET_DAILY_PRICES,
-                    checkpoint={"last_synced_date": day},
+                    checkpoint={"last_synced_date": synced_through},
                     rows_total=total,
-                    data_through=day,
+                    data_through=synced_through,
                 )
             return SyncResult(
                 dataset=DATASET_DAILY_PRICES, status="ok", rows=total, data_through=synced_through
@@ -236,14 +241,19 @@ class JQuantsSyncEngine:
 
         return self._run_dataset(DATASET_DAILY_PRICES, work)
 
-    def sync_index_bars(self, target_date: str) -> SyncResult:
+    def sync_index_bars(self, target_date: str, *, revalidate_target: bool = False) -> SyncResult:
         def work() -> SyncResult:
             checkpoint = self._checkpoint(DATASET_INDEX_PRICES)
             if not checkpoint.get("last_synced_date"):
                 return SyncResult(dataset=DATASET_INDEX_PRICES, status="backfill_required", rows=0)
             total = 0
             synced_through = checkpoint.get("last_synced_date")
-            for day in self._pending_trading_days(DATASET_INDEX_PRICES, target_date):
+            days = self._pending_trading_days(DATASET_INDEX_PRICES, target_date)
+            if revalidate_target and synced_through >= target_date and self._repository.is_trading_day(target_date) is True:
+                # A checkpoint means a response was ingested, not that every
+                # security arrived. Explicit batch repair must revisit that day.
+                days = [target_date]
+            for day in days:
                 rows = [
                     mapped
                     for row in self._client.fetch_rows("/indices/bars/daily", {"date": day})
@@ -259,12 +269,12 @@ class JQuantsSyncEngine:
                         data_through=synced_through,
                     )
                 total += self._repository.upsert_index_bars(rows)
-                synced_through = day
+                synced_through = max(synced_through, day)
                 self._repository.record_sync_success(
                     DATASET_INDEX_PRICES,
-                    checkpoint={"last_synced_date": day},
+                    checkpoint={"last_synced_date": synced_through},
                     rows_total=total,
-                    data_through=day,
+                    data_through=synced_through,
                 )
             return SyncResult(
                 dataset=DATASET_INDEX_PRICES, status="ok", rows=total, data_through=synced_through

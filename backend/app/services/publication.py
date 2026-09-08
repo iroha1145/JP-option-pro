@@ -191,6 +191,27 @@ def regulation_input_fingerprint(
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
 
+def calculation_fingerprint(value: Any) -> str:
+    """Fingerprint the complete calculation input, including historical corrections.
+
+    Values here are already normalized by the production mapping/cleaning path.
+    Missing and non-finite observations stay missing; timestamps from ingestion
+    are deliberately not supplied by the caller.
+    """
+    def canonical(item: Any) -> Any:
+        if isinstance(item, Mapping):
+            return {str(k): canonical(v) for k, v in sorted(item.items())}
+        if isinstance(item, (list, tuple)):
+            return [canonical(v) for v in item]
+        if isinstance(item, float) and not math.isfinite(item):
+            return None
+        return item
+
+    raw = json.dumps(canonical(value), sort_keys=True, ensure_ascii=False,
+                     allow_nan=False, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def input_fingerprint(
     valid_inputs: Sequence[Sequence[Any]],
     *,
@@ -200,6 +221,7 @@ def input_fingerprint(
     index_close: float | None = None,
     market_fit: float | None = None,
     regulation_fingerprint: str | None = None,
+    calculation_digest: str | None = None,
 ) -> str:
     blob = json.dumps(
         {
@@ -210,6 +232,7 @@ def input_fingerprint(
             "index_close": _quantize(index_close),
             "market_fit": _quantize(market_fit),
             "regulation_fingerprint": regulation_fingerprint or "",
+            "calculation_digest": calculation_digest or "",
         },
         ensure_ascii=False,
         sort_keys=True,
@@ -244,9 +267,9 @@ def expected_trade_date(
     if latest is None:
         return None
     if session_status is not None and session_status(today) is None:
-        gap = _date_gap_days(today, latest)
-        if gap is None or gap > max_cover_gap_days:
-            return None
+        # A missing calendar row is unknown even when yesterday was known.
+        # Genuine weekends/holidays have explicit non-trading rows.
+        return None
     if latest == today:
         boundary = parse_hhmm(batch_hhmm)
         if moment.hour * 60 + moment.minute < boundary:
@@ -255,20 +278,22 @@ def expected_trade_date(
 
 
 def previous_publication_usable(meta: Mapping[str, Any] | None, *, today: str | None) -> bool:
-    """A previous snapshot can block a worse replacement only if it is coherent."""
-
-    if not meta:
+    """Only coherent saved metadata may block a replacement or certify freshness."""
+    if not meta or not meta.get("publication_id") or not meta.get("score_version"):
         return False
-    publication_id = meta.get("publication_id")
-    trade_date = str(meta.get("trade_date") or "")
-    if not publication_id or not trade_date:
-        return False
-    if today and trade_date > today:
-        return False
-    built_at = str(meta.get("built_at") or "")
-    if built_at.endswith("Z") or "+" in built_at[10:]:
-        pass
-    elif not built_at:
+    trade = str(meta.get("trade_date") or "")
+    through = str(meta.get("input_data_through") or trade)
+    try:
+        if date.fromisoformat(trade).isoformat() != trade:
+            return False
+        if date.fromisoformat(through).isoformat() != through or through != trade:
+            return False
+        if today and date.fromisoformat(trade) > date.fromisoformat(today):
+            return False
+        built = datetime.fromisoformat(str(meta.get("built_at") or "").replace("Z", "+00:00"))
+        if built.tzinfo is None or built > datetime.now(timezone.utc) + timedelta(minutes=1):
+            return False
+    except (ValueError, TypeError):
         return False
     return True
 
@@ -336,6 +361,7 @@ def strength_etag(
     expected_trade_date_value: str | None,
     freshness: Mapping[str, Any],
     universe_count: int,
+    representation: Mapping[str, Any] | None = None,
 ) -> str:
     raw = "|".join(
         (
@@ -345,6 +371,7 @@ def strength_etag(
             str(freshness.get("freshness") or ""),
             str(freshness.get("calendar_state") or ""),
             str(universe_count),
+            calculation_fingerprint(representation or {}),
         )
     )
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]

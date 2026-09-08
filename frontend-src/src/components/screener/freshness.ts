@@ -65,11 +65,14 @@ export function interpretOwnerRefresh(input: {
   previousPublicationId: string | null;
 }): RefreshVerdict {
   const { actionStatus, timedOut, promised, readback, previousPublicationId } = input;
-  if (timedOut && actionStillRunning(actionStatus)) {
+  if (actionStillRunning(actionStatus)) {
     return { state: 'running', messageKey: '后台任务仍在运行', commitResponse: false };
   }
   if (actionStatus === 'failed' || promised.outcome === 'failed') {
     return { state: 'error', messageKey: '更新失败，已保留上次结果', commitResponse: false };
+  }
+  if (timedOut || actionStatus !== 'completed') {
+    return { state: 'error', messageKey: '更新未完成', commitResponse: false };
   }
   if (promised.outcome === 'waiting_input') {
     return { state: 'waiting', messageKey: '仍在等待供应商发布当日日线', commitResponse: true };
@@ -80,40 +83,29 @@ export function interpretOwnerRefresh(input: {
   if (promised.outcome === 'skipped') {
     return { state: 'waiting', messageKey: '本次未发布新评分', commitResponse: true };
   }
-  if (!readback?.publication_id) {
+  if (promised.outcome !== 'published' && promised.outcome !== 'already_current') {
     return { state: 'error', messageKey: '未能核验承诺发布', commitResponse: false };
   }
-  if (promised.outcome === 'already_current') {
-    if (promised.publicationId && !publicationMatches(readback, promised.publicationId)) {
-      return { state: 'error', messageKey: '读回发布与任务承诺不一致', commitResponse: false };
-    }
-    if (promised.tradeDate && readback.trade_date && readback.trade_date !== promised.tradeDate) {
-      return { state: 'error', messageKey: '读回发布与任务承诺不一致', commitResponse: false };
-    }
-    if (!QUALITY_OK.has(String(readback.freshness || ''))) {
-      return { state: 'waiting', messageKey: freshnessNotCurrentMessage(readback.freshness), commitResponse: true };
-    }
-    return { state: 'done', messageKey: '已是最新可用日线', commitResponse: true };
+  if (!readback?.publication_id || !promised.publicationId) {
+    return { state: 'error', messageKey: '未能核验承诺发布', commitResponse: false };
   }
-  if (promised.outcome === 'published') {
-    if (!promised.publicationId) {
-      return { state: 'error', messageKey: '未能核验承诺发布', commitResponse: false };
-    }
-    if (!publicationMatches(readback, promised.publicationId)) {
-      return { state: 'error', messageKey: '读回发布与任务承诺不一致', commitResponse: false };
-    }
-    if (promised.tradeDate && readback.trade_date && readback.trade_date !== promised.tradeDate) {
-      return { state: 'error', messageKey: '读回发布与任务承诺不一致', commitResponse: false };
-    }
-    if (promised.scoreVersion && readback.stored_score_version && readback.stored_score_version !== promised.scoreVersion) {
-      return { state: 'error', messageKey: '读回发布与任务承诺不一致', commitResponse: false };
-    }
-    if (previousPublicationId && readback.publication_id === previousPublicationId) {
-      return { state: 'error', messageKey: '任务已结束但读回仍是旧发布', commitResponse: false };
-    }
-    return { state: 'done', messageKey: '日线与评分已更新', commitResponse: true };
+  if (!publicationMatches(readback, promised.publicationId)) {
+    return { state: 'error', messageKey: '读回发布与任务承诺不一致', commitResponse: false };
   }
-  return { state: 'error', messageKey: '未能核验承诺发布', commitResponse: false };
+  if (!QUALITY_OK.has(String(readback.freshness || ''))) {
+    return { state: 'waiting', messageKey: freshnessNotCurrentMessage(readback.freshness), commitResponse: true };
+  }
+  if (!promised.tradeDate || readback.trade_date !== promised.tradeDate ||
+      !promised.scoreVersion || readback.stored_score_version !== promised.scoreVersion ||
+      (readback.input_data_through != null && readback.input_data_through !== promised.tradeDate) ||
+      readback.score_compatible === false) {
+    return { state: 'error', messageKey: '读回发布与任务承诺不一致', commitResponse: false };
+  }
+  // The same receipt may already have been observed by an automatic query.
+  // Its identity/quality, not whether the UI has seen it, proves this action.
+  void previousPublicationId;
+  return { state: 'done', messageKey: promised.outcome === 'already_current'
+    ? '已是最新可用日线' : '日线与评分已更新', commitResponse: true };
 }
 
 export function freshnessNotCurrentMessage(freshness: string | null | undefined): string {

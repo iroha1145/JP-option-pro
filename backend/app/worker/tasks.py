@@ -42,6 +42,7 @@ from app.services.publication import (
     REASON_NOT_PUBLISHED,
     absolute_retry_iso,
     expected_trade_date,
+    previous_publication_usable,
 )
 from app.services.strength_scan import STRENGTH_SCORE_VERSION, build_strength_rows, compute_market_regime_jp
 from app.worker.runtime import TaskResult, TaskSpec
@@ -178,18 +179,20 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
         if not context.jquants_ready():
             return _not_configured()
         next_delay = seconds_until_next_jst_time((config.sync.daily_batch_time_jst,))
+        normal_next_delay = next_delay
         target = context.latest_completed_trading_day()
         if target is None:
             return TaskResult(
                 status="skipped", next_delay_seconds=next_delay,
                 details={"reason": "trading_calendar_empty_or_non_trading_day"},
+                outcome=OUTCOME_SKIPPED,
             )
         radar_only = bool(payload and payload.get("__radar_only"))
         results: dict[str, Any] = {"target_date": target}
         if not radar_only:
             steps = (
-                ("daily_bars", lambda: context.engine.sync_daily_bars(target)),
-                ("index_bars", lambda: context.engine.sync_index_bars(target)),
+                ("daily_bars", lambda: context.engine.sync_daily_bars(target, revalidate_target=True)),
+                ("index_bars", lambda: context.engine.sync_index_bars(target, revalidate_target=True)),
                 ("margin_interest", lambda: context.engine.sync_margin_interest(target)),
                 ("margin_alerts", lambda: context.engine.sync_margin_alerts(target)),
                 ("short_ratios", lambda: context.engine.sync_short_ratios(target)),
@@ -293,7 +296,8 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             status="failed" if failed else "completed",
             error_code=(f"step_failed:{failed[0]}" if failed else None),
             next_delay_seconds=next_delay,
-            details={**results, "pending_publish": pending, "retry": retry, "outcome": outcome},
+            details={**results, "pending_publish": pending, "retry": retry, "outcome": outcome,
+                     "normal_next_delay_seconds": normal_next_delay},
             outcome=outcome,
         )
 
@@ -763,10 +767,13 @@ def _needs_strength_receipt(
     return (state.get("checkpoint") or {}).get("publication_id") != publication_id
 
 
-def _needs_screener_repair(repository: CoreRepository, target_date: str) -> bool:
+def _needs_screener_repair(repository: CoreRepository, target_date: str, publication_id: str | None) -> bool:
     if _dataset_through(repository, "screener_snapshot") != target_date:
         return True
-    return repository.screener_trade_date() != target_date
+    if repository.screener_trade_date() != target_date:
+        return True
+    receipt = repository.sync_state("screener_snapshot") or {}
+    return (receipt.get("checkpoint") or {}).get("publication_id") != publication_id
 
 
 def _write_screener_followup(
@@ -784,7 +791,7 @@ def _write_screener_followup(
         )
         context.repository.record_sync_success(
             "strength_snapshot",
-            rows_total=publication.rows_written or 0,
+            rows_total=len(context.repository.strength_rows_all()),
             data_through=publication.input_data_through or target_date,
             checkpoint={"publication_id": publication.publication_id},
         )
@@ -799,7 +806,8 @@ def _write_screener_followup(
         return summary
     if written:
         context.repository.record_sync_success(
-            "screener_snapshot", rows_total=written, data_through=target_date
+            "screener_snapshot", rows_total=written, data_through=target_date,
+            checkpoint={"publication_id": publication.publication_id}
         )
         summary["screener_rows"] = written
         summary["screener_outcome"] = OUTCOME_PUBLISHED
@@ -831,6 +839,12 @@ def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str,
             "target_date": target_date,
             "latest_bar_date": latest,
         }
+    previous = context.repository.strength_meta()
+    if (previous_publication_usable(previous, today=iso_date(today_jst())) and
+            (previous.get("input_data_through") or previous.get("trade_date") or "") > target_date):
+        return {"status": "skipped", "outcome": OUTCOME_RETAINED,
+                "reason": "input_date_regression", "target_date": target_date,
+                "screener_rows": 0, "strength_rows": 0, "publication": None}
     lookback_start = add_days(target_date, -context.config.radar.lookback_days * 2)
     engine = RadarEngine(context.repository, context.config.radar)
     summary = engine.scan(target_date, lookback_start=lookback_start)
@@ -925,11 +939,11 @@ def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str,
             )
             context.repository.record_sync_success(
                 "strength_snapshot",
-                rows_total=publication.rows_written or 0,
+                rows_total=len(context.repository.strength_rows_all()),
                 data_through=publication.input_data_through or target_date,
                 checkpoint={"publication_id": publication.publication_id},
             )
-        if _needs_screener_repair(context.repository, target_date):
+        if _needs_screener_repair(context.repository, target_date, publication.publication_id):
             return _write_screener_followup(
                 context,
                 target_date,

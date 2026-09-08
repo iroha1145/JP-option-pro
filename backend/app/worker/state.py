@@ -562,12 +562,18 @@ class WorkerStateRepository(SQLiteRepository):
         max_attempts: int = 12,
         now: datetime | None = None,
         advance: bool | None = None,
+        owner_id: str | None = None,
+        fencing_token: int | None = None,
     ) -> dict[str, Any]:
         from app.services.publication import deadline_is_due
 
         recorded_at = utc_now_iso()
         clock = now or datetime.now(timezone.utc)
         with self.write() as connection:
+            if owner_id is not None or fencing_token is not None:
+                if owner_id is None or fencing_token is None:
+                    raise WorkerLeaseLost("retry write requires an owner and fence")
+                self._assert_fence(connection, owner_id, fencing_token)
             existing = connection.execute(
                 "SELECT first_failed_at, attempt_count, next_retry_at, exhausted "
                 "FROM worker_retry_deadlines "
@@ -640,8 +646,15 @@ class WorkerStateRepository(SQLiteRepository):
                 "last_reason": reason,
             }
 
-    def clear_retry(self, *, task_name: str, target_trade_date: str, dataset_scope: str) -> None:
+    def clear_retry(
+        self, *, task_name: str, target_trade_date: str, dataset_scope: str,
+        owner_id: str | None = None, fencing_token: int | None = None,
+    ) -> None:
         with self.write() as connection:
+            if owner_id is not None or fencing_token is not None:
+                if owner_id is None or fencing_token is None:
+                    raise WorkerLeaseLost("retry write requires an owner and fence")
+                self._assert_fence(connection, owner_id, fencing_token)
             connection.execute(
                 "DELETE FROM worker_retry_deadlines "
                 "WHERE task_name=? AND target_trade_date=? AND dataset_scope=?",

@@ -18,6 +18,7 @@ from app.repositories.core import CoreRepository
 from app.services import margin_regulation as mreg
 from app.services.publication import (
     CoverageSummary,
+    calculation_fingerprint,
     classify_equity_input,
     clip_rows_through,
     input_fingerprint,
@@ -29,6 +30,7 @@ from . import lifecycle as lc
 from .base_detector import detect_base
 from .features import (
     MIN_BARS_FOR_FEATURES,
+    FEATURE_VERSION,
     _median,
     compute_features_from_series,
     index_return,
@@ -447,7 +449,7 @@ class RadarEngine:
         coverage = CoverageSummary(
             expected=len(equities),
             index_input_date=index_input_date,
-            index_stale=bool(index_input_date and index_input_date != target_date),
+            index_stale=(index_input_date != target_date or index_close is None or not math.isfinite(index_close)),
             universe_version=universe_version(
                 list(equities),
                 market_codes=self._config.market_codes,
@@ -455,6 +457,7 @@ class RadarEngine:
                 min_avg_turnover_jpy=self._config.min_avg_turnover_jpy,
             ),
         )
+        history_digests: dict[str, str] = {}
         valid_inputs: list[tuple[Any, ...]] = []
         features_by_code: dict[str, dict[str, Any]] = {}
         structure_by_code: dict[str, dict[str, Any]] = {}
@@ -477,6 +480,7 @@ class RadarEngine:
             if bucket == "excluded":
                 coverage.excluded += 1
                 continue
+            history_digests[code] = calculation_fingerprint(series)
             coverage.valid += 1
             features = compute_features_from_series(series)
             if features is None:
@@ -713,6 +717,27 @@ class RadarEngine:
             regulation_fingerprint=regulation_input_fingerprint(
                 regulation_map, features_by_code.keys()
             ),
+            calculation_digest=calculation_fingerprint({
+                "histories": history_digests,
+                "indices": [
+                    {k: row.get(k) for k in ("trade_date", "open", "high", "low", "close")}
+                    for row in topix
+                ],
+                "securities": {
+                    code: {k: security.get(k) for k in (
+                        "sector33_code", "sector33_name", "market_code", "market_name",
+                        "name_ja", "name_en",
+                    )}
+                    for code, security in equities.items()
+                },
+                "margin": {
+                    code: {k: row.get(k) for k in ("application_date", "long_total", "short_total")}
+                    for code, row in margin_map.items() if code in equities
+                },
+                "config": self._config.model_dump(mode="json"),
+                "feature_version": FEATURE_VERSION,
+                "engine_version": ENGINE_VERSION,
+            }),
         )
         input_dates = [item[1] for item in valid_inputs]
         input_data_through = max(input_dates) if input_dates else None

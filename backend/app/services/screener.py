@@ -122,13 +122,13 @@ def run_screener(
     repository: CoreRepository, filters: ScreenerFilters
 ) -> dict[str, Any]:
     where_sql, params, order_sql = compile_filters(filters)
-    rows, total = repository.screener_query(
+    rows, total, trade_date = repository.screener_query(
         where_sql=where_sql, params=params, order_sql=order_sql,
-        limit=filters.limit, offset=filters.offset,
+        limit=filters.limit, offset=filters.offset, include_trade_date=True,
     )
     return {
         "version": SCREENER_VERSION,
-        "trade_date": repository.screener_trade_date(),
+        "trade_date": trade_date,
         "total": total,
         "rows": rows,
     }

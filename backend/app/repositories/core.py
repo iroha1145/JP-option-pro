@@ -1378,8 +1378,9 @@ class CoreRepository(SQLiteRepository):
         return len(prepared)
 
     def screener_query(
-        self, *, where_sql: str, params: Sequence[Any], order_sql: str, limit: int, offset: int
-    ) -> tuple[list[dict[str, Any]], int]:
+        self, *, where_sql: str, params: Sequence[Any], order_sql: str, limit: int, offset: int,
+        include_trade_date: bool = False,
+    ) -> tuple[list[dict[str, Any]], int] | tuple[list[dict[str, Any]], int, str | None]:
         """Execute an allowlisted screener filter. ``where_sql``/``order_sql``
         must be built exclusively by the screener service's filter compiler."""
 
@@ -1392,6 +1393,7 @@ class CoreRepository(SQLiteRepository):
                 f"LIMIT {int(limit)} OFFSET {int(offset)}",
                 tuple(params),
             ).fetchall()
+            day = connection.execute("SELECT MAX(trade_date) FROM screener_rows").fetchone()[0] if include_trade_date else None
         results = []
         for row in rows:
             item = dict(row)
@@ -1401,6 +1403,8 @@ class CoreRepository(SQLiteRepository):
             except ValueError:
                 item["metrics"] = {}
             results.append(item)
+        if include_trade_date:
+            return results, int(total), day
         return results, int(total)
 
     def screener_trade_date(self) -> str | None:

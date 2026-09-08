@@ -18,10 +18,10 @@ from tests.test_screener_freshness import _config, _seed
 
 
 class _OkEngine:
-    def sync_daily_bars(self, _target):
+    def sync_daily_bars(self, _target, *, revalidate_target=False):
         return {"status": "ok"}
 
-    def sync_index_bars(self, _target):
+    def sync_index_bars(self, _target, *, revalidate_target=False):
         return {"status": "ok"}
 
     def sync_margin_interest(self, _target):
@@ -41,12 +41,12 @@ class _OkEngine:
 
 
 class _FailBarsEngine(_OkEngine):
-    def sync_daily_bars(self, _target):
+    def sync_daily_bars(self, _target, *, revalidate_target=False):
         return {"status": "error", "error_code": "vendor_error"}
 
 
 class _NotPublishedEngine(_OkEngine):
-    def sync_daily_bars(self, _target):
+    def sync_daily_bars(self, _target, *, revalidate_target=False):
         return {"status": "not_published"}
 
 

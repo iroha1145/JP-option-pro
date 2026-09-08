@@ -91,7 +91,7 @@ function summarizeFilters(filters: ScanFilters): string {
 }
 
 export default function Screener() {
-  const { canManageWatchlist, isOwner, accountUsername } = useAccess();
+  const { canManageWatchlist, isOwner, accountUsername, loading: accessLoading, identityUnavailable } = useAccess();
 
   const [meta, setMeta] = useState<StrengthProfilesMeta | null>(null);
   const [metaFailed, setMetaFailed] = useState(false);
@@ -110,13 +110,18 @@ export default function Screener() {
   const [refreshState, setRefreshState] = useState<'idle' | 'queued' | 'running' | 'waiting' | 'done' | 'error'>('idle');
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
   const [unverified, setUnverified] = useState(false);
+  const [refreshBusy, setRefreshBusy] = useState(false);
+  const refreshBusyRef = useRef(false);
+  const pendingActionRef = useRef<number | null>(null);
+  const manualPendingRef = useRef<number | null>(null);
+  const silentPendingRef = useRef<number | null>(null);
   const requestSeq = useRef(0);
   const verifySeq = useRef(0);
   const refreshSeq = useRef(0);
   const sessionGen = useRef(0);
   const appliedRef = useRef(applied);
   appliedRef.current = applied;
-  const sessionKey = `${isOwner}:${accountUsername ?? ''}`;
+  const sessionKey = `${isOwner}:${accountUsername ?? ''}:${identityUnavailable}`;
 
   const dirty = scanState === 'done' && !filtersEqual(draft, applied);
 
@@ -153,27 +158,15 @@ export default function Screener() {
     };
   }, []);
 
-  const sessionKeyRef = useRef(sessionKey);
-  useEffect(() => {
-    if (sessionKeyRef.current === sessionKey) return;
-    sessionKeyRef.current = sessionKey;
-    sessionGen.current += 1;
-    refreshSeq.current += 1;
-  }, [sessionKey]);
-
-  useEffect(
-    () => () => {
-      sessionGen.current += 1;
-      refreshSeq.current += 1;
-    },
-    [],
-  );
-
   const runScan = useCallback(async (filters: ScanFilters, opts?: { silent?: boolean; cache?: RequestCache }) => {
+    if (opts?.silent && (manualPendingRef.current !== null || refreshBusyRef.current || silentPendingRef.current !== null)) return false;
     const sessionAtStart = sessionGen.current;
     const requestAtStart = opts?.silent ? requestSeq.current : ++requestSeq.current;
     const verifyAtStart = opts?.silent ? ++verifySeq.current : verifySeq.current;
-    if (!opts?.silent) {
+    if (opts?.silent) silentPendingRef.current = verifyAtStart;
+    else {
+      ++verifySeq.current; // invalidate every automatic read started before this query
+      manualPendingRef.current = requestAtStart;
       setScanState('scanning');
       setScanError(null);
     }
@@ -203,8 +196,8 @@ export default function Screener() {
       if (sessionGen.current !== sessionAtStart) return false;
       setResponse(result);
       setUnverified(false);
+      appliedRef.current = filters;
       setApplied(filters);
-      setDraft(filters);
       setScanDurationMs(Date.now() - startedAt);
       setPage(1);
       setExpanded(null);
@@ -229,14 +222,36 @@ export default function Screener() {
       setScanError(error instanceof ApiError ? error : new ApiError(500, error instanceof Error ? error.message : t('扫描失败')));
       setScanState('error');
       return false;
+    } finally {
+      if (opts?.silent && silentPendingRef.current === verifyAtStart) silentPendingRef.current = null;
+      if (!opts?.silent && manualPendingRef.current === requestAtStart) manualPendingRef.current = null;
     }
   }, []);
 
-  /* 首次进入自动跑一次默认扫描（读取夜间快照，成本低）。 */
+  // Identity arriving after the first page render must not strand the query
+  // in "scanning". Every identity generation starts a new read and invalidates
+  // in-flight owner status callbacks, including those awaiting an HTTP reply.
   useEffect(() => {
-    void runScan(DEFAULT_FILTERS);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    ++sessionGen.current;
+    ++refreshSeq.current;
+    ++requestSeq.current;
+    ++verifySeq.current;
+    manualPendingRef.current = null;
+    silentPendingRef.current = null;
+    pendingActionRef.current = null;
+    refreshBusyRef.current = false;
+    setRefreshBusy(false);
+    setRefreshState('idle');
+    setRefreshMessage(null);
+    if (!accessLoading && !identityUnavailable) void runScan(appliedRef.current);
+    else if (identityUnavailable) setUnverified(true);
+    return () => {
+      ++sessionGen.current;
+      ++refreshSeq.current;
+      ++requestSeq.current;
+      ++verifySeq.current;
+    };
+  }, [sessionKey, accessLoading, identityUnavailable, runScan]);
 
   const onScanClick = useCallback(() => void runScan(draft), [draft, runScan]);
 
@@ -246,6 +261,7 @@ export default function Screener() {
     while (Date.now() < deadline) {
       if (refreshSeq.current !== seq) return { item: null, timedOut: false };
       const item = await workerApi.action(actionId);
+      if (refreshSeq.current !== seq) return { item: null, timedOut: false };
       last = item as Record<string, unknown>;
       const status = String(item.status);
       if (status === 'completed' || status === 'failed') return { item, timedOut: false };
@@ -256,14 +272,19 @@ export default function Screener() {
   }, []);
 
   const onOwnerRefresh = useCallback(async () => {
+    if (!isOwner || identityUnavailable || refreshBusyRef.current) return;
+    refreshBusyRef.current = true;
+    setRefreshBusy(true);
+    ++verifySeq.current; // discard automatic reads issued before the update
     const seq = ++refreshSeq.current;
     const sessionAtStart = sessionGen.current;
-    const requestAtStart = requestSeq.current;
     setRefreshState('queued');
     setRefreshMessage(null);
     try {
-      const accepted = await workerApi.trigger('post_close_batch');
-      const actionId = accepted.action_id;
+      // Resume verification after a UI timeout instead of submitting another job.
+      const actionId = pendingActionRef.current ?? (await workerApi.trigger('post_close_batch')).action_id;
+      if (refreshSeq.current !== seq || sessionGen.current !== sessionAtStart) return;
+      pendingActionRef.current = actionId ?? null;
       if (actionId == null) {
         setRefreshState('error');
         setRefreshMessage(t('无法提交日线更新'));
@@ -278,9 +299,19 @@ export default function Screener() {
       }
       const finished = (polled.item ?? {}) as { status?: string; result?: Record<string, unknown> };
       const promised = promisedPublication(finished as Record<string, unknown>);
+      if (finished.status === 'completed' || finished.status === 'failed') pendingActionRef.current = null;
       const previousId = response?.publication_id ?? null;
       const readFilters = appliedRef.current;
-      const verified = await strengthApi.scan(buildParams(readFilters), { cache: 'reload' });
+      const requestAtStart = requestSeq.current;
+      let verified = await strengthApi.scan(buildParams(readFilters), { cache: 'reload' });
+      // Replicas/proxies may briefly lag a committed receipt. Retry only the read;
+      // no additional worker action or provider request is submitted here.
+      for (let attempt = 0; attempt < 3 && promised.publicationId &&
+           verified.publication_id !== promised.publicationId && finished.status === 'completed'; attempt += 1) {
+        if (refreshSeq.current !== seq || sessionGen.current !== sessionAtStart) return;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        verified = await strengthApi.scan(buildParams(readFilters), { cache: 'reload' });
+      }
       if (refreshSeq.current !== seq || sessionGen.current !== sessionAtStart) return;
       const verdict = interpretOwnerRefresh({
         actionStatus: String(finished.status ?? ''),
@@ -299,7 +330,8 @@ export default function Screener() {
         requestSeqAtStart: requestAtStart,
         currentRequestSeq: requestSeq.current,
       });
-      if (verdict.commitResponse && mayCommit) {
+      if (verdict.commitResponse && mayCommit && manualPendingRef.current === null && filtersEqual(readFilters, appliedRef.current)) {
+        ++verifySeq.current;
         setResponse(verified);
         setUnverified(false);
         if (verdict.state === 'done' && promised.outcome === 'published') {
@@ -316,8 +348,13 @@ export default function Screener() {
       if (sessionGen.current !== sessionAtStart) return;
       setRefreshState('error');
       setRefreshMessage(error instanceof ApiError ? error.message : t('更新失败，已保留上次结果'));
+    } finally {
+      if (refreshSeq.current === seq && sessionGen.current === sessionAtStart) {
+        refreshBusyRef.current = false;
+        setRefreshBusy(false);
+      }
     }
-  }, [pollAction, response?.publication_id]);
+  }, [isOwner, identityUnavailable, pollAction, response?.publication_id]);
 
   useEffect(() => {
     const onVisible = () => {
@@ -487,7 +524,7 @@ export default function Screener() {
             {isOwner && (
               <ForceRefreshButton
                 onClick={() => void onOwnerRefresh()}
-                spinning={refreshState === 'queued' || refreshState === 'running'}
+                spinning={refreshBusy}
                 label={t('更新日线与评分')}
                 title={t('所有者提交有界后台任务：拉取日线并发布新评分')}
                 testId="screener-owner-refresh"
@@ -514,7 +551,7 @@ export default function Screener() {
 
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* B2 结果区 */}
-        <section className="lg:col-span-8" aria-label={t('扫描结果')}>
+        <section className="lg:col-span-8" aria-label={t('扫描结果')} data-testid="screener-results" data-publication-id={response?.publication_id ?? ''} data-applied-profile={applied.profile}>
           <div className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-2">
             {scanState === 'scanning' ? (
               <span className="flex items-center gap-2 text-body-s text-ink-500">
@@ -594,7 +631,7 @@ export default function Screener() {
             </SoftBadge>
           )}
           {refreshMessage && (
-            <p className="mt-2 text-micro text-ink-500" data-testid="screener-refresh-status">
+            <p className="mt-2 text-micro text-ink-500" data-testid="screener-refresh-status" data-state={refreshState} role="status">
               {refreshMessage}
             </p>
           )}
