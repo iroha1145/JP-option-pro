@@ -1,5 +1,5 @@
 /**
- * Header：Logo | 编号导航（滑行下划线） | ⌘K | 时段LED+JST时钟 | 语言/涨跌色 | 登录
+ * Header：Logo | 编号导航（滑行下划线） | ⌘K | 时段LED+JST时钟 | 语言/涨跌色/外观 | 登录
  */
 import { useLayoutEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router';
@@ -14,6 +14,7 @@ import Icon from '@/components/icons';
 import { SessionDot } from '@/components/shared/SessionLED';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import ColorModeSwitcher from '@/components/ColorModeSwitcher';
+import ThemeSwitcher from '@/components/ThemeSwitcher';
 import { t } from '@/i18n/core';
 
 export const NAV_ITEMS = [
@@ -164,6 +165,7 @@ export default function Navbar({ onOpenPalette }: { onOpenPalette: () => void })
 
           <LanguageSwitcher className="hidden md:block" />
           <ColorModeSwitcher className="hidden xl:flex" />
+          <ThemeSwitcher />
 
           {isSignedIn ? (
             <button

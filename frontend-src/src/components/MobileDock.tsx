@@ -123,7 +123,7 @@ function MobileDockContent() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="fixed inset-0 z-[64] bg-[rgba(13,22,38,.32)] xl:hidden"
+              className="fixed inset-0 z-[64] bg-[var(--scrim)] xl:hidden"
               onClick={() => setMoreOpen(false)}
               data-focus-backdrop={overlayId}
               aria-hidden="true"

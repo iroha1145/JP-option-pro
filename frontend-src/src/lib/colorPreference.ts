@@ -1,7 +1,10 @@
 /**
  * 涨跌色彩习惯（美股绿涨红跌 / 亚洲红涨绿跌）。
  * 日本站默认 asian；用户切换后写入本地存储。
+ * 深色档对齐 Cloud Monitor 的绿/底色（#62D0A5 / #163D34）。
  */
+import { getResolvedTheme, type ThemeAppearance } from './themePreference.ts';
+
 export type ColorMode = 'western' | 'asian';
 
 const COLOR_MODE_KEY = 'optixjp_color_mode';
@@ -22,6 +25,25 @@ export const PRICE_COLORS = {
     down600: '#0E9F6E',
     down700: '#0B7A55',
     down50: '#E5F6EF',
+  },
+} as const;
+
+export const DARK_PRICE_COLORS = {
+  western: {
+    up600: '#62D0A5',
+    up700: '#4BB890',
+    up50: '#163D34',
+    down600: '#F07178',
+    down700: '#E5484D',
+    down50: '#3A1C1E',
+  },
+  asian: {
+    up600: '#F07178',
+    up700: '#E5484D',
+    up50: '#3A1C1E',
+    down600: '#62D0A5',
+    down700: '#4BB890',
+    down50: '#163D34',
   },
 } as const;
 
@@ -73,8 +95,11 @@ export function getColorMode(): ColorMode {
   return currentMode;
 }
 
-export function directionColors(mode: ColorMode = getColorMode()) {
-  return PRICE_COLORS[mode];
+export function directionColors(
+  mode: ColorMode = getColorMode(),
+  appearance: ThemeAppearance = getResolvedTheme(),
+) {
+  return appearance === 'dark' ? DARK_PRICE_COLORS[mode] : PRICE_COLORS[mode];
 }
 
 export function applyColorMode(mode: ColorMode = getColorMode()): void {

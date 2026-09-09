@@ -13,7 +13,8 @@ export type IconName =
   | 'refresh' | 'wallet-gauge' | 'doc-quote' | 'logout' | 'arrow-up' | 'arrow-down' | 'minus'
   | 'check' | 'menu' | 'list' | 'cards' | 'languages'
   | 'trend-line' | 'ray-right' | 'channel' | 'rect' | 'fib' | 'text-note'
-  | 'lock' | 'unlock' | 'eye' | 'eye-off' | 'undo' | 'redo' | 'expand' | 'compress';
+  | 'lock' | 'unlock' | 'eye' | 'eye-off' | 'undo' | 'redo' | 'expand' | 'compress'
+  | 'desktop';
 
 interface IconProps extends SVGProps<SVGSVGElement> {
   name: IconName;
@@ -261,6 +262,12 @@ const PATHS: Record<IconName, ReactElement> = {
   compress: (
     <>
       <path d="M9.6 4.8v4H5.6M14.4 4.8v4h4M9.6 19.2v-4H5.6M14.4 19.2v-4h4" />
+    </>
+  ),
+  desktop: (
+    <>
+      <rect x="3.6" y="5.2" width="16.8" height="10.4" rx="1.6" />
+      <path d="M8.4 18.8h7.2M12 15.6v3.2" />
     </>
   ),
 };

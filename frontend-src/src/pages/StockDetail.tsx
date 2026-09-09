@@ -9,6 +9,7 @@ import { motion } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router';
 import { useNow } from '@/hooks/useNow';
 import { useColorMode } from '@/hooks/useColorMode';
+import { useTheme } from '@/hooks/useTheme';
 import SessionLED from '@/components/shared/SessionLED';
 import { tokyoSession } from '@/lib/tokyoSession';
 import { stocksApi, workerApi } from '@/api/modules';
@@ -528,11 +529,13 @@ function IntradayPane({
   onRefresh: () => void;
 }) {
   const colorMode = useColorMode();
+  const theme = useTheme();
   const { onInit, prepareOption } = useChartZoom(
     `${data?.canonical_code ?? ''}|${data?.interval ?? ''}`, data?.bars.length ?? 0, 80,
   );
   const option = useMemo(() => {
     void colorMode;
+    void theme;
     const bars = data?.bars ?? [];
     if (bars.length === 0) return null;
     const labels = bars.map((bar) => `${bar.trade_date.slice(5)} ${bar.bar_time}`);
@@ -573,7 +576,7 @@ function IntradayPane({
         },
       ],
     };
-  }, [colorMode, data]);
+  }, [colorMode, data, theme]);
 
   if (loading && !data) return <SkeletonCard className="h-[360px]" />;
   if (data && data.available && option) {
@@ -646,7 +649,9 @@ function TickPane({
   onFetch: () => void;
   onRefresh: () => void;
 }) {
+  const theme = useTheme();
   const option = useMemo(() => {
+    void theme;
     const points = data?.points ?? [];
     if (points.length === 0) return null;
     const labels = points.map((point) => point.t);
@@ -685,7 +690,7 @@ function TickPane({
         },
       ],
     };
-  }, [data]);
+  }, [data, theme]);
 
   if (loading && !data) return <SkeletonCard className="h-[360px]" />;
   if (data && data.available && option) {
