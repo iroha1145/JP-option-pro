@@ -92,7 +92,7 @@ export default function ThemeSwitcher({
   };
 
   return (
-    <div ref={ref} className={cn(corner && 'fixed right-3 top-3 z-[70] md:right-5 md:top-4', 'relative', className)}>
+    <div ref={ref} className={cn(corner ? 'fixed right-3 top-3 z-[70] md:right-5 md:top-4' : 'relative', className)}>
       <button
         ref={triggerRef}
         type="button"
@@ -106,6 +106,7 @@ export default function ThemeSwitcher({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={t('切换外观')}
+        data-theme-switcher=""
         title={tip}
         className={cn(
           'theme-control inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-line bg-card text-ink-500 shadow-btn transition-colors duration-fast hover:bg-paper hover:text-ink-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-400 md:h-8 md:w-8',
@@ -133,6 +134,7 @@ export default function ThemeSwitcher({
                   <button
                     role="menuitemradio"
                     aria-checked={active}
+                    data-theme-option={option.value}
                     onClick={() => {
                       setThemePreference(option.value);
                       setOpen(false);

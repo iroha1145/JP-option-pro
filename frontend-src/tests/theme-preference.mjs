@@ -245,12 +245,16 @@ test('顶栏始终挂 ThemeSwitcher；登录页右上角也有；不藏进 xl', 
   assert.match(navbar, /<ThemeSwitcher/);
   assert.doesNotMatch(navbar, /<ThemeSwitcher[^>]*className="[^"]*hidden/);
   assert.match(login, /<ThemeSwitcher corner/);
+  assert.match(switcher, /corner \? 'fixed right-3 top-3/);
+  assert.doesNotMatch(switcher, /corner && 'fixed/);
   assert.match(switcher, /useThemePreference\(\)/);
   assert.match(switcher, /setThemePreference/);
   assert.match(switcher, /跟随系统/);
   assert.match(switcher, /浅色/);
   assert.match(switcher, /深色/);
   assert.match(switcher, /theme-control/);
+  assert.match(switcher, /data-theme-switcher/);
+  assert.match(switcher, /data-theme-option/);
 });
 
 test('main 与 index.html 在首屏之前套用主题，避免白闪', async () => {

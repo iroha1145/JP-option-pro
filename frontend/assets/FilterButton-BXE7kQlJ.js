@@ -1,1 +1,0 @@
-import{j as s,c as a}from"./index-zQQEtzbq.js";function u({active:t,className:o,type:n="button",...r}){return s.jsx("button",{...r,type:n,"aria-pressed":t,className:a("control-button",o)})}export{u as F};
