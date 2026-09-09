@@ -60,12 +60,12 @@ export const PRESETS: Record<Exclude<PresetId, 'custom'>, PresetDef> = {
   minimal: {
     label: t('极简'),
     enabled: ['ma20', 'auto_patterns'],
-    maxPatterns: 3,
-    maxLabels: 6,
+    maxPatterns: 1,
+    maxLabels: 2,
     minShapeQuality: 0.45,
     onlyActive: true,
     showInvalidated: false,
-    labelDensity: 0.4,
+    labelDensity: 0.5,
   },
   structure: {
     label: t('结构分析'),
