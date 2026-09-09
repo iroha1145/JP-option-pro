@@ -1,7 +1,7 @@
 /** 个股日线：日本站工具条 + 美国站智能画线 / 多副图 / 图层菜单。
  *  盘中/逐笔仍走 children；面积与不复权保持原行为，不画分析图层。 */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import EmptyState from '@/components/shared/EmptyState';
 import InfoHint from '@/components/shared/InfoHint';
@@ -23,7 +23,6 @@ import {
   valueAxis,
   withAlpha,
   type ChartOption,
-  type EChartsInstance,
 } from '@/lib/chart';
 import { DUR_FAST, DUR_UI, EASE_PAPER } from '@/lib/motion';
 import { useColorMode } from '@/hooks/useColorMode';
@@ -42,13 +41,12 @@ import {
 import {
   analysisGate,
   barFingerprint,
-  filterOverlays,
   filterPanes,
   labelBudget,
   mapChartAnalysis,
 } from './chart-drawings/analysis/mapBundle.ts';
-import { detectSmartLines, selectSmartOverlays, withChartIndices } from './chart-drawings/analysis/smartLines.ts';
-import { prepareStructuralOverlays } from './chart-drawings/analysis/structuralOverlays.ts';
+import { detectSmartLines, withChartIndices } from './chart-drawings/analysis/smartLines.ts';
+import { visibleAnalysisOverlays } from './chart-drawings/analysis/visibleOverlays.ts';
 import { detectPriceGaps } from './chart-drawings/analysis/priceGaps.ts';
 import { overlaysToMarks, overlaysToSeries, panesToOption } from './chart-drawings/analysis/overlaysToMarks.ts';
 import { loadLayerSettings, saveLayerSettings, type LayerSettings } from './chart-drawings/analysis/settings.ts';
@@ -56,7 +54,8 @@ import AnalysisLegend from './chart-drawings/AnalysisLegend';
 import LayerMenu from './chart-drawings/LayerMenu';
 import { clippedLineSeries, isClippedLine } from './chart-drawings/clippedLines';
 import { barKeyOf } from './chart-drawings/projection.ts';
-import { insideZoom, zoomFromOption, type ZoomWindow } from './chart-drawings/zoom.ts';
+import { insideZoom } from './chart-drawings/zoom.ts';
+import { useChartZoom } from './chart-drawings/useChartZoom.ts';
 
 export type ChartInterval = '1d' | '60m' | '5m' | '1m' | 'tick';
 export type ChartRange = '3m' | '6m' | '1y' | '3y' | '10y';
@@ -195,8 +194,8 @@ function OverlayLegend({
               <span className="inline-block h-0 w-4 border-t border-dotted border-down-600" aria-hidden />,
               t('失效位'),
             )}
-          {chip(<span aria-hidden className="text-warn-600" style={{ fontSize: 8 }}>▼</span>, t('确认摆动高点'))}
-          {chip(<span aria-hidden className="text-ai-600" style={{ fontSize: 8 }}>▲</span>, t('确认摆动低点'))}
+          {showOverlays && chip(<span aria-hidden className="text-warn-600" style={{ fontSize: 8 }}>▼</span>, t('确认摆动高点'))}
+          {showOverlays && chip(<span aria-hidden className="text-ai-600" style={{ fontSize: 8 }}>▲</span>, t('确认摆动低点'))}
           {chip(
             <span className="inline-block h-0 w-4 border-t border-dashed border-brand-500" aria-hidden />,
             t('MA20 · 最近 20 根常规时段收盘的均线'),
@@ -257,8 +256,9 @@ function legacyCandleOption(
     ...baseAnimation,
     grid: [
       baseGrid({ top: 8, bottom: '24%', left: 4, right: 48 }),
-      baseGrid({ top: '80%', bottom: 2, left: 4, right: 48 }),
+      baseGrid({ top: '80%', bottom: 36, left: 4, right: 48 }),
     ],
+    dataZoom: insideZoom(rows.length, [0, 1]),
     tooltip: glassTooltip({ trigger: 'axis' }),
     xAxis: [
       { ...categoryAxis(shortDates), gridIndex: 0 },
@@ -354,9 +354,7 @@ export default function StockChart({
   const [selectedIndicator, setSelectedIndicator] = useState('macd');
   const [layersOpen, setLayersOpen] = useState(false);
   const [narrowIndicators, setNarrowIndicators] = useState(false);
-  const [chartInst, setChartInst] = useState<EChartsInstance | null>(null);
   const plotRef = useRef<HTMLDivElement>(null);
-  const zoomRef = useRef<{ scope: string; window: ZoomWindow } | null>(null);
   const colorMode = useColorMode();
   const { username, isOwner, isCustomer } = useAccess();
   const identityKey = isCustomer && username ? `account:${username}` : isOwner ? 'owner' : 'anonymous';
@@ -400,22 +398,15 @@ export default function StockChart({
     return detectSmartLines(smartBars);
   }, [analysisOk, smartDrawingEnabled, smartBars, layerSettings.enabled]);
   const gapProposals = useMemo(() => {
-    if (!analysisOk || !layerSettings.enabled.includes('gaps')) return [];
+    if (!analysisOk || !smartDrawingEnabled || !layerSettings.enabled.includes('gaps')) return [];
     return detectPriceGaps(smartBars, '1d');
-  }, [analysisOk, smartBars, layerSettings.enabled]);
+  }, [analysisOk, smartDrawingEnabled, smartBars, layerSettings.enabled]);
   const visibleOverlays = useMemo(() => {
     if (!analysisOk || !analysisBundle) return [];
-    if (!smartDrawingEnabled) {
-      const filtered = filterOverlays([...analysisBundle.overlays, ...gapProposals], layerSettings);
-      const gaps = filtered.filter((row) => row.kind === 'gap')
-        .sort((a, b) => b.displayPriority - a.displayPriority || a.id.localeCompare(b.id, 'en')).slice(0, 4);
-      return [...filtered.filter((row) => row.kind !== 'gap'), ...gaps];
-    }
-    const candidates = filterOverlays(
-      prepareStructuralOverlays([...analysisBundle.overlays, ...smartProposals, ...gapProposals], smartBars),
-      { ...layerSettings, maxPatterns: 64 },
+    return visibleAnalysisOverlays(
+      [...analysisBundle.overlays, ...smartProposals, ...gapProposals],
+      smartBars, layerSettings, smartDrawingEnabled,
     );
-    return selectSmartOverlays(candidates, smartBars, layerSettings.maxPatterns);
   }, [analysisOk, analysisBundle, layerSettings, smartDrawingEnabled, smartProposals, smartBars, gapProposals]);
   const visiblePanes = useMemo(() => {
     if (!analysisOk || !analysisBundle) return [];
@@ -457,21 +448,10 @@ export default function StockChart({
     };
   }, [analysisOk, analysisBars, style, visibleOverlays, visiblePanes, layerSettings, indicatorView, selectedIndicator, narrowIndicators]);
 
-  const zoomScope = `${ticker ?? displayCode}|${range}|${priceMode}|${style}`;
-  useEffect(() => { zoomRef.current = null; }, [zoomScope]);
-  useEffect(() => {
-    const chart = chartInst;
-    if (!chart || chart.isDisposed()) return;
-    const handler = () => {
-      if (chart.isDisposed()) return;
-      const next = zoomFromOption(chart.getOption() as { dataZoom?: { startValue?: unknown; endValue?: unknown }[] }, analysisBars.length);
-      if (next) zoomRef.current = { scope: zoomScope, window: next };
-    };
-    chart.on('datazoom', handler);
-    return () => {
-      if (!chart.isDisposed()) chart.off('datazoom', handler);
-    };
-  }, [chartInst, analysisBars.length, zoomScope]);
+  const zoomScope = `${ticker ?? displayCode}|${interval}|${range}|${priceMode}|${style}`;
+  const { chart: chartInst, onInit: setChartInst, prepareOption } = useChartZoom(
+    zoomScope, analysisOk ? analysisBars.length : rows.length,
+  );
 
   useEffect(() => {
     const node = plotRef.current;
@@ -492,7 +472,8 @@ export default function StockChart({
     const change = first != null && last != null ? last - first : null;
     if (style === 'area') {
       return {
-        grid: baseGrid({ top: 8, bottom: 8, left: 4, right: 48 }),
+        grid: baseGrid({ top: 8, bottom: 36, left: 4, right: 48 }),
+        dataZoom: insideZoom(rows.length, [0]),
         tooltip: glassTooltip({ trigger: 'axis' }),
         xAxis: categoryAxis(rows.map((bar) => bar.trade_date.slice(2))),
         yAxis: valueAxis({ scale: true, position: 'right' }),
@@ -505,7 +486,7 @@ export default function StockChart({
         ],
       } as ChartOption;
     }
-    if (!analysisOk) return legacyCandleOption(rows, priceMode, overlays);
+    if (!analysisOk) return legacyCandleOption(rows, priceMode, smartDrawingEnabled ? overlays : null);
 
     const labels = analysisBars.map((bar) => bar.t.slice(2));
     const candleData = analysisBars.map((bar) => ({ value: [bar.o, bar.c, bar.l, bar.h] }));
@@ -569,7 +550,7 @@ export default function StockChart({
       ...baseAnimation,
       axisPointer: { link: [{ xAxisIndex: 'all' as const }] },
       grid: grids,
-      dataZoom: insideZoom(analysisBars.length, grids.map((_, index) => index), zoomRef.current?.scope === zoomScope ? zoomRef.current.window : null),
+      dataZoom: insideZoom(analysisBars.length, grids.map((_, index) => index)),
       xAxis: grids.map((_, index) => ({
         type: 'category' as const,
         gridIndex: index,
@@ -713,20 +694,7 @@ export default function StockChart({
         ...(railSeries ? [railSeries] : []),
       ],
     } as ChartOption;
-  }, [analysisBars, analysisOk, analysisOption, colorMode, daily, extraMarks, overlays, priceMode, rows, style, zoomScope]);
-
-  const prepareOption = useCallback((next: ChartOption): ChartOption => {
-    const saved = zoomRef.current;
-    if (!saved || saved.scope !== zoomScope || !Array.isArray(next.dataZoom)) return next;
-    const restored = insideZoom(analysisBars.length, [], saved.window)?.[0];
-    if (!restored) return next;
-    return {
-      ...next,
-      dataZoom: next.dataZoom.map((row) => ({
-        ...row, startValue: restored.startValue, endValue: restored.endValue,
-      })),
-    };
-  }, [analysisBars.length, zoomScope]);
+  }, [analysisBars, analysisOk, analysisOption, colorMode, daily, extraMarks, overlays, priceMode, rows, style, smartDrawingEnabled]);
 
   const chartHeight = analysisOk ? analysisOption.layout.height : 420;
 
@@ -788,7 +756,7 @@ export default function StockChart({
           <button
             type="button"
             aria-pressed={smartDrawingEnabled}
-            disabled={!analysisOk || !layerSettings.enabled.some((id) => id === 'auto_patterns' || id === 'support_resistance')}
+            disabled={priceMode !== 'adjusted'}
             title={t('根据已收盘 K 线识别支撑、阻力和形态，并合并相近线条')}
             onClick={() => setSmartDrawingEnabled((value) => !value)}
             className={cn(toggleButtonCls(smartDrawingEnabled), 'disabled:cursor-not-allowed disabled:opacity-50')}
@@ -841,8 +809,8 @@ export default function StockChart({
         </div>
       )}
       {daily && (analysisOk
-        ? <AnalysisLegend overlays={visibleOverlays} smartEnabled={smartDrawingEnabled} />
-        : <OverlayLegend style={style} overlays={overlays} showOverlays={priceMode === 'adjusted'} />)}
+        ? <AnalysisLegend overlays={visibleOverlays} />
+        : <OverlayLegend style={style} overlays={overlays} showOverlays={priceMode === 'adjusted' && smartDrawingEnabled} />)}
       <div className="relative mt-3" ref={plotRef} style={daily ? { height: chartHeight } : undefined}>
         {daily ? (
           <AnimatePresence mode="wait">

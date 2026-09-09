@@ -6,7 +6,6 @@ const RAIL_KINDS = new Set(['support_trend', 'resistance_trend', 'channel', 'tri
 /** Describe only the layers actually present; a gap-only view has its own legend. */
 export default function AnalysisLegend({ overlays }: {
   overlays: readonly { kind: string }[];
-  smartEnabled: boolean;
 }) {
   const hasRails = overlays.some(row => RAIL_KINDS.has(row.kind) || row.kind === 'level');
   const hasBox = overlays.some(row => row.kind === 'box');
