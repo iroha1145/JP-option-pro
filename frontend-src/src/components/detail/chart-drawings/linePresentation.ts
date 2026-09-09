@@ -163,7 +163,8 @@ export function renderPatternInk(
     const extension = target.x > segment.b.x + 0.01 ? { a: segment.b, b: target } : undefined;
     const label = (tail: Point) => i === 0 && pattern.label ? {
       show: true, formatter: `${pattern.label} · ${priceText(tail.y)}`,
-      position: 'insideEndTop', distance: 4, fontSize: 11, lineHeight: 14,
+      position: 'insideMiddleTop', distance: 4, fontSize: 11, lineHeight: 14,
+      span: [[segment.a.x, segment.a.y], [target.x, target.y]],
       priority: (pattern.labelPriority ?? 0) + ink.labelPriority,
       color, backgroundColor: 'rgba(255,255,255,0.97)', borderColor: color,
       borderWidth: 0.5, borderRadius: 4, padding: [2, 5],
@@ -171,13 +172,13 @@ export function renderPatternInk(
     out.lines.push([
       { coord: [segment.a.x, segment.a.y], clipToPlot: true,
         lineStyle: { ...manualLineInk(color, ink.width, broken ? [2, 4] : 'solid'), opacity: ink.opacity },
-        label: extension ? { show: false } : label(segment.b) },
+        label: label(target) },
       { coord: [segment.b.x, segment.b.y] },
     ]);
     if (extension) out.lines.push([
       { coord: [extension.a.x, extension.a.y], clipToPlot: true,
         lineStyle: { ...manualLineInk(color, Math.max(1, ink.width - 0.6), [7, 4]), opacity: ink.extensionOpacity },
-        label: label(extension.b) },
+        label: { show: false } },
       { coord: [extension.b.x, extension.b.y] },
     ]);
   });

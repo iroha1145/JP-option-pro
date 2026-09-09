@@ -76,6 +76,9 @@ jobs:
       - name: Chart drawing switch and navigation gate
         run: node --experimental-strip-types --test frontend-src/tests/chart-interaction.mjs
 
+      - name: Chart centered annotation gate
+        run: node --experimental-strip-types --test frontend-src/tests/chart-labels.mjs
+
       # 後端が組み立てた文（テンプレート + パラメータ）を 3 言語で描画できるか。
       # 辞書に載っていても引き方を間違えれば画面には出ない ——「載っているか」の
       # 門（pytest 側）とは別に見る。
