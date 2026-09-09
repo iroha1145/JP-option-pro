@@ -414,7 +414,7 @@ export function filterOverlays(
     if (overlay.status === 'invalidated') {
       return settings.showInvalidated;
     }
-    if (settings.onlyActive && !ACTIVE_STATUSES.has(overlay.status) && overlay.status !== 'broken_up' && overlay.status !== 'broken_down') {
+    if (settings.onlyActive && !ACTIVE_STATUSES.has(overlay.status)) {
       return false;
     }
     return true;
@@ -450,4 +450,3 @@ export function labelBudget(overlays: AnalysisOverlay[], settings: LayerSettings
     .sort((a, b) => b.displayPriority - a.displayPriority)
     .slice(0, cap);
 }
-

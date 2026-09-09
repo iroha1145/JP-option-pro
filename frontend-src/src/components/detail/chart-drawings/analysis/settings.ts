@@ -13,12 +13,9 @@ export interface LayerSettings {
   labelDensity: number;
 }
 
-/** 日本站默认打开智能画线 + 多种副图；用户仍可通过预设改回极简。 */
+/** 默认只画一组主要自动线和 MA20；六种副图仍可切换或展开。 */
 const DEFAULT_ENABLED = [
   'ma20',
-  'swings',
-  'support_resistance',
-  'bases',
   'auto_patterns',
   'rsi',
   'macd',
@@ -32,17 +29,43 @@ export const DEFAULT_LAYER_SETTINGS: LayerSettings = {
   preset: 'custom',
   enabled: [...DEFAULT_ENABLED],
   minShapeQuality: 0.45,
-  onlyActive: false,
+  onlyActive: true,
   showInvalidated: false,
-  maxPatterns: 8,
-  maxLabels: 10,
-  labelDensity: 0.7,
+  maxPatterns: PRESETS.minimal.maxPatterns,
+  maxLabels: PRESETS.minimal.maxLabels,
+  labelDensity: PRESETS.minimal.labelDensity,
 };
 
 const VALID_IDS = new Set(LAYERS.map((layer) => layer.id));
 
-/** 存储格式版本。v2 = 质量门槛 0.45 时代；v2 起旧默认迁移不再执行（一次性）。 */
-const LAYER_SETTINGS_VERSION = 2;
+/** v3 只收紧未改动的旧默认；质量门槛迁移仍以 v2 为界。 */
+const LAYER_SETTINGS_VERSION = 3;
+const QUALITY_MIGRATION_VERSION = 2;
+
+const OLD_DEFAULT: LayerSettings = {
+  preset: 'custom',
+  enabled: ['ma20', 'swings', 'support_resistance', 'bases', 'auto_patterns',
+    'rsi', 'macd', 'obv', 'clv', 'range_persistence', 'topix_rs'],
+  minShapeQuality: 0.45, onlyActive: false, showInvalidated: false,
+  maxPatterns: 8, maxLabels: 10, labelDensity: 0.7,
+};
+const OLD_MINIMAL: LayerSettings = {
+  preset: 'minimal', enabled: ['ma20', 'auto_patterns'],
+  minShapeQuality: 0.45, onlyActive: true, showInvalidated: false,
+  maxPatterns: 3, maxLabels: 6, labelDensity: 0.4,
+};
+
+function unchangedSettings(settings: LayerSettings, previous: LayerSettings): boolean {
+  return settings.preset === previous.preset
+    && settings.enabled.length === previous.enabled.length
+    && previous.enabled.every(id => settings.enabled.includes(id))
+    && settings.minShapeQuality === previous.minShapeQuality
+    && settings.onlyActive === previous.onlyActive
+    && settings.showInvalidated === previous.showInvalidated
+    && settings.maxPatterns === previous.maxPatterns
+    && settings.maxLabels === previous.maxLabels
+    && settings.labelDensity === previous.labelDensity;
+}
 
 export function settingsFromPreset(preset: Exclude<PresetId, 'custom'>): LayerSettings {
   const row = PRESETS[preset];
@@ -88,16 +111,26 @@ export function parseLayerSettings(raw: unknown): LayerSettings {
      加载时被再次改掉——迁移必须一次性，靠版本号封口。 */
   const storedVersion = num(row.schemaVersion, 1);
   const qualityRaw = Math.min(1, Math.max(0, num(row.minShapeQuality, DEFAULT_LAYER_SETTINGS.minShapeQuality)));
-  return {
+  const parsed: LayerSettings = {
     preset: preset === 'custom' || row.preset === 'custom' ? 'custom' : preset,
     enabled,
-    minShapeQuality: storedVersion >= LAYER_SETTINGS_VERSION ? qualityRaw : migrateStaleQualityGate(qualityRaw),
-    onlyActive: row.onlyActive === true,
+    minShapeQuality: storedVersion >= QUALITY_MIGRATION_VERSION ? qualityRaw : migrateStaleQualityGate(qualityRaw),
+    onlyActive: typeof row.onlyActive === 'boolean' ? row.onlyActive : DEFAULT_LAYER_SETTINGS.onlyActive,
     showInvalidated: row.showInvalidated === true,
     maxPatterns: Math.max(0, Math.round(num(row.maxPatterns, DEFAULT_LAYER_SETTINGS.maxPatterns))),
     maxLabels: Math.max(0, Math.round(num(row.maxLabels, DEFAULT_LAYER_SETTINGS.maxLabels))),
     labelDensity: Math.min(1, Math.max(0, num(row.labelDensity, DEFAULT_LAYER_SETTINGS.labelDensity))),
   };
+  // A matching preset name alone is not enough: retain every user adjustment.
+  if (storedVersion < LAYER_SETTINGS_VERSION) {
+    if (row.preset === 'custom' && unchangedSettings(parsed, OLD_DEFAULT)) {
+      return { ...DEFAULT_LAYER_SETTINGS, enabled: [...DEFAULT_LAYER_SETTINGS.enabled] };
+    }
+    if (row.preset === 'minimal' && unchangedSettings(parsed, OLD_MINIMAL)) {
+      return settingsFromPreset('minimal');
+    }
+  }
+  return parsed;
 }
 
 export function loadLayerSettings(identity: string, storage?: Storage | null): LayerSettings {
