@@ -162,6 +162,7 @@ export interface StockBar {
   adj_high: number | null;
   adj_low: number | null;
   adj_close: number | null;
+  adj_volume?: number | null;
   volume: number | null;
   turnover_value: number | null;
   adjustment_factor: number | null;

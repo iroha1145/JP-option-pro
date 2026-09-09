@@ -13,6 +13,12 @@ import math
 from datetime import datetime, timezone
 from typing import Any, Mapping, Sequence
 
+from app.services.radar.adjustment import adjusted_bar, cumulative_factors
+from app.services.chart_patterns import (
+    ALGORITHM_VERSION as AUTO_PATTERNS_VERSION,
+    apply_display_evidence,
+    detect_auto_patterns,
+)
 from app.services.radar.base_detector import DETECTOR_VERSION as BASE_VERSION
 from app.services.radar.base_detector import detect_base
 from app.services.radar.features import clean_series, series_excluding_last
@@ -495,6 +501,54 @@ def _base_state_from_close(base: Mapping[str, Any] | None, close: float | None) 
     return {"status": status}
 
 
+def _pattern_overlays(patterns: Sequence[Mapping[str, Any]], data_through: str) -> list[dict[str, Any]]:
+    overlays: list[dict[str, Any]] = []
+    for row in patterns:
+        if row.get("kind") == "box":
+            continue
+        evidence = dict(row.get("evidence") or {})
+        # 「触碰 n 次」这枚 chip 读的是 evidence.touches，而 touches 原本只在
+        # 顶层 pattern 行上——不带进来这枚 chip 永远渲染不出。
+        if row.get("touches") is not None:
+            evidence["touches"] = int(row["touches"])
+        overlays.append(
+            _overlay(
+                overlay_id=str(row["id"]),
+                source_id="auto_patterns",
+                algorithm_version=str(row.get("algorithmVersion") or AUTO_PATTERNS_VERSION),
+                group="price",
+                kind=str(row["kind"]),
+                geometry={
+                    "type": "rails",
+                    "anchors": list(row.get("fitAnchors") or row.get("anchors") or []),
+                    "fitAnchors": list(row.get("fitAnchors") or row.get("anchors") or []),
+                    "touchAnchors": list(row.get("touchAnchors") or []),
+                    "supportRail": row.get("supportRail"),
+                    "resistanceRail": row.get("resistanceRail"),
+                    "slope": row.get("slope"),
+                    "intercept": row.get("intercept"),
+                    "supportSlope": row.get("supportSlope"),
+                    "supportIntercept": row.get("supportIntercept"),
+                    "resistanceSlope": row.get("resistanceSlope"),
+                    "resistanceIntercept": row.get("resistanceIntercept"),
+                    "subtype": row.get("subtype"),
+                    "styleHint": "auto-pale",
+                },
+                status=str(row.get("status") or "forming"),
+                direction=str(row.get("direction") or "neutral"),
+                shape_quality=float(row.get("shapeQuality") or 0.0),
+                display_priority=float(row.get("displayPriority") or 0.0),
+                evidence=evidence,
+                formation_start=str(row.get("formationStart") or data_through),
+                formation_end=str(row.get("formationEnd") or data_through),
+                data_through=data_through,
+                label=f"{row.get('kind')}:{row.get('subtype') or ''}".rstrip(":"),
+                detail="shapeQuality is geometry, not a probability",
+            )
+        )
+    return overlays
+
+
 def _base_overlays(
     base: Mapping[str, Any] | None,
     base_state: Mapping[str, Any] | None,
@@ -688,12 +742,13 @@ def _price_action_overlays(
                 detail="nearest confirmed swing low",
             )
         )
-    for name in price_action.get("patterns") or []:
+    for event in price_action.get("pattern_events") or []:
+        name = event.get("pattern")
         if not name:
             continue
-        day = dates[-1] if dates else data_through
-        price = series.get("closes", [None])[-1] if series.get("closes") else None
-        if price is None:
+        day = event.get("trade_date")
+        price = event.get("price")
+        if price is None or day not in dates:
             continue
         overlays.append(
             _overlay(
@@ -721,6 +776,25 @@ def _price_action_overlays(
                 detail="exact barKey event",
             )
         )
+    for event in price_action.get("trap_events") or []:
+        name = event.get("pattern")
+        day = event.get("trade_date")
+        price = _finite_number(event.get("price"))
+        if name not in {"spring", "upthrust"} or day not in dates or price is None:
+            continue
+        overlays.append(_overlay(
+            overlay_id=f"trap:{name}:{day}", source_id="price_action",
+            algorithm_version=PRICE_ACTION_VERSION, group="event", kind="trap",
+            geometry={
+                "type": "point", "pattern": name, "styleHint": "event",
+                "anchors": [{"time": f"{day}T00:00:00+00:00", "barKey": day, "price": price}],
+            },
+            status="testing", direction="bullish" if name == "spring" else "bearish",
+            shape_quality=0.6, display_priority=0.5,
+            evidence={"sources": ["price_action"]},
+            formation_start=day, formation_end=day, data_through=data_through,
+            label=name, detail="price-action event at its actual session",
+        ))
     return overlays
 
 
@@ -822,7 +896,22 @@ def _breakout_overlays(
     ]
 
 
+def chart_bars(bars: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Materialize one adjusted OHLCV series for both the chart and its analysis.
+
+    Bulk history has adjustment factors but no stored adjusted prices. Keep the
+    raw fields intact for the raw-price view and use the existing split rules.
+    """
+
+    result: list[dict[str, Any]] = []
+    for bar, factor in zip(bars, cumulative_factors(bars)):
+        adjusted = adjusted_bar(bar, factor)
+        result.append({**bar, **{f"adj_{key}": value for key, value in adjusted.items()}})
+    return result
+
+
 def series_from_jp_bars(bars: Sequence[Mapping[str, Any]], *, min_bars: int = 30) -> dict[str, list] | None:
+    bars = chart_bars(bars)
     series = clean_series(bars, min_bars=min_bars)
     if series is None:
         return None
@@ -831,13 +920,10 @@ def series_from_jp_bars(bars: Sequence[Mapping[str, Any]], *, min_bars: int = 30
     times: list[int] = []
     for day in series["dates"]:
         bar = by_date.get(str(day), {})
-        volume = bar.get("volume")
-        if volume is None:
-            volume = bar.get("turnover_value") or 0.0
-        try:
-            volumes.append(max(0.0, float(volume)))
-        except (TypeError, ValueError):
-            volumes.append(0.0)
+        volume = _finite_number(bar.get("adj_volume"))
+        # Yen turnover is not a share count. A missing volume contributes no
+        # volume instead of mixing units in OBV and the displayed volume bars.
+        volumes.append(max(0.0, volume) if volume is not None else 0.0)
         times.append(_date_epoch(str(day)))
     series["volumes"] = volumes
     series["times"] = times
@@ -868,6 +954,10 @@ def assemble_chart_analysis(
     overlays: list[dict[str, Any]] = []
     overlays.extend(_ma_overlays(series, data_through))
     overlays.extend(_price_action_overlays(price_action, series, data_through))
+    overlays.extend(_pattern_overlays([
+        apply_display_evidence(row, volume_confirmation, trend_alignment)
+        for row in detect_auto_patterns(series, data_through=data_through)
+    ], data_through))
     overlays.extend(
         _base_overlays(
             base,
@@ -959,6 +1049,7 @@ __all__ = [
     "bar_fingerprint",
     "canonical_bar_payload",
     "chart_analysis_for_bars",
+    "chart_bars",
     "consecutive_swing_labels",
     "fingerprint_meta",
     "macd_series",

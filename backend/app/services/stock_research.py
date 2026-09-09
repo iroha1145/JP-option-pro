@@ -14,6 +14,7 @@ from app.services import short_interest as si
 from app.services.chart_analysis import (
     TOPIX_INDEX_CODE,
     chart_analysis_for_bars,
+    chart_bars,
     topix_close_map,
 )
 from app.services.radar.base_detector import detect_base
@@ -45,7 +46,7 @@ def _topix_closes(repository: CoreRepository, *, limit: int) -> dict[str, float]
 
 def stock_chart(repository: CoreRepository, canonical_code: str, *, range_key: str = "1y") -> dict[str, Any]:
     limit = _CHART_RANGES.get(range_key, 250)
-    bars = repository.bars_for_code(canonical_code, limit=limit)
+    bars = chart_bars(repository.bars_for_code(canonical_code, limit=limit))
     return {
         "canonical_code": canonical_code,
         "display_code": display_code(canonical_code),
@@ -67,6 +68,7 @@ def stock_chart(repository: CoreRepository, canonical_code: str, *, range_key: s
                 "adj_high": bar.get("adj_high"),
                 "adj_low": bar.get("adj_low"),
                 "adj_close": bar.get("adj_close"),
+                "adj_volume": bar.get("adj_volume"),
                 "volume": bar.get("volume"),
                 "turnover_value": bar.get("turnover_value"),
                 "adjustment_factor": bar.get("adjustment_factor"),

@@ -116,7 +116,7 @@ function toAnalysisBars(rows: StockBar[], mode: PriceMode): AnalysisBar[] {
       h: high,
       l: low,
       c,
-      v: bar.volume ?? bar.turnover_value ?? 0,
+      v: Math.max(0, (mode === 'adjusted' ? bar.adj_volume : bar.volume) ?? 0),
       closed: true,
     });
   }
@@ -829,7 +829,7 @@ export default function StockChart({
                 <MenuSelect
                   ariaLabel={t('选择副图指标')}
                   value={analysisOption.panes[0]?.id ?? selectedIndicator}
-                  options={visiblePanes.map((pane) => ({ value: pane.id, label: pane.label }))}
+                  options={visiblePanes.map((pane) => ({ value: pane.id, label: t(pane.label) }))}
                   onChange={setSelectedIndicator}
                   className="min-w-0 max-w-full"
                 />
