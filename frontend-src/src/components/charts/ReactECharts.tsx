@@ -9,10 +9,12 @@ interface ReactEChartsProps {
   onClick?: (params: unknown) => void;
   /** 实例创建后回调一次；实例随组件卸载 dispose，外部持有需以此回调刷新引用 */
   onInit?: (chart: EChartsInstance) => void;
+  /** 提交前改 option（例如写回用户滚过的 dataZoom），不要在这里做算法。 */
+  prepareOption?: (option: ChartOption) => ChartOption;
   ariaLabel?: string;
 }
 
-export default function ReactECharts({ option, className, style, onClick, onInit, ariaLabel }: ReactEChartsProps) {
+export default function ReactECharts({ option, className, style, onClick, onInit, prepareOption, ariaLabel }: ReactEChartsProps) {
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<EChartsInstance | null>(null);
   const onInitRef = useRef(onInit);
@@ -38,12 +40,12 @@ export default function ReactECharts({ option, className, style, onClick, onInit
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart) return;
-    chart.setOption(option, { notMerge: true });
+    chart.setOption(prepareOption ? prepareOption(option) : option, { notMerge: true });
     // Always detach first so a transition to onClick=undefined removes the stale
     // handler (previously the off() lived inside the if and leaked the old binding).
     chart.off('click');
     if (onClick) chart.on('click', onClick);
-  }, [option, onClick]);
+  }, [option, onClick, prepareOption]);
 
   return (
     /* 尺寸只认 className（内联 height:100% 会压过 h-*，而父级是 auto 高时

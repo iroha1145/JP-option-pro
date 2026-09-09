@@ -336,6 +336,7 @@ export default function StockDetail() {
       <div className="mt-8 grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
         <StockChart
           displayCode={security.display_code}
+          ticker={security.canonical_code}
           interval={interval}
           onInterval={setInterval}
           range={range}
@@ -345,6 +346,7 @@ export default function StockDetail() {
           bars={chartData?.bars}
           barsLoading={chart.loading}
           overlays={technical?.chart_overlays}
+          analysis={chartData?.chart_analysis}
           onRetry={() => chart.refresh({ force: true })}
         >
           {interval === 'tick' ? (

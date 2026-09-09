@@ -11,6 +11,11 @@ from typing import Any
 from app.domain.symbols import display_code, normalize_input_code
 from app.repositories.core import CoreRepository
 from app.services import short_interest as si
+from app.services.chart_analysis import (
+    TOPIX_INDEX_CODE,
+    chart_analysis_for_bars,
+    topix_close_map,
+)
 from app.services.radar.base_detector import detect_base
 from app.services.radar.features import clean_series, series_excluding_last
 from app.services.radar.price_action import compute_price_action
@@ -34,6 +39,10 @@ def resolve_code(repository: CoreRepository, raw: str) -> dict[str, Any] | None:
     return matches[0] if matches else None
 
 
+def _topix_closes(repository: CoreRepository, *, limit: int) -> dict[str, float]:
+    return topix_close_map(repository.index_series(TOPIX_INDEX_CODE, limit=limit))
+
+
 def stock_chart(repository: CoreRepository, canonical_code: str, *, range_key: str = "1y") -> dict[str, Any]:
     limit = _CHART_RANGES.get(range_key, 250)
     bars = repository.bars_for_code(canonical_code, limit=limit)
@@ -42,6 +51,11 @@ def stock_chart(repository: CoreRepository, canonical_code: str, *, range_key: s
         "display_code": display_code(canonical_code),
         "range": range_key,
         "data_through": bars[-1]["trade_date"] if bars else None,
+        "chart_analysis": chart_analysis_for_bars(
+            bars,
+            ticker=canonical_code,
+            topix_closes=_topix_closes(repository, limit=limit + 80),
+        ),
         "bars": [
             {
                 "trade_date": bar["trade_date"],
@@ -128,7 +142,12 @@ def derive_quarter_values(summaries: list[dict[str, Any]]) -> list[dict[str, Any
     return results
 
 
-def technical_structure(bars: list[dict[str, Any]]) -> dict[str, Any] | None:
+def technical_structure(
+    bars: list[dict[str, Any]],
+    *,
+    ticker: str = "",
+    topix_closes: dict[str, float] | None = None,
+) -> dict[str, Any] | None:
     """K線構造分析（米国版アルゴリズム移植: ベース/価格行動/量価/指標）。"""
 
     series = clean_series(bars)
@@ -150,12 +169,18 @@ def technical_structure(bars: list[dict[str, Any]]) -> dict[str, Any] | None:
         overlays["invalidation_price"] = base.get("invalidation_price")
         overlays["base_start"] = base.get("base_start")
         overlays["base_end"] = base.get("base_end")
+    last_date = series["dates"][-1] if series.get("dates") else None
     return {
         "base": base,
         "price_action": price_action,
         "vol_price": vol_price,
         "technicals": technicals,
         "chart_overlays": overlays,
+        "last_bar": {"trade_date": last_date, "closed": True} if last_date else None,
+        "data_through": last_date,
+        "chart_analysis": chart_analysis_for_bars(
+            bars, ticker=ticker, topix_closes=topix_closes,
+        ),
     }
 
 
@@ -226,7 +251,11 @@ def stock_overview(repository: CoreRepository, canonical_code: str) -> dict[str,
         "short_positions": short_rows[:30],
         "short_interest": short_interest,
         "radar_events": repository.radar_events_for_code(canonical_code, limit=20),
-        "technical": technical_structure(bars),
+        "technical": technical_structure(
+            bars,
+            ticker=canonical_code,
+            topix_closes=_topix_closes(repository, limit=380),
+        ),
     }
 
 

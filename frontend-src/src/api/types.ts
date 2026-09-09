@@ -239,6 +239,9 @@ export interface SwingPoint {
 
 export interface TechnicalStructure {
   base: BaseStructure | null;
+  last_bar?: { trade_date: string; closed?: boolean } | null;
+  data_through?: string | null;
+  chart_analysis?: Record<string, unknown> | null;
   price_action: {
     status: string;
     score: number | null;
