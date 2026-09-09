@@ -67,6 +67,9 @@ jobs:
       - name: Color-mode preference gate
         run: node --experimental-strip-types --test frontend-src/tests/color-preference.mjs
 
+      - name: Night-mode preference gate
+        run: node --experimental-strip-types --test frontend-src/tests/theme-preference.mjs
+
       - name: Screener freshness gate
         run: node --experimental-strip-types --test frontend-src/tests/screener-freshness.mjs
 

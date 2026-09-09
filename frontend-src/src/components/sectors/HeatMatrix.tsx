@@ -10,6 +10,7 @@ import { heatColor } from '@/lib/chart';
 import { SkeletonBlock } from '@/components/shared/Skeleton';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import { useColorMode } from '@/hooks/useColorMode';
+import { useTheme } from '@/hooks/useTheme';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import { EASE_PAPER } from '@/lib/motion';
 import { t } from '@/i18n/core';
@@ -49,6 +50,7 @@ function HeatTile({
   /* heatColor 在渲染期读 getColorMode()。不订阅则换盘后整块矩阵停在旧口径，
      与同屏徽章 / 涨跌幅红绿相反，直到别的原因触发重绘才追上。 */
   useColorMode();
+  useTheme();
   const reduce = usePrefersReducedMotion();
   const primary = metricValue(sector, metric);
   const secondary = metric === 'r1' ? sector.median_return_20d : sector.median_return_1d;

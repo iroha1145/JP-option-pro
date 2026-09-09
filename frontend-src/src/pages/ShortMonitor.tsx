@@ -19,6 +19,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useColorMode } from '@/hooks/useColorMode';
+import { useTheme } from '@/hooks/useTheme';
 import { Link } from 'react-router';
 import { motion } from 'framer-motion';
 import PageHeader from '@/components/shared/PageHeader';
@@ -624,8 +625,10 @@ function Explanation({ detail }: { detail: ShortMonitorDetail }) {
  *  市场在公开之前不可能知道这件事，标在仓位日等于把未来信息画进过去。 */
 function LeadChart({ bars, events, code }: { bars: StockBar[]; events: ShortMonitorEvent[]; code: string }) {
   const colorMode = useColorMode();
+  const theme = useTheme();
   const option = useMemo(() => {
     void colorMode;
+    void theme;
     const dates = bars.map((bar) => bar.trade_date.slice(5));
     const candles = bars.map((bar) => [
       bar.adj_open ?? bar.open,
@@ -677,7 +680,7 @@ function LeadChart({ bars, events, code }: { bars: StockBar[]; events: ShortMoni
         },
       ],
     };
-  }, [bars, colorMode, events]);
+  }, [bars, colorMode, events, theme]);
   return <ReactECharts className="h-64 w-full" option={option} ariaLabel={`${code} short monitor chart`} />;
 }
 

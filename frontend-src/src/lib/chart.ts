@@ -28,6 +28,7 @@ import type {
 } from 'echarts/components';
 import { CHART_MONO_FONT } from './chartFonts.ts';
 import { directionColors, getColorMode } from './colorPreference.ts';
+import { getResolvedTheme, themeChrome } from './themePreference.ts';
 
 echarts.use([
   LineChart, BarChart, CandlestickChart, PieChart, CustomChart,
@@ -58,22 +59,44 @@ export type ChartOption = ComposeOption<
 /** echarts.init 返回的实例类型（供交互层 convertFromPixel/zr 事件使用） */
 export type EChartsInstance = ReturnType<typeof echarts.init>;
 
-/* ---------- 调色（与 CSS 变量一致；up/down 随涨跌色彩习惯） ---------- */
+/* ---------- 调色（与 CSS 变量一致；up/down 随涨跌色彩习惯，chrome 随外观） ---------- */
 export const CH = {
-  ink400: '#626F8B',
-  ink300: '#B7BFD3',
-  lineChart: '#EDF0F4',
-  brand600: '#2E46E0',
-  brand500: '#3B59F2',
-  brand400: '#6B82FF',
+  get ink400() {
+    return themeChrome().ink400;
+  },
+  get ink300() {
+    return themeChrome().ink300;
+  },
+  get lineChart() {
+    return themeChrome().lineChart;
+  },
+  get brand600() {
+    return themeChrome().brand600;
+  },
+  get brand500() {
+    return themeChrome().brand500;
+  },
+  get brand400() {
+    return themeChrome().brand400;
+  },
   get up600() {
     return directionColors().up600;
   },
   get down600() {
     return directionColors().down600;
   },
-  warn600: '#E8930C',
-  ai600: '#0B7285',
+  get warn600() {
+    return themeChrome().warn600;
+  },
+  get ai600() {
+    return themeChrome().ai600;
+  },
+  get card() {
+    return themeChrome().card;
+  },
+  get tooltipFg() {
+    return themeChrome().tooltipFg;
+  },
 };
 
 /* ---------- 通用配置 ---------- */
@@ -183,7 +206,7 @@ export function insightLineSeries(options: {
             symbolSize: 8,
             itemStyle: {
               color,
-              borderColor: '#FFFFFF',
+              borderColor: CH.card,
               borderWidth: 2,
               shadowBlur: 8,
               shadowColor: hexRgba(color, 0.5),
@@ -200,11 +223,11 @@ export function glassTooltip(overrides: Record<string, unknown> = {}) {
     trigger: 'axis' as const,
     transitionDuration: 0,
     className: 'cloud-chart-tooltip',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: CH.card,
     borderColor: 'var(--line)',
     borderWidth: 1,
     padding: [8, 12],
-    textStyle: { color: '#3D4A68', fontSize: 12, fontFamily: 'Inter, sans-serif' },
+    textStyle: { color: CH.tooltipFg, fontSize: 12, fontFamily: 'Inter, sans-serif' },
     extraCssText:
       'box-shadow:var(--popover-shadow);border-radius:9px;font-variant-numeric:tabular-nums;transition:opacity 140ms ease-out;',
     axisPointer: {
@@ -218,19 +241,22 @@ export function glassTooltip(overrides: Record<string, unknown> = {}) {
 
 /* ---------- 点阵面积图 pattern（§6-2） ---------- */
 let stippleCanvas: HTMLCanvasElement | null = null;
+let stippleTheme: ReturnType<typeof getResolvedTheme> | null = null;
 export function stipplePattern(): HTMLCanvasElement | null {
   if (typeof document === 'undefined') return null;
-  if (stippleCanvas) return stippleCanvas;
+  const theme = getResolvedTheme();
+  if (stippleCanvas && stippleTheme === theme) return stippleCanvas;
   const c = document.createElement('canvas');
   c.width = 6;
   c.height = 6;
   const ctx = c.getContext('2d');
   if (!ctx) return null;
-  ctx.fillStyle = 'rgba(46,70,224,.20)';
+  ctx.fillStyle = theme === 'dark' ? 'rgba(138,188,240,.28)' : 'rgba(46,70,224,.20)';
   ctx.beginPath();
   ctx.arc(3, 3, 1.1, 0, Math.PI * 2);
   ctx.fill();
   stippleCanvas = c;
+  stippleTheme = theme;
   return c;
 }
 
@@ -258,27 +284,35 @@ export function hatchDecal(color = CH.brand600) {
 /* ---------- 涨跌热力色阶（§1.7 连续映射） ----------
    色阶两端是「涨/跌」不是固定绿/红。基表按西方习惯（绿涨红跌）；
    亚洲习惯下翻转符号，与 ColorModeSwitcher / CH.up600 共用同一快照。 */
-const HEAT_STOPS: { pct: number; rgb: [number, number, number] }[] = [
+const HEAT_STOPS_LIGHT: { pct: number; rgb: [number, number, number] }[] = [
   { pct: -3, rgb: [214, 53, 59] },
   { pct: -1.5, rgb: [240, 131, 127] },
   { pct: 0, rgb: [241, 239, 232] },
   { pct: 1.5, rgb: [124, 207, 169] },
   { pct: 3, rgb: [14, 159, 110] },
 ];
+const HEAT_STOPS_DARK: { pct: number; rgb: [number, number, number] }[] = [
+  { pct: -3, rgb: [240, 113, 120] },
+  { pct: -1.5, rgb: [196, 96, 102] },
+  { pct: 0, rgb: [44, 48, 57] },
+  { pct: 1.5, rgb: [70, 160, 130] },
+  { pct: 3, rgb: [98, 208, 165] },
+];
 
 export function heatColor(pct: number): string {
   const signed = getColorMode() === 'asian' ? -pct : pct;
   const clamped = Math.max(-3, Math.min(3, signed));
-  for (let i = 0; i < HEAT_STOPS.length - 1; i++) {
-    const a = HEAT_STOPS[i];
-    const b = HEAT_STOPS[i + 1];
+  const stops = getResolvedTheme() === 'dark' ? HEAT_STOPS_DARK : HEAT_STOPS_LIGHT;
+  for (let i = 0; i < stops.length - 1; i++) {
+    const a = stops[i];
+    const b = stops[i + 1];
     if (clamped >= a.pct && clamped <= b.pct) {
       const t = (clamped - a.pct) / (b.pct - a.pct);
       const mix = a.rgb.map((v, k) => Math.round(v + (b.rgb[k] - v) * t));
       return `rgb(${mix[0]},${mix[1]},${mix[2]})`;
     }
   }
-  return 'rgb(241,239,232)';
+  return getResolvedTheme() === 'dark' ? 'rgb(44,48,57)' : 'rgb(241,239,232)';
 }
 
 /** 强度分色阶（§6-5） */
