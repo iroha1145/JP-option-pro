@@ -3,9 +3,11 @@
  * 发丝网格 / 毛玻璃 tooltip / 绘制动画 / 点阵面积 / 斜纹柱
  */
 import * as echarts from 'echarts/core';
-import { BarChart, CandlestickChart, LineChart, PieChart } from 'echarts/charts';
+import { BarChart, CandlestickChart, CustomChart, LineChart, PieChart } from 'echarts/charts';
 import {
   DataZoomComponent,
+  DataZoomSliderComponent,
+  GraphicComponent,
   GridComponent,
   MarkAreaComponent,
   MarkLineComponent,
@@ -14,23 +16,27 @@ import {
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import type { ComposeOption } from 'echarts/core';
-import type { BarSeriesOption, CandlestickSeriesOption, LineSeriesOption, PieSeriesOption } from 'echarts/charts';
+import type { BarSeriesOption, CandlestickSeriesOption, CustomSeriesOption, LineSeriesOption, PieSeriesOption } from 'echarts/charts';
 import type {
   DataZoomComponentOption,
+  GraphicComponentOption,
   GridComponentOption,
   MarkAreaComponentOption,
   MarkLineComponentOption,
   MarkPointComponentOption,
   TooltipComponentOption,
 } from 'echarts/components';
+import { CHART_MONO_FONT } from './chartFonts.ts';
 import { directionColors, getColorMode } from './colorPreference.ts';
 
 echarts.use([
-  LineChart, BarChart, CandlestickChart, PieChart,
-  GridComponent, TooltipComponent, DataZoomComponent, MarkLineComponent,
-  MarkPointComponent, MarkAreaComponent,
+  LineChart, BarChart, CandlestickChart, PieChart, CustomChart,
+  GridComponent, TooltipComponent, DataZoomComponent, DataZoomSliderComponent,
+  MarkLineComponent, MarkPointComponent, MarkAreaComponent, GraphicComponent,
   CanvasRenderer,
 ]);
+
+export { CHART_MONO_FONT };
 
 export { echarts };
 
@@ -39,12 +45,14 @@ export type ChartOption = ComposeOption<
   | BarSeriesOption
   | CandlestickSeriesOption
   | PieSeriesOption
+  | CustomSeriesOption
   | GridComponentOption
   | TooltipComponentOption
   | DataZoomComponentOption
   | MarkLineComponentOption
   | MarkPointComponentOption
   | MarkAreaComponentOption
+  | GraphicComponentOption
 >;
 
 /** echarts.init 返回的实例类型（供交互层 convertFromPixel/zr 事件使用） */
@@ -100,6 +108,21 @@ export function valueAxis(overrides: Record<string, unknown> = {}) {
     splitLine: { lineStyle: { color: CH.lineChart, width: 1 } },
     ...overrides,
   };
+}
+
+export function withAlpha(hex: string, alpha: number): string {
+  const raw = hex.replace('#', '');
+  const value = Number.parseInt(raw, 16);
+  if (!Number.isFinite(value)) return hex;
+  return `rgba(${(value >> 16) & 255},${(value >> 8) & 255},${value & 255},${alpha})`;
+}
+
+export function escapeTooltipText(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 function hexRgba(hex: string, alpha: number): string {

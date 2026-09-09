@@ -162,6 +162,7 @@ export interface StockBar {
   adj_high: number | null;
   adj_low: number | null;
   adj_close: number | null;
+  adj_volume?: number | null;
   volume: number | null;
   turnover_value: number | null;
   adjustment_factor: number | null;
@@ -239,6 +240,9 @@ export interface SwingPoint {
 
 export interface TechnicalStructure {
   base: BaseStructure | null;
+  last_bar?: { trade_date: string; closed?: boolean } | null;
+  data_through?: string | null;
+  chart_analysis?: Record<string, unknown> | null;
   price_action: {
     status: string;
     score: number | null;

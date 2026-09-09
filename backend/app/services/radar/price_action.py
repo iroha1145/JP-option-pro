@@ -117,12 +117,12 @@ def _structure_state(
     return "range"
 
 
-def _detect_patterns(
+def _pattern_events(
     opens: Sequence[float], highs: Sequence[float], lows: Sequence[float], closes: Sequence[float],
     check_last: int = 3, extreme_window: int = 10,
-) -> list[str]:
+) -> list[tuple[str, int]]:
     n = len(closes)
-    found: list[str] = []
+    found: list[tuple[str, int]] = []
     for i in range(max(1, n - check_last), n):
         o, h, l, c = opens[i], highs[i], lows[i], closes[i]
         po, pc = opens[i - 1], closes[i - 1]
@@ -135,20 +135,51 @@ def _detect_patterns(
         prev_body = abs(pc - po)
 
         if pc < po and c > o and c >= po and o <= pc and body > prev_body * 1.05:
-            found.append("bullish_engulfing")
+            found.append(("bullish_engulfing", i))
         elif pc > po and c < o and c <= po and o >= pc and body > prev_body * 1.05:
-            found.append("bearish_engulfing")
+            found.append(("bearish_engulfing", i))
 
         window_lo = min(lows[max(0, i - extreme_window):i + 1])
         window_hi = max(highs[max(0, i - extreme_window):i + 1])
         if body > 0 and lower_wick >= body * 2 and upper_wick <= body * 0.6 and l <= window_lo * 1.01:
-            found.append("hammer")
+            found.append(("hammer", i))
         elif body > 0 and upper_wick >= body * 2 and lower_wick <= body * 0.6 and h >= window_hi * 0.99:
-            found.append("shooting_star")
+            found.append(("shooting_star", i))
 
         if h < highs[i - 1] and l > lows[i - 1]:
-            found.append("inside_bar")
-    return list(dict.fromkeys(found))
+            found.append(("inside_bar", i))
+    return found
+
+
+def _detect_patterns(
+    opens: Sequence[float], highs: Sequence[float], lows: Sequence[float], closes: Sequence[float],
+    check_last: int = 3, extreme_window: int = 10,
+) -> list[str]:
+    return list(dict.fromkeys(name for name, _ in _pattern_events(
+        opens, highs, lows, closes, check_last, extreme_window,
+    )))
+
+
+def _trap_events(
+    highs: Sequence[float], lows: Sequence[float], closes: Sequence[float],
+    swing_highs: list[tuple[int, float]], swing_lows: list[tuple[int, float]],
+    recent: int = 8,
+) -> dict[str, tuple[int, float]]:
+    n = len(closes)
+    start = max(0, n - recent)
+    events: dict[str, tuple[int, float]] = {}
+    for i in range(start, n):
+        prior_lows = [price for idx, price in swing_lows if idx < i - 1]
+        if prior_lows and "spring" not in events:
+            level = prior_lows[-1]
+            if lows[i] < level * 0.998 and closes[i] > level:
+                events["spring"] = (i, level)
+        prior_highs = [price for idx, price in swing_highs if idx < i - 1]
+        if prior_highs and "upthrust" not in events:
+            level = prior_highs[-1]
+            if highs[i] > level * 1.002 and closes[i] < level:
+                events["upthrust"] = (i, level)
+    return events
 
 
 def _detect_traps(
@@ -156,22 +187,8 @@ def _detect_traps(
     swing_highs: list[tuple[int, float]], swing_lows: list[tuple[int, float]],
     recent: int = 8,
 ) -> tuple[bool, bool]:
-    n = len(closes)
-    start = max(0, n - recent)
-    spring = False
-    upthrust = False
-    for i in range(start, n):
-        prior_lows = [price for idx, price in swing_lows if idx < i - 1]
-        if prior_lows and not spring:
-            level = prior_lows[-1]
-            if lows[i] < level * 0.998 and closes[i] > level:
-                spring = True
-        prior_highs = [price for idx, price in swing_highs if idx < i - 1]
-        if prior_highs and not upthrust:
-            level = prior_highs[-1]
-            if highs[i] > level * 1.002 and closes[i] < level:
-                upthrust = True
-    return spring, upthrust
+    events = _trap_events(highs, lows, closes, swing_highs, swing_lows, recent)
+    return "spring" in events, "upthrust" in events
 
 
 def compute_price_action(
@@ -196,7 +213,8 @@ def compute_price_action(
     score = _STRUCTURE_SCORES[structure]
     tags: list[str] = [structure_label] if structure != "range" else []
 
-    patterns = _detect_patterns(opens, highs, lows, closes)
+    pattern_events = _pattern_events(opens, highs, lows, closes)
+    patterns = list(dict.fromkeys(name for name, _ in pattern_events))
     pattern_adjust = 0.0
     for pattern in patterns:
         pattern_adjust += _PATTERN_ADJUST.get(pattern, 0.0)
@@ -207,7 +225,8 @@ def compute_price_action(
         tags.append("内包线收缩")
     pattern_adjust = max(-10.0, min(10.0, pattern_adjust))
 
-    spring, upthrust = _detect_traps(highs, lows, closes, swing_highs, swing_lows)
+    trap_events = _trap_events(highs, lows, closes, swing_highs, swing_lows)
+    spring, upthrust = "spring" in trap_events, "upthrust" in trap_events
     trap_adjust = 0.0
     if spring:
         trap_adjust += 8.0
@@ -239,8 +258,16 @@ def compute_price_action(
         "support_dist_pct": _safe((support / last_close - 1) * 100, 2) if support else None,
         "patterns": patterns,
         "pattern_labels": [_PATTERN_LABELS[p] for p in patterns if p in _PATTERN_LABELS],
+        "pattern_events": [
+            {"pattern": name, "trade_date": dates[index], "price": _safe(closes[index])}
+            for name, index in pattern_events
+        ],
         "spring": spring,
         "upthrust": upthrust,
+        "trap_events": [
+            {"pattern": name, "trade_date": dates[index], "price": _safe(level)}
+            for name, (index, level) in trap_events.items()
+        ],
         "tags": list(dict.fromkeys(tags))[:4],
     }
 

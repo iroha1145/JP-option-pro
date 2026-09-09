@@ -63,7 +63,7 @@ export const stocksApi = {
   overview(code: string): Promise<StockOverview> {
     return get(`/stocks/${encodeURIComponent(code)}`);
   },
-  chart(code: string, range: string): Promise<{ canonical_code: string; display_code: string; range: string; data_through: string | null; bars: StockBar[] }> {
+  chart(code: string, range: string): Promise<{ canonical_code: string; display_code: string; range: string; data_through: string | null; chart_analysis?: Record<string, unknown> | null; bars: StockBar[] }> {
     return get(`/stocks/${encodeURIComponent(code)}/chart?${toQuery({ range })}`);
   },
   intradayChart(code: string, interval: '1m' | '5m' | '60m'): Promise<IntradayChart> {

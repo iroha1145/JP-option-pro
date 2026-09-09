@@ -69,6 +69,23 @@ def test_radar_current_and_event_detail(client):
     assert detail.json()["transitions"]
 
 
+def test_stock_chart_exposes_aligned_analysis_panes(client):
+    body = client.get("/api/stocks/7203/chart", params={"range": "6m"}).json()
+    assert body["bars"]
+    analysis = body["chart_analysis"]
+    assert analysis is not None
+    assert analysis["range"] == "1d"
+    assert analysis["adjustment"] == "adjusted"
+    assert analysis["ticker"] == "72030"
+    assert analysis["barCount"] == len(analysis["dates"])
+    assert analysis["dataThrough"] == body["data_through"]
+    pane_ids = {pane["id"] for pane in analysis["indicatorPanes"]}
+    assert {"rsi", "macd", "obv", "clv", "range_persistence", "topix_rs"} <= pane_ids
+    assert "spy_rs" not in pane_ids
+    overlay_kinds = {row["kind"] for row in analysis["overlays"]}
+    assert "ma" in overlay_kinds
+
+
 def test_stock_overview_resolves_letter_code(client):
     response = client.get("/api/stocks/285A")
     assert response.status_code == 200
