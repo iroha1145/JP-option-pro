@@ -12,15 +12,17 @@ export function insideZoom(
   barCount: number,
   axes: number[],
   saved?: ZoomWindow | null,
+  defaultBars = DEFAULT_ZOOM_BARS,
 ) {
-  if (barCount <= DEFAULT_ZOOM_BARS) return undefined;
+  if (!Number.isSafeInteger(barCount) || barCount < 2) return undefined;
   const last = barCount - 1;
-  let startValue = barCount - DEFAULT_ZOOM_BARS;
+  const window = Number.isFinite(defaultBars) ? Math.max(2, Math.floor(defaultBars)) : DEFAULT_ZOOM_BARS;
+  let startValue = Math.max(0, barCount - window);
   let endValue = last;
-  if (saved) {
-    const span = Math.max(1, saved.end - saved.start);
-    endValue = saved.pinnedEnd ? last : Math.min(last, Math.max(1, saved.end));
-    startValue = Math.max(0, Math.min(endValue - 1, saved.pinnedEnd ? endValue - span : saved.start));
+  if (saved && Number.isFinite(saved.start) && Number.isFinite(saved.end) && saved.end > saved.start) {
+    const span = Math.min(last, Math.max(1, Math.round(saved.end - saved.start)));
+    endValue = saved.pinnedEnd ? last : Math.min(last, Math.max(span, Math.round(saved.end)));
+    startValue = endValue - span;
   }
   return [
     {
@@ -28,7 +30,7 @@ export function insideZoom(
       xAxisIndex: axes,
       startValue,
       endValue,
-      minValueSpan: 15,
+      minValueSpan: 1,
       preventDefaultMouseMove: false,
       zoomOnMouseWheel: true,
       moveOnMouseMove: true,
@@ -39,6 +41,7 @@ export function insideZoom(
       xAxisIndex: axes,
       startValue,
       endValue,
+      minValueSpan: 1,
       height: 16,
       bottom: 0,
       borderColor: 'transparent',
@@ -55,13 +58,16 @@ export function zoomFromOption(
   } | null | undefined,
   barCount: number,
 ): ZoomWindow | null {
+  if (!Number.isSafeInteger(barCount) || barCount < 2) return null;
   const row = option?.dataZoom?.[0];
-  const start = Number(row?.startValue ?? row?.start);
-  const end = Number(row?.endValue ?? row?.end);
+  const value = (index: unknown, percent: unknown) => typeof index === 'number' && Number.isFinite(index)
+    ? index : typeof percent === 'number' && Number.isFinite(percent) ? percent * (barCount - 1) / 100 : NaN;
+  const start = Math.max(0, Math.min(barCount - 1, Math.round(value(row?.startValue, row?.start))));
+  const end = Math.max(0, Math.min(barCount - 1, Math.round(value(row?.endValue, row?.end))));
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
   return {
-    start: Math.max(0, Math.round(start)),
-    end: Math.round(end),
-    pinnedEnd: Math.round(end) >= barCount - 1,
+    start,
+    end,
+    pinnedEnd: end >= barCount - 1,
   };
 }

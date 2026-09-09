@@ -29,6 +29,8 @@ import InfoHint from '@/components/shared/InfoHint';
 import TickAnalyticsPanel from '@/components/charts/TickAnalyticsPanel';
 import ShortBehaviorPanel from '@/components/domain/ShortBehaviorPanel';
 import StockChart, { type ChartInterval, type ChartRange, type PriceMode } from '@/components/detail/StockChart';
+import { insideZoom } from '@/components/detail/chart-drawings/zoom';
+import { useChartZoom } from '@/components/detail/chart-drawings/useChartZoom';
 import KeyStats from '@/components/detail/KeyStats';
 import { CH, baseGrid, categoryAxis, glassTooltip, insightLineSeries, valueAxis } from '@/lib/chart';
 import { DataThrough, ScoreBar, SignalChip, StateChip } from '@/components/domain';
@@ -526,6 +528,9 @@ function IntradayPane({
   onRefresh: () => void;
 }) {
   const colorMode = useColorMode();
+  const { onInit, prepareOption } = useChartZoom(
+    `${data?.canonical_code ?? ''}|${data?.interval ?? ''}`, data?.bars.length ?? 0, 80,
+  );
   const option = useMemo(() => {
     void colorMode;
     const bars = data?.bars ?? [];
@@ -536,8 +541,9 @@ function IntradayPane({
     return {
       grid: [
         baseGrid({ top: 8, bottom: '24%', left: 4, right: 48 }),
-        baseGrid({ top: '80%', bottom: 2, left: 4, right: 48 }),
+        baseGrid({ top: '80%', bottom: 36, left: 4, right: 48 }),
       ],
+      dataZoom: insideZoom(bars.length, [0, 1], null, 80),
       tooltip: glassTooltip({ trigger: 'axis' }),
       xAxis: [
         { ...categoryAxis(labels), gridIndex: 0 },
@@ -573,7 +579,7 @@ function IntradayPane({
   if (data && data.available && option) {
     return (
       <div>
-        <ReactECharts className="h-[360px] w-full" option={option} ariaLabel="intraday chart" />
+        <ReactECharts className="h-[360px] w-full" option={option} onInit={onInit} prepareOption={prepareOption} ariaLabel="intraday chart" />
         <p className="mt-1 text-right text-micro text-ink-400">
           {t('分钟数据为未复权原始价')} · {(data.days ?? []).length} {t('个交易日')} ·{' '}
           {t('数据截至')} {data.data_through ?? '—'}
