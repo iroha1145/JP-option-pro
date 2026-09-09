@@ -230,7 +230,7 @@ function legacyCandleOption(
       markLines.push({
         yAxis: overlays.invalidation_price,
         lineStyle: { color: CH.down600, type: 'dotted', width: 1 },
-        label: { formatter: t('失效位'), position: 'insideEndBottom', color: CH.down600, fontSize: 10 },
+        label: { formatter: t('失效位'), position: 'insideMiddleBottom', color: CH.down600, fontSize: 10 },
       });
     }
     const markSwing = (points: { trade_date: string; price: number | null }[], isHigh: boolean) => {
