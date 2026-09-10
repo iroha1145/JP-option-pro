@@ -4,9 +4,11 @@ import './styles/transitions-root.css';
 import './index.css';
 import './styles/transitions-catalog.css';
 import { applyColorMode } from './lib/colorPreference.ts';
+import { applyTheme } from './lib/themePreference.ts';
 import App from './App.tsx';
 
 applyColorMode();
+applyTheme();
 
 window.addEventListener('vite:preloadError', (event) => {
   const KEY = 'optixjp:preload-reloaded';

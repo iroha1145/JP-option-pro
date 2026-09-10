@@ -155,7 +155,7 @@ export function ScanButton({
   onScan: () => void;
   className?: string;
 }) {
-  const base = 'inset 0 1px 0 rgba(255,255,255,.12), 0 1px 2px rgba(16,24,40,.12), 0 3px 7px -4px rgba(16,24,40,.24)';
+  const base = 'var(--shadow-btn-hi)';
   return (
     <motion.button
       type="button"

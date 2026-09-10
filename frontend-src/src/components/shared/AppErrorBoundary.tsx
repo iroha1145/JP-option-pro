@@ -41,9 +41,9 @@ export default class AppErrorBoundary extends Component<Props, State> {
           maxWidth: '34rem',
           padding: '1.5rem',
           borderRadius: '12px',
-          border: '1px solid rgba(200, 60, 60, .25)',
-          background: '#fffaf9',
-          color: '#1b1b1f',
+          border: '1px solid color-mix(in srgb, var(--down-600) 25%, transparent)',
+          background: 'var(--card)',
+          color: 'var(--ink-900)',
           fontFamily:
             'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
           textAlign: 'center',
@@ -55,13 +55,13 @@ export default class AppErrorBoundary extends Component<Props, State> {
             marginTop: '.5rem',
             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
             fontSize: '12px',
-            color: '#6b6b76',
+            color: 'var(--ink-500)',
             wordBreak: 'break-all',
           }}
         >
           {error.name}: {error.message}
         </p>
-        <p style={{ marginTop: '.25rem', fontSize: '12px', color: '#8a8a95' }}>
+        <p style={{ marginTop: '.25rem', fontSize: '12px', color: 'var(--ink-400)' }}>
           {t('已拦截为错误卡以避免白屏；完整堆栈保留在控制台。若反复出现，可清除本站的本地存储后重试。')}
         </p>
         <div
@@ -78,13 +78,13 @@ export default class AppErrorBoundary extends Component<Props, State> {
             style={{
               borderRadius: '8px',
               border: 'none',
-              background: '#2e46e0',
+              background: 'var(--brand-600)',
               color: '#fff',
               padding: '.5rem 1rem',
               fontSize: '13px',
               fontWeight: 500,
               cursor: 'pointer',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,.16), 0 1px 2px rgba(16,24,40,.18), 0 4px 12px -4px rgba(16,24,40,.34)',
+              boxShadow: 'var(--shadow-btn-hi)',
             }}
           >
             {t('重新加载')}
@@ -101,13 +101,13 @@ export default class AppErrorBoundary extends Component<Props, State> {
             }}
             style={{
               borderRadius: '8px',
-              border: '1px solid #d8d8de',
-              background: '#fff',
-              color: '#4a4a55',
+              border: '1px solid var(--line)',
+              background: 'var(--card)',
+              color: 'var(--ink-600)',
               padding: '.5rem 1rem',
               fontSize: '13px',
               cursor: 'pointer',
-              boxShadow: '0 1px 2px rgba(16,24,40,.08), 0 2px 6px -2px rgba(16,24,40,.06), inset 0 1px 0 rgba(255,255,255,.75)',
+              boxShadow: 'var(--shadow-btn)',
             }}
           >
             {t('清除本地存储并重载')}

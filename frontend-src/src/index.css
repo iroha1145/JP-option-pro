@@ -41,6 +41,7 @@
     --down-600: #E5484D;
     --down-700: #C4302B;
     --down-50: #FCECEC;
+    --warn-700: #B87109;
     --warn-600: #E8930C;
     --warn-50: #FCF3E2;
     /* v8.1：AI 语义色弃紫。「紫 + AI」是 2024–26 最烂大街的生成式设计签名；
@@ -57,10 +58,22 @@
     --shadow-sh-2: 0 1px 2px rgba(16, 24, 40, .03), 0 12px 32px -14px rgba(16, 24, 40, .10);
     --shadow-sh-3: 0 2px 4px rgba(16, 24, 40, .04), 0 24px 56px -16px rgba(16, 24, 40, .16);
     /* Cloud Monitor 的细节层次，保留 Optix 的纸面与群青。 */
+    --scrim: rgba(13, 22, 38, .32);
+    --dot-ink: rgba(13, 22, 38, .02);
     --control-track: #F2F4F7;
     --control-selected-shadow: 0 2px 4px rgba(24, 43, 68, .045), 0 5px 12px -4px rgba(24, 43, 68, .09);
     --card-shadow: 0 2px 4px rgba(24, 43, 68, .02), 0 9px 25px -12px rgba(24, 43, 68, .12);
     --popover-shadow: 0 2px 5px rgba(24, 43, 68, .045), 0 10px 28px -10px rgba(24, 43, 68, .15);
+    /* 按钮与交互件阴影体系（亮色模式）：顶层微白内高光 */
+    --shadow-btn: 0 1px 2px rgba(16, 24, 40, .07), inset 0 1px 0 rgba(255, 255, 255, .75);
+    --shadow-btn-hi: inset 0 1px 0 rgba(255, 255, 255, .16), 0 1px 2px rgba(16, 24, 40, .18), 0 4px 12px -4px rgba(16, 24, 40, .34);
+    --shadow-btn-active: inset 0 1px 2px rgba(16, 24, 40, .08);
+    --shadow-btn-hi-active: inset 0 1.5px 3px rgba(13, 22, 38, .28), 0 1px 2px rgba(16, 24, 40, .10);
+    --shadow-chip: inset 0 1px 0 rgba(255, 255, 255, .14), 0 1px 3px -1px rgba(16, 24, 40, .25);
+    --shadow-card-hover: 0 1px 2px rgba(16, 24, 40, .03), 0 12px 32px -14px rgba(16, 24, 40, .10), inset 0 1px 0 rgba(255, 255, 255, .7);
+    --shadow-inset-hi: inset 0 1px 0 rgba(255, 255, 255, .7);
+    --shadow-zone: inset 0 1px 0 rgba(255, 255, 255, .45), 0 1px 2px rgba(16, 24, 40, .10);
+    --shadow-track: inset 0 1px 2px rgba(16, 24, 40, .16);
 
     /* shadcn/ui 基座变量（亮纸面映射；v8.1 hue 44°→220° 随纸面降温，杜绝冷暖混用） */
     --background: 220 20% 97%;
@@ -98,7 +111,91 @@
     --down-50: #E5F6EF;
   }
 
+  /* 夜间模式：色值对齐 Cloud Monitor dashboard .dark
+     （页底 #191B20 · 卡片 #24262D · 主字 #F1F3F5 · 辅字 #B0B6C0 · 边线 #323640 · 主色 #8ABCF0） */
+  html.dark {
+    color-scheme: dark;
+    --paper: #191B20;
+    --paper-2: #1D1F24;
+    --card: #24262D;
+    --card-warm: #2C3039;
+    --overlay: rgba(25, 27, 32, 0.78);
+    --ink-900: #F1F3F5;
+    --ink-800: #E8EAED;
+    --ink-700: #C5CAD3;
+    --ink-600: #B0B6C0;
+    --ink-500: #A0A8B5;
+    --ink-400: #8B93A0;
+    --ink-300: #5C6470;
+    --line: #323640;
+    --line-strong: #454B58;
+    --line-chart: #353944;
+    --brand-700: #6BA3D8;
+    --brand-600: #8ABCF0;
+    --brand-500: #9BC8F8;
+    --brand-400: #B5D4F5;
+    --brand-100: #25374C;
+    --brand-50: #24354C;
+    --up-600: #62D0A5;
+    --up-700: #4BB890;
+    --up-50: #163D34;
+    --down-600: #F07178;
+    --down-700: #E5484D;
+    --down-50: #3A1C1E;
+    --warn-700: #F0C060;
+    --warn-600: #E8A83A;
+    --warn-50: #3A2E14;
+    --ai-600: #5BC0C8;
+    --ai-50: #16343A;
+    --control-track: #21242B;
+    --scrim: rgba(0, 0, 0, .52);
+    --dot-ink: rgba(241, 243, 245, .045);
+    --shadow-sh-1: 0 1px 2px rgba(0, 0, 0, .35);
+    --shadow-sh-2: 0 1px 2px rgba(0, 0, 0, .28), 0 12px 32px -14px rgba(0, 0, 0, .55);
+    --shadow-sh-3: 0 2px 4px rgba(0, 0, 0, .32), 0 24px 56px -16px rgba(0, 0, 0, .62);
+    --control-selected-shadow: 0 2px 4px rgba(0, 0, 0, .25), 0 5px 12px -4px rgba(0, 0, 0, .4);
+    --card-shadow: 0 2px 4px rgba(0, 0, 0, .2), 0 9px 25px -12px rgba(0, 0, 0, .45);
+    --popover-shadow: 0 2px 5px rgba(0, 0, 0, .28), 0 10px 28px -10px rgba(0, 0, 0, .5);
+    /* 夜间模式：彻底清除所有白色内高光（inset white），避免在深色底上泛出高亮白边 */
+    --shadow-btn: 0 1px 2px rgba(0, 0, 0, .35);
+    --shadow-btn-hi: 0 1px 2px rgba(0, 0, 0, .30), 0 4px 12px -4px rgba(0, 0, 0, .50);
+    --shadow-btn-active: inset 0 1px 2px rgba(0, 0, 0, .35);
+    --shadow-btn-hi-active: inset 0 1.5px 3px rgba(0, 0, 0, .45), 0 1px 2px rgba(0, 0, 0, .25);
+    --shadow-chip: 0 1px 3px -1px rgba(0, 0, 0, .45);
+    --shadow-card-hover: 0 1px 2px rgba(0, 0, 0, .28), 0 12px 32px -14px rgba(0, 0, 0, .55);
+    --shadow-inset-hi: none;
+    --shadow-zone: 0 1px 2px rgba(0, 0, 0, .25);
+    --shadow-track: inset 0 1px 2px rgba(0, 0, 0, .40);
+    --background: 220 12% 11%;
+    --foreground: 210 17% 95%;
+    --card-h: 228 11% 16%;
+    --card-foreground: 210 17% 95%;
+    --popover: 228 11% 16%;
+    --popover-foreground: 210 17% 95%;
+    --primary: 208 76% 74%;
+    --primary-foreground: 220 12% 11%;
+    --secondary: 220 12% 14%;
+    --secondary-foreground: 210 14% 78%;
+    --muted: 228 11% 16%;
+    --muted-foreground: 214 10% 67%;
+    --accent: 213 35% 22%;
+    --accent-foreground: 208 76% 74%;
+    --border: 222 13% 22%;
+    --input: 222 12% 31%;
+    --ring: 208 76% 74%;
+  }
+
+  html.dark[data-color-mode="asian"] {
+    --up-600: #F07178;
+    --up-700: #E5484D;
+    --up-50: #3A1C1E;
+    --down-600: #62D0A5;
+    --down-700: #4BB890;
+    --down-50: #163D34;
+  }
+
   html {
+    color-scheme: light;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -116,7 +213,7 @@
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    background-image: radial-gradient(circle, rgba(13, 22, 38, .02) 1px, transparent 1px);
+    background-image: radial-gradient(circle, var(--dot-ink) 1px, transparent 1px);
     background-size: 22px 22px;
   }
 
@@ -129,7 +226,7 @@
   :focus-visible {
     outline: 2px solid var(--brand-600);
     outline-offset: 3px;
-    box-shadow: 0 0 0 3px rgba(46, 70, 224, .18);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-600) 28%, transparent);
     border-radius: 6px;
     transition: none;
   }
@@ -150,7 +247,7 @@
     border-radius: 8px;
     padding: .75rem 1rem;
     background: var(--ink-900);
-    color: white;
+    color: var(--paper);
   }
   .skip-link:focus { transform: none; }
 
@@ -214,7 +311,7 @@
     font-weight: 500;
     line-height: 1.25;
     color: #fff;
-    box-shadow: var(--shadow-sh-1), 0 1px 0 rgba(255, 255, 255, .18) inset;
+    box-shadow: var(--shadow-btn-hi);
     transition:
       transform var(--duration-quick) var(--ease-smooth-out),
       background-color var(--duration-quick) var(--ease-smooth-out),
@@ -227,7 +324,7 @@
   }
   .btn-primary:not(:disabled):active {
     transform: scale(0.98);
-    box-shadow: inset 0 1.5px 3px rgba(13, 22, 38, .28), 0 1px 2px rgba(16, 24, 40, .10);
+    box-shadow: var(--shadow-btn-hi-active);
   }
   @media (hover: hover) and (pointer: fine) {
     .btn-primary:not(:disabled):hover {
@@ -266,7 +363,7 @@
     inset: 0;
     border-radius: inherit;
     opacity: 0;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.55), transparent 46%);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--ink-900) 8%, transparent), transparent 46%);
     transition: opacity var(--tilt-glare-fade) var(--tilt-glare-ease);
   }
   @media (hover: hover) and (pointer: fine) {
@@ -308,7 +405,7 @@
   @media (hover: hover) and (pointer: fine) {
     .card-hover:hover {
       transform: translateY(-2px);
-      box-shadow: var(--shadow-sh-2), inset 0 1px 0 rgba(255, 255, 255, .7);
+      box-shadow: var(--shadow-card-hover);
     }
     .card-lift:hover {
       transform: translateY(-2px);
@@ -345,7 +442,7 @@
     position: absolute;
     inset: 0;
     transform: translateX(-100%);
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .85), transparent);
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ink-900) 12%, transparent), transparent);
     animation: shimmer 1.6s linear infinite;
   }
 
@@ -547,7 +644,8 @@
   .cloud-chart-tooltip { transition: none !important; }
 }
 @media (pointer: coarse) {
-  .color-mode-control { min-height: 44px; }
+  .color-mode-control,
+  .theme-control { min-height: 44px; min-width: 44px; }
 }
 .change-badge { font-family: inherit; font-weight: 500; white-space: nowrap; letter-spacing: -.015em; }
 .strength-track { background: var(--control-track); }
@@ -567,11 +665,17 @@
 /* §3.6 按钮立体层级的全局状态物理（token 见 tailwind.config boxShadow.btn/btn-hi/
    chip/track）：按下阴影收拢成内凹、禁用摊平，调用点只写一个 shadow-* 类即可，
    不必逐个补 active:/disabled: 变体。选择器特异度 (0,3,0) 稳压工具类。 */
+/* 未分层：压过 @layer base/components/utilities，深色主色钮不再用白字，阴影走 token。 */
+html.dark .btn-primary,
+html.dark .bg-brand-600 {
+  color: #191B20;
+}
+
 .shadow-btn:not(:disabled):active {
-  box-shadow: inset 0 1px 2px rgba(16, 24, 40, .08);
+  box-shadow: var(--shadow-btn-active);
 }
 .shadow-btn-hi:not(:disabled):active {
-  box-shadow: inset 0 1.5px 3px rgba(13, 22, 38, .28), 0 1px 2px rgba(16, 24, 40, .10);
+  box-shadow: var(--shadow-btn-hi-active);
 }
 .shadow-btn:disabled,
 .shadow-btn-hi:disabled {
@@ -673,11 +777,11 @@
 @layer utilities {
   /* 点阵纹理（登录页/页头带可加密到 18px） */
   .dot-grid {
-    background-image: radial-gradient(circle, rgba(13, 22, 38, .035) 1px, transparent 1px);
+    background-image: radial-gradient(circle, color-mix(in srgb, var(--ink-900) 8%, transparent) 1px, transparent 1px);
     background-size: 22px 22px;
   }
   .dot-grid-dense {
-    background-image: radial-gradient(circle, rgba(13, 22, 38, .04) 1px, transparent 1px);
+    background-image: radial-gradient(circle, color-mix(in srgb, var(--ink-900) 10%, transparent) 1px, transparent 1px);
     background-size: 18px 18px;
   }
   .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -749,7 +853,7 @@
   outline: none;
 }
 .insight-chart-interactive:focus-visible {
-  box-shadow: 0 0 0 3px rgba(46, 70, 224, .18);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-600) 28%, transparent);
   border-radius: 8px;
 }
 .insight-cursor-pill {

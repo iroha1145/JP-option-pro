@@ -26,6 +26,7 @@ import {
 } from '@/lib/chart';
 import { DUR_FAST, DUR_UI, EASE_PAPER } from '@/lib/motion';
 import { useColorMode } from '@/hooks/useColorMode';
+import { useTheme } from '@/hooks/useTheme';
 import { useAccess } from '@/hooks/useAccess';
 import { t } from '@/i18n/core';
 import { fmtPrice, fmtShares, fmtYenCompact } from '@/lib/format';
@@ -356,6 +357,7 @@ export default function StockChart({
   const [narrowIndicators, setNarrowIndicators] = useState(false);
   const plotRef = useRef<HTMLDivElement>(null);
   const colorMode = useColorMode();
+  const theme = useTheme();
   const { username, isOwner, isCustomer } = useAccess();
   const identityKey = isCustomer && username ? `account:${username}` : isOwner ? 'owner' : 'anonymous';
   const [layersIdentity, setLayersIdentity] = useState(identityKey);
@@ -465,6 +467,7 @@ export default function StockChart({
 
   const option = useMemo((): ChartOption | null => {
     void colorMode;
+    void theme;
     if (!daily || rows.length === 0) return null;
     const closes = rows.map((bar) => pickPrice(bar, priceMode, 'adj_close', 'close'));
     const first = closes.find((value) => value != null);
@@ -694,7 +697,7 @@ export default function StockChart({
         ...(railSeries ? [railSeries] : []),
       ],
     } as ChartOption;
-  }, [analysisBars, analysisOk, analysisOption, colorMode, daily, extraMarks, overlays, priceMode, rows, style, smartDrawingEnabled]);
+  }, [analysisBars, analysisOk, analysisOption, colorMode, daily, extraMarks, overlays, priceMode, rows, style, smartDrawingEnabled, theme]);
 
   const chartHeight = analysisOk ? analysisOption.layout.height : 420;
 
