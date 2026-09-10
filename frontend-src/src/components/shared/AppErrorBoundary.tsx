@@ -84,7 +84,7 @@ export default class AppErrorBoundary extends Component<Props, State> {
               fontSize: '13px',
               fontWeight: 500,
               cursor: 'pointer',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,.16), 0 1px 2px rgba(16,24,40,.18), 0 4px 12px -4px rgba(16,24,40,.34)',
+              boxShadow: 'var(--shadow-btn-hi)',
             }}
           >
             {t('重新加载')}
@@ -107,7 +107,7 @@ export default class AppErrorBoundary extends Component<Props, State> {
               padding: '.5rem 1rem',
               fontSize: '13px',
               cursor: 'pointer',
-              boxShadow: '0 1px 2px rgba(16,24,40,.08), 0 2px 6px -2px rgba(16,24,40,.06), inset 0 1px 0 rgba(255,255,255,.75)',
+              boxShadow: 'var(--shadow-btn)',
             }}
           >
             {t('清除本地存储并重载')}

@@ -214,7 +214,7 @@ test('heatColor 中性档在深色下不用浅纸面色', () => {
 
 test('深色 CSS 使用 Cloud Monitor 页底/卡片/主字/边线/主色', async () => {
   const css = await source('index.css');
-  const block = css.match(/html\.dark\s*\{([\s\S]*?)\n  \}/);
+  const block = css.match(/html\.dark\s*\{([\s\S]*?)\n\s{2}\}/);
   assert.ok(block, '缺少 html.dark 规则');
   const body = block[1];
   assert.match(body, /--paper:\s*#191B20/i);
@@ -236,6 +236,37 @@ test('Tailwind paper/ink/line/brand 从 CSS 变量生成，而不是编译期写
   assert.doesNotMatch(config, /paper:\s*\{[^}]*#F6F7F9/s);
   assert.doesNotMatch(config, /ink:\s*\{[^}]*#0D1626/s);
   assert.doesNotMatch(config, /brand:\s*\{[^}]*#2E46E0/s);
+});
+
+test('夜间模式下按钮阴影消除白色内高光（无白边），Tailwind 与 CSS 变量统一定义', async () => {
+  const css = await source('index.css');
+  const config = await source('../tailwind.config.js');
+  const block = css.match(/html\.dark\s*\{([\s\S]*?)\n\s{2}\}/);
+  assert.ok(block, '缺少 html.dark 规则');
+  const darkBody = block[1];
+
+  // 验证 dark 下按钮与小件阴影变量存在
+  assert.match(darkBody, /--shadow-btn:\s*0 1px 2px rgba\(0,\s*0,\s*0,\s*\.35\)/);
+  assert.match(darkBody, /--shadow-btn-hi:/);
+  assert.match(darkBody, /--shadow-chip:/);
+
+  // 验证 dark 下阴影变量均无白色内高光白边
+  const darkShadowLines = darkBody
+    .split('\n')
+    .filter((line) => line.includes('--shadow-btn') || line.includes('--shadow-chip') || line.includes('--shadow-card-hover'));
+  for (const line of darkShadowLines) {
+    assert.doesNotMatch(line, /rgba\(255,\s*255,\s*255/, `深色阴影中不能包含白色内高光: ${line}`);
+    assert.doesNotMatch(line, /#fff/i, `深色阴影中不能包含白色内高光: ${line}`);
+  }
+
+  // 验证 Tailwind 配置中使用 CSS 变量，而不是硬编码白色 inset
+  assert.match(config, /btn:\s*'var\(--shadow-btn\)'/);
+  assert.match(config, /'btn-hi':\s*'var\(--shadow-btn-hi\)'/);
+  assert.match(config, /chip:\s*'var\(--shadow-chip\)'/);
+  assert.match(config, /borderColor:\s*\{\s*DEFAULT:\s*'color-mix\(in srgb, var\(--line\)/);
+
+  // 验证 html.dark 下 btn-primary 移除了白色内高光
+  assert.match(css, /html\.dark\s+\.btn-primary\s*\{[^}]*box-shadow:\s*var\(--shadow-sh-1\)/s);
 });
 
 test('顶栏始终挂 ThemeSwitcher；登录页右上角也有；不藏进 xl', async () => {
