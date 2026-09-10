@@ -5,7 +5,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -265,8 +265,35 @@ test('夜间模式下按钮阴影消除白色内高光（无白边），Tailwind
   assert.match(config, /chip:\s*'var\(--shadow-chip\)'/);
   assert.match(config, /borderColor:\s*\{\s*DEFAULT:\s*'color-mix\(in srgb, var\(--line\)/);
 
-  // 验证 html.dark 下 btn-primary 移除了白色内高光
-  assert.match(css, /html\.dark\s+\.btn-primary\s*\{[^}]*box-shadow:\s*var\(--shadow-sh-1\)/s);
+  // .btn-primary 必须走阴影 token，不能在组件层写死白色 inset（@layer base 盖不住它）
+  assert.match(css, /\.btn-primary\s*\{[^}]*box-shadow:\s*var\(--shadow-btn-hi\)/s);
+  assert.match(css, /\.btn-primary:not\(:disabled\):active\s*\{[^}]*box-shadow:\s*var\(--shadow-btn-hi-active\)/s);
+  const btnPrimary = css.match(/\.btn-primary\s*\{[^}]+\}/);
+  assert.ok(btnPrimary, '缺少 .btn-primary 规则');
+  assert.doesNotMatch(btnPrimary[0], /rgba\(\s*255\s*,\s*255\s*,\s*255/, '.btn-primary 不能写死白色内高光');
+});
+
+test('已构建 CSS 的 shadow-btn 必须引用变量，不能编译进白色内高光', async () => {
+  const dirs = [path.join(root, 'dist', 'assets'), path.resolve(root, '..', 'frontend', 'assets')];
+  let built = '';
+  for (const dir of dirs) {
+    try {
+      const files = (await readdir(dir)).filter((name) => /^index-.*\.css$/.test(name)).sort();
+      if (!files.length) continue;
+      built = await readFile(path.join(dir, files[files.length - 1]), 'utf8');
+      break;
+    } catch {
+      /* 下一个目录 */
+    }
+  }
+  assert.ok(built, '找不到已构建的 index-*.css（先 npm run build）');
+  assert.match(built, /--shadow-btn:/);
+  assert.match(built, /\.shadow-btn\{[^}]*var\(--shadow-btn\)/);
+  assert.match(built, /\.shadow-btn-hi\{[^}]*var\(--shadow-btn-hi\)/);
+  const shadowBtn = built.match(/\.shadow-btn\{[^}]+\}/);
+  assert.ok(shadowBtn, '构建产物缺少 .shadow-btn');
+  assert.doesNotMatch(shadowBtn[0], /255\s*,\s*255\s*,\s*255/, `构建产物 .shadow-btn 仍含白色内高光: ${shadowBtn[0]}`);
+  assert.doesNotMatch(built, /\.shadow-btn\{[^}]*inset 0 1px 0 rgba\(255/);
 });
 
 test('顶栏始终挂 ThemeSwitcher；登录页右上角也有；不藏进 xl', async () => {

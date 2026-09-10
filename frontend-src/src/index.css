@@ -194,15 +194,6 @@
     --down-50: #163D34;
   }
 
-  /* Cloud Monitor 深色主色 #8ABCF0 偏亮，实心按钮改用页底色作字色，并清除浅色白色内高光。 */
-  html.dark .btn-primary {
-    color: #191B20;
-    box-shadow: var(--shadow-sh-1);
-  }
-  html.dark .bg-brand-600 {
-    color: #191B20;
-  }
-
   html {
     color-scheme: light;
     -webkit-font-smoothing: antialiased;
@@ -320,7 +311,7 @@
     font-weight: 500;
     line-height: 1.25;
     color: #fff;
-    box-shadow: var(--shadow-sh-1), 0 1px 0 rgba(255, 255, 255, .18) inset;
+    box-shadow: var(--shadow-btn-hi);
     transition:
       transform var(--duration-quick) var(--ease-smooth-out),
       background-color var(--duration-quick) var(--ease-smooth-out),
@@ -333,7 +324,7 @@
   }
   .btn-primary:not(:disabled):active {
     transform: scale(0.98);
-    box-shadow: inset 0 1.5px 3px rgba(13, 22, 38, .28), 0 1px 2px rgba(16, 24, 40, .10);
+    box-shadow: var(--shadow-btn-hi-active);
   }
   @media (hover: hover) and (pointer: fine) {
     .btn-primary:not(:disabled):hover {
@@ -674,6 +665,12 @@
 /* §3.6 按钮立体层级的全局状态物理（token 见 tailwind.config boxShadow.btn/btn-hi/
    chip/track）：按下阴影收拢成内凹、禁用摊平，调用点只写一个 shadow-* 类即可，
    不必逐个补 active:/disabled: 变体。选择器特异度 (0,3,0) 稳压工具类。 */
+/* 未分层：压过 @layer base/components/utilities，深色主色钮不再用白字，阴影走 token。 */
+html.dark .btn-primary,
+html.dark .bg-brand-600 {
+  color: #191B20;
+}
+
 .shadow-btn:not(:disabled):active {
   box-shadow: var(--shadow-btn-active);
 }
