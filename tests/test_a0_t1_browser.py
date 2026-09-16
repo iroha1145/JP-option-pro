@@ -27,7 +27,7 @@ def live_app(tmp_path_factory):
     from app.tools.dev_fixture import build_fixture
 
     data_dir = tmp_path_factory.mktemp("a0-t1-browser")
-    fixture = build_fixture(str(data_dir), days=140)
+    fixture = build_fixture(str(data_dir), days=320)
     port = _free_port()
     env = os.environ.copy()
     env.update(
@@ -71,9 +71,17 @@ def test_production_frontend_serves_screener_bundle(live_app):
     page = httpx.get(f"{live_app['base']}/screener", timeout=10)
     assert page.status_code == 200
     assert "选股扫描" in page.text or "screener" in page.text.lower() or "root" in page.text
+    production = httpx.get(
+        f"{live_app['base']}/api/strength/scan?top=5&ranking_algorithm=production", timeout=10
+    )
     scan = httpx.get(f"{live_app['base']}/api/strength/scan?top=5&ranking_algorithm=a0", timeout=10)
     assert scan.status_code == 200
-    assert scan.json()["effective_algorithm"] == "a0_mid_long"
+    body = scan.json()
+    assert body["effective_algorithm"] == "a0_mid_long"
+    assert body["a0_status"] == "active"
+    assert body["rows"][0]["a0_available"] is True
+    assert production.json()["rows"][0]["canonical_code"]
+    assert body["publication_id"] == production.json()["publication_id"]
 
 
 def test_playwright_switches_algorithm_and_recovers_after_navigation(live_app):
@@ -108,6 +116,7 @@ def test_playwright_switches_algorithm_and_recovers_after_navigation(live_app):
         page.get_by_test_id("screener-algorithm-status").wait_for()
         status = page.get_by_test_id("screener-algorithm-status").inner_text()
         assert "a0_mid_long" in status
+        assert page.get_by_test_id("screener-a0-unavailable").count() == 0
         page.screenshot(path=str(artifacts / "screener-a0-1440.png"))
         page.set_viewport_size({"width": 390, "height": 844})
         page.screenshot(path=str(artifacts / "screener-a0-390.png"))
