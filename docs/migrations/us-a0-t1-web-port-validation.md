@@ -4,23 +4,39 @@
 
 | 项 | 值 |
 |---|---|
-| 验证 HEAD（代码 + CI） | `ca50ab7f4599628e341f10946c590b15b55c73df` |
-| 本地全集 pytest HEAD | `d3050ec43d5f63ba793d6e1ba1b9e97c543b1637`（`ca50ab7` 相对它只去掉 leftover `or True` 并记录 CI） |
+| 验证 HEAD（本轮三项 P2 代码） | `d83aa3226bd3ac5fdfc13a4c9c7d768ce0aedd10` |
+| 本地全集 pytest | `d83aa32`：**779 passed**（776 非浏览器 + 3 Playwright，133.82s） |
+| 本轮代码 CI | `d83aa32` 终态 **success**：push `35076660156` / PR `35076663889` |
+| 上一轮代码 + CI | `ca50ab7f4599628e341f10946c590b15b55c73df` |
 | TARGET_BASE_SHA | `a449ddb9ee89785eae22ea4c28174903c89d331c` |
 | SOURCE_SHA | `98330ca4dc27af5e640484b3797ee7aa3d6f1573` |
 | PR | https://github.com/iroha1145/JP-option-pro/pull/27 |
 | 日期 | 2026-09-16 |
 
+## 本轮三项 P2（复核 `2a741a04`）
+
+本地对 `d83aa32` 跑通全部 pytest。本机无 `docker`，镜像步本地 **NOT RUN**。远端 CI 在 **`d83aa32` 终态 success**：
+
+- push `35076660156`（2026-09-16T08:57:29Z → 09:00:58Z）
+- PR `35076663889`（2026-09-16T08:57:31Z → 09:01:02Z）
+
+CI 计数：后端 **776 passed**（55.86s）；隔离 **12 passed**；Docker 镜像硬门 `docker build` + `/ready` `/health` A0 scan **success**；Playwright **3 passed**（72.60s）；dict 1390 / byte gate / US residue 均 success。
+
+| 项 | 修复前 | 修复后（真实算法 → SQLite → API / 生产前端） |
+|---|---|---|
+| T1 计价基准 | 冻结锚 100，日后 `adj_*` 半价，distance 2.58→−41.87，met→unmet | T 窗优先 raw×截止 T 因子重建到事件日基准；有书面拆股因子才换算 `adj_*`。纯等比例 restatement 后仍 met、distance/CLV/RVOL 不变、`first_known_at` 不变。无可靠比例时保留 settled + `latest_attempt.reason=price_basis_unreliable` |
+| ETag | `base_quality` 80→30 或 `support_low` 95→91，带旧 ETag 仍 304 | `_canonical_event_view` 哈希完整事件正文。production/T1 嵌套分/结构/snapshot 变则 200；同内容 304；short 过滤身份不合并 |
+| 偏好 GET | Alice GET 迟到可把 Bob 可见算法改成 T1 | `preferenceIdentityEpoch` + effect cleanup/AbortSignal。Playwright：Alice GET 挂起 → Bob production → 释放 Alice T1，雷达/选股仍是 Bob production；登出后迟到 GET 不能写成 A0 |
+
+未加入新策略权重。原版默认、A0=0.5 mid+0.5 long、T1 四条件、全池雷达排序、按日取数、本地先落库、写队列隔离均保留。
+
+本轮新增/改写的真实回归：`tests/test_t1_price_basis.py`、`test_split_adjust_revises_identity_but_keeps_anchor`、`test_radar_t1_view_identity.py` 嵌套 ETag、`test_playwright_stale_preference_get_cannot_override_new_identity`、前端 epoch 门。
+
 旧提交绿灯（含审查基线 `195a743` / 修复提交 `8674a15` / 文档钉 `b5a8528`）不能代替本 HEAD。下面每项都写了当时的证据。
 
 ## 结论
 
-本地对 `d3050ec` 跑通全部 pytest + 新增矩阵 + Playwright + WAL。本机无 `docker`，镜像步本地 **NOT RUN**。远端 CI 在 **`ca50ab7` 终态 success**：
-
-- push `35073693026`（2026-09-16T08:27:50Z）
-- PR `35073696875`（2026-09-16T08:27:59Z）
-
-镜像硬门真实 `docker build` + 容器 `/ready` `/health` A0 scan，Playwright **2 passed**。未做生产库写入，未清空数据，未自动合并，未标 ready。
+本轮三项 P2 以 `d83aa32` 为准：本地 **779 passed**；CI push `35076660156` / PR `35076663889` **success**（后端 776、隔离 12、Docker 硬门、Playwright 3）。本机无 `docker`，镜像步本地 **NOT RUN**。上一轮 F1–F5 钉在 `ca50ab7`（push `35073693026` / PR `35073696875`）。未做生产库写入，未清空数据，未自动合并，未标 ready。
 
 工程接通 ≠ 已证明日股收益率提高。本报告不包含收益率回测。
 
@@ -53,7 +69,7 @@
 | 不改自动画线与标注定位 | 满足 | 未改 `chart-drawings`；现有 chart node gates 未删 |
 | 真实生产入口测试 | 满足 | 算法 → CoreRepository/SQLite → WorkerSupervisor → FastAPI → 生产 `frontend/` Playwright |
 | supervisor 外层取消（真实挂起，非抛 TimeoutError） | 满足 | `test_supervisor_wait_for_cancels_hanging_fetch_and_keeps_eight_budget`：`Event.wait()` + `wait_for` |
-| 现有测试 + 新矩阵 + CI | 满足 | 本地 `d3050ec`：768 passed。CI `ca50ab7` push `35073693026` / PR `35073696875`：success。后端 766 passed；隔离 12 passed；Docker 镜像步 success；Playwright 2 passed |
+| 现有测试 + 新矩阵 + CI | 满足 | 本地 `d83aa32`：779 passed。CI `d83aa32` push `35076660156` / PR `35076663889`：success。后端 776 passed；隔离 12 passed；Docker 镜像步 success；Playwright 3 passed |
 | 交付 PR / 迁移说明 / 结果对应 HEAD | 满足 | PR #27 draft；分支已推。本环境 `ManagePullRequest` 因仓库改名无法改 PR 正文。验收以本文 + CI run 为准。 |
 
 ## 本环境实测（代码 `d3050ec`；CI 复跑 `ca50ab7`）
