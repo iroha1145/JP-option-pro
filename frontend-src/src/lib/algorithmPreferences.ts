@@ -126,6 +126,15 @@ export function shouldApplyRemotePreference(
   return algorithmPreferenceRevision(principal) === startedRevision;
 }
 
+export function shouldApplyFetchedPreferences(
+  principal: string | null | undefined,
+  startedRevision: number,
+  remotePrincipal: string | null | undefined,
+): boolean {
+  if (remotePrincipal == null || remotePrincipal === '') return false;
+  return shouldApplyRemotePreference(principal, startedRevision);
+}
+
 export function preferencePrincipalFromAccess(
   isOwner: boolean,
   accountUsername: string | null | undefined,

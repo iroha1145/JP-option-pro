@@ -55,7 +55,7 @@ import {
   markAlgorithmPreferencePendingSync,
   preferencePrincipalFromAccess,
   readAlgorithmPreferences,
-  shouldApplyRemotePreference,
+  shouldApplyFetchedPreferences,
   writeAlgorithmPreferences,
 } from '@/lib/algorithmPreferences';
 import {
@@ -110,7 +110,7 @@ function summarizeFilters(filters: ScanFilters): string {
 }
 
 export default function Screener() {
-  const { canManageWatchlist, isOwner, accountUsername, loading: accessLoading } = useAccess();
+  const { canManageWatchlist, isOwner, accountUsername, isSignedIn, loading: accessLoading } = useAccess();
 
   const [meta, setMeta] = useState<StrengthProfilesMeta | null>(null);
   const [metaFailed, setMetaFailed] = useState(false);
@@ -274,10 +274,11 @@ export default function Screener() {
     }
     const startedRevision = algorithmPreferenceRevision(principal);
     void runScan(next);
+    if (!isSignedIn) return;
     void viewPreferencesApi
       .get()
       .then((remote) => {
-        if (!shouldApplyRemotePreference(principal, startedRevision)) return;
+        if (!shouldApplyFetchedPreferences(principal, startedRevision, remote.principal)) return;
         const choice = (remote.preferences.screener_ranking_algorithm || local.screenerRankingAlgorithm) as ScanFilters['rankingAlgorithm'];
         writeAlgorithmPreferences({ screenerRankingAlgorithm: choice }, principal);
         setDraft((prev) => ({ ...prev, rankingAlgorithm: choice }));
@@ -290,7 +291,7 @@ export default function Screener() {
         }
       })
       .catch(() => undefined);
-  }, [accessLoading, accountUsername, isOwner, runScan, sessionKey]);
+  }, [accessLoading, accountUsername, isOwner, isSignedIn, runScan, sessionKey]);
 
   const persistAlgorithmChoice = useCallback(
     (choice: ScanFilters['rankingAlgorithm']) => {

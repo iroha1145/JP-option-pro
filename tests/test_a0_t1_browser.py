@@ -260,6 +260,21 @@ def test_playwright_switches_algorithm_and_recovers_after_navigation(live_app):
             arg=a0_first,
         )
         assert first_row.get_attribute("data-canonical-code") == a0_first
+        stored = page.evaluate(
+            """() => {
+              const out = {};
+              for (const key of Object.keys(localStorage)) {
+                if (key.includes('algorithmPreferences')) {
+                  out[key] = JSON.parse(localStorage.getItem(key) || 'null');
+                }
+              }
+              return out;
+            }"""
+        )
+        assert any(
+            (value or {}).get("screenerRankingAlgorithm") == "a0_mid_long"
+            for value in stored.values()
+        ), stored
         page.screenshot(path=str(artifacts / "screener-a0-1440.png"))
         page.set_viewport_size({"width": 390, "height": 844})
         assert page.locator("[data-testid=screener-first-row]").nth(1).get_attribute("data-canonical-code") == a0_first

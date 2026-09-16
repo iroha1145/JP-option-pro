@@ -36,7 +36,7 @@ import {
   markAlgorithmPreferencePendingSync,
   preferencePrincipalFromAccess,
   readAlgorithmPreferences,
-  shouldApplyRemotePreference,
+  shouldApplyFetchedPreferences,
   writeAlgorithmPreferences,
   type RadarSortChoice,
 } from '@/lib/algorithmPreferences';
@@ -79,7 +79,7 @@ const GROUP_STATES: Record<StateGroup, string | undefined> = {
 };
 
 export default function Radar() {
-  const { isOwner, accountUsername } = useAccess();
+  const { isOwner, accountUsername, isSignedIn } = useAccess();
   const toast = useToast();
   const [group, setGroup] = useState<StateGroup>('active');
   const [view, setView] = useState<ViewMode>('cards');
@@ -131,18 +131,19 @@ export default function Radar() {
       setPrefUnsynced(true);
       return;
     }
+    if (!isSignedIn) return;
     const startedRevision = algorithmPreferenceRevision(principal);
     void viewPreferencesApi
       .get()
       .then((remote) => {
-        if (!shouldApplyRemotePreference(principal, startedRevision)) return;
+        if (!shouldApplyFetchedPreferences(principal, startedRevision, remote.principal)) return;
         const choice = (remote.preferences.radar_sort_algorithm || local.radarSortAlgorithm) as RadarSortChoice;
         writeAlgorithmPreferences({ radarSortAlgorithm: choice }, principal);
         setSortAlgorithm(choice);
         setPrefUnsynced(false);
       })
       .catch(() => undefined);
-  }, [accountUsername, isOwner]);
+  }, [accountUsername, isOwner, isSignedIn]);
   const state = remoteState(query, (d) => d.events.length === 0);
 
   /* 夜間断面に遅延気配を重ねる（再スキャンではない）。答えたい問いは

@@ -32,6 +32,7 @@ const {
   markAlgorithmPreferencePendingSync,
   preferenceStorageKey,
   readAlgorithmPreferences,
+  shouldApplyFetchedPreferences,
   shouldApplyRemotePreference,
   writeAlgorithmPreferences,
 } = await import('../src/lib/algorithmPreferences.ts');
@@ -97,6 +98,15 @@ test('late remote GET cannot apply after a newer local revision', () => {
   assert.equal(readAlgorithmPreferences('account:alice').screenerRankingAlgorithm, SCREENER_A0);
 });
 
+test('anonymous GET placeholders cannot overwrite a local A0 choice', () => {
+  writeAlgorithmPreferences({ screenerRankingAlgorithm: SCREENER_A0 }, 'visitor');
+  const started = algorithmPreferenceRevision('visitor');
+  assert.equal(shouldApplyFetchedPreferences('visitor', started, null), false);
+  assert.equal(shouldApplyFetchedPreferences('visitor', started, ''), false);
+  assert.equal(shouldApplyFetchedPreferences('account:fresh', started, 'account:fresh'), true);
+  assert.equal(readAlgorithmPreferences('visitor').screenerRankingAlgorithm, SCREENER_A0);
+});
+
 test('screener and radar persist through principal, generation, and PUT signal', async () => {
   const screener = await source('pages/Screener.tsx');
   const radar = await source('pages/Radar.tsx');
@@ -104,7 +114,9 @@ test('screener and radar persist through principal, generation, and PUT signal',
   const modules = await source('api/modules.ts');
   assert.match(screener, /currentPreferenceWriteGeneration\(\)/);
   assert.match(screener, /viewPreferencesApi\.put\(\{ screener_ranking_algorithm: choice \}, \{ signal \}\)/);
-  assert.match(screener, /shouldApplyRemotePreference\(principal, startedRevision\)/);
+  assert.match(screener, /shouldApplyFetchedPreferences\(principal, startedRevision, remote\.principal\)/);
+  assert.match(screener, /if \(!isSignedIn\) return;/);
+  assert.match(radar, /shouldApplyFetchedPreferences\(principal, startedRevision, remote\.principal\)/);
   assert.match(radar, /viewPreferencesApi\.put\(\{ radar_sort_algorithm: value \}, \{ signal \}\)/);
   assert.match(radar, /currentPreferenceWriteGeneration\(\)/);
   assert.match(access, /invalidatePreferenceWriteQueue\(\)/);
