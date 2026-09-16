@@ -16,6 +16,10 @@ import {
 import { accessApi, accountApi } from '@/api/modules';
 import { PRINCIPAL_INVALID_EVENT } from '@/api/client';
 import { dropQueryRegistry, setQueryPrincipal } from '@/api/queryRegistry';
+import {
+  bindPreferenceWritePrincipal,
+  invalidatePreferenceWriteQueue,
+} from '@/lib/viewPreferenceWrites';
 import type { AccessStatus } from '@/api/types';
 
 interface AccessContextValue {
@@ -58,6 +62,8 @@ export function AccessProvider({ children }: { children: ReactNode }) {
         lastPrincipalRef.current = principal;
         setQueryPrincipal(principal);
         void dropQueryRegistry();
+        invalidatePreferenceWriteQueue();
+        bindPreferenceWritePrincipal(principal);
       }
     }
     setStatus(next);

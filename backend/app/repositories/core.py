@@ -1326,7 +1326,7 @@ class CoreRepository(SQLiteRepository):
     def radar_events_scanned_on(
         self, trade_date: str, *, states: Sequence[str] | None = None,
         signal_types: Sequence[str] | None = None, min_priority: float | None = None,
-        limit: int = 200,
+        limit: int | None = 200,
     ) -> list[dict[str, Any]]:
         clauses = ["last_scanned_date = ?"]
         params: list[Any] = [trade_date]
@@ -1339,13 +1339,15 @@ class CoreRepository(SQLiteRepository):
         if min_priority is not None:
             clauses.append("alert_priority >= ?")
             params.append(float(min_priority))
-        params.append(int(limit))
+        sql = (
+            f"SELECT * FROM radar_events WHERE {' AND '.join(clauses)} "
+            "ORDER BY alert_priority IS NULL, alert_priority DESC, event_id"
+        )
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(int(limit))
         with self.read() as connection:
-            rows = connection.execute(
-                f"SELECT * FROM radar_events WHERE {' AND '.join(clauses)} "
-                "ORDER BY alert_priority IS NULL, alert_priority DESC, event_id LIMIT ?",
-                params,
-            ).fetchall()
+            rows = connection.execute(sql, params).fetchall()
         return [self._radar_row(row) for row in rows]
 
     def radar_event(self, event_id: str) -> dict[str, Any] | None:
@@ -1888,6 +1890,96 @@ class CoreRepository(SQLiteRepository):
             (event_id, version, identity, status, body.get("first_known_at"), published_at),
         )
 
+    def save_t1_anchors(self, events: Sequence[Mapping[str, Any]]) -> int:
+        """Insert-or-ignore first-publish T1 anchors. Resistance is never updated."""
+
+        written = 0
+        now = utc_now_iso()
+        with self.write() as connection:
+            for event in events:
+                event_id = str(event.get("event_id") or "")
+                features = event.get("features") if isinstance(event.get("features"), Mapping) else {}
+                anchor = event.get("t1_anchor")
+                if not isinstance(anchor, Mapping):
+                    anchor = features.get("t1_anchor") if isinstance(features, Mapping) else None
+                if not event_id or not isinstance(anchor, Mapping):
+                    continue
+                try:
+                    resistance = float(anchor.get("resistance_high"))
+                except (TypeError, ValueError):
+                    continue
+                if resistance != resistance or resistance <= 0:
+                    continue
+                connection.execute(
+                    """
+                    INSERT OR IGNORE INTO radar_t1_anchors(
+                        event_id, session_date, platform_id, resistance_high,
+                        data_convention, version, source, created_at
+                    ) VALUES(?,?,?,?,?,?,?,?)
+                    """,
+                    (
+                        event_id,
+                        str(anchor.get("session_date") or event.get("discovered_date") or ""),
+                        (str(anchor.get("platform_id") or "") or None),
+                        resistance,
+                        str(anchor.get("data_convention") or "jp_adj_ohlcv_v1"),
+                        int(anchor.get("version") or 1),
+                        str(anchor.get("source") or "first_publish"),
+                        now,
+                    ),
+                )
+                written += 1
+        return written
+
+    def overlay_t1_anchors(self, events: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+        result = [dict(event) for event in events]
+        event_ids = [str(item.get("event_id") or "") for item in result if item.get("event_id")]
+        if not event_ids:
+            return result
+        try:
+            placeholders = ", ".join("?" for _ in event_ids)
+            with self.read() as connection:
+                rows = connection.execute(
+                    f"SELECT * FROM radar_t1_anchors WHERE event_id IN ({placeholders})",
+                    event_ids,
+                ).fetchall()
+        except Exception:
+            return result
+        stored = {str(row["event_id"]): dict(row) for row in rows}
+        overlaid: list[dict[str, Any]] = []
+        for item in result:
+            event_id = str(item.get("event_id") or "")
+            features = dict(item.get("features") or {})
+            existing = item.get("t1_anchor") if isinstance(item.get("t1_anchor"), Mapping) else None
+            if existing is None:
+                existing = features.get("t1_anchor") if isinstance(features.get("t1_anchor"), Mapping) else None
+            if isinstance(existing, Mapping) and existing.get("resistance_high") is not None:
+                merged = dict(item)
+                features["t1_anchor"] = dict(existing)
+                merged["features"] = features
+                merged["t1_anchor"] = dict(existing)
+                overlaid.append(merged)
+                continue
+            row = stored.get(event_id)
+            if not row:
+                overlaid.append(item)
+                continue
+            anchor = {
+                "event_id": row.get("event_id"),
+                "session_date": row.get("session_date"),
+                "platform_id": row.get("platform_id"),
+                "resistance_high": row.get("resistance_high"),
+                "data_convention": row.get("data_convention"),
+                "version": row.get("version"),
+                "source": row.get("source"),
+            }
+            merged = dict(item)
+            features["t1_anchor"] = anchor
+            merged["features"] = features
+            merged["t1_anchor"] = anchor
+            overlaid.append(merged)
+        return overlaid
+
     def persist_t1_evaluations(self, events: Sequence[Mapping[str, Any]]) -> int:
         items = [dict(event) for event in events if isinstance(event, Mapping)]
         if not items:
@@ -1907,7 +1999,7 @@ class CoreRepository(SQLiteRepository):
         return written
 
     def overlay_t1_evaluations(self, events: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-        result = [dict(event) for event in events]
+        result = self.overlay_t1_anchors(events)
         if not result:
             return result
         event_ids = [str(item.get("event_id") or "") for item in result]

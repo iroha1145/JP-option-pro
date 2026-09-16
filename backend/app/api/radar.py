@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+from typing import Any, Mapping, Sequence
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
@@ -59,6 +61,75 @@ def _maybe_304(request: Request, response: Response, etag: str) -> bool:
     return False
 
 
+def _etag_event(view: Mapping[str, Any]) -> dict[str, Any]:
+    t1 = view.get("t1_priority") if isinstance(view.get("t1_priority"), Mapping) else {}
+    short = view.get("short_behavior") if isinstance(view.get("short_behavior"), Mapping) else {}
+    snapshot = view.get("snapshot") if isinstance(view.get("snapshot"), Mapping) else {}
+    return {
+        "event_id": view.get("event_id"),
+        "state": view.get("state"),
+        "alert_priority": view.get("alert_priority"),
+        "alert_priority_base": view.get("alert_priority_base"),
+        "pivot_price": view.get("pivot_price"),
+        "trigger_price": view.get("trigger_price"),
+        "discovered_date": view.get("discovered_date"),
+        "last_scanned_date": view.get("last_scanned_date"),
+        "state_changed_date": view.get("state_changed_date"),
+        "close": snapshot.get("close") if isinstance(snapshot, Mapping) else None,
+        "t1_status": t1.get("status") if isinstance(t1, Mapping) else None,
+        "t1_eval_version": t1.get("eval_version") if isinstance(t1, Mapping) else None,
+        "t1_identity_hash": t1.get("identity_hash") if isinstance(t1, Mapping) else None,
+        "short_state": short.get("state") if isinstance(short, Mapping) else None,
+        "short_shift": short.get("priority_shift") if isinstance(short, Mapping) else None,
+        "short_flags": list(short.get("flags") or []) if isinstance(short, Mapping) else [],
+        "short_score": short.get("shadow_score") if isinstance(short, Mapping) else None,
+        "short_confidence": short.get("data_confidence") if isinstance(short, Mapping) else None,
+    }
+
+
+def _radar_content_etag(
+    *,
+    scan_date: str,
+    resolution,
+    states: str | None,
+    signals: str | None,
+    min_priority: float | None,
+    short_states: str | None,
+    short_flags: str | None,
+    exclude_short_flags: str | None,
+    min_short_confidence: float | None,
+    limit: int,
+    offset: int,
+    matched_count: int,
+    t1_view: str | None,
+    cursor_stale: bool,
+    page: Sequence[Mapping[str, Any]],
+) -> str:
+    payload = {
+        "scan_date": scan_date,
+        "algorithm": resolution.effective,
+        "version": resolution.version,
+        "source": resolution.source,
+        "filters": {
+            "states": states or "",
+            "signals": signals or "",
+            "min_priority": min_priority,
+            "short_states": short_states or "",
+            "short_flags": short_flags or "",
+            "exclude_short_flags": exclude_short_flags or "",
+            "min_short_confidence": min_short_confidence,
+        },
+        "limit": limit,
+        "offset": offset,
+        "matched_count": matched_count,
+        "t1_view": t1_view,
+        "cursor_stale": cursor_stale,
+        "events": [_etag_event(item) for item in page],
+    }
+    encoded = json.dumps(payload, allow_nan=False, default=str, separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:32]
+
+
 @router.get("/current")
 def radar_current(
     request: Request,
@@ -95,13 +166,12 @@ def radar_current(
         return {"scan_date": None, "events": [], "note": "レーダー未実行", **resolution.as_public_dict()}
     state_filter = _csv_filter(states, ALL_STATES)
     signal_filter = _csv_filter(signals, ALL_SIGNAL_TYPES)
-    fetch_limit = 400 if resolution.effective == T1_ALGORITHM else limit + offset
     events = repository.radar_events_scanned_on(
         scan_date,
         states=state_filter,
         signal_types=signal_filter,
         min_priority=min_priority,
-        limit=max(fetch_limit, limit),
+        limit=None,
     )
     events = repository.overlay_t1_evaluations(events)
     # 空売り行動は **重ねるだけ**。alert_priority だけを有界に動かし、
@@ -132,22 +202,23 @@ def radar_current(
             restart_required = True
             offset = 0
     page = views[offset: offset + limit]
-    etag = hashlib.sha256(
-        "|".join(
-            (
-                scan_date,
-                resolution.effective,
-                resolution.version,
-                t1_view or "",
-                states or "",
-                signals or "",
-                str(min_priority or ""),
-                str(limit),
-                str(offset),
-                str(len(views)),
-            )
-        ).encode("utf-8")
-    ).hexdigest()[:32]
+    etag = _radar_content_etag(
+        scan_date=scan_date,
+        resolution=resolution,
+        states=states,
+        signals=signals,
+        min_priority=min_priority,
+        short_states=short_states,
+        short_flags=short_flags,
+        exclude_short_flags=exclude_short_flags,
+        min_short_confidence=min_short_confidence,
+        limit=limit,
+        offset=offset,
+        matched_count=len(views),
+        t1_view=t1_view,
+        cursor_stale=cursor_stale,
+        page=page,
+    )
     if _maybe_304(request, response, etag):
         return {}
     return {
@@ -240,6 +311,7 @@ def _event_view(repository, event: dict, *, include_transitions: bool = False) -
         "scores": event.get("scores") or {},
         "snapshot": (event.get("features") or {}).get("snapshot") or {},
         "structure": (event.get("features") or {}).get("structure") or None,
+        "t1_anchor": event.get("t1_anchor") or (event.get("features") or {}).get("t1_anchor"),
         "t1_priority": event.get("t1_priority") or (event.get("features") or {}).get("t1_priority"),
     }
     if include_transitions:

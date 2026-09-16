@@ -50,11 +50,18 @@ import {
 import {
   a0ViewSupported,
   algorithmPreferencePendingSync,
+  algorithmPreferenceRevision,
+  bumpAlgorithmPreferenceRevision,
   markAlgorithmPreferencePendingSync,
+  preferencePrincipalFromAccess,
   readAlgorithmPreferences,
+  shouldApplyRemotePreference,
   writeAlgorithmPreferences,
 } from '@/lib/algorithmPreferences';
-import { persistRemoteOrKeepLocal } from '@/lib/viewPreferenceWrites';
+import {
+  currentPreferenceWriteGeneration,
+  persistRemoteOrKeepLocal,
+} from '@/lib/viewPreferenceWrites';
 import { t } from '@/i18n/core';
 import { EASE_PAPER } from '@/lib/motion';
 import { usePolling } from '@/hooks/usePolling';
@@ -147,7 +154,7 @@ export default function Screener() {
   }, [loadMeta]);
 
   useEffect(() => {
-    const principal = isOwner ? 'owner' : accountUsername ? `account:${accountUsername}` : 'visitor';
+    const principal = preferencePrincipalFromAccess(isOwner, accountUsername);
     const local = readAlgorithmPreferences(principal);
     setDraft((prev) => ({ ...prev, rankingAlgorithm: local.screenerRankingAlgorithm }));
     setApplied((prev) => ({ ...prev, rankingAlgorithm: local.screenerRankingAlgorithm }));
@@ -155,10 +162,11 @@ export default function Screener() {
       setPrefUnsynced(true);
       return;
     }
+    const startedRevision = algorithmPreferenceRevision(principal);
     void viewPreferencesApi
       .get()
       .then((remote) => {
-        if (algorithmPreferencePendingSync(principal)) return;
+        if (!shouldApplyRemotePreference(principal, startedRevision)) return;
         const choice = (remote.preferences.screener_ranking_algorithm || local.screenerRankingAlgorithm) as ScanFilters['rankingAlgorithm'];
         writeAlgorithmPreferences({ screenerRankingAlgorithm: choice }, principal);
         setDraft((prev) => ({ ...prev, rankingAlgorithm: choice }));
@@ -284,15 +292,19 @@ export default function Screener() {
 
   const persistAlgorithmChoice = useCallback(
     (choice: ScanFilters['rankingAlgorithm']) => {
-      const principal = isOwner ? 'owner' : accountUsername ? `account:${accountUsername}` : 'visitor';
+      const principal = preferencePrincipalFromAccess(isOwner, accountUsername);
       writeAlgorithmPreferences({ screenerRankingAlgorithm: choice }, principal);
+      bumpAlgorithmPreferenceRevision(principal);
       markAlgorithmPreferencePendingSync(principal, true);
       setPrefUnsynced(false);
-      void persistRemoteOrKeepLocal({ screenerRankingAlgorithm: choice }, async (signal) => {
-        await viewPreferencesApi.put({ screener_ranking_algorithm: choice });
-        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-        return { screenerRankingAlgorithm: choice };
-      }).then((result) => {
+      void persistRemoteOrKeepLocal(
+        { screenerRankingAlgorithm: choice },
+        async (signal) => {
+          await viewPreferencesApi.put({ screener_ranking_algorithm: choice }, { signal });
+          return { screenerRankingAlgorithm: choice };
+        },
+        { principal, generation: currentPreferenceWriteGeneration() },
+      ).then((result) => {
         if (result.persisted === false) {
           setPrefUnsynced(true);
           return;

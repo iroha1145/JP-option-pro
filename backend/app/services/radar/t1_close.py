@@ -258,91 +258,108 @@ async def complete_pending_t1(
         else:
             needs_fetch.append(event)
 
-    completed = 0
-    finished_keys: list[str] = []
-    updated_events: list[dict[str, Any]] = []
-    for event in local_ready:
-        session = str(event.get("discovered_date") or "")[:10]
-        bars = _adjusted_through(repository, str(event.get("canonical_code") or ""), session)
-        attached = attach_t1_features(
-            event, bars, as_of=moment,
-            previous=event.get("t1_priority") if isinstance(event.get("t1_priority"), Mapping) else None,
-            is_trading_day=is_trading_day,
-            prior_trading_sessions=prior_sessions,
-        )
-        updated_events.append(attached)
+    def is_finished(attached: Mapping[str, Any]) -> bool:
         status = str((attached.get("t1_priority") or {}).get("status") or "")
         reason = str((attached.get("t1_priority") or {}).get("reason") or "")
-        if status in {T1_MET, T1_UNMET, T1_NOT_APPLICABLE} or (
+        return status in {T1_MET, T1_UNMET, T1_NOT_APPLICABLE} or (
             status == "unavailable" and reason not in T1_RETRYABLE_REASONS
-        ):
-            completed += 1
-            finished_keys.append(retry_identity(event)[0])
+        )
+
+    def evaluate_group(items: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+        updated: list[dict[str, Any]] = []
+        for event in items:
+            session = str(event.get("discovered_date") or "")[:10]
+            code = str(event.get("canonical_code") or "")
+            bars = _adjusted_through(repository, code, session) if session else []
+            attached = attach_t1_features(
+                event,
+                bars,
+                as_of=moment,
+                previous=event.get("t1_priority") if isinstance(event.get("t1_priority"), Mapping) else None,
+                is_trading_day=is_trading_day,
+                prior_trading_sessions=prior_sessions,
+            )
+            updated.append(attached)
+        return updated
+
+    def commit_group(updated: Sequence[Mapping[str, Any]]) -> int:
+        if not updated:
+            return 0
+        repository.persist_t1_evaluations(updated)
+        finished_keys = [retry_identity(item)[0] for item in updated if is_finished(item)]
+        if finished_keys:
+            repository.clear_t1_retry_states(finished_keys)
+        return sum(1 for item in updated if is_finished(item))
+
+    completed = 0
+    if local_ready:
+        try:
+            completed += commit_group(evaluate_group(local_ready))
+        except Exception:
+            pass
 
     reserved_delay = None
     reserved_attempt = 0
+    remote_fail = False
     if needs_fetch:
         if fetcher is None:
             bump_states(needs_fetch, "price_adapter_unavailable")
         else:
-            try:
-                _, reserved_delay, reserved_attempt = bump_states(
-                    needs_fetch, "t1_dispatch_reserved", persist_required=persist_required_on_reserve,
-                )
-            except Exception:
-                return {
-                    "attempted": len(eligible),
-                    "completed": completed,
-                    "pending": len(pending) - completed,
-                    "retry": True,
-                    "reason": "reservation_persist_failed",
-                }
-            codes = list(dict.fromkeys(str(item.get("canonical_code") or "") for item in needs_fetch if item.get("canonical_code")))
-            session_dates = list(dict.fromkeys(str(item.get("discovered_date") or "")[:10] for item in needs_fetch))
-            session_for_fetch = session_dates[0] if session_dates else ""
-            try:
-                fetched = await fetcher(codes, session_for_fetch)
-            except (asyncio.CancelledError, KeyboardInterrupt):
-                raise
-            except Exception:
-                return {
-                    "attempted": len(eligible),
-                    "completed": completed,
-                    "pending": len(pending) - completed,
-                    "retry": reserved_delay is not None,
-                    "reason": "daily_fetch_failed",
-                    "retry_after_seconds": reserved_delay,
-                    "attempt": reserved_attempt,
-                }
-            fetched = fetched if isinstance(fetched, Mapping) else {}
+            by_date: dict[str, list[dict[str, Any]]] = {}
+            date_order: list[str] = []
             for event in needs_fetch:
-                code = str(event.get("canonical_code") or "")
                 session = str(event.get("discovered_date") or "")[:10]
-                extra = list(fetched.get(code) or [])
-                if extra:
-                    repository.upsert_daily_bars(extra)
-                bars = _adjusted_through(repository, code, session)
-                attached = attach_t1_features(
-                    event, bars, as_of=moment,
-                    previous=event.get("t1_priority") if isinstance(event.get("t1_priority"), Mapping) else None,
-                    is_trading_day=is_trading_day,
-                    prior_trading_sessions=prior_sessions,
-                )
-                updated_events.append(attached)
-                status = str((attached.get("t1_priority") or {}).get("status") or "")
-                reason = str((attached.get("t1_priority") or {}).get("reason") or "")
-                if status in {T1_MET, T1_UNMET, T1_NOT_APPLICABLE} or (
-                    status == "unavailable" and reason not in T1_RETRYABLE_REASONS
-                ):
-                    completed += 1
-                    finished_keys.append(retry_identity(event)[0])
+                if session not in by_date:
+                    date_order.append(session)
+                    by_date[session] = []
+                by_date[session].append(event)
+            for session in date_order:
+                group = by_date[session]
+                try:
+                    _, group_delay, group_attempt = bump_states(
+                        group, "t1_dispatch_reserved", persist_required=persist_required_on_reserve,
+                    )
+                except Exception:
+                    return {
+                        "attempted": len(eligible),
+                        "completed": completed,
+                        "pending": max(0, len(pending) - completed),
+                        "retry": True,
+                        "reason": "reservation_persist_failed",
+                    }
+                if group_delay is not None:
+                    reserved_delay = group_delay if reserved_delay is None else min(reserved_delay, group_delay)
+                reserved_attempt = max(reserved_attempt, group_attempt)
+                codes = list(dict.fromkeys(
+                    str(item.get("canonical_code") or "")
+                    for item in group
+                    if item.get("canonical_code")
+                ))
+                try:
+                    fetched = await fetcher(codes, session)
+                except (asyncio.CancelledError, KeyboardInterrupt):
+                    raise
+                except Exception:
+                    remote_fail = True
+                    continue
+                fetched = fetched if isinstance(fetched, Mapping) else {}
+                for event in group:
+                    extra = list(fetched.get(str(event.get("canonical_code") or "")) or [])
+                    if extra:
+                        repository.upsert_daily_bars(extra)
+                try:
+                    completed += commit_group(evaluate_group(group))
+                except Exception:
+                    continue
 
-    if updated_events:
-        repository.persist_t1_evaluations(updated_events)
-    if finished_keys:
-        repository.clear_t1_retry_states(finished_keys)
-    still_pending = len(pending) - completed
-    retry = still_pending > 0 and (reserved_delay is not None or waiting_vendor > 0)
+    still_pending = max(0, len(pending) - completed)
+    retry = still_pending > 0 and (reserved_delay is not None or waiting_vendor > 0 or remote_fail)
+    if completed:
+        reason = None
+    elif remote_fail:
+        reason = "daily_fetch_failed"
+    else:
+        reason = "t1_still_pending"
     return {
         "attempted": len(eligible),
         "completed": completed,
@@ -350,5 +367,5 @@ async def complete_pending_t1(
         "retry": retry,
         "retry_after_seconds": reserved_delay,
         "attempt": reserved_attempt,
-        "reason": None if completed else "t1_still_pending",
+        "reason": reason,
     }

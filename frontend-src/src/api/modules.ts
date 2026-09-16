@@ -1,6 +1,6 @@
 /** 领域 API 模块：registry 走共享注册表，其余直连。 */
 
-import { del, get, patch as patchVerb, post, put, toQuery } from './client.ts';
+import { del, get, patch as patchVerb, post, put, toQuery, type RequestOptions } from './client.ts';
 import { invalidateQueryPaths, registryGet } from './queryRegistry.ts';
 import type {
   AccessStatus,
@@ -309,8 +309,11 @@ export const viewPreferencesApi = {
   get(): Promise<ViewPreferencesResponse> {
     return get('/view-preferences');
   },
-  put(body: { screener_ranking_algorithm?: string; radar_sort_algorithm?: string }) {
-    return put<ViewPreferencesResponse>('/view-preferences', body);
+  put(
+    body: { screener_ranking_algorithm?: string; radar_sort_algorithm?: string },
+    options?: RequestOptions,
+  ) {
+    return put<ViewPreferencesResponse>('/view-preferences', body, options);
   },
 };
 

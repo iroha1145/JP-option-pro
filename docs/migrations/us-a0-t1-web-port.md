@@ -24,7 +24,7 @@
 | 全不可算时不可宣称 A0 已生效 | 无 | **适配**：`a0_unavailable`，不回退成“已生效的原排序”却贴 A0 标签 | `test_a0_api.py` |
 | T1 仅 DAILY_BASE_BREAKOUT | `radar.engine.SIGNAL_BASE_BREAK = base_breakout`；其它 high_break_* / volume_surge_break 保持原优先级 | **适配语义**：只评估首次触发的 `base_breakout`；无冻结平台证据 → `not_applicable` | `test_t1_priority.py` |
 | CLV/RVOL/上影/ATR 距；RVOL=成交量中位数；ATR=TR 的 20 日 SMA | `turnover_ratio` 是成交额比；现有 `atr14` 是 14 日特征，不是 T1 ATR | **适配**：独立 T1 数学；成交量走 `adj_volume` / 逆因子调整；禁止 Va 代 Vo | `test_t1_priority.py` / `test_t1_volume_not_turnover.py` |
-| 不完整输入只写 latest_attempt；存储层不盲信 identity_complete | 无 T1 表 | **移植最终语义**到 `radar_t1_*`（jp-core-v10） | `test_t1_settled_and_identity.py` |
+| 不完整输入只写 latest_attempt；存储层不盲信 identity_complete | 无 T1 表 | **移植最终语义**到 `radar_t1_*`（jp-core-v10）+ 冻结锚位 `radar_t1_anchors`（jp-core-v11） | `test_t1_settled_and_identity.py` / `test_t1_frozen_anchor.py` |
 | 派发 `price_data.daily` 前预约 8 次预算 | `worker/runtime.py` 现为 sync `to_thread`，无外层 wait_for 取消 | **适配**：本地日线优先；缺 T 日线才预约后派发；supervisor `wait_for` 取消计入预算 | `test_t1_close_retry_budget.py` |
 | 美股每用户 A0 变体文件 / variant_demand 队列 | 日本站夜间全池 + API 轻量筛选 | **不迁移** | — |
 | 美股期权 / NY 时区 / SPY/QQQ / 盘前盘后 | 日本站已排除 | **不迁移** | `ci.yml` 美股残留门 |
@@ -50,11 +50,21 @@ A0/T1 是可选模式。工程接通 ≠ 已证明日股收益率提高。
 
 不改现有 `radar_events` / `strength_rows` / 证券主数据。重复 `initialize()` 幂等。
 
+### jp-core-v10 → jp-core-v11
+
+新增 `radar_t1_anchors`。首次发布 `base_breakout` 时写入冻结阻力（`resistance_high`、平台 ID、调整口径）。`INSERT OR IGNORE`，日常 structure 覆盖不得改锚。
+
+**已经保存的不可靠 T1 版本：** v10 时代用当日 `features.structure.base.resistance_high` 评出的 met/unmet 不能当作历史证据。升级后：
+
+- 有 `radar_t1_anchors` 或事件上已冻结 `t1_anchor` 的，继续用该锚重评；官方 T 日窗口修订可以产生新 `eval_version`，但 `first_known_at` 与锚位不变。
+- 没有锚、也没有「当时 pivot 就是阻力且口径一致」的书面恢复记录的，重评结果为 `not_applicable`（`missing_frozen_platform`）。旧 `radar_t1_evaluations` 行保留，不删除、不回写成今天的 structure。
+- 不要用生产 `pivot_price` 盲恢复：检测器里的 pivot 是 resistance mid，不是 T1 阻力高。
+
 回滚（仅在确认不再读取 T1 之后）：
 
 1. 将代码回退到 `TARGET_BASE_SHA` `a449ddb9ee89785eae22ea4c28174903c89d331c`。
-2. 旧代码打开 v10 库会因版本/校验和不匹配而拒绝启动。需要先把 `jp_core_schema.version` 写回 `jp-core-v9` 并恢复当时的 checksum，或从备份还原整个 `jp-core.db`。
-3. 可选：`DROP TABLE radar_t1_evaluations; DROP TABLE radar_t1_current; DROP TABLE radar_t1_retry;`
+2. 旧代码打开 v11 库会因版本/校验和不匹配而拒绝启动。需要先把 `jp_core_schema.version` 写回当时的版本并恢复 checksum，或从备份还原整个 `jp-core.db`。
+3. 可选：`DROP TABLE radar_t1_evaluations; DROP TABLE radar_t1_current; DROP TABLE radar_t1_retry; DROP TABLE radar_t1_anchors;`
 4. **不要**清空 `securities` / `daily_bars` / `strength_rows` / `radar_events`。
 
 生产库约 4GB。禁止用“删库重建”当回滚。

@@ -31,12 +31,19 @@ import {
   RADAR_PRODUCTION,
   RADAR_T1,
   algorithmPreferencePendingSync,
+  algorithmPreferenceRevision,
+  bumpAlgorithmPreferenceRevision,
   markAlgorithmPreferencePendingSync,
+  preferencePrincipalFromAccess,
   readAlgorithmPreferences,
+  shouldApplyRemotePreference,
   writeAlgorithmPreferences,
   type RadarSortChoice,
 } from '@/lib/algorithmPreferences';
-import { persistRemoteOrKeepLocal } from '@/lib/viewPreferenceWrites';
+import {
+  currentPreferenceWriteGeneration,
+  persistRemoteOrKeepLocal,
+} from '@/lib/viewPreferenceWrites';
 import StrengthBar from '@/components/shared/StrengthBar';
 import HistoryRail from '@/components/radar/HistoryRail';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
@@ -117,17 +124,18 @@ export default function Radar() {
   }, [query.data?.t1_view, t1Cursor]);
 
   useEffect(() => {
-    const principal = isOwner ? 'owner' : accountUsername ? `account:${accountUsername}` : 'visitor';
+    const principal = preferencePrincipalFromAccess(isOwner, accountUsername);
     const local = readAlgorithmPreferences(principal);
     setSortAlgorithm(local.radarSortAlgorithm);
     if (algorithmPreferencePendingSync(principal)) {
       setPrefUnsynced(true);
       return;
     }
+    const startedRevision = algorithmPreferenceRevision(principal);
     void viewPreferencesApi
       .get()
       .then((remote) => {
-        if (algorithmPreferencePendingSync(principal)) return;
+        if (!shouldApplyRemotePreference(principal, startedRevision)) return;
         const choice = (remote.preferences.radar_sort_algorithm || local.radarSortAlgorithm) as RadarSortChoice;
         writeAlgorithmPreferences({ radarSortAlgorithm: choice }, principal);
         setSortAlgorithm(choice);
@@ -273,13 +281,18 @@ export default function Radar() {
           onChange={(value) => {
             setSortAlgorithm(value);
             setT1Cursor(null);
-            const principal = isOwner ? 'owner' : accountUsername ? `account:${accountUsername}` : 'visitor';
+            const principal = preferencePrincipalFromAccess(isOwner, accountUsername);
             writeAlgorithmPreferences({ radarSortAlgorithm: value }, principal);
+            bumpAlgorithmPreferenceRevision(principal);
             markAlgorithmPreferencePendingSync(principal, true);
-            void persistRemoteOrKeepLocal({ radarSortAlgorithm: value }, async () => {
-              await viewPreferencesApi.put({ radar_sort_algorithm: value });
-              return { radarSortAlgorithm: value };
-            }).then((result) => {
+            void persistRemoteOrKeepLocal(
+              { radarSortAlgorithm: value },
+              async (signal) => {
+                await viewPreferencesApi.put({ radar_sort_algorithm: value }, { signal });
+                return { radarSortAlgorithm: value };
+              },
+              { principal, generation: currentPreferenceWriteGeneration() },
+            ).then((result) => {
               if (result.persisted === false) {
                 setPrefUnsynced(true);
                 return;
@@ -539,6 +552,9 @@ function LeadBigCard({
       transition={{ duration: DUR_SECTION, ease: EASE_PAPER }}
       aria-label={t('{code} 首要信号大卡', { code: event.display_code })}
       className={cn('radar-lead-card card-surface p-5', locate && 'bk-locate')}
+      data-testid="radar-first-event"
+      data-canonical-code={event.canonical_code}
+      data-event-id={event.event_id}
     >
       <div className="flex flex-wrap items-center gap-1.5">
         <SignalChip signal={event.signal_type} />

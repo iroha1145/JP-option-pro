@@ -27,9 +27,12 @@ const {
   SCREENER_A0,
   a0ViewSupported,
   algorithmPreferencePendingSync,
+  algorithmPreferenceRevision,
+  bumpAlgorithmPreferenceRevision,
   markAlgorithmPreferencePendingSync,
   preferenceStorageKey,
   readAlgorithmPreferences,
+  shouldApplyRemotePreference,
   writeAlgorithmPreferences,
 } = await import('../src/lib/algorithmPreferences.ts');
 
@@ -83,6 +86,30 @@ test('screener ordinary scan does not force cache reload; owner refresh does', a
   assert.ok(ordinary, 'runScan must call strengthApi.scan');
   assert.match(ordinary[1], /opts\?\.cache/);
   assert.doesNotMatch(ordinary[1], /'reload'/);
+});
+
+test('late remote GET cannot apply after a newer local revision', () => {
+  writeAlgorithmPreferences({ screenerRankingAlgorithm: SCREENER_A0 }, 'account:alice');
+  const started = algorithmPreferenceRevision('account:alice');
+  bumpAlgorithmPreferenceRevision('account:alice');
+  markAlgorithmPreferencePendingSync('account:alice', false);
+  assert.equal(shouldApplyRemotePreference('account:alice', started), false);
+  assert.equal(readAlgorithmPreferences('account:alice').screenerRankingAlgorithm, SCREENER_A0);
+});
+
+test('screener and radar persist through principal, generation, and PUT signal', async () => {
+  const screener = await source('pages/Screener.tsx');
+  const radar = await source('pages/Radar.tsx');
+  const access = await source('hooks/useAccess.tsx');
+  const modules = await source('api/modules.ts');
+  assert.match(screener, /currentPreferenceWriteGeneration\(\)/);
+  assert.match(screener, /viewPreferencesApi\.put\(\{ screener_ranking_algorithm: choice \}, \{ signal \}\)/);
+  assert.match(screener, /shouldApplyRemotePreference\(principal, startedRevision\)/);
+  assert.match(radar, /viewPreferencesApi\.put\(\{ radar_sort_algorithm: value \}, \{ signal \}\)/);
+  assert.match(radar, /currentPreferenceWriteGeneration\(\)/);
+  assert.match(access, /invalidatePreferenceWriteQueue\(\)/);
+  assert.match(access, /bindPreferenceWritePrincipal\(principal\)/);
+  assert.match(modules, /put<ViewPreferencesResponse>\('\/view-preferences', body, options\)/);
 });
 
 test('radar owner refresh binds the action then invalidates publication paths', async () => {

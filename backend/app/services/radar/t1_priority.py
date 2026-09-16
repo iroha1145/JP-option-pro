@@ -268,21 +268,47 @@ def t1_view_token(
     )[:24]
 
 
-def t1_resistance_high(event: Mapping[str, Any]) -> Any:
-    """Frozen platform high stored on the event. Never rebuild today's base."""
+def t1_anchor_payload(event: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Dedicated first-publish T1 anchor. Live daily structure is not an anchor."""
 
     features = event.get("features") if isinstance(event.get("features"), Mapping) else {}
-    structure = event.get("structure")
-    if not isinstance(structure, Mapping):
-        structure = features.get("structure") if isinstance(features, Mapping) else None
-    if isinstance(structure, Mapping):
-        base = structure.get("base")
-        if isinstance(base, Mapping) and base.get("resistance_high") is not None:
-            return base.get("resistance_high")
-    snapshot = features.get("snapshot") if isinstance(features, Mapping) else None
-    if isinstance(snapshot, Mapping) and snapshot.get("resistance_high") is not None:
-        return snapshot.get("resistance_high")
+    for source in (
+        event.get("t1_anchor"),
+        features.get("t1_anchor") if isinstance(features, Mapping) else None,
+    ):
+        if isinstance(source, Mapping) and source.get("resistance_high") is not None:
+            return dict(source)
     return None
+
+
+def _legacy_pivot_recovery(event: Mapping[str, Any]) -> Any:
+    """Recover resistance from frozen pivot only with explicit then-resistance proof.
+
+    Production ``pivot_price`` from the base detector is resistance mid. Do not
+    treat a bare pivot as T1 resistance without a recorded convention match.
+    """
+
+    features = event.get("features") if isinstance(event.get("features"), Mapping) else {}
+    recovery = event.get("t1_anchor_recovery")
+    if not isinstance(recovery, Mapping):
+        recovery = features.get("t1_anchor_recovery") if isinstance(features, Mapping) else None
+    if not isinstance(recovery, Mapping):
+        return None
+    if recovery.get("pivot_was_resistance_high") is not True:
+        return None
+    convention = str(recovery.get("data_convention") or "").strip()
+    if convention and convention != T1_DATA_CONVENTION:
+        return None
+    return event.get("pivot_price")
+
+
+def t1_resistance_high(event: Mapping[str, Any]) -> Any:
+    """Frozen first-publish platform high. Never read today's live structure."""
+
+    anchor = t1_anchor_payload(event)
+    if anchor is not None:
+        return anchor.get("resistance_high")
+    return _legacy_pivot_recovery(event)
 
 
 def frozen_platform_evidence(event: Mapping[str, Any]) -> bool:
@@ -567,29 +593,34 @@ def event_group_key(event: Mapping[str, Any]) -> str:
 
 
 def apply_t1_stable_boost(events: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """Boost T1-met events inside each trading-date group.
+    """Boost T1-met events inside each trading-date group's original slots.
 
-    Incoming order is the production order and is preserved except that
-    ``met`` rows move to the front of their discovered-date group. Pending
-    and unavailable events stay with unmet events; they are not extra-penalized.
-    Cross-day group order is unchanged.
+    Incoming order is the production order. Zero boostable events returns that
+    sequence item-for-item — dates are not regrouped. When at least one event
+    is boostable, each discovered-date group is stably partitioned into met /
+    rest and written back into the group's original index slots so interleaved
+    dates (A T / B T-1 / C T) do not collapse into A,C,B.
     """
 
-    groups: dict[str, list[dict[str, Any]]] = {}
+    items = [dict(item) for item in events]
+    if not any(t1_boost_eligible(item) for item in items):
+        return items
+    groups: dict[str, list[int]] = {}
     group_order: list[str] = []
-    for item in events:
+    for index, item in enumerate(items):
         key = event_group_key(item)
         if key not in groups:
             group_order.append(key)
             groups[key] = []
-        groups[key].append(dict(item))
-    boosted: list[dict[str, Any]] = []
+        groups[key].append(index)
+    boosted = list(items)
     for key in group_order:
-        bucket = groups[key]
+        slots = groups[key]
+        bucket = [items[index] for index in slots]
         met = [item for item in bucket if t1_boost_eligible(item)]
         rest = [item for item in bucket if not t1_boost_eligible(item)]
-        boosted.extend(met)
-        boosted.extend(rest)
+        for slot, item in zip(slots, met + rest):
+            boosted[slot] = item
     return boosted
 
 

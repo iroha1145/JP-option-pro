@@ -30,7 +30,7 @@ def test_only_base_breakout_is_applicable():
     as_of = jst(18, 0)
     applicable = attach_t1_features(
         {"event_id": "a", "signal_type": SIGNAL_BASE_BREAK, "discovered_date": SESSION.isoformat(),
-         "features": {"structure": {"base": {"resistance_high": 100}}}},
+         "features": {"t1_anchor": {"resistance_high": 100, "data_convention": "jp_adj_ohlcv_v1"}}},
         None,
         as_of=as_of,
         is_trading_day=lambda _v: True,
@@ -71,3 +71,37 @@ def test_same_day_met_moves_ahead_without_deleting_or_reordering_days():
     assert set(ids) == {item["event_id"] for item in incoming}
     assert ids.index("a-met") < ids.index("a-low")
     assert ids.index("a-met") < ids.index("a-other")
+
+
+def test_zero_boostable_events_preserve_production_order_item_for_item():
+    incoming = [
+        _event("A", SIGNAL_BASE_BREAK, "2026-03-16", 90, "unmet"),
+        _event("B", SIGNAL_BASE_BREAK, "2026-03-13", 80, "unmet"),
+        _event("C", SIGNAL_BASE_BREAK, "2026-03-16", 70, "pending_close"),
+    ]
+    boosted = apply_t1_stable_boost(incoming)
+    assert [item["event_id"] for item in boosted] == ["A", "B", "C"]
+
+
+def test_interleaved_dates_keep_original_slots_when_boosting():
+    incoming = [
+        _event("A", SIGNAL_BASE_BREAK, "2026-03-16", 90, T1_MET),
+        _event("B", SIGNAL_BASE_BREAK, "2026-03-13", 80, "unmet"),
+        _event("C", SIGNAL_BASE_BREAK, "2026-03-16", 70, "unmet"),
+    ]
+    boosted = apply_t1_stable_boost(incoming)
+    assert [item["event_id"] for item in boosted] == ["A", "B", "C"]
+
+
+def test_live_structure_without_anchor_is_not_applicable():
+    as_of = jst(18, 0)
+    attached = attach_t1_features(
+        {"event_id": "legacy", "signal_type": SIGNAL_BASE_BREAK, "discovered_date": SESSION.isoformat(),
+         "features": {"structure": {"base": {"resistance_high": 100}}}},
+        None,
+        as_of=as_of,
+        is_trading_day=lambda _v: True,
+        prior_trading_sessions=lambda *_a: None,
+    )
+    assert attached["t1_priority"]["status"] == T1_NOT_APPLICABLE
+    assert attached["t1_priority"]["reason"] == "missing_frozen_platform"

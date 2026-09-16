@@ -7,7 +7,7 @@ upserts that keep ``ingested_at`` as the revision stamp.
 
 from __future__ import annotations
 
-CORE_SCHEMA_VERSION = "jp-core-v10"
+CORE_SCHEMA_VERSION = "jp-core-v11"
 
 # -- 機関空売り行動モニター（v6 追加）--------------------------------------
 #
@@ -319,6 +319,21 @@ _T1_DDL: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_radar_t1_retry_event ON radar_t1_retry(event_id, session_date)",
 )
 
+_T1_ANCHOR_DDL: tuple[str, ...] = (
+    """
+    CREATE TABLE IF NOT EXISTS radar_t1_anchors (
+        event_id TEXT PRIMARY KEY,
+        session_date TEXT NOT NULL,
+        platform_id TEXT,
+        resistance_high REAL NOT NULL,
+        data_convention TEXT NOT NULL,
+        version INTEGER NOT NULL DEFAULT 1,
+        source TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    ) WITHOUT ROWID
+    """,
+)
+
 CORE_DDL: tuple[str, ...] = (
     # -- 上場銘柄マスタ（現在ビュー） ---------------------------------------
     """
@@ -586,6 +601,7 @@ CORE_DDL: tuple[str, ...] = (
     *_QUOTE_INDEX_DDL,
     *_SHORT_MONITOR_DDL,
     *_T1_DDL,
+    *_T1_ANCHOR_DDL,
 )
 
 #: v4: 業種相対の 20 日/63 日分離 + 信用規制状態。
@@ -730,7 +746,8 @@ CORE_MIGRATIONS: dict[str, tuple[tuple[str, ...], str]] = {
     "jp-core-v6": (_STALE_REPORTING_DDL, "jp-core-v7"),
     "jp-core-v7": (_SHORT_IDENTITY_DDL, "jp-core-v8"),
     "jp-core-v8": (_STRENGTH_PUBLICATION_DDL, "jp-core-v9"),
-    "jp-core-v9": (_T1_DDL, CORE_SCHEMA_VERSION),
+    "jp-core-v9": (_T1_DDL, "jp-core-v10"),
+    "jp-core-v10": (_T1_ANCHOR_DDL, CORE_SCHEMA_VERSION),
 }
 
 __all__ = ["CORE_DDL", "CORE_MIGRATIONS", "CORE_SCHEMA_VERSION"]

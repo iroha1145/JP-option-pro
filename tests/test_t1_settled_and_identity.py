@@ -127,7 +127,7 @@ def test_carryover_and_api_overlay_share_repository_rules(tmp_path, monkeypatch)
     assert event["t1_priority"]["status"] == T1_MET
     attached = attach_t1_features(
         {"event_id": "evt-api", "signal_type": "base_breakout", "discovered_date": SESSION.isoformat(),
-         "features": {"structure": {"base": {"resistance_high": 100}}}},
+         "features": {"t1_anchor": {"resistance_high": 100, "data_convention": "jp_adj_ohlcv_v1"}}},
         None,
         as_of=jst(18, 0),
         previous=first,

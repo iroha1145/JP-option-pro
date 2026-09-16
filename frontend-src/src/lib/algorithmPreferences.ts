@@ -101,6 +101,38 @@ export function algorithmPreferencePendingSync(principal?: string | null): boole
   return parsed?.pendingSync === true;
 }
 
+export function algorithmPreferenceRevision(principal?: string | null): number {
+  const parsed = readStorage(preferenceStorageKey(principal));
+  const value = Number(parsed?.choiceRevision ?? 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
+export function bumpAlgorithmPreferenceRevision(principal?: string | null): number {
+  const key = preferenceStorageKey(principal);
+  const current = readStorage(key) ?? readAlgorithmPreferences(principal);
+  const next = algorithmPreferenceRevision(principal) + 1;
+  writeStorage(key, { ...current, choiceRevision: next } as AlgorithmPreferences & {
+    choiceRevision?: number;
+    pendingSync?: boolean;
+  });
+  return next;
+}
+
+export function shouldApplyRemotePreference(
+  principal: string | null | undefined,
+  startedRevision: number,
+): boolean {
+  if (algorithmPreferencePendingSync(principal)) return false;
+  return algorithmPreferenceRevision(principal) === startedRevision;
+}
+
+export function preferencePrincipalFromAccess(
+  isOwner: boolean,
+  accountUsername: string | null | undefined,
+): string {
+  return isOwner ? 'owner' : accountUsername ? `account:${accountUsername}` : 'visitor';
+}
+
 export function a0ViewSupported(timeframe: string, profile: string): boolean {
   return timeframe === 'all' && profile === 'balanced';
 }

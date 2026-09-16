@@ -135,29 +135,42 @@ def insert_radar_event(
     priority: float = 80.0,
     resistance_high: float | None = 100.0,
     state: str = "triggered",
+    freeze_anchor: bool = True,
+    last_scanned: str | None = None,
 ) -> None:
-    features = {}
+    features: dict = {}
     if resistance_high is not None:
         features["structure"] = {"base": {"resistance_high": resistance_high}}
-    repo.upsert_radar_events(
-        [
-            {
+        if freeze_anchor:
+            features["t1_anchor"] = {
                 "event_id": event_id,
-                "canonical_code": code,
-                "signal_type": signal_type,
-                "state": state,
-                "discovered_date": discovered,
-                "pivot_price": resistance_high,
-                "trigger_price": (resistance_high or 0) + 5,
-                "state_changed_date": discovered,
-                "last_scanned_date": discovered,
-                "alert_priority": priority,
-                "scores": {"alert_priority": priority},
-                "features": features,
+                "session_date": discovered,
+                "platform_id": None,
+                "resistance_high": resistance_high,
+                "data_convention": "jp_adj_ohlcv_v1",
+                "version": 1,
+                "source": "first_publish",
             }
-        ]
-    )
-    repo.record_sync_success("radar_scan", data_through=discovered)
+    events = [
+        {
+            "event_id": event_id,
+            "canonical_code": code,
+            "signal_type": signal_type,
+            "state": state,
+            "discovered_date": discovered,
+            "pivot_price": resistance_high,
+            "trigger_price": (resistance_high or 0) + 5,
+            "state_changed_date": discovered,
+            "last_scanned_date": last_scanned or discovered,
+            "alert_priority": priority,
+            "scores": {"alert_priority": priority},
+            "features": features,
+        }
+    ]
+    repo.upsert_radar_events(events)
+    if freeze_anchor and resistance_high is not None:
+        repo.save_t1_anchors(events)
+    repo.record_sync_success("radar_scan", data_through=last_scanned or discovered)
 
 
 def publish_strength_rows(repo: CoreRepository, rows: list[dict], *, trade_date: str = SESSION_ISO):
