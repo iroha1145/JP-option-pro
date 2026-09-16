@@ -306,8 +306,8 @@ export const strengthApi = {
 };
 
 export const viewPreferencesApi = {
-  get(): Promise<ViewPreferencesResponse> {
-    return get('/view-preferences');
+  get(options?: RequestOptions): Promise<ViewPreferencesResponse> {
+    return get('/view-preferences', options);
   },
   put(
     body: { screener_ranking_algorithm?: string; radar_sort_algorithm?: string },

@@ -34,6 +34,10 @@ const {
   readAlgorithmPreferences,
   shouldApplyFetchedPreferences,
   shouldApplyRemotePreference,
+  bumpPreferenceIdentityEpoch,
+  currentPreferenceIdentityEpoch,
+  resetPreferenceIdentityEpoch,
+  canCommitPreferenceWriteResult,
   writeAlgorithmPreferences,
 } = await import('../src/lib/algorithmPreferences.ts');
 
@@ -107,6 +111,47 @@ test('anonymous GET placeholders cannot overwrite a local A0 choice', () => {
   assert.equal(readAlgorithmPreferences('visitor').screenerRankingAlgorithm, SCREENER_A0);
 });
 
+test('identity epoch change rejects a late GET even when revision matches', () => {
+  resetPreferenceIdentityEpoch();
+  writeAlgorithmPreferences({ screenerRankingAlgorithm: SCREENER_A0 }, 'account:alice');
+  const started = algorithmPreferenceRevision('account:alice');
+  const startedEpoch = currentPreferenceIdentityEpoch();
+  bumpPreferenceIdentityEpoch();
+  assert.equal(
+    shouldApplyFetchedPreferences('account:alice', started, 'account:alice-id', {
+      startedEpoch,
+      currentEpoch: currentPreferenceIdentityEpoch(),
+      currentPrincipal: 'account:bob',
+    }),
+    false,
+  );
+  assert.equal(
+    shouldApplyFetchedPreferences('account:alice', started, 'account:alice-id', {
+      startedEpoch,
+      currentEpoch: startedEpoch,
+      currentPrincipal: 'account:alice',
+    }),
+    false,
+  );
+  resetPreferenceIdentityEpoch();
+  assert.equal(
+    shouldApplyFetchedPreferences('account:alice', started, 'account:alice-id', {
+      startedEpoch: 0,
+      currentEpoch: 0,
+      currentPrincipal: 'account:alice',
+    }),
+    true,
+  );
+});
+
+test('old write callback cannot clear the new principal unsynced flag', () => {
+  resetPreferenceIdentityEpoch();
+  const started = currentPreferenceIdentityEpoch();
+  bumpPreferenceIdentityEpoch();
+  assert.equal(canCommitPreferenceWriteResult(started, 'account:bob', 'account:alice'), false);
+  assert.equal(canCommitPreferenceWriteResult(currentPreferenceIdentityEpoch(), 'account:bob', 'account:bob'), true);
+});
+
 test('screener and radar persist through principal, generation, and PUT signal', async () => {
   const screener = await source('pages/Screener.tsx');
   const radar = await source('pages/Radar.tsx');
@@ -115,14 +160,19 @@ test('screener and radar persist through principal, generation, and PUT signal',
   assert.match(screener, /currentPreferenceWriteGeneration\(\)/);
   assert.match(screener, /screener_ranking_algorithm: choice/);
   assert.match(screener, /radar_sort_algorithm: readAlgorithmPreferences\(principal\)\.radarSortAlgorithm/);
-  assert.match(screener, /shouldApplyFetchedPreferences\(principal, startedRevision, remote\.principal\)/);
-  assert.match(screener, /if \(!isSignedIn\) return;/);
-  assert.match(radar, /shouldApplyFetchedPreferences\(principal, startedRevision, remote\.principal\)/);
+  assert.match(screener, /shouldApplyFetchedPreferences\(principal, startedRevision, remote\.principal/);
+  assert.match(screener, /currentPreferenceIdentityEpoch\(\)/);
+  assert.match(screener, /canCommitPreferenceWriteResult/);
+  assert.match(screener, /controller\.abort\(\)/);
+  assert.match(radar, /shouldApplyFetchedPreferences\(principal, startedRevision, remote\.principal/);
+  assert.match(radar, /currentPreferenceIdentityEpoch\(\)/);
+  assert.match(radar, /canCommitPreferenceWriteResult/);
   assert.match(radar, /radar_sort_algorithm: value/);
   assert.match(radar, /screener_ranking_algorithm: readAlgorithmPreferences\(principal\)\.screenerRankingAlgorithm/);
   assert.match(radar, /currentPreferenceWriteGeneration\(\)/);
   assert.match(access, /invalidatePreferenceWriteQueue\(\)/);
   assert.match(access, /bindPreferenceWritePrincipal\(principal\)/);
+  assert.match(access, /bumpPreferenceIdentityEpoch\(\)/);
   assert.match(modules, /put<ViewPreferencesResponse>\('\/view-preferences', body, options\)/);
 });
 

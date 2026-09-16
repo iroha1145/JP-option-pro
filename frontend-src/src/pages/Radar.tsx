@@ -33,6 +33,8 @@ import {
   algorithmPreferencePendingSync,
   algorithmPreferenceRevision,
   bumpAlgorithmPreferenceRevision,
+  canCommitPreferenceWriteResult,
+  currentPreferenceIdentityEpoch,
   markAlgorithmPreferencePendingSync,
   preferencePrincipalFromAccess,
   readAlgorithmPreferences,
@@ -124,25 +126,49 @@ export default function Radar() {
   }, [query.data?.t1_view, t1Cursor]);
 
   useEffect(() => {
+    let active = true;
+    const startedEpoch = currentPreferenceIdentityEpoch();
     const principal = preferencePrincipalFromAccess(isOwner, accountUsername);
+    const controller = new AbortController();
     const local = readAlgorithmPreferences(principal);
     setSortAlgorithm(local.radarSortAlgorithm);
     if (algorithmPreferencePendingSync(principal)) {
       setPrefUnsynced(true);
-      return;
+      return () => {
+        active = false;
+        controller.abort();
+      };
     }
-    if (!isSignedIn) return;
+    if (!isSignedIn) {
+      return () => {
+        active = false;
+        controller.abort();
+      };
+    }
     const startedRevision = algorithmPreferenceRevision(principal);
     void viewPreferencesApi
-      .get()
+      .get({ signal: controller.signal })
       .then((remote) => {
-        if (!shouldApplyFetchedPreferences(principal, startedRevision, remote.principal)) return;
+        if (!active) return;
+        if (
+          !shouldApplyFetchedPreferences(principal, startedRevision, remote.principal, {
+            startedEpoch,
+            currentEpoch: currentPreferenceIdentityEpoch(),
+            currentPrincipal: preferencePrincipalFromAccess(isOwner, accountUsername),
+          })
+        ) {
+          return;
+        }
         const choice = (remote.preferences.radar_sort_algorithm || local.radarSortAlgorithm) as RadarSortChoice;
         writeAlgorithmPreferences({ radarSortAlgorithm: choice }, principal);
         setSortAlgorithm(choice);
         setPrefUnsynced(false);
       })
       .catch(() => undefined);
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [accountUsername, isOwner, isSignedIn]);
   const state = remoteState(query, (d) => d.events.length === 0);
 
@@ -283,6 +309,7 @@ export default function Radar() {
             setSortAlgorithm(value);
             setT1Cursor(null);
             const principal = preferencePrincipalFromAccess(isOwner, accountUsername);
+            const startedEpoch = currentPreferenceIdentityEpoch();
             writeAlgorithmPreferences({ radarSortAlgorithm: value }, principal);
             bumpAlgorithmPreferenceRevision(principal);
             markAlgorithmPreferencePendingSync(principal, true);
@@ -300,6 +327,15 @@ export default function Radar() {
               },
               { principal, generation: currentPreferenceWriteGeneration() },
             ).then((result) => {
+              if (
+                !canCommitPreferenceWriteResult(
+                  startedEpoch,
+                  preferencePrincipalFromAccess(isOwner, accountUsername),
+                  principal,
+                )
+              ) {
+                return;
+              }
               if (result.persisted === false) {
                 setPrefUnsynced(true);
                 return;
@@ -456,7 +492,12 @@ export default function Radar() {
             </SoftBadge>
           )}
           {query.data?.effective_algorithm && (
-            <p className="mb-2 text-micro text-ink-400" data-testid="radar-algorithm-status">
+            <p
+              className="mb-2 text-micro text-ink-400"
+              data-testid="radar-algorithm-status"
+              data-sort-algorithm={sortAlgorithm}
+              data-effective-algorithm={query.data.effective_algorithm}
+            >
               {t('当前排序')} {query.data.effective_algorithm} · {query.data.algorithm_version}
             </p>
           )}

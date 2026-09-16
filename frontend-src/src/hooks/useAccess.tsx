@@ -16,6 +16,7 @@ import {
 import { accessApi, accountApi } from '@/api/modules';
 import { PRINCIPAL_INVALID_EVENT } from '@/api/client';
 import { dropQueryRegistry, setQueryPrincipal } from '@/api/queryRegistry';
+import { bumpPreferenceIdentityEpoch } from '@/lib/algorithmPreferences';
 import {
   bindPreferenceWritePrincipal,
   invalidatePreferenceWriteQueue,
@@ -60,6 +61,7 @@ export function AccessProvider({ children }: { children: ReactNode }) {
           : 'visitor';
       if (lastPrincipalRef.current !== principal) {
         lastPrincipalRef.current = principal;
+        bumpPreferenceIdentityEpoch();
         setQueryPrincipal(principal);
         void dropQueryRegistry();
         invalidatePreferenceWriteQueue();
@@ -101,6 +103,8 @@ export function AccessProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (password: string, username = 'admin') => {
       await accessApi.login(password, username);
+      bumpPreferenceIdentityEpoch();
+      invalidatePreferenceWriteQueue();
       await refresh();
     },
     [refresh],
@@ -109,6 +113,8 @@ export function AccessProvider({ children }: { children: ReactNode }) {
   const register = useCallback(
     async (username: string, password: string) => {
       await accountApi.register(username, password);
+      bumpPreferenceIdentityEpoch();
+      invalidatePreferenceWriteQueue();
       await refresh();
     },
     [refresh],
@@ -116,6 +122,8 @@ export function AccessProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await accessApi.logout();
+    bumpPreferenceIdentityEpoch();
+    invalidatePreferenceWriteQueue();
     await refresh();
   }, [refresh]);
 

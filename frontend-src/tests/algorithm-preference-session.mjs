@@ -22,11 +22,18 @@ globalThis.window = {
 const {
   SCREENER_A0,
   SCREENER_PRODUCTION,
+  RADAR_T1,
+  RADAR_PRODUCTION,
   bumpAlgorithmPreferenceRevision,
   algorithmPreferenceRevision,
   markAlgorithmPreferencePendingSync,
   readAlgorithmPreferences,
   shouldApplyRemotePreference,
+  shouldApplyFetchedPreferences,
+  bumpPreferenceIdentityEpoch,
+  currentPreferenceIdentityEpoch,
+  resetPreferenceIdentityEpoch,
+  canCommitPreferenceWriteResult,
   writeAlgorithmPreferences,
 } = await import('../src/lib/algorithmPreferences.ts');
 const {
@@ -84,6 +91,56 @@ test('late GET after local write cannot restore an older remote choice', async (
   assert.equal(shouldApplyRemotePreference('account:alice', started), false);
   assert.equal(readAlgorithmPreferences('account:alice').screenerRankingAlgorithm, SCREENER_A0);
   assert.equal(remote.screener_ranking_algorithm, SCREENER_PRODUCTION);
+});
+
+test('late Alice GET cannot apply after Bob identity epoch advances', () => {
+  resetPreferenceIdentityEpoch();
+  writeAlgorithmPreferences({ radarSortAlgorithm: RADAR_T1 }, 'account:alice');
+  writeAlgorithmPreferences({ radarSortAlgorithm: RADAR_PRODUCTION }, 'account:bob');
+  const aliceRevision = algorithmPreferenceRevision('account:alice');
+  const aliceEpoch = currentPreferenceIdentityEpoch();
+  bumpPreferenceIdentityEpoch();
+  assert.equal(
+    shouldApplyFetchedPreferences('account:alice', aliceRevision, 'account:alice-db-id', {
+      startedEpoch: aliceEpoch,
+      currentEpoch: currentPreferenceIdentityEpoch(),
+      currentPrincipal: 'account:bob',
+    }),
+    false,
+  );
+  assert.equal(readAlgorithmPreferences('account:bob').radarSortAlgorithm, RADAR_PRODUCTION);
+});
+
+test('logout epoch rejects a late signed-in GET', () => {
+  resetPreferenceIdentityEpoch();
+  const started = algorithmPreferenceRevision('account:alice');
+  const startedEpoch = currentPreferenceIdentityEpoch();
+  bumpPreferenceIdentityEpoch();
+  assert.equal(
+    shouldApplyFetchedPreferences('account:alice', started, 'account:alice-db-id', {
+      startedEpoch,
+      currentEpoch: currentPreferenceIdentityEpoch(),
+      currentPrincipal: 'visitor',
+    }),
+    false,
+  );
+});
+
+test('same-principal write still applies when epoch is unchanged', async () => {
+  resetPreferenceWriteQueue();
+  resetPreferenceIdentityEpoch();
+  bindPreferenceWritePrincipal('account:bob');
+  const startedEpoch = currentPreferenceIdentityEpoch();
+  const result = await persistRemoteOrKeepLocal(
+    { radarSortAlgorithm: RADAR_PRODUCTION },
+    async () => ({ radarSortAlgorithm: RADAR_PRODUCTION }),
+    { principal: 'account:bob', generation: currentPreferenceWriteGeneration() },
+  );
+  assert.equal(result.persisted, true);
+  assert.equal(
+    canCommitPreferenceWriteResult(startedEpoch, 'account:bob', 'account:bob'),
+    true,
+  );
 });
 
 test('503 keeps explicit local intent and reports unsynced', async () => {

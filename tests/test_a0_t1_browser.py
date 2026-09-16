@@ -351,3 +351,167 @@ def test_playwright_switches_algorithm_and_recovers_after_navigation(live_app):
         ]
         assert unexplained == []
         browser.close()
+
+
+def _access_body(user: str) -> dict:
+    if user == "visitor":
+        return {
+            "mode": "private_network",
+            "is_owner": False,
+            "password_configured": False,
+            "account": {"logged_in": False, "username": None},
+        }
+    return {
+        "mode": "private_network",
+        "is_owner": False,
+        "password_configured": False,
+        "account": {"logged_in": True, "username": user},
+    }
+
+
+def _prefs_body(user: str) -> dict:
+    defaults = {
+        "screener_ranking_algorithm": "production",
+        "radar_sort_algorithm": "production",
+    }
+    if user == "alice":
+        return {
+            "principal": "account:alice-db",
+            "preferences": {
+                "screener_ranking_algorithm": "a0_mid_long",
+                "radar_sort_algorithm": "t1_daily_priority",
+            },
+            "admin_defaults": defaults,
+        }
+    if user == "bob":
+        return {
+            "principal": "account:bob-db",
+            "preferences": {
+                "screener_ranking_algorithm": "production",
+                "radar_sort_algorithm": "production",
+            },
+            "admin_defaults": defaults,
+        }
+    return {
+        "principal": None,
+        "preferences": {
+            "screener_ranking_algorithm": "follow_default",
+            "radar_sort_algorithm": "follow_default",
+        },
+        "admin_defaults": defaults,
+    }
+
+
+def test_playwright_stale_preference_get_cannot_override_new_identity(live_app):
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        context = browser.new_context(
+            viewport={"width": 1440, "height": 900},
+            reduced_motion="reduce",
+            locale="ja-JP",
+        )
+        context.add_init_script("localStorage.setItem('optixjp:locale', 'ja');")
+        page = context.new_page()
+        state = {"user": "alice"}
+        held = []
+
+        def on_status(route):
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=json.dumps(_access_body(state["user"])),
+            )
+
+        def on_prefs(route):
+            if route.request.method != "GET":
+                route.continue_()
+                return
+            if state["user"] == "alice":
+                held.append(route)
+                return
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=json.dumps(_prefs_body(state["user"])),
+            )
+
+        page.route("**/api/access/status", on_status)
+        page.route("**/api/view-preferences", on_prefs)
+        page.goto(f"{live_app['base']}/radar", wait_until="networkidle")
+        page.get_by_test_id("radar-first-event").wait_for()
+        assert held, "Alice radar GET should stay pending"
+        state["user"] = "bob"
+        page.evaluate("() => window.dispatchEvent(new Event('optixjp:principal-invalid'))")
+        page.wait_for_function(
+            """() => {
+              const node = document.querySelector('[data-testid=radar-algorithm-status]');
+              return node && node.getAttribute('data-sort-algorithm') === 'production';
+            }"""
+        )
+        bob_sort = page.get_by_test_id("radar-algorithm-status").get_attribute("data-sort-algorithm")
+        assert bob_sort == "production"
+        alice_payload = json.dumps(_prefs_body("alice"))
+        for route in list(held):
+            try:
+                route.fulfill(status=200, content_type="application/json", body=alice_payload)
+            except Exception:
+                pass
+        held.clear()
+        page.wait_for_timeout(400)
+        assert page.get_by_test_id("radar-algorithm-status").get_attribute("data-sort-algorithm") == "production"
+        assert "t1_daily_priority" not in page.get_by_test_id("radar-algorithm-status").inner_text()
+
+        state["user"] = "alice"
+        held.clear()
+        page.goto(f"{live_app['base']}/screener", wait_until="networkidle")
+        page.get_by_role("heading", name="銘柄スキャン").wait_for()
+        page.get_by_test_id("screener-first-row").first.wait_for()
+        page.wait_for_timeout(300)
+        assert held, "Alice screener GET should stay pending"
+        state["user"] = "bob"
+        page.evaluate("() => window.dispatchEvent(new Event('optixjp:principal-invalid'))")
+        page.wait_for_function(
+            """() => {
+              const node = document.querySelector('[data-testid=screener-algorithm-status]');
+              return node && node.getAttribute('data-ranking-algorithm') === 'production';
+            }"""
+        )
+        for route in list(held):
+            try:
+                route.fulfill(status=200, content_type="application/json", body=alice_payload)
+            except Exception:
+                pass
+        held.clear()
+        page.wait_for_timeout(400)
+        assert page.get_by_test_id("screener-algorithm-status").get_attribute("data-ranking-algorithm") == "production"
+        assert "a0_mid_long" not in page.get_by_test_id("screener-algorithm-status").inner_text()
+
+        state["user"] = "visitor"
+        page.evaluate("() => window.dispatchEvent(new Event('optixjp:principal-invalid'))")
+        page.wait_for_timeout(300)
+        leftover = list(held)
+        held.clear()
+        for route in leftover:
+            try:
+                route.fulfill(status=200, content_type="application/json", body=alice_payload)
+            except Exception:
+                pass
+        page.wait_for_timeout(400)
+        ranking = page.get_by_test_id("screener-algorithm-status").get_attribute("data-ranking-algorithm")
+        assert ranking in {"production", "follow_default"}
+        assert "a0_mid_long" not in page.get_by_test_id("screener-algorithm-status").inner_text()
+
+        state["user"] = "alice"
+        held.clear()
+        page.goto(f"{live_app['base']}/radar", wait_until="domcontentloaded")
+        page.wait_for_timeout(200)
+        page.goto(f"{live_app['base']}/screener", wait_until="networkidle")
+        for route in list(held):
+            try:
+                route.fulfill(status=500, content_type="application/json", body='{"code":"failed"}')
+            except Exception:
+                pass
+        page.get_by_test_id("screener-first-row").first.wait_for()
+        browser.close()

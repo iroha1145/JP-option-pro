@@ -126,13 +126,54 @@ export function shouldApplyRemotePreference(
   return algorithmPreferenceRevision(principal) === startedRevision;
 }
 
+export interface PreferenceIdentityGuard {
+  startedEpoch: number;
+  currentEpoch: number;
+  currentPrincipal?: string | null;
+}
+
+let preferenceIdentityEpoch = 0;
+
+export function currentPreferenceIdentityEpoch(): number {
+  return preferenceIdentityEpoch;
+}
+
+export function bumpPreferenceIdentityEpoch(): number {
+  preferenceIdentityEpoch += 1;
+  return preferenceIdentityEpoch;
+}
+
+export function resetPreferenceIdentityEpoch(): void {
+  preferenceIdentityEpoch = 0;
+}
+
 export function shouldApplyFetchedPreferences(
   principal: string | null | undefined,
   startedRevision: number,
   remotePrincipal: string | null | undefined,
+  identity?: PreferenceIdentityGuard,
 ): boolean {
+  if (identity) {
+    if (identity.startedEpoch !== identity.currentEpoch) return false;
+    if (identity.currentEpoch !== preferenceIdentityEpoch) return false;
+    if (
+      identity.currentPrincipal !== undefined &&
+      (identity.currentPrincipal ?? '') !== (principal ?? '')
+    ) {
+      return false;
+    }
+  }
   if (remotePrincipal == null || remotePrincipal === '') return false;
   return shouldApplyRemotePreference(principal, startedRevision);
+}
+
+export function canCommitPreferenceWriteResult(
+  startedEpoch: number,
+  currentPrincipal: string | null | undefined,
+  capturedPrincipal: string | null | undefined,
+): boolean {
+  if (startedEpoch !== preferenceIdentityEpoch) return false;
+  return (currentPrincipal ?? '') === (capturedPrincipal ?? '');
 }
 
 export function preferencePrincipalFromAccess(

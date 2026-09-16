@@ -52,6 +52,8 @@ import {
   algorithmPreferencePendingSync,
   algorithmPreferenceRevision,
   bumpAlgorithmPreferenceRevision,
+  canCommitPreferenceWriteResult,
+  currentPreferenceIdentityEpoch,
   markAlgorithmPreferencePendingSync,
   preferencePrincipalFromAccess,
   readAlgorithmPreferences,
@@ -261,7 +263,10 @@ export default function Screener() {
 
   useEffect(() => {
     if (accessLoading) return;
+    let active = true;
+    const startedEpoch = currentPreferenceIdentityEpoch();
     const principal = preferencePrincipalFromAccess(isOwner, accountUsername);
+    const controller = new AbortController();
     const local = readAlgorithmPreferences(principal);
     const next = { ...appliedRef.current, rankingAlgorithm: local.screenerRankingAlgorithm };
     setDraft((prev) => ({ ...prev, rankingAlgorithm: local.screenerRankingAlgorithm }));
@@ -270,15 +275,32 @@ export default function Screener() {
     if (algorithmPreferencePendingSync(principal)) {
       setPrefUnsynced(true);
       void runScan(next);
-      return;
+      return () => {
+        active = false;
+        controller.abort();
+      };
     }
     const startedRevision = algorithmPreferenceRevision(principal);
     void runScan(next);
-    if (!isSignedIn) return;
+    if (!isSignedIn) {
+      return () => {
+        active = false;
+        controller.abort();
+      };
+    }
     void viewPreferencesApi
-      .get()
+      .get({ signal: controller.signal })
       .then((remote) => {
-        if (!shouldApplyFetchedPreferences(principal, startedRevision, remote.principal)) return;
+        if (!active) return;
+        if (
+          !shouldApplyFetchedPreferences(principal, startedRevision, remote.principal, {
+            startedEpoch,
+            currentEpoch: currentPreferenceIdentityEpoch(),
+            currentPrincipal: preferencePrincipalFromAccess(isOwner, accountUsername),
+          })
+        ) {
+          return;
+        }
         const choice = (remote.preferences.screener_ranking_algorithm || local.screenerRankingAlgorithm) as ScanFilters['rankingAlgorithm'];
         writeAlgorithmPreferences({ screenerRankingAlgorithm: choice }, principal);
         setDraft((prev) => ({ ...prev, rankingAlgorithm: choice }));
@@ -291,11 +313,16 @@ export default function Screener() {
         }
       })
       .catch(() => undefined);
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [accessLoading, accountUsername, isOwner, isSignedIn, runScan, sessionKey]);
 
   const persistAlgorithmChoice = useCallback(
     (choice: ScanFilters['rankingAlgorithm']) => {
       const principal = preferencePrincipalFromAccess(isOwner, accountUsername);
+      const startedEpoch = currentPreferenceIdentityEpoch();
       writeAlgorithmPreferences({ screenerRankingAlgorithm: choice }, principal);
       bumpAlgorithmPreferenceRevision(principal);
       markAlgorithmPreferencePendingSync(principal, true);
@@ -314,6 +341,15 @@ export default function Screener() {
         },
         { principal, generation: currentPreferenceWriteGeneration() },
       ).then((result) => {
+        if (
+          !canCommitPreferenceWriteResult(
+            startedEpoch,
+            preferencePrincipalFromAccess(isOwner, accountUsername),
+            principal,
+          )
+        ) {
+          return;
+        }
         if (result.persisted === false) {
           setPrefUnsynced(true);
           return;
@@ -717,7 +753,12 @@ export default function Screener() {
             </SoftBadge>
           )}
           {response?.effective_algorithm && (
-            <p className="mt-2 text-micro text-ink-400" data-testid="screener-algorithm-status">
+            <p
+              className="mt-2 text-micro text-ink-400"
+              data-testid="screener-algorithm-status"
+              data-ranking-algorithm={applied.rankingAlgorithm}
+              data-effective-algorithm={response.effective_algorithm}
+            >
               {t('当前排序')} {response.effective_algorithm} · {response.algorithm_version} · {response.sort_basis}
             </p>
           )}
