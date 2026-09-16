@@ -12,11 +12,28 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
-from app.api.deps import core_repository
+from app.api.account import current_account
+from app.access import request_is_owner_session
+from app.api.deps import app_store, core_repository
 from app.domain.constants import SECTOR33
 from app.domain.timeutil import iso_date, now_jst, today_jst
 from app.personal_config import get_personal_config
 from app.repositories.base import utc_now_iso
+from app.services.a0_ranking import (
+    a0_request_can_score,
+    annotate_a0_row,
+    annotate_production_row,
+    apply_a0_mid_long,
+)
+from app.services.algorithm_modes import (
+    A0_ALGORITHM,
+    A0_UNAVAILABLE,
+    A0_VERSION,
+    ConflictingAlgorithmError,
+    PRODUCTION_ALGORITHM,
+    UnknownAlgorithmError,
+    resolve_screener_algorithm,
+)
 from app.services.publication import (
     evaluate_freshness,
     expected_trade_date,
@@ -30,6 +47,11 @@ from app.services.strength_scan import (
     sort_view_rows,
     tier_distribution,
     tier_of,
+)
+from app.services.view_preferences import (
+    preference_principal,
+    read_admin_defaults,
+    read_view_preferences,
 )
 
 router = APIRouter(prefix="/api/strength", tags=["strength"])
@@ -87,6 +109,66 @@ def _maybe_304(request: Request, response: Response, etag: str) -> bool:
     return False
 
 
+def _request_screener_resolution(
+    request: Request,
+    *,
+    ranking_algorithm: str | None,
+    timeframe: str,
+    profile: str,
+):
+    store = app_store()
+    defaults = read_admin_defaults(store)
+    account = current_account(request)
+    if account is not None:
+        principal = preference_principal("account", account.user_id)
+    elif request_is_owner_session(request):
+        principal = preference_principal("owner", None)
+    else:
+        principal = None
+    user_choice = None
+    if principal:
+        user_choice = read_view_preferences(store, principal).screener_ranking_algorithm
+    explicit = ranking_algorithm is not None
+    return resolve_screener_algorithm(
+        requested=ranking_algorithm,
+        user_choice=user_choice,
+        admin_default=defaults.get("screener_ranking_algorithm"),
+        timeframe=timeframe,
+        profile=profile,
+        explicit_request=explicit,
+    )
+
+
+def _view_identity(
+    *,
+    resolution,
+    timeframe: str,
+    profile: str,
+    top: int,
+    sector_id: str | None,
+    min_price: float,
+    max_price: float | None,
+    min_avg_turnover: float,
+    tier: str | None,
+    min_score: float | None,
+) -> str:
+    return "|".join(
+        (
+            resolution.effective,
+            resolution.version,
+            timeframe,
+            profile,
+            str(top),
+            sector_id or "",
+            str(min_price),
+            "" if max_price is None else str(max_price),
+            str(min_avg_turnover),
+            tier or "",
+            "" if min_score is None else str(min_score),
+        )
+    )
+
+
 def _load_snapshot() -> tuple[list[dict], dict]:
     repository = core_repository()
     if not repository.exists():
@@ -116,11 +198,26 @@ def strength_scan(
     min_avg_turnover: float = Query(default=0.0, ge=0),
     tier: str | None = Query(default=None, pattern="^(S|A|B|C)$"),
     min_score: float | None = Query(default=None, ge=0, le=100),
+    ranking_algorithm: str | None = Query(default=None),
 ) -> dict:
     if timeframe not in TIMEFRAMES:
         raise HTTPException(status_code=422, detail={"code": "invalid_timeframe"})
     if profile not in PROFILES:
         raise HTTPException(status_code=422, detail={"code": "invalid_profile"})
+    try:
+        resolution = _request_screener_resolution(
+            request, ranking_algorithm=ranking_algorithm, timeframe=timeframe, profile=profile
+        )
+    except UnknownAlgorithmError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": exc.code, "family": exc.family, "value": exc.value},
+        ) from exc
+    except ConflictingAlgorithmError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": exc.code, "algorithm": exc.algorithm, "message": str(exc)},
+        ) from exc
     sector_ids: set[str] = set()
     if sector_id:
         sector_ids = {part.strip() for part in sector_id.split(",") if part.strip()}
@@ -132,28 +229,40 @@ def strength_scan(
     repository = core_repository()
     expected = _expected_trade_date(repository)
     extra = _publication_fields(meta, expected=expected)
+    view_identity = _view_identity(
+        resolution=resolution,
+        timeframe=timeframe,
+        profile=profile,
+        top=top,
+        sector_id=sector_id,
+        min_price=min_price,
+        max_price=max_price,
+        min_avg_turnover=min_avg_turnover,
+        tier=tier,
+        min_score=min_score,
+    )
     etag = strength_etag(
         publication_id=extra.get("publication_id"),
         stored_score_version=extra.get("stored_score_version"),
         expected_trade_date_value=expected,
         freshness={"freshness": extra["freshness"], "calendar_state": extra["calendar_state"]},
         universe_count=int(meta.get("universe_count") or 0),
+        view_identity=view_identity,
     )
     if _maybe_304(request, response, etag):
         return {}
-    view = build_view_rows(stored, meta["regime"], profile=profile)
+    view = build_view_rows(list(stored), meta["regime"], profile=profile)
 
-    # サーバ側フィルタ: 全評価済み母集団に適用（米国版はクライアント側条件が
-    # 上位120行にしか届かなかった — 日本版は断面が手元にあるので全量に掛ける）。
+    # サーバ側フィルタ: 全評価済み母集団に適用してから並べ、最後に Top-N。
     screened = [
-        row for row in view
+        dict(row) for row in view
         if (row.get("close") or 0.0) >= min_price
         and (max_price is None or (row.get("close") or 0.0) <= max_price)
         and (min_avg_turnover <= 0 or (row.get("avg_turnover_20d") or 0.0) >= min_avg_turnover)
         and (not sector_ids or row.get("sector33_code") in sector_ids)
     ]
     distribution = tier_distribution(screened, timeframe)
-    matched = screened
+    matched = list(screened)
     if tier is not None:
         matched = [
             row for row in matched
@@ -164,20 +273,33 @@ def strength_scan(
             row for row in matched
             if row.get("ranking_score") is not None and float(row["ranking_score"]) >= min_score
         ]
-    sort_view_rows(matched, timeframe)
+    a0_status = None
+    sort_basis = resolution.score_basis
+    effective = resolution.effective
+    if effective == A0_ALGORITHM:
+        a0_status = "active" if a0_request_can_score(matched) else A0_UNAVAILABLE
+        matched = apply_a0_mid_long(matched)
+    else:
+        sort_view_rows(matched, timeframe)
+        matched = [annotate_production_row(row) for row in matched]
+        for rank, row in enumerate(matched, start=1):
+            row["selected_view_rank"] = rank
     limited = matched[: top]
-    for rank, row in enumerate(limited, start=1):
-        row["selected_view_rank"] = rank
 
     return {
         "trade_date": meta["trade_date"],
         "built_at": meta["built_at"],
         "score_version": extra.get("stored_score_version"),
         **extra,
+        **resolution.as_public_dict(),
+        "a0_status": a0_status,
+        "sort_basis": sort_basis,
         "params": {
             "timeframe": timeframe, "profile": profile, "top": top,
-            "sector_id": sector_id, "min_price": min_price,
+            "sector_id": sector_id, "min_price": min_price, "max_price": max_price,
             "min_avg_turnover": min_avg_turnover, "tier": tier, "min_score": min_score,
+            "ranking_algorithm": ranking_algorithm,
+            "effective_algorithm": effective,
         },
         "market_regime": meta["regime"],
         "universe_count": meta["universe_count"],
@@ -236,6 +358,12 @@ def _public_row(row: dict) -> dict:
         "reasons": row.get("reasons") or [],
         "warnings": row.get("warnings") or [],
         "selected_view_rank": row.get("selected_view_rank"),
+        "sort_score": row.get("sort_score"),
+        "sort_basis": row.get("sort_basis"),
+        "sort_algorithm": row.get("sort_algorithm"),
+        "sort_algorithm_version": row.get("sort_algorithm_version"),
+        "a0_score": row.get("a0_score"),
+        "a0_available": row.get("a0_available"),
         "families": details.get("families") or {},
         "effective_weights": details.get("effective_weights") or {},
         "missing_families": details.get("missing_families") or [],
@@ -286,4 +414,20 @@ def strength_profiles() -> dict:
             "short": 0.16, "mid": 0.24, "long": 0.14,
             "trend": 0.16, "breakout": 0.15, "price_action": 0.15,
         },
+        "algorithms": [
+            {
+                "id": PRODUCTION_ALGORITHM,
+                "name": "原版综合",
+                "version": STRENGTH_SCORE_VERSION,
+                "default": True,
+            },
+            {
+                "id": A0_ALGORITHM,
+                "name": "A0 中长期",
+                "version": A0_VERSION,
+                "supported_timeframe": "all",
+                "supported_profile": "balanced",
+                "default": False,
+            },
+        ],
     }
