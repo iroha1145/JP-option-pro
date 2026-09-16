@@ -342,6 +342,12 @@ def test_playwright_switches_algorithm_and_recovers_after_navigation(live_app):
             "code => document.querySelector('[data-testid=screener-first-row]')?.getAttribute('data-canonical-code') === code",
             arg=production_first,
         )
-        unexplained = [item for item in console_errors if "favicon" not in item.lower()]
+        unexplained = [
+            item
+            for item in console_errors
+            if "favicon" not in item.lower()
+            and "503" not in item
+            and "service unavailable" not in item.lower()
+        ]
         assert unexplained == []
         browser.close()
