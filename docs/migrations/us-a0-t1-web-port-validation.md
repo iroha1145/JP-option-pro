@@ -4,7 +4,7 @@
 
 | 项 | 值 |
 |---|---|
-| 验证 HEAD | 见仓库当前分支 tip；浏览器加强断言提交后更新 |
+| 验证 HEAD | `f8acfbc4dc0c766d098fc3151aecabcb2ecd4690` |
 | TARGET_BASE_SHA | `a449ddb9ee89785eae22ea4c28174903c89d331c` |
 | SOURCE_SHA | `98330ca4dc27af5e640484b3797ee7aa3d6f1573` |
 | PR | https://github.com/iroha1145/JP-option-pro/pull/27 |
