@@ -7,7 +7,7 @@ upserts that keep ``ingested_at`` as the revision stamp.
 
 from __future__ import annotations
 
-CORE_SCHEMA_VERSION = "jp-core-v9"
+CORE_SCHEMA_VERSION = "jp-core-v10"
 
 # -- 機関空売り行動モニター（v6 追加）--------------------------------------
 #
@@ -277,6 +277,48 @@ _STRENGTH_DDL: tuple[str, ...] = (
     """,
 )
 
+_T1_DDL: tuple[str, ...] = (
+    """
+    CREATE TABLE IF NOT EXISTS radar_t1_evaluations (
+        event_id TEXT NOT NULL,
+        eval_version INTEGER NOT NULL,
+        identity_hash TEXT NOT NULL,
+        status TEXT NOT NULL,
+        first_known_at TEXT,
+        known_at TEXT,
+        computed_at TEXT NOT NULL,
+        published_at TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        PRIMARY KEY (event_id, eval_version)
+    ) WITHOUT ROWID
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS radar_t1_current (
+        event_id TEXT PRIMARY KEY,
+        eval_version INTEGER NOT NULL,
+        identity_hash TEXT NOT NULL,
+        status TEXT NOT NULL,
+        first_known_at TEXT,
+        published_at TEXT NOT NULL
+    ) WITHOUT ROWID
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS radar_t1_retry (
+        retry_key TEXT PRIMARY KEY,
+        event_id TEXT NOT NULL,
+        session_date TEXT NOT NULL,
+        algorithm TEXT NOT NULL,
+        attempt INTEGER NOT NULL DEFAULT 0,
+        max_attempts INTEGER NOT NULL DEFAULT 8,
+        next_eligible_at TEXT,
+        exhausted INTEGER NOT NULL DEFAULT 0 CHECK (exhausted IN (0, 1)),
+        last_reason TEXT,
+        updated_at TEXT NOT NULL
+    ) WITHOUT ROWID
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_radar_t1_retry_event ON radar_t1_retry(event_id, session_date)",
+)
+
 CORE_DDL: tuple[str, ...] = (
     # -- 上場銘柄マスタ（現在ビュー） ---------------------------------------
     """
@@ -543,6 +585,7 @@ CORE_DDL: tuple[str, ...] = (
     *_STRENGTH_DDL,
     *_QUOTE_INDEX_DDL,
     *_SHORT_MONITOR_DDL,
+    *_T1_DDL,
 )
 
 #: v4: 業種相対の 20 日/63 日分離 + 信用規制状態。
@@ -686,7 +729,8 @@ CORE_MIGRATIONS: dict[str, tuple[tuple[str, ...], str]] = {
     "jp-core-v5": (_SHORT_MONITOR_MIGRATION, "jp-core-v6"),
     "jp-core-v6": (_STALE_REPORTING_DDL, "jp-core-v7"),
     "jp-core-v7": (_SHORT_IDENTITY_DDL, "jp-core-v8"),
-    "jp-core-v8": (_STRENGTH_PUBLICATION_DDL, CORE_SCHEMA_VERSION),
+    "jp-core-v8": (_STRENGTH_PUBLICATION_DDL, "jp-core-v9"),
+    "jp-core-v9": (_T1_DDL, CORE_SCHEMA_VERSION),
 }
 
 __all__ = ["CORE_DDL", "CORE_MIGRATIONS", "CORE_SCHEMA_VERSION"]

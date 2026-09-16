@@ -19,8 +19,8 @@ from app.repositories.core_schema import (
 )
 
 # Bump these together whenever CORE_DDL changes (and add the matching migration).
-EXPECTED_VERSION = "jp-core-v9"
-EXPECTED_CHECKSUM = "011dd150b68b94aeffa3af8d0e124d09cfee23e796437a64b15e77b6ecf592e8"
+EXPECTED_VERSION = "jp-core-v10"
+EXPECTED_CHECKSUM = "caf90afd3f3ff29d56950275f92c718f7cc05fcf3872cf9ec03b38423062ba1f"
 
 
 def test_core_ddl_change_requires_version_bump():

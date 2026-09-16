@@ -14,7 +14,7 @@ from typing import Any
 
 from .base import SQLiteRepository, utc_now_iso
 
-APP_SCHEMA_VERSION = "jp-app-v2"
+APP_SCHEMA_VERSION = "jp-app-v3"
 
 _ACCOUNT_WATCHLIST_DDL: tuple[str, ...] = (
     """
@@ -31,6 +31,25 @@ _ACCOUNT_WATCHLIST_DDL: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_account_watchlist_user ON account_watchlist(user_id, added_at)",
 )
 
+_VIEW_PREF_DDL: tuple[str, ...] = (
+    """
+    CREATE TABLE IF NOT EXISTS view_preferences (
+        principal TEXT PRIMARY KEY,
+        screener_ranking_algorithm TEXT NOT NULL DEFAULT 'follow_default',
+        radar_sort_algorithm TEXT NOT NULL DEFAULT 'follow_default',
+        updated_at TEXT NOT NULL
+    ) WITHOUT ROWID
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS algorithm_defaults (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        screener_ranking_algorithm TEXT NOT NULL DEFAULT 'production',
+        radar_sort_algorithm TEXT NOT NULL DEFAULT 'production',
+        updated_at TEXT NOT NULL
+    )
+    """,
+)
+
 APP_DDL: tuple[str, ...] = (
     """
     CREATE TABLE IF NOT EXISTS watchlist (
@@ -42,6 +61,7 @@ APP_DDL: tuple[str, ...] = (
     ) WITHOUT ROWID
     """,
     *_ACCOUNT_WATCHLIST_DDL,
+    *_VIEW_PREF_DDL,
 )
 
 
@@ -49,7 +69,10 @@ class AppStore(SQLiteRepository):
     SCHEMA_NAME = "jp_app"
     SCHEMA_VERSION = APP_SCHEMA_VERSION
     DDL = APP_DDL
-    MIGRATIONS = {"jp-app-v1": (_ACCOUNT_WATCHLIST_DDL, APP_SCHEMA_VERSION)}
+    MIGRATIONS = {
+        "jp-app-v1": (_ACCOUNT_WATCHLIST_DDL, "jp-app-v2"),
+        "jp-app-v2": (_VIEW_PREF_DDL, APP_SCHEMA_VERSION),
+    }
 
     #: オーナーの自選は従来の watchlist テーブル。この定数は per-account API が
     #: 「オーナー主体」を選ぶ際の目印にだけ使う（accounts.db の own_local と対応）。
@@ -170,6 +193,86 @@ class AppStore(SQLiteRepository):
                 (user_id, canonical_code),
             )
             return bool(cursor.rowcount)
+
+    # ------------------------------------------------------------------
+    # per-principal algorithm preferences (API writable; not jp-core)
+    # ------------------------------------------------------------------
+
+    def get_view_preferences(self, principal: str) -> dict[str, str] | None:
+        key = str(principal or "").strip()
+        if not key:
+            return None
+        with self.read() as connection:
+            row = connection.execute(
+                "SELECT screener_ranking_algorithm, radar_sort_algorithm, updated_at "
+                "FROM view_preferences WHERE principal = ?",
+                (key,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def put_view_preferences(
+        self, principal: str, *, screener_ranking_algorithm: str, radar_sort_algorithm: str
+    ) -> dict[str, str]:
+        key = str(principal or "").strip()
+        if not key:
+            raise ValueError("principal_required")
+        now = utc_now_iso()
+        with self.write() as connection:
+            connection.execute(
+                """
+                INSERT INTO view_preferences(
+                    principal, screener_ranking_algorithm, radar_sort_algorithm, updated_at
+                ) VALUES(?,?,?,?)
+                ON CONFLICT(principal) DO UPDATE SET
+                    screener_ranking_algorithm=excluded.screener_ranking_algorithm,
+                    radar_sort_algorithm=excluded.radar_sort_algorithm,
+                    updated_at=excluded.updated_at
+                """,
+                (key, screener_ranking_algorithm, radar_sort_algorithm, now),
+            )
+        return {
+            "principal": key,
+            "screener_ranking_algorithm": screener_ranking_algorithm,
+            "radar_sort_algorithm": radar_sort_algorithm,
+            "updated_at": now,
+        }
+
+    def get_algorithm_defaults(self) -> dict[str, str]:
+        with self.read() as connection:
+            row = connection.execute(
+                "SELECT screener_ranking_algorithm, radar_sort_algorithm, updated_at "
+                "FROM algorithm_defaults WHERE id = 1"
+            ).fetchone()
+        if row is None:
+            return {
+                "screener_ranking_algorithm": "production",
+                "radar_sort_algorithm": "production",
+                "updated_at": None,
+            }
+        return dict(row)
+
+    def put_algorithm_defaults(
+        self, *, screener_ranking_algorithm: str, radar_sort_algorithm: str
+    ) -> dict[str, str]:
+        now = utc_now_iso()
+        with self.write() as connection:
+            connection.execute(
+                """
+                INSERT INTO algorithm_defaults(
+                    id, screener_ranking_algorithm, radar_sort_algorithm, updated_at
+                ) VALUES(1,?,?,?)
+                ON CONFLICT(id) DO UPDATE SET
+                    screener_ranking_algorithm=excluded.screener_ranking_algorithm,
+                    radar_sort_algorithm=excluded.radar_sort_algorithm,
+                    updated_at=excluded.updated_at
+                """,
+                (screener_ranking_algorithm, radar_sort_algorithm, now),
+            )
+        return {
+            "screener_ranking_algorithm": screener_ranking_algorithm,
+            "radar_sort_algorithm": radar_sort_algorithm,
+            "updated_at": now,
+        }
 
 
 __all__ = ["AppStore"]
