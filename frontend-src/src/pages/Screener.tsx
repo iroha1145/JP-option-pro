@@ -153,29 +153,6 @@ export default function Screener() {
     loadMeta();
   }, [loadMeta]);
 
-  useEffect(() => {
-    const principal = preferencePrincipalFromAccess(isOwner, accountUsername);
-    const local = readAlgorithmPreferences(principal);
-    setDraft((prev) => ({ ...prev, rankingAlgorithm: local.screenerRankingAlgorithm }));
-    setApplied((prev) => ({ ...prev, rankingAlgorithm: local.screenerRankingAlgorithm }));
-    if (algorithmPreferencePendingSync(principal)) {
-      setPrefUnsynced(true);
-      return;
-    }
-    const startedRevision = algorithmPreferenceRevision(principal);
-    void viewPreferencesApi
-      .get()
-      .then((remote) => {
-        if (!shouldApplyRemotePreference(principal, startedRevision)) return;
-        const choice = (remote.preferences.screener_ranking_algorithm || local.screenerRankingAlgorithm) as ScanFilters['rankingAlgorithm'];
-        writeAlgorithmPreferences({ screenerRankingAlgorithm: choice }, principal);
-        setDraft((prev) => ({ ...prev, rankingAlgorithm: choice }));
-        setApplied((prev) => ({ ...prev, rankingAlgorithm: choice }));
-        setPrefUnsynced(false);
-      })
-      .catch(() => undefined);
-  }, [isOwner, accountUsername]);
-
   /* 新闻72h摘要：一次批量取回（覆盖所有有新闻的股票）。 */
   useEffect(() => {
     let alive = true;
@@ -282,13 +259,38 @@ export default function Screener() {
     }
   }, []);
 
-  /* Wait for the first identity, then also restart reads after an account
-     change. Otherwise its generation guard drops the initial pending result
-     without ever settling the page's scanning state. */
   useEffect(() => {
     if (accessLoading) return;
-    void runScan(appliedRef.current);
-  }, [accessLoading, sessionKey, runScan]);
+    const principal = preferencePrincipalFromAccess(isOwner, accountUsername);
+    const local = readAlgorithmPreferences(principal);
+    const next = { ...appliedRef.current, rankingAlgorithm: local.screenerRankingAlgorithm };
+    setDraft((prev) => ({ ...prev, rankingAlgorithm: local.screenerRankingAlgorithm }));
+    setApplied((prev) => ({ ...prev, rankingAlgorithm: local.screenerRankingAlgorithm }));
+    appliedRef.current = next;
+    if (algorithmPreferencePendingSync(principal)) {
+      setPrefUnsynced(true);
+      void runScan(next);
+      return;
+    }
+    const startedRevision = algorithmPreferenceRevision(principal);
+    void runScan(next);
+    void viewPreferencesApi
+      .get()
+      .then((remote) => {
+        if (!shouldApplyRemotePreference(principal, startedRevision)) return;
+        const choice = (remote.preferences.screener_ranking_algorithm || local.screenerRankingAlgorithm) as ScanFilters['rankingAlgorithm'];
+        writeAlgorithmPreferences({ screenerRankingAlgorithm: choice }, principal);
+        setDraft((prev) => ({ ...prev, rankingAlgorithm: choice }));
+        setApplied((prev) => ({ ...prev, rankingAlgorithm: choice }));
+        setPrefUnsynced(false);
+        if (choice !== next.rankingAlgorithm) {
+          const updated = { ...appliedRef.current, rankingAlgorithm: choice };
+          appliedRef.current = updated;
+          void runScan(updated);
+        }
+      })
+      .catch(() => undefined);
+  }, [accessLoading, accountUsername, isOwner, runScan, sessionKey]);
 
   const persistAlgorithmChoice = useCallback(
     (choice: ScanFilters['rankingAlgorithm']) => {

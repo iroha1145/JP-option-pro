@@ -243,10 +243,11 @@ def test_playwright_switches_algorithm_and_recovers_after_navigation(live_app):
         page = context.new_page()
         console_errors = []
         page.on("console", lambda message: console_errors.append(message.text) if message.type == "error" else None)
+        first_row = page.locator("[data-testid=screener-first-row]").first
         page.goto(f"{live_app['base']}/screener", wait_until="networkidle")
         page.get_by_role("heading", name="銘柄スキャン").wait_for()
-        page.get_by_test_id("screener-first-row").wait_for()
-        prod_code = page.get_by_test_id("screener-first-row").get_attribute("data-canonical-code")
+        first_row.wait_for()
+        prod_code = first_row.get_attribute("data-canonical-code")
         assert prod_code == production_first
         page.get_by_role("tab", name="A0 中長期").click()
         page.get_by_test_id("screener-apply-filters").click()
@@ -254,16 +255,14 @@ def test_playwright_switches_algorithm_and_recovers_after_navigation(live_app):
         status = page.get_by_test_id("screener-algorithm-status").inner_text()
         assert "a0_mid_long" in status
         assert page.get_by_test_id("screener-a0-unavailable").count() == 0
-        page.get_by_test_id("screener-first-row").wait_for()
         page.wait_for_function(
             "code => document.querySelector('[data-testid=screener-first-row]')?.getAttribute('data-canonical-code') === code",
             arg=a0_first,
         )
-        assert page.get_by_test_id("screener-first-row").get_attribute("data-canonical-code") == a0_first
+        assert first_row.get_attribute("data-canonical-code") == a0_first
         page.screenshot(path=str(artifacts / "screener-a0-1440.png"))
         page.set_viewport_size({"width": 390, "height": 844})
-        page.get_by_test_id("screener-first-row").wait_for()
-        assert page.get_by_test_id("screener-first-row").get_attribute("data-canonical-code") == a0_first
+        assert page.locator("[data-testid=screener-first-row]").nth(1).get_attribute("data-canonical-code") == a0_first
         page.screenshot(path=str(artifacts / "screener-a0-390.png"))
 
         page.goto(f"{live_app['base']}/radar", wait_until="networkidle")
@@ -281,8 +280,11 @@ def test_playwright_switches_algorithm_and_recovers_after_navigation(live_app):
         page.goto(f"{live_app['base']}/screener", wait_until="networkidle")
         page.get_by_test_id("screener-algorithm-status").wait_for()
         assert "a0_mid_long" in page.get_by_test_id("screener-algorithm-status").inner_text()
-        page.get_by_test_id("screener-first-row").wait_for()
-        assert page.get_by_test_id("screener-first-row").get_attribute("data-canonical-code") == a0_first
+        page.wait_for_function(
+            "code => document.querySelector('[data-testid=screener-first-row]')?.getAttribute('data-canonical-code') === code",
+            arg=a0_first,
+        )
+        assert page.locator("[data-testid=screener-first-row]").first.get_attribute("data-canonical-code") == a0_first
 
         page.route(
             "**/api/view-preferences",
