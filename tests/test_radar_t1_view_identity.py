@@ -217,3 +217,106 @@ def test_zero_met_radar_order_equals_production(tmp_path, monkeypatch):
     prod_ids = [item["event_id"] for item in production.json()["events"]]
     t1_ids = [item["event_id"] for item in t1.json()["events"]]
     assert prod_ids == t1_ids == ["A", "B", "C"]
+
+
+def _mutate_event(repo, event_id, mutator):
+    event = repo.radar_event(event_id)
+    mutator(event)
+    repo.upsert_radar_events([event])
+
+
+def test_nested_score_change_breaks_etag_production_and_t1(tmp_path, monkeypatch):
+    repo, client = _open(tmp_path, monkeypatch)
+    for algorithm, score in (("production", 30), ("t1", 21)):
+        first = client.get("/api/radar/current", params={"sort_algorithm": algorithm, "limit": 20})
+        assert first.status_code == 200
+        etag = first.headers["etag"]
+        assert first.json()["events"][0]["alert_priority"] == 80
+        same = client.get(
+            "/api/radar/current",
+            params={"sort_algorithm": algorithm, "limit": 20},
+            headers={"If-None-Match": etag},
+        )
+        assert same.status_code == 304
+        _mutate_event(
+            repo,
+            "evt-cache",
+            lambda event, value=score: event.update(
+                {
+                    "scores": {
+                        **(event.get("scores") or {}),
+                        "alert_priority": 80,
+                        "base_quality": {"score": value},
+                    }
+                }
+            ),
+        )
+        changed = client.get(
+            "/api/radar/current",
+            params={"sort_algorithm": algorithm, "limit": 20},
+            headers={"If-None-Match": etag},
+        )
+        assert changed.status_code == 200, algorithm
+        assert changed.json()["events"][0]["alert_priority"] == 80
+        assert changed.json()["events"][0]["scores"]["base_quality"]["score"] == score
+        assert changed.headers["etag"] != etag
+        detail = client.get("/api/radar/events/evt-cache")
+        assert detail.json()["scores"]["base_quality"]["score"] == score
+
+
+def test_nested_structure_change_breaks_etag(tmp_path, monkeypatch):
+    repo, client = _open(tmp_path, monkeypatch)
+    first = client.get("/api/radar/current", params={"sort_algorithm": "production", "limit": 20})
+    etag = first.headers["etag"]
+
+    def mutate(event):
+        features = dict(event.get("features") or {})
+        structure = dict(features.get("structure") or {})
+        base = dict(structure.get("base") or {})
+        base["support_low"] = 91
+        structure["base"] = base
+        features["structure"] = structure
+        event["features"] = features
+
+    _mutate_event(repo, "evt-cache", mutate)
+    later = client.get(
+        "/api/radar/current",
+        params={"sort_algorithm": "production", "limit": 20},
+        headers={"If-None-Match": etag},
+    )
+    assert later.status_code == 200
+    assert later.json()["events"][0]["structure"]["base"]["support_low"] == 91
+    assert later.json()["events"][0]["alert_priority"] == 80
+    detail = client.get("/api/radar/events/evt-cache")
+    assert detail.json()["structure"]["base"]["support_low"] == 91
+
+
+def test_snapshot_change_breaks_etag_and_short_filter_stays_distinct(tmp_path, monkeypatch):
+    repo, client = _open(tmp_path, monkeypatch)
+    first = client.get("/api/radar/current", params={"sort_algorithm": "production", "limit": 20})
+    etag = first.headers["etag"]
+    filtered = client.get(
+        "/api/radar/current",
+        params={"sort_algorithm": "production", "limit": 20, "short_states": "covering"},
+    )
+    assert filtered.status_code == 200
+    assert filtered.headers["etag"] != etag
+
+    def mutate(event):
+        features = dict(event.get("features") or {})
+        snapshot = dict(features.get("snapshot") or {})
+        snapshot["close"] = 123.4
+        snapshot["note"] = "revised"
+        features["snapshot"] = snapshot
+        event["features"] = features
+
+    _mutate_event(repo, "evt-cache", mutate)
+    later = client.get(
+        "/api/radar/current",
+        params={"sort_algorithm": "production", "limit": 20},
+        headers={"If-None-Match": etag},
+    )
+    assert later.status_code == 200
+    assert later.json()["events"][0]["snapshot"]["close"] == 123.4
+    assert later.json()["events"][0]["snapshot"]["note"] == "revised"
+

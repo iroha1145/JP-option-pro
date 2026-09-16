@@ -61,30 +61,10 @@ def _maybe_304(request: Request, response: Response, etag: str) -> bool:
     return False
 
 
-def _etag_event(view: Mapping[str, Any]) -> dict[str, Any]:
-    t1 = view.get("t1_priority") if isinstance(view.get("t1_priority"), Mapping) else {}
-    short = view.get("short_behavior") if isinstance(view.get("short_behavior"), Mapping) else {}
-    snapshot = view.get("snapshot") if isinstance(view.get("snapshot"), Mapping) else {}
-    return {
-        "event_id": view.get("event_id"),
-        "state": view.get("state"),
-        "alert_priority": view.get("alert_priority"),
-        "alert_priority_base": view.get("alert_priority_base"),
-        "pivot_price": view.get("pivot_price"),
-        "trigger_price": view.get("trigger_price"),
-        "discovered_date": view.get("discovered_date"),
-        "last_scanned_date": view.get("last_scanned_date"),
-        "state_changed_date": view.get("state_changed_date"),
-        "close": snapshot.get("close") if isinstance(snapshot, Mapping) else None,
-        "t1_status": t1.get("status") if isinstance(t1, Mapping) else None,
-        "t1_eval_version": t1.get("eval_version") if isinstance(t1, Mapping) else None,
-        "t1_identity_hash": t1.get("identity_hash") if isinstance(t1, Mapping) else None,
-        "short_state": short.get("state") if isinstance(short, Mapping) else None,
-        "short_shift": short.get("priority_shift") if isinstance(short, Mapping) else None,
-        "short_flags": list(short.get("flags") or []) if isinstance(short, Mapping) else [],
-        "short_score": short.get("shadow_score") if isinstance(short, Mapping) else None,
-        "short_confidence": short.get("data_confidence") if isinstance(short, Mapping) else None,
-    }
+def _canonical_event_view(view: Mapping[str, Any]) -> Any:
+    """Full returned event body. Nested scores/structure/snapshot are not optional."""
+
+    return json.loads(json.dumps(view, allow_nan=False, default=str, sort_keys=True))
 
 
 def _radar_content_etag(
@@ -124,7 +104,7 @@ def _radar_content_etag(
         "matched_count": matched_count,
         "t1_view": t1_view,
         "cursor_stale": cursor_stale,
-        "events": [_etag_event(item) for item in page],
+        "events": [_canonical_event_view(item) for item in page],
     }
     encoded = json.dumps(payload, allow_nan=False, default=str, separators=(",", ":"), sort_keys=True)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:32]
