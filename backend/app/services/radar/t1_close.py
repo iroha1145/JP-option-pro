@@ -12,17 +12,18 @@ from typing import Any, Awaitable, Callable, Mapping, Sequence
 
 from app.domain.timeutil import JST, now_jst
 from app.services.algorithm_modes import T1_ALGORITHM
-from app.services.radar.adjustment import adjust_series
 from app.services.radar.t1_priority import (
     T1_MET,
     T1_NOT_APPLICABLE,
     T1_RETRYABLE_REASONS,
+    T1_SETTLED_STATUSES,
     T1_UNMET,
     attach_t1_features,
     t1_needs_close_eval,
     t1_setup_applicable,
     vendor_publish_ready,
 )
+from app.services.radar.t1_price_basis import rebuild_t1_event_day_window
 
 T1_RETRY_MAX_ATTEMPTS = 8
 T1_RETRY_BASE_SECONDS = 30.0
@@ -31,11 +32,74 @@ T1_RETRY_MAX_DELAY = 300.0
 BarFetcher = Callable[[Sequence[str], str], Awaitable[Mapping[str, Sequence[Mapping[str, Any]]]]]
 
 
-def _adjusted_through(repository, canonical_code: str, session_date: str) -> list[dict[str, Any]]:
+def _t1_aligned_window(
+    repository,
+    canonical_code: str,
+    session_date: str,
+    *,
+    previous: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not canonical_code or not session_date:
+        return {
+            "ok": False,
+            "bars": [],
+            "basis": None,
+            "reason": "missing_session_or_code",
+            "has_session_bar": False,
+        }
     raw = repository.bars_for_code(canonical_code, end_date=session_date, limit=80)
-    if not raw:
-        return []
-    return adjust_series(raw)
+    later = repository.bars_for_code(canonical_code, start_date=session_date, limit=60)
+    settled = str((previous or {}).get("status") or "") in T1_SETTLED_STATUSES
+    rebuilt = rebuild_t1_event_day_window(
+        raw,
+        session_date,
+        factor_bars=later,
+        allow_unconverted_adj=not settled,
+    )
+    has_session = any(str(item.get("trade_date") or "")[:10] == session_date for item in raw)
+    rebuilt["has_session_bar"] = has_session
+    return rebuilt
+
+
+def _attach_from_repository(
+    repository,
+    event: Mapping[str, Any],
+    *,
+    moment: datetime,
+    is_trading_day,
+    prior_sessions,
+) -> dict[str, Any]:
+    previous = event.get("t1_priority") if isinstance(event.get("t1_priority"), Mapping) else None
+    if not t1_setup_applicable(event):
+        return attach_t1_features(
+            event, None, as_of=moment,
+            previous=previous,
+            is_trading_day=is_trading_day,
+            prior_trading_sessions=prior_sessions,
+        )
+    session = str(event.get("discovered_date") or "")[:10]
+    window = _t1_aligned_window(
+        repository, str(event.get("canonical_code") or ""), session, previous=previous,
+    )
+    if not window.get("ok"):
+        return attach_t1_features(
+            event,
+            None,
+            as_of=moment,
+            previous=previous,
+            is_trading_day=is_trading_day,
+            prior_trading_sessions=prior_sessions,
+            price_basis_error=str(window.get("reason") or "price_basis_unreliable"),
+        )
+    return attach_t1_features(
+        event,
+        window.get("bars") or [],
+        as_of=moment,
+        previous=previous,
+        is_trading_day=is_trading_day,
+        prior_trading_sessions=prior_sessions,
+        price_basis=window.get("basis"),
+    )
 
 
 def _calendar_helpers(repository):
@@ -63,26 +127,15 @@ def evaluate_t1_from_local_bars(
     is_trading_day, prior_sessions = _calendar_helpers(repository)
     updated: list[dict[str, Any]] = []
     for event in source:
-        if not t1_setup_applicable(event):
-            attached = attach_t1_features(
-                event, None, as_of=moment,
+        updated.append(
+            _attach_from_repository(
+                repository,
+                event,
+                moment=moment,
                 is_trading_day=is_trading_day,
-                prior_trading_sessions=prior_sessions,
+                prior_sessions=prior_sessions,
             )
-            updated.append(attached)
-            continue
-        session = str(event.get("discovered_date") or "")[:10]
-        bars = _adjusted_through(repository, str(event.get("canonical_code") or ""), session) if session else []
-        previous = event.get("t1_priority") if isinstance(event.get("t1_priority"), Mapping) else None
-        attached = attach_t1_features(
-            event,
-            bars,
-            as_of=moment,
-            previous=previous,
-            is_trading_day=is_trading_day,
-            prior_trading_sessions=prior_sessions,
         )
-        updated.append(attached)
     written = repository.persist_t1_evaluations(updated)
     return {"attempted": len(updated), "written": written}
 
@@ -251,9 +304,11 @@ async def complete_pending_t1(
     is_trading_day, prior_sessions = _calendar_helpers(repository)
     for event in eligible:
         session = str(event.get("discovered_date") or "")[:10]
-        bars = _adjusted_through(repository, str(event.get("canonical_code") or ""), session) if session else []
-        has_t = any(str(bar.get("trade_date") or "")[:10] == session for bar in bars)
-        if has_t:
+        previous = event.get("t1_priority") if isinstance(event.get("t1_priority"), Mapping) else None
+        window = _t1_aligned_window(
+            repository, str(event.get("canonical_code") or ""), session, previous=previous,
+        )
+        if window.get("has_session_bar"):
             local_ready.append(event)
         else:
             needs_fetch.append(event)
@@ -266,21 +321,16 @@ async def complete_pending_t1(
         )
 
     def evaluate_group(items: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-        updated: list[dict[str, Any]] = []
-        for event in items:
-            session = str(event.get("discovered_date") or "")[:10]
-            code = str(event.get("canonical_code") or "")
-            bars = _adjusted_through(repository, code, session) if session else []
-            attached = attach_t1_features(
+        return [
+            _attach_from_repository(
+                repository,
                 event,
-                bars,
-                as_of=moment,
-                previous=event.get("t1_priority") if isinstance(event.get("t1_priority"), Mapping) else None,
+                moment=moment,
                 is_trading_day=is_trading_day,
-                prior_trading_sessions=prior_sessions,
+                prior_sessions=prior_sessions,
             )
-            updated.append(attached)
-        return updated
+            for event in items
+        ]
 
     def commit_group(updated: Sequence[Mapping[str, Any]]) -> int:
         if not updated:

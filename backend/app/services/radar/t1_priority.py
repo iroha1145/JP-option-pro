@@ -24,6 +24,7 @@ from app.services.radar.daily_confirmation import (
     valid_session_volume,
 )
 from app.services.radar.engine import SIGNAL_BASE_BREAK
+from app.services.radar.t1_price_basis import PRICE_BASIS_UNRELIABLE, T1_EVENT_DAY_KIND
 
 
 T1_MET = "met"
@@ -196,46 +197,51 @@ def t1_input_identity(
     session_bar: Mapping[str, Any],
     prior_bars: Sequence[Mapping[str, Any]],
     settings: Mapping[str, Any] | None = None,
+    price_basis: Mapping[str, Any] | None = None,
 ) -> str:
     """Fingerprint every causal T-window input, including ATR history."""
 
     cfg = {**T1_SETTINGS, **dict(settings or {})}
-    return _identity_hash(
-        {
-            "event_id": event_id or "",
-            "session_date": session_date.isoformat(),
-            "version": T1_VERSION,
-            "variant": T1_ALGORITHM,
-            "data_convention": T1_DATA_CONVENTION,
-            "resistance": _finite(resistance_high),
-            "session_bar": {
-                "open": _finite(session_bar.get("open")),
-                "high": _finite(session_bar.get("high")),
-                "low": _finite(session_bar.get("low")),
-                "close": _finite(session_bar.get("close")),
-                "volume": _finite(session_bar.get("volume")),
-            },
-            "prior_bars": [
-                {
-                    "session_date": str(item.get("session_date") or ""),
-                    "open": _finite(item.get("open")),
-                    "high": _finite(item.get("high")),
-                    "low": _finite(item.get("low")),
-                    "close": _finite(item.get("close")),
-                    "volume": _finite(item.get("volume")),
-                }
-                for item in prior_bars
-            ],
-            "settings": {
-                "clv_min": cfg.get("clv_min"),
-                "rvol_min": cfg.get("rvol_min"),
-                "upper_shadow_max": cfg.get("upper_shadow_max"),
-                "distance_atr_min": cfg.get("distance_atr_min"),
-                "rvol_lookback": cfg.get("rvol_lookback"),
-                "atr_period": cfg.get("atr_period"),
-            },
+    payload: dict[str, Any] = {
+        "event_id": event_id or "",
+        "session_date": session_date.isoformat(),
+        "version": T1_VERSION,
+        "variant": T1_ALGORITHM,
+        "data_convention": T1_DATA_CONVENTION,
+        "resistance": _finite(resistance_high),
+        "session_bar": {
+            "open": _finite(session_bar.get("open")),
+            "high": _finite(session_bar.get("high")),
+            "low": _finite(session_bar.get("low")),
+            "close": _finite(session_bar.get("close")),
+            "volume": _finite(session_bar.get("volume")),
+        },
+        "prior_bars": [
+            {
+                "session_date": str(item.get("session_date") or ""),
+                "open": _finite(item.get("open")),
+                "high": _finite(item.get("high")),
+                "low": _finite(item.get("low")),
+                "close": _finite(item.get("close")),
+                "volume": _finite(item.get("volume")),
+            }
+            for item in prior_bars
+        ],
+        "settings": {
+            "clv_min": cfg.get("clv_min"),
+            "rvol_min": cfg.get("rvol_min"),
+            "upper_shadow_max": cfg.get("upper_shadow_max"),
+            "distance_atr_min": cfg.get("distance_atr_min"),
+            "rvol_lookback": cfg.get("rvol_lookback"),
+            "atr_period": cfg.get("atr_period"),
+        },
+    }
+    if price_basis:
+        payload["price_basis"] = {
+            "kind": str(price_basis.get("kind") or T1_EVENT_DAY_KIND),
+            "session_date": str(price_basis.get("session_date") or session_date.isoformat()),
         }
-    )
+    return _identity_hash(payload)
 
 
 def t1_view_token(
@@ -327,6 +333,7 @@ def evaluate_t1_from_daily(
     event_id: str | None = None,
     is_trading_day: Callable[[str], bool | None] | None = None,
     prior_trading_sessions: Callable[[date, int], list[str] | None] | None = None,
+    price_basis: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Evaluate T1 from completed daily bars only.
 
@@ -366,6 +373,7 @@ def evaluate_t1_from_daily(
         "upper_shadow_ratio": None,
         "breakout_distance_atr": None,
         "reason": None,
+        "price_basis": dict(price_basis) if price_basis else None,
     }
     trading = None if is_trading_day is None else is_trading_day(session_date.isoformat())
     if trading is None and is_trading_day is not None:
@@ -448,6 +456,7 @@ def evaluate_t1_from_daily(
         session_bar=session_packed,
         prior_bars=prior_bars,
         settings=cfg,
+        price_basis=price_basis,
     )
     if (
         prior.get("identity_hash") == identity
@@ -632,6 +641,8 @@ def attach_t1_features(
     previous: Mapping[str, Any] | None = None,
     is_trading_day: Callable[[str], bool | None] | None = None,
     prior_trading_sessions: Callable[[date, int], list[str] | None] | None = None,
+    price_basis: Mapping[str, Any] | None = None,
+    price_basis_error: str | None = None,
 ) -> dict[str, Any]:
     payload = dict(event)
     features = dict(payload.get("features") or {})
@@ -669,6 +680,24 @@ def attach_t1_features(
             "known_at": None,
             "identity_complete": False,
         }
+    elif price_basis_error:
+        evaluation = {
+            "version": T1_VERSION,
+            "variant": T1_ALGORITHM,
+            "status": T1_UNAVAILABLE,
+            "reason": price_basis_error or PRICE_BASIS_UNRELIABLE,
+            "session_date": session_date.isoformat(),
+            "computed_at": computed_at,
+            "known_at": None,
+            "first_known_at": (
+                (previous or {}).get("first_known_at")
+                if isinstance(previous, Mapping)
+                else None
+            ),
+            "identity_complete": False,
+            "identity_hash": None,
+            "price_basis": None,
+        }
     else:
         evaluation = evaluate_t1_from_daily(
             daily,
@@ -685,6 +714,7 @@ def attach_t1_features(
             event_id=str(payload.get("event_id") or "") or None,
             is_trading_day=is_trading_day,
             prior_trading_sessions=prior_trading_sessions,
+            price_basis=price_basis,
         )
     features["t1_priority"] = evaluation
     payload["features"] = features

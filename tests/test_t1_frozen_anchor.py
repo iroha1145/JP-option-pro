@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+import pytest
+
 from app.personal_config import RadarConfig
 from app.services.radar import lifecycle as lc
 from app.services.radar.engine import RadarEngine, _first_publish_t1_anchor
@@ -188,10 +190,12 @@ def test_split_adjust_revises_identity_but_keeps_anchor(tmp_path):
     insert_radar_event(repo, event_id="evt-split", code="72030")
     evaluate_t1_from_local_bars(repo, scan_date=SESSION_ISO, as_of=jst(18, 0))
     first = repo.overlay_t1_evaluations([{"event_id": "evt-split"}])[0]["t1_priority"]
+    assert first["status"] == T1_MET
+    assert first["breakout_distance_atr"] == pytest.approx(2.5777777777777766, rel=1e-6)
+    first_known = first["first_known_at"] or first["known_at"]
     adjusted = []
     for bar in bars:
         item = dict(bar)
-        item["adjustment_factor"] = 0.5
         item["adj_open"] = bar["open"] * 0.5
         item["adj_high"] = bar["high"] * 0.5
         item["adj_low"] = bar["low"] * 0.5
@@ -201,6 +205,14 @@ def test_split_adjust_revises_identity_but_keeps_anchor(tmp_path):
     repo.upsert_daily_bars(adjusted)
     evaluate_t1_from_local_bars(repo, scan_date=SESSION_ISO, as_of=jst(18, 0))
     later = repo.overlay_t1_evaluations([{"event_id": "evt-split"}])[0]
+    payload = later["t1_priority"]
     assert t1_resistance_high(later) == 100
-    assert later["t1_priority"]["identity_hash"] != first["identity_hash"]
-    assert later["t1_priority"]["first_known_at"] == first["first_known_at"] or first["known_at"]
+    assert later["t1_anchor"]["resistance_high"] == 100
+    assert payload["status"] == T1_MET
+    assert payload["clv"] == pytest.approx(first["clv"], rel=1e-9)
+    assert payload["rvol_daily_20med"] == pytest.approx(first["rvol_daily_20med"], rel=1e-9)
+    assert payload["upper_shadow_ratio"] == pytest.approx(first["upper_shadow_ratio"], rel=1e-9)
+    assert payload["breakout_distance_atr"] == pytest.approx(first["breakout_distance_atr"], rel=1e-6)
+    assert payload["first_known_at"] == first_known
+    assert payload["eval_version"] == first["eval_version"]
+    assert payload["identity_hash"] == first["identity_hash"]
