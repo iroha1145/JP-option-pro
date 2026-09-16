@@ -32,7 +32,7 @@ jobs:
 
       # CI は実 J-Quants・実 OpenAI に接続しない（テストは全て MockTransport/フィクスチャ）
       - name: Backend tests
-        run: python -m pytest tests/ -q
+        run: python -m pytest tests/ -q --ignore=tests/test_a0_t1_browser.py
 
       - name: Fixture pipeline smoke (radar + screener build)
         run: |
@@ -79,6 +79,12 @@ jobs:
       - name: Chart centered annotation gate
         run: node --experimental-strip-types --test frontend-src/tests/chart-labels.mjs
 
+      - name: Query registry identity gate
+        run: node --experimental-strip-types --test frontend-src/tests/query-registry-identity.mjs
+
+      - name: Algorithm preference gate
+        run: node --experimental-strip-types --test frontend-src/tests/algorithm-preferences.mjs
+
       # 後端が組み立てた文（テンプレート + パラメータ）を 3 言語で描画できるか。
       # 辞書に載っていても引き方を間違えれば画面には出ない ——「載っているか」の
       # 門（pytest 側）とは別に見る。
@@ -96,3 +102,14 @@ jobs:
             backend/app/services backend/app/api backend/app/repositories backend/app/providers \
             frontend-src/src/pages frontend-src/src/components frontend-src/src/api \
             || (echo "US-market residue found" && exit 1)
+
+      - name: Isolated backend A0/T1 integration
+        run: python -m pytest tests/test_a0_t1_container.py tests/test_t1_close_retry_budget.py -q
+
+      - name: Install Playwright Chromium
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Production-frontend A0/T1 Playwright gate
+        run: python -m pytest tests/test_a0_t1_browser.py -q
