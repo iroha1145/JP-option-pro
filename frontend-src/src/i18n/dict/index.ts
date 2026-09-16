@@ -2275,4 +2275,38 @@ export const DICT: Record<string, [string, string]> = {
   '{label} · 参考': ['{label} · context', '{label} · 参考'],
   '价格缺口 · 已回补': ['Gap · filled', 'ギャップ · 埋め済み'],
   '价格缺口 · 未回补': ['Gap · open', 'ギャップ · 未埋め'],
+  跟随默认: ['Follow default', '既定に従う'],
+  原版综合: ['Original composite', '従来の総合'],
+  'A0 中长期': ['A0 mid/long', 'A0 中長期'],
+  排序算法: ['Ranking algorithm', '並び替えアルゴリズム'],
+  'A0 仅支持全部周期与均衡偏好': [
+    'A0 only supports all timeframes and the balanced profile',
+    'A0 は全期間・均衡プロファイルのみ',
+  ],
+  'A0 分数不可计算，未宣称原排序为 A0': [
+    'A0 scores unavailable; original order is not labeled as A0',
+    'A0 スコアを計算できないため、従来順を A0 とは表示しません',
+  ],
+  当前排序: ['Current sort', '現在の並び'],
+  '偏好未同步，本地选择仍有效': [
+    'Preference not synced; the local choice still applies',
+    '設定は未同期ですが、ローカル選択は有効です',
+  ],
+  '当前名次按 A0 = 0.5×中期 + 0.5×长期，分档仍用原综合分': [
+    'Ranks use A0 = 0.5×mid + 0.5×long; tiers still use the original composite',
+    '順位は A0 = 0.5×中期 + 0.5×長期。分档は従来の総合点',
+  ],
+  当前名次按原版综合分: ['Ranks use the original composite score', '順位は従来の総合点'],
+  原版雷达: ['Original radar', '従来レーダー'],
+  'T1 日线优先': ['T1 daily priority', 'T1 日足優先'],
+  'T1 已确认': ['T1 met', 'T1 満たす'],
+  'T1 未满足': ['T1 unmet', 'T1 未達'],
+  'T1 待收盘': ['T1 pending close', 'T1 引け待ち'],
+  'T1 暂不可用': ['T1 unavailable', 'T1 利用不可'],
+  'T1 不适用': ['T1 not applicable', 'T1 対象外'],
+  'T1 排序已修订，已回到第一页': [
+    'T1 ranking revised; returned to page 1',
+    'T1 の並びが改訂されたため 1 ページ目に戻しました',
+  ],
+  '无法提交雷达更新': ['Could not submit the radar update', 'レーダー更新を投入できません'],
 };

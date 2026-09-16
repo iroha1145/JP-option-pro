@@ -5,6 +5,7 @@
  * 避免「强度高=在涨」的暗示（日中惯例红=涨，与美版相反，故不照搬美版配色）。
  */
 import type { NewsSecurityRow, TierDistribution } from '@/api/types';
+import type { ScreenerRankingChoice } from '@/lib/algorithmPreferences';
 import { t } from '@/i18n/core';
 
 export type Tier = 'S' | 'A' | 'B' | 'C' | 'D';
@@ -24,6 +25,12 @@ export const PROFILE_CN: Record<ProfilePref, string> = {
   conservative: t('稳健'),
   balanced: t('均衡'),
   aggressive: t('进取'),
+};
+
+export const ALGORITHM_CN: Record<ScreenerRankingChoice, string> = {
+  follow_default: t('跟随默认'),
+  production: t('原版综合'),
+  a0_mid_long: t('A0 中长期'),
 };
 
 export const SORT_CN: Record<SortMode, string> = {
@@ -77,6 +84,7 @@ export interface ScanFilters {
   minTurnover: number;
   minScore: number | null;
   presetId: string | null;
+  rankingAlgorithm: ScreenerRankingChoice;
 }
 
 export const DEFAULT_TOP_N = 20;
@@ -93,6 +101,7 @@ export const DEFAULT_FILTERS: ScanFilters = {
   minTurnover: 100_000_000,
   minScore: null,
   presetId: null,
+  rankingAlgorithm: 'follow_default',
 };
 
 export const TOPN_OPTIONS: { value: number; label: string }[] = [

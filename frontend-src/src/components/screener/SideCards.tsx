@@ -209,12 +209,14 @@ export function MethodCard({
   loading,
   error,
   onRetry,
+  algorithmNote,
 }: {
   meta: StrengthProfilesMeta | null;
   profileId: string;
   loading?: boolean;
   error?: boolean;
   onRetry?: () => void;
+  algorithmNote?: string;
 }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
@@ -297,6 +299,11 @@ export function MethodCard({
               <p className="mt-1.5 text-micro leading-[16px] text-ink-400">
                 {t('最终排序分 = 内在 78% + 市场形态 8% + 偏好适配 14%（置信度加权）。')}
               </p>
+              {algorithmNote && (
+                <p className="mt-1.5 text-micro leading-[16px] text-ink-500" data-testid="screener-method-algorithm">
+                  {algorithmNote}
+                </p>
+              )}
             </>
           )}
         </div>

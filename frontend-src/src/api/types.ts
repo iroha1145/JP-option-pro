@@ -421,6 +421,21 @@ export interface RadarEvent {
   snapshot: Record<string, number | string | boolean | null>;
   structure?: EventStructure | null;
   transitions?: { date: string; from: string | null; to: string; reason: string }[];
+  t1_priority?: {
+    status?: string | null;
+    reason?: string | null;
+    version?: string | null;
+    eval_version?: number | null;
+    known_at?: string | null;
+    first_known_at?: string | null;
+    identity_hash?: string | null;
+    identity_complete?: boolean;
+    clv?: number | null;
+    rvol_daily_20med?: number | null;
+    upper_shadow_ratio?: number | null;
+    breakout_distance_atr?: number | null;
+    latest_attempt?: { status?: string; reason?: string | null; computed_at?: string } | null;
+  } | null;
 }
 
 export interface RadarCurrent {
@@ -428,6 +443,17 @@ export interface RadarCurrent {
   granularity?: string;
   events: RadarEvent[];
   note?: string;
+  matched_count?: number;
+  offset?: number;
+  limit?: number;
+  t1_view?: string | null;
+  cursor_stale?: boolean;
+  restart_required?: boolean;
+  requested_algorithm?: string | null;
+  effective_algorithm?: string;
+  algorithm_version?: string;
+  score_basis?: string;
+  fallback_reason?: string | null;
 }
 
 export interface ScreenerRow {
@@ -745,6 +771,12 @@ export interface StrengthRow {
   score_short: number | null;
   score_mid: number | null;
   score_long: number | null;
+  sort_score?: number | null;
+  sort_basis?: string | null;
+  sort_algorithm?: string | null;
+  sort_algorithm_version?: string | null;
+  a0_score?: number | null;
+  a0_available?: boolean;
   trend_score: number | null;
   breakout_quality_score: number | null;
   price_action_score: number | null;
@@ -827,6 +859,16 @@ export interface StrengthScanResponse {
   calendar_state?: string;
   version_state?: string;
   query_kind?: string;
+  requested_algorithm?: string | null;
+  user_choice?: string | null;
+  admin_default_algorithm?: string;
+  effective_algorithm?: string;
+  algorithm_version?: string;
+  score_basis?: string;
+  resolution_source?: string;
+  fallback_reason?: string | null;
+  a0_status?: string | null;
+  sort_basis?: string | null;
   params: Record<string, unknown>;
   market_regime: MarketRegime;
   universe_count: number;
@@ -842,6 +884,26 @@ export interface StrengthProfilesMeta {
   presets: { id: string; name: string; profile: string; min_score: number | null; description: string }[];
   sectors: { id: string; name: string }[];
   family_weights: Record<string, number>;
+  algorithms?: {
+    id: string;
+    name: string;
+    version: string;
+    default?: boolean;
+    supported_timeframe?: string;
+    supported_profile?: string;
+  }[];
+}
+
+export interface ViewPreferencesResponse {
+  principal: string | null;
+  preferences: {
+    screener_ranking_algorithm: string;
+    radar_sort_algorithm: string;
+  };
+  admin_defaults: {
+    screener_ranking_algorithm: string;
+    radar_sort_algorithm: string;
+  };
 }
 
 /** AI 分析的受影响股票：只有代码与理由，不含方向预测（v2 起产品移除）。 */

@@ -4,7 +4,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { motion } from 'framer-motion';
-import { quotesApi, radarApi, stocksApi, watchlistApi, workerApi } from '@/api/modules';
+import { quotesApi, radarApi, viewPreferencesApi, stocksApi, watchlistApi, workerApi } from '@/api/modules';
+import { invalidateQueryPaths } from '@/api/queryRegistry';
 import { usePolling } from '@/hooks/usePolling';
 import { useTickFlash } from '@/hooks/useTickFlash';
 import { useColorMode } from '@/hooks/useColorMode';
@@ -24,7 +25,18 @@ import SelectionViewport from '@/components/shared/SelectionViewport';
 import { SkeletonCard } from '@/components/shared/Skeleton';
 import ReactECharts from '@/components/charts/ReactECharts';
 import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart';
-import { CodeCell, DataThrough, RADAR_STATE_LABELS, ScoreBar, SignalChip, StateChip } from '@/components/domain';
+import { CodeCell, DataThrough, RADAR_STATE_LABELS, ScoreBar, SignalChip, StateChip, T1Chip } from '@/components/domain';
+import {
+  RADAR_FOLLOW_DEFAULT,
+  RADAR_PRODUCTION,
+  RADAR_T1,
+  algorithmPreferencePendingSync,
+  markAlgorithmPreferencePendingSync,
+  readAlgorithmPreferences,
+  writeAlgorithmPreferences,
+  type RadarSortChoice,
+} from '@/lib/algorithmPreferences';
+import { persistRemoteOrKeepLocal } from '@/lib/viewPreferenceWrites';
 import StrengthBar from '@/components/shared/StrengthBar';
 import HistoryRail from '@/components/radar/HistoryRail';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
@@ -60,13 +72,16 @@ const GROUP_STATES: Record<StateGroup, string | undefined> = {
 };
 
 export default function Radar() {
-  const { isOwner } = useAccess();
+  const { isOwner, accountUsername } = useAccess();
   const toast = useToast();
   const [group, setGroup] = useState<StateGroup>('active');
   const [view, setView] = useState<ViewMode>('cards');
   const [leadId, setLeadId] = useState<string | null>(null);
   const [locateId, setLocateId] = useState<string | null>(null);
   const [rescanning, setRescanning] = useState(false);
+  const [sortAlgorithm, setSortAlgorithm] = useState<RadarSortChoice>(RADAR_FOLLOW_DEFAULT);
+  const [prefUnsynced, setPrefUnsynced] = useState(false);
+  const [t1Cursor, setT1Cursor] = useState<string | null>(null);
   const locateTimer = useRef<number | null>(null);
 
   const promoteLead = (id: string) => {
@@ -85,10 +100,41 @@ export default function Radar() {
   );
 
   const query = usePolling(
-    () => radarApi.current(GROUP_STATES[group] ? { states: GROUP_STATES[group], limit: 200 } : { limit: 200 }),
+    () =>
+      radarApi.current({
+        ...(GROUP_STATES[group] ? { states: GROUP_STATES[group] } : {}),
+        limit: 200,
+        sort_algorithm: sortAlgorithm,
+        ...(t1Cursor ? { cursor: t1Cursor } : {}),
+      }),
     120_000,
-    [group],
+    [group, sortAlgorithm, t1Cursor],
   );
+
+  useEffect(() => {
+    const token = query.data?.t1_view ?? null;
+    if (token && token !== t1Cursor) setT1Cursor(token);
+  }, [query.data?.t1_view, t1Cursor]);
+
+  useEffect(() => {
+    const principal = isOwner ? 'owner' : accountUsername ? `account:${accountUsername}` : 'visitor';
+    const local = readAlgorithmPreferences(principal);
+    setSortAlgorithm(local.radarSortAlgorithm);
+    if (algorithmPreferencePendingSync(principal)) {
+      setPrefUnsynced(true);
+      return;
+    }
+    void viewPreferencesApi
+      .get()
+      .then((remote) => {
+        if (algorithmPreferencePendingSync(principal)) return;
+        const choice = (remote.preferences.radar_sort_algorithm || local.radarSortAlgorithm) as RadarSortChoice;
+        writeAlgorithmPreferences({ radarSortAlgorithm: choice }, principal);
+        setSortAlgorithm(choice);
+        setPrefUnsynced(false);
+      })
+      .catch(() => undefined);
+  }, [accountUsername, isOwner]);
   const state = remoteState(query, (d) => d.events.length === 0);
 
   /* 夜間断面に遅延気配を重ねる（再スキャンではない）。答えたい問いは
@@ -136,7 +182,7 @@ export default function Radar() {
 
   useEffect(() => {
     setLeadId(null);
-  }, [group, minScore, onlyWatch]);
+  }, [group, minScore, onlyWatch, sortAlgorithm]);
 
   const restEvents = useMemo(
     () => events.filter((event) => event.event_id !== lead?.event_id),
@@ -172,7 +218,22 @@ export default function Radar() {
                   if (rescanning) return;
                   setRescanning(true);
                   try {
-                    await workerApi.trigger('radar_refresh');
+                    const accepted = await workerApi.trigger('radar_refresh');
+                    const actionId = accepted.action_id;
+                    if (actionId == null) throw new Error(t('无法提交雷达更新'));
+                    const deadline = Date.now() + 90_000;
+                    let status = 'queued';
+                    while (Date.now() < deadline) {
+                      const item = await workerApi.action(actionId);
+                      status = String(item.status);
+                      if (status === 'completed' || status === 'failed') break;
+                      await new Promise((resolve) => setTimeout(resolve, 1500));
+                    }
+                    if (status !== 'completed') {
+                      toast.error(t('重算雷达'), t('更新未完成'));
+                      return;
+                    }
+                    invalidateQueryPaths(['/radar/current'], { reload: true });
                     toast.success(t('重算雷达'), t('已提交'));
                     query.refresh({ force: true });
                   } catch (error) {
@@ -201,6 +262,33 @@ export default function Radar() {
           ]}
           value={group}
           onChange={setGroup}
+        />
+        <Segmented<RadarSortChoice>
+          options={[
+            { value: RADAR_FOLLOW_DEFAULT, label: t('跟随默认') },
+            { value: RADAR_PRODUCTION, label: t('原版雷达') },
+            { value: RADAR_T1, label: t('T1 日线优先') },
+          ]}
+          value={sortAlgorithm}
+          onChange={(value) => {
+            setSortAlgorithm(value);
+            setT1Cursor(null);
+            const principal = isOwner ? 'owner' : accountUsername ? `account:${accountUsername}` : 'visitor';
+            writeAlgorithmPreferences({ radarSortAlgorithm: value }, principal);
+            markAlgorithmPreferencePendingSync(principal, true);
+            void persistRemoteOrKeepLocal({ radarSortAlgorithm: value }, async () => {
+              await viewPreferencesApi.put({ radar_sort_algorithm: value });
+              return { radarSortAlgorithm: value };
+            }).then((result) => {
+              if (result.persisted === false) {
+                setPrefUnsynced(true);
+                return;
+              }
+              markAlgorithmPreferencePendingSync(principal, false);
+              setPrefUnsynced(false);
+            });
+          }}
+          ariaLabel={t('排序算法')}
         />
         <div className="flex max-w-full flex-wrap items-center gap-2">
           <span className="flex items-center gap-1.5 text-caption text-ink-500">
@@ -337,6 +425,21 @@ export default function Radar() {
           {state === 'stale' && (
             <StaleStrip onRetry={() => query.refresh()} refreshing={query.refreshing} />
           )}
+          {query.data?.cursor_stale && (
+            <SoftBadge tone="warn" className="mb-2" data-testid="radar-t1-cursor-stale">
+              {t('T1 排序已修订，已回到第一页')}
+            </SoftBadge>
+          )}
+          {prefUnsynced && (
+            <SoftBadge tone="warn" className="mb-2" data-testid="radar-pref-unsynced">
+              {t('偏好未同步，本地选择仍有效')}
+            </SoftBadge>
+          )}
+          {query.data?.effective_algorithm && (
+            <p className="mb-2 text-micro text-ink-400" data-testid="radar-algorithm-status">
+              {t('当前排序')} {query.data.effective_algorithm} · {query.data.algorithm_version}
+            </p>
+          )}
           {filteredEmpty && (
             <div className="card-surface" data-testid="radar-filter-empty">
               <EmptyState
@@ -439,6 +542,7 @@ function LeadBigCard({
     >
       <div className="flex flex-wrap items-center gap-1.5">
         <SignalChip signal={event.signal_type} />
+        <T1Chip event={event} />
         <StateChip state={event.state} />
         <span className="radar-chip radar-chip-neutral">
           {event.sector33_name ?? '—'} · {event.market_name ?? '—'}
@@ -680,6 +784,7 @@ function EventCard({ event, onSelect, live, flash }: {
       </div>
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
         <SignalChip signal={event.signal_type} />
+        <T1Chip event={event} />
         <StateChip state={event.state} />
         {structure?.setup_label && <SoftBadge tone="ai">{t(structure.setup_label)}</SoftBadge>}
         {above && (
@@ -764,7 +869,12 @@ function RadarTable({
         key: 'code', title: t('代码'), width: '28%',
         render: (row) => <CodeCell displayCode={row.display_code} nameJa={row.name_ja} to={`/stock/${row.display_code}`} />,
       },
-      { key: 'signal', title: t('信号'), render: (row) => <SignalChip signal={row.signal_type} /> },
+      { key: 'signal', title: t('信号'), render: (row) => (
+        <span className="flex flex-wrap items-center gap-1">
+          <SignalChip signal={row.signal_type} />
+          <T1Chip event={row} />
+        </span>
+      ) },
       { key: 'state', title: t('状态'), render: (row) => <StateChip state={row.state} /> },
       {
         key: 'pivot', title: t('枢轴价'), align: 'right',

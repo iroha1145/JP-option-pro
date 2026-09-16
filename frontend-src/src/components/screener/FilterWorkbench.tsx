@@ -19,6 +19,7 @@ import { SkeletonBlock } from '@/components/shared/Skeleton';
 import InfoHint from '@/components/shared/InfoHint';
 import { STRENGTH_HINTS, type ScoreHint } from '@/lib/indicatorHints';
 import {
+  ALGORITHM_CN,
   PROFILE_CN,
   TIMEFRAME_CN,
   TOPN_OPTIONS,
@@ -28,6 +29,7 @@ import {
   type TierFilter,
   type Timeframe,
 } from './types';
+import { a0ViewSupported, type ScreenerRankingChoice } from '@/lib/algorithmPreferences';
 import { t } from '@/i18n/core';
 
 const EASE_PAPER = [0.16, 1, 0.3, 1] as [number, number, number, number];
@@ -328,6 +330,25 @@ export default function FilterWorkbench({
             onChange={(profile) => patch({ profile, presetId: null })}
             ariaLabel={t('偏好')}
           />
+        </div>
+        <div className="min-w-0">
+          <FieldLabel>{t('排序算法')}</FieldLabel>
+          <Segmented<ScreenerRankingChoice>
+            options={([
+              { value: 'follow_default' as const, label: ALGORITHM_CN.follow_default },
+              { value: 'production' as const, label: ALGORITHM_CN.production },
+              { value: 'a0_mid_long' as const, label: ALGORITHM_CN.a0_mid_long },
+            ])}
+            value={draft.rankingAlgorithm}
+            onChange={(rankingAlgorithm) => {
+              if (rankingAlgorithm === 'a0_mid_long' && !a0ViewSupported(draft.timeframe, draft.profile)) return;
+              patch({ rankingAlgorithm });
+            }}
+            ariaLabel={t('排序算法')}
+          />
+          {!a0ViewSupported(draft.timeframe, draft.profile) && (
+            <p className="mt-1 text-micro text-ink-400">{t('A0 仅支持全部周期与均衡偏好')}</p>
+          )}
         </div>
         <div>
           <FieldLabel hint={STRENGTH_HINTS.topN}>{t('返回数量')}</FieldLabel>
