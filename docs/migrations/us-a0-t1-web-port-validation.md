@@ -1,20 +1,26 @@
 # A0/T1 日本站迁移验证报告
 
-对应提交（本文件落地时的工作树 HEAD；若随后只有文档微调，以该次测试运行的 commit 为准）：
+对应提交（本文件落地时的工作树可能随后只有文档微调；**实测与 CI 以该次代码 commit 为准**）：
 
 | 项 | 值 |
 |---|---|
-| 验证 HEAD | `d3050ec43d5f63ba793d6e1ba1b9e97c543b1637` |
+| 验证 HEAD（代码 + CI） | `ca50ab7f4599628e341f10946c590b15b55c73df` |
+| 本地全集 pytest HEAD | `d3050ec43d5f63ba793d6e1ba1b9e97c543b1637`（`ca50ab7` 相对它只去掉 leftover `or True` 并记录 CI） |
 | TARGET_BASE_SHA | `a449ddb9ee89785eae22ea4c28174903c89d331c` |
 | SOURCE_SHA | `98330ca4dc27af5e640484b3797ee7aa3d6f1573` |
 | PR | https://github.com/iroha1145/JP-option-pro/pull/27 |
 | 日期 | 2026-09-16 |
 
-旧提交绿灯（含审查基线 `195a743` / 修复提交 `8674a15`）不能代替本 HEAD。下面每项都写了当时的证据。
+旧提交绿灯（含审查基线 `195a743` / 修复提交 `8674a15` / 文档钉 `b5a8528`）不能代替本 HEAD。下面每项都写了当时的证据。
 
 ## 结论
 
-本地对 `d3050ec` 跑通全部 pytest + 新增矩阵 + Playwright + WAL。本机无 `docker`，镜像步本地 **NOT RUN**。远端 CI 在 `b5a8528` 终态 **success**：镜像硬门真实 `docker build` + 容器 `/ready` `/health` A0 scan，Playwright **2 passed**。未做生产库写入，未清空数据，未自动合并，未标 ready。
+本地对 `d3050ec` 跑通全部 pytest + 新增矩阵 + Playwright + WAL。本机无 `docker`，镜像步本地 **NOT RUN**。远端 CI 在 **`ca50ab7` 终态 success**：
+
+- push `35073693026`（2026-09-16T08:27:50Z）
+- PR `35073696875`（2026-09-16T08:27:59Z）
+
+镜像硬门真实 `docker build` + 容器 `/ready` `/health` A0 scan，Playwright **2 passed**。未做生产库写入，未清空数据，未自动合并，未标 ready。
 
 工程接通 ≠ 已证明日股收益率提高。本报告不包含收益率回测。
 
@@ -37,9 +43,9 @@
 | 固定 TARGET_BASE_SHA / SOURCE_SHA | 满足 | `docs/migrations/us-a0-t1-web-port.md` |
 | 美股 #167 最终语义（不完整输入不覆盖 settled；派发前预约次数） | 满足 | `t1_identity_complete` 不盲信 `identity_complete=True`；`complete_pending_t1` 先 persist 再 fetch；`tests/test_t1_settled_and_identity.py`、`tests/test_t1_close_retry_budget.py` |
 | 保留夜间全池 + 请求时轻量筛选 | 满足 | `/api/strength/scan` 对已保存断面 filter-then-sort；无 variant_demand |
-| 保留 TOPIX / MA / 33 业种 / 日元 / canonical_code / J-Quants | 满足 | 未迁美国期权/纽约时区/SPY/QQQ；US residue gate 本地通过 |
+| 保留 TOPIX / MA / 33 业种 / 日元 / canonical_code / J-Quants | 满足 | 未迁美国期权/纽约时区/SPY/QQQ；US residue gate CI 通过 |
 | 原版默认，A0/T1 可选 | 满足 | `production` default；`follow_default`；profiles 广告 A0 `default: false` |
-| A0 = 0.5 mid + 0.5 long；不填 None/NaN/Inf | 满足 | `tests/test_a0_ranking.py` |
+| A0 = 0.5 mid + 0.5 long；不填 None/NaN/Inf | 满足 | `tests/test_a0_ranking.py`（含在 766/768 全集） |
 | T1 只评估 `base_breakout` | 满足 | `tests/test_t1_priority_boost.py`、`tests/test_t1_daily_math.py` |
 | T1 阻力冻结 | 满足 | `tests/test_t1_frozen_anchor.py` |
 | RVOL ≠ turnover_ratio | 满足 | `tests/test_t1_volume_not_turnover.py` |
@@ -47,10 +53,10 @@
 | 不改自动画线与标注定位 | 满足 | 未改 `chart-drawings`；现有 chart node gates 未删 |
 | 真实生产入口测试 | 满足 | 算法 → CoreRepository/SQLite → WorkerSupervisor → FastAPI → 生产 `frontend/` Playwright |
 | supervisor 外层取消（真实挂起，非抛 TimeoutError） | 满足 | `test_supervisor_wait_for_cancels_hanging_fetch_and_keeps_eight_budget`：`Event.wait()` + `wait_for` |
-| 现有测试 + 新矩阵 + CI | 满足 | 本地 `d3050ec`：768 passed。CI `b5a8528` run `35072667434`（push）与 `35072672737`（PR）：success。后端 766 passed；隔离 12 passed；Docker 镜像步 success；Playwright 2 passed |
+| 现有测试 + 新矩阵 + CI | 满足 | 本地 `d3050ec`：768 passed。CI `ca50ab7` push `35073693026` / PR `35073696875`：success。后端 766 passed；隔离 12 passed；Docker 镜像步 success；Playwright 2 passed |
 | 交付 PR / 迁移说明 / 结果对应 HEAD | 满足 | PR #27 draft；分支已推。本环境 `ManagePullRequest` 因仓库改名无法改 PR 正文。验收以本文 + CI run 为准。 |
 
-## 本环境实测（最终代码 `d3050ec`）
+## 本环境实测（代码 `d3050ec`；CI 复跑 `ca50ab7`）
 
 命令：`PYTHONPATH=backend .venv/bin/python -m pytest tests/ -q --tb=no`
 
@@ -67,6 +73,7 @@
 - `dict_no_duplicates.mjs`：1390 keys, no duplicates
 - US residue grep：无命中
 - `diff -r frontend-src/dist frontend`：一致
+- `ca50ab7` 去掉 `tests/test_t1_calendar_publication.py` leftover `or True`；CI 在该尖复跑上述门
 
 ### supervisor 八次预算
 
@@ -85,11 +92,13 @@
 
 截图（`/opt/cursor/artifacts/`）：
 
+- `manual_screener_production_first_row.webp` / `manual_screener_a0_first_row.webp`
+- `manual_screener_a0_after_radar_remount.webp` / `manual_radar_t1_lead.webp`
 - `screener-a0-1440.png` / `screener_a0_desktop_first_row.png`
 - `screener-a0-390.png` / `screener_a0_mobile_algorithm.png`
 - `radar-t1-390.png` / `radar_t1_mobile_lead.png`
 
-无头 Chromium 在缺日文字体时截图可能出现方框，DOM 断言仍按 `data-canonical-code` / `data-event-id` / 算法状态文本通过。
+无头 Chromium 在缺日文字体时截图可能出现方框，DOM 断言仍按 `data-canonical-code` / `data-event-id` / 算法状态文本通过。已污染或 0 字节的录屏不作验收。
 
 ### 性能（代表池，不是 17 名 6ms）
 
@@ -97,11 +106,11 @@
 
 | 视图 | ms | 冠军 |
 |---|---|---|
-| strength production cold | 65.717 | 72030 |
-| strength A0 cold | 23.099 | 99840 |
-| strength A0 hot | 22.405 | 99840 |
-| radar production | 46.422 | — |
-| radar T1 | 40.098 | — |
+| strength production cold | 37.751 | 72030 |
+| strength A0 cold | 23.72 | 99840 |
+| strength A0 hot | 21.5 | 99840 |
+| radar production | 46.954 | — |
+| radar T1 | 40.296 | — |
 
 冠军不同。不能外推到全市场耗时或收益。旧的 17 名 `/opt/cursor/artifacts/a0-t1-perf.json` 只作对照，不作验收。
 
@@ -119,11 +128,11 @@
 | 项 | 标记 | 原因 |
 |---|---|---|
 | 完整 production 镜像（本机） | **NOT RUN / BLOCKED** | 本环境无 `docker` |
-| 完整 production 镜像（CI） | **passed** | run `35072667434` 步 `Production Docker image + isolated API`：`docker build -f backend/Dockerfile -t jp-option-pro-a0-t1:ci`，导出 `jp-option-pro-a0-t1:ci`，`docker run` 名为 `jp-a0-t1-api`，断言 A0 `effective_algorithm`。无 skip |
+| 完整 production 镜像（CI） | **passed** | `ca50ab7` push `35073693026` 步 `Production Docker image + isolated API`：`docker build -f backend/Dockerfile -t jp-option-pro-a0-t1:ci`，`naming to docker.io/library/jp-option-pro-a0-t1:ci done`，`docker run` 名为 `jp-a0-t1-api`，断言 A0 `effective_algorithm`。无 skip |
 | 生产 jp-core.db 实库迁移演练 | **NOT RUN** | 任务禁止清空/改生产数据 |
 | 日股收益率 / 回测 | **NOT RUN** | 不在工程验收范围 |
 | 用 ManagePullRequest 更新 PR 正文 | **BLOCKED** | origin 仍是 `iroha1145/jp-option-pro`，源已迁到 `iroha1145/JP-option-pro`。未改用 `gh` 写操作 |
-| GitHub Actions | **success** | push `35072667434`、PR `35072672737`，HEAD `b5a8528`，2026-09-16T08:16Z 终态 |
+| GitHub Actions | **success** | push `35073693026`、PR `35073696875`，HEAD `ca50ab7`，2026-09-16T08:27Z 终态 |
 
 ## CI 接入
 
@@ -135,4 +144,4 @@
 - `docker build` + 容器内 `/ready` `/health` `/api/strength/scan?ranking_algorithm=a0`（无 skip-as-pass）
 - Playwright Chromium 安装与 `tests/test_a0_t1_browser.py`
 
-`b5a8528` 实测：Backend tests **766 passed / 53.48s**；Isolated A0/T1 **12 passed / 4.07s**；Docker 镜像步 **success**（约 14s，含 build+run+A0 curl）；Playwright **2 passed / 6.82s**。
+`ca50ab7` 实测（push `35073693026`）：Backend tests **766 passed / 53.40s**；Isolated A0/T1 **12 passed / 4.17s**；Docker 镜像步 **success**（build+run+A0 curl）；Playwright **2 passed / 6.93s**。PR run `35073696875`：766 / 12 / Docker success / Playwright **2 passed / 7.09s**。日志摘录：`/opt/cursor/artifacts/ci-ca50ab7-evidence.txt`。
