@@ -113,11 +113,13 @@ test('screener and radar persist through principal, generation, and PUT signal',
   const access = await source('hooks/useAccess.tsx');
   const modules = await source('api/modules.ts');
   assert.match(screener, /currentPreferenceWriteGeneration\(\)/);
-  assert.match(screener, /viewPreferencesApi\.put\(\{ screener_ranking_algorithm: choice \}, \{ signal \}\)/);
+  assert.match(screener, /screener_ranking_algorithm: choice/);
+  assert.match(screener, /radar_sort_algorithm: readAlgorithmPreferences\(principal\)\.radarSortAlgorithm/);
   assert.match(screener, /shouldApplyFetchedPreferences\(principal, startedRevision, remote\.principal\)/);
   assert.match(screener, /if \(!isSignedIn\) return;/);
   assert.match(radar, /shouldApplyFetchedPreferences\(principal, startedRevision, remote\.principal\)/);
-  assert.match(radar, /viewPreferencesApi\.put\(\{ radar_sort_algorithm: value \}, \{ signal \}\)/);
+  assert.match(radar, /radar_sort_algorithm: value/);
+  assert.match(radar, /screener_ranking_algorithm: readAlgorithmPreferences\(principal\)\.screenerRankingAlgorithm/);
   assert.match(radar, /currentPreferenceWriteGeneration\(\)/);
   assert.match(access, /invalidatePreferenceWriteQueue\(\)/);
   assert.match(access, /bindPreferenceWritePrincipal\(principal\)/);

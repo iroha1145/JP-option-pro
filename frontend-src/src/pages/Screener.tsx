@@ -303,7 +303,13 @@ export default function Screener() {
       void persistRemoteOrKeepLocal(
         { screenerRankingAlgorithm: choice },
         async (signal) => {
-          await viewPreferencesApi.put({ screener_ranking_algorithm: choice }, { signal });
+          await viewPreferencesApi.put(
+            {
+              screener_ranking_algorithm: choice,
+              radar_sort_algorithm: readAlgorithmPreferences(principal).radarSortAlgorithm,
+            },
+            { signal },
+          );
           return { screenerRankingAlgorithm: choice };
         },
         { principal, generation: currentPreferenceWriteGeneration() },

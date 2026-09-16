@@ -292,9 +292,37 @@ def test_playwright_switches_algorithm_and_recovers_after_navigation(live_app):
         page.screenshot(path=str(artifacts / "radar-t1-390.png"))
 
         page.set_viewport_size({"width": 1440, "height": 900})
+        stored_after_radar = page.evaluate(
+            """() => {
+              const out = {};
+              for (const key of Object.keys(localStorage)) {
+                if (key.includes('algorithmPreferences')) {
+                  out[key] = JSON.parse(localStorage.getItem(key) || 'null');
+                }
+              }
+              return out;
+            }"""
+        )
+        scan_urls = []
+        page.on("request", lambda request: scan_urls.append(request.url) if "strength/scan" in request.url else None)
         page.goto(f"{live_app['base']}/screener", wait_until="networkidle")
         page.get_by_test_id("screener-algorithm-status").wait_for()
-        assert "a0_mid_long" in page.get_by_test_id("screener-algorithm-status").inner_text()
+        stored_after_remount = page.evaluate(
+            """() => {
+              const out = {};
+              for (const key of Object.keys(localStorage)) {
+                if (key.includes('algorithmPreferences')) {
+                  out[key] = JSON.parse(localStorage.getItem(key) || 'null');
+                }
+              }
+              return out;
+            }"""
+        )
+        status_text = page.get_by_test_id("screener-algorithm-status").inner_text()
+        assert "a0_mid_long" in status_text, (
+            f"status={status_text!r} after_radar={stored_after_radar!r} "
+            f"after_remount={stored_after_remount!r} scans={scan_urls!r}"
+        )
         page.wait_for_function(
             "code => document.querySelector('[data-testid=screener-first-row]')?.getAttribute('data-canonical-code') === code",
             arg=a0_first,

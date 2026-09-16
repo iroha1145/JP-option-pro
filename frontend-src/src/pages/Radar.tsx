@@ -289,7 +289,13 @@ export default function Radar() {
             void persistRemoteOrKeepLocal(
               { radarSortAlgorithm: value },
               async (signal) => {
-                await viewPreferencesApi.put({ radar_sort_algorithm: value }, { signal });
+                await viewPreferencesApi.put(
+                  {
+                    screener_ranking_algorithm: readAlgorithmPreferences(principal).screenerRankingAlgorithm,
+                    radar_sort_algorithm: value,
+                  },
+                  { signal },
+                );
                 return { radarSortAlgorithm: value };
               },
               { principal, generation: currentPreferenceWriteGeneration() },

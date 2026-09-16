@@ -64,7 +64,21 @@ def read_view_preferences(store: AppStore, principal: str) -> ViewPreferences:
 
 
 def write_view_preferences(store: AppStore, principal: str, value: Any) -> ViewPreferences:
-    prefs = normalize_view_preferences(value)
+    payload = value if isinstance(value, dict) else {}
+    current = read_view_preferences(store, principal)
+    merged = {
+        "screener_ranking_algorithm": (
+            payload["screener_ranking_algorithm"]
+            if "screener_ranking_algorithm" in payload
+            else current.screener_ranking_algorithm
+        ),
+        "radar_sort_algorithm": (
+            payload["radar_sort_algorithm"]
+            if "radar_sort_algorithm" in payload
+            else current.radar_sort_algorithm
+        ),
+    }
+    prefs = normalize_view_preferences(merged)
     store.put_view_preferences(
         principal,
         screener_ranking_algorithm=prefs.screener_ranking_algorithm,
