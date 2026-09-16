@@ -9,6 +9,7 @@ import { fmtDate, fmtScore } from '@/lib/format';
 import { radarScoreHint, type ScoreHint } from '@/lib/indicatorHints';
 import { strengthBarClass } from '@/lib/strengthColor';
 import { cn } from '@/lib/utils';
+import { t1StatusLabelKey, t1StatusOf } from '@/lib/t1Status';
 
 export const RADAR_STATE_LABELS: Record<string, string> = {
   discovered: '已发现',
@@ -54,6 +55,24 @@ export function StateChip({ state }: { state: string }) {
 
 export function SignalChip({ signal }: { signal: string }) {
   return <SoftBadge>{t(SIGNAL_LABELS[signal] ?? signal)}</SoftBadge>;
+}
+
+const T1_TONES: Record<string, BadgeTone> = {
+  met: 'brand',
+  unmet: 'neutral',
+  pending_close: 'warn',
+  unavailable: 'warn',
+  not_applicable: 'neutral',
+};
+
+export function T1Chip({ event }: { event: { t1_priority?: { status?: string | null } | null } }) {
+  const status = t1StatusOf(event);
+  if (!status) return null;
+  return (
+    <SoftBadge tone={T1_TONES[status] ?? 'neutral'} data-testid="t1-chip">
+      {t(t1StatusLabelKey(status))}
+    </SoftBadge>
+  );
 }
 
 /** 数据基准日徽章 —— 每个数据卡都必须标注截至日期，不冒充实时。 */

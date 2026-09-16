@@ -54,6 +54,8 @@ from .scoring import (
 )
 
 ENGINE_VERSION = "jp-radar-engine-v2"
+_T1_ANCHOR_CONVENTION = "jp_adj_ohlcv_v1"
+_T1_ANCHOR_VERSION = 1
 
 SIGNAL_HIGH_252 = "high_break_252"
 SIGNAL_HIGH_120 = "high_break_120"
@@ -604,7 +606,10 @@ class RadarEngine:
                 event["scores"] = scores
                 event["alert_priority"] = (scores.get("alert_priority") or {}).get("score")
                 event_features = dict(event.get("features") or {})
+                existing_anchor = event_features.get("t1_anchor")
                 event_features["structure"] = _structure_snapshot(structure)
+                if isinstance(existing_anchor, Mapping) and existing_anchor.get("resistance_high") is not None:
+                    event_features["t1_anchor"] = existing_anchor
                 event["features"] = event_features
                 updated.append(event)
                 if changed:
@@ -649,6 +654,18 @@ class RadarEngine:
                 hold_days=hold_days,
                 **score_kwargs,
             )
+            event_features = {
+                "engine_version": ENGINE_VERSION,
+                "hold_days": hold_days,
+                "event_high": features.get("close"),
+                "liquidity_known": bool(features.get("liquidity_known")),
+                "snapshot": _feature_snapshot(features),
+                "structure": _structure_snapshot(structure),
+            }
+            if signal_type == SIGNAL_BASE_BREAK:
+                t1_anchor = _first_publish_t1_anchor(event_id, target_date, structure)
+                if t1_anchor is not None:
+                    event_features["t1_anchor"] = t1_anchor
             new_candidates.append(
                 {
                     "event_id": event_id,
@@ -662,14 +679,7 @@ class RadarEngine:
                     "last_scanned_date": target_date,
                     "alert_priority": (scores.get("alert_priority") or {}).get("score"),
                     "scores": scores,
-                    "features": {
-                        "engine_version": ENGINE_VERSION,
-                        "hold_days": hold_days,
-                        "event_high": features.get("close"),
-                        "liquidity_known": bool(features.get("liquidity_known")),
-                        "snapshot": _feature_snapshot(features),
-                        "structure": _structure_snapshot(structure),
-                    },
+                    "features": event_features,
                     "transitions": transitions_log,
                 }
             )
@@ -695,6 +705,7 @@ class RadarEngine:
         persist_events = coverage.allows_complete_publish
         if persist_events and updated:
             self._repository.upsert_radar_events(updated)
+            self._repository.save_t1_anchors(updated)
         elif not persist_events:
             updated = []
             accepted = []
@@ -860,6 +871,31 @@ class RadarEngine:
             # 発見日自身を 0 日目とする（片端を除く）
             return max(0, len(days) - 1)
         return _date_diff_days(discovered_date, target_date)
+
+
+def _first_publish_t1_anchor(
+    event_id: str, session_date: str, structure: Mapping[str, Any] | None
+) -> dict[str, Any] | None:
+    """Freeze resistance_high at first base_breakout publish. Never rewrite later."""
+
+    base = structure.get("base") if isinstance(structure, Mapping) else None
+    if not isinstance(base, Mapping):
+        return None
+    try:
+        resistance = float(base.get("resistance_high"))
+    except (TypeError, ValueError):
+        return None
+    if resistance != resistance or resistance <= 0:
+        return None
+    return {
+        "event_id": event_id,
+        "session_date": session_date,
+        "platform_id": base.get("pivot_id"),
+        "resistance_high": resistance,
+        "data_convention": _T1_ANCHOR_CONVENTION,
+        "version": _T1_ANCHOR_VERSION,
+        "source": "first_publish",
+    }
 
 
 def _structure_snapshot(structure: Mapping[str, Any]) -> dict[str, Any]:

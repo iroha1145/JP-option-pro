@@ -355,6 +355,7 @@ def strength_etag(
     expected_trade_date_value: str | None,
     freshness: Mapping[str, Any],
     universe_count: int,
+    view_identity: str | None = None,
 ) -> str:
     raw = "|".join(
         (
@@ -364,6 +365,7 @@ def strength_etag(
             str(freshness.get("freshness") or ""),
             str(freshness.get("calendar_state") or ""),
             str(universe_count),
+            view_identity or "",
         )
     )
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]

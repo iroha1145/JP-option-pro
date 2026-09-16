@@ -17,7 +17,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Awaitable, Callable
 
 from datetime import datetime, timedelta, timezone
 
@@ -47,6 +47,8 @@ class TaskSpec:
     failure_backoff_seconds: float = 60.0
     max_backoff_seconds: float = 3600.0
     action_types: tuple[str, ...] = ()
+    run_async: Callable[[dict[str, Any] | None], Awaitable[TaskResult]] | None = None
+    timeout_seconds: float | None = None
 
 
 class WorkerSupervisor:
@@ -225,9 +227,41 @@ class WorkerSupervisor:
             if recorded is _STOPPED:
                 return
             try:
-                result = await asyncio.to_thread(spec.run, payload)
+                if spec.run_async is not None:
+                    if spec.timeout_seconds:
+                        result = await asyncio.wait_for(
+                            spec.run_async(payload), timeout=spec.timeout_seconds
+                        )
+                    else:
+                        result = await spec.run_async(payload)
+                else:
+                    result = await asyncio.to_thread(spec.run, payload)
+            except asyncio.CancelledError:
+                raise
             except WorkerLeaseLost:
                 raise
+            except asyncio.TimeoutError:
+                failures += 1
+                recorded = await self._retry_state_call(
+                    self._state.record_task,
+                    self._owner_id, self._fencing_token, spec.name,
+                    status="failed", error_code="task_timeout",
+                    success=False,
+                )
+                if recorded is _STOPPED:
+                    return
+                if action_id is not None:
+                    completed = await self._retry_state_call(
+                        self._state.complete_action,
+                        self._owner_id, self._fencing_token, action_id,
+                        status="failed", error_code="task_timeout",
+                    )
+                    if completed is _STOPPED:
+                        return
+                delay = min(
+                    spec.max_backoff_seconds, spec.failure_backoff_seconds * (2 ** (failures - 1))
+                )
+                continue
             except Exception as exc:  # noqa: BLE001
                 failures += 1
                 backoff = min(

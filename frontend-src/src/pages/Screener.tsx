@@ -9,7 +9,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { newsApi, quotesApi, strengthApi, workerApi, type StrengthScanParams } from '@/api/modules';
+import { newsApi, quotesApi, strengthApi, viewPreferencesApi, workerApi, type StrengthScanParams } from '@/api/modules';
+import { invalidateQueryPaths } from '@/api/queryRegistry';
 import { ApiError } from '@/api/client';
 import type { StrengthProfilesMeta, StrengthScanResponse, StrengthRow } from '@/api/types';
 import { useAccess } from '@/hooks/useAccess';
@@ -30,6 +31,7 @@ import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
 import SourceNote from '@/components/shared/SourceNote';
 import { MarketRegimeCard, MethodCard, TierHistogram } from '@/components/screener/SideCards';
 import {
+  ALGORITHM_CN,
   DEFAULT_FILTERS,
   MAX_TOP_N,
   PROFILE_CN,
@@ -45,6 +47,23 @@ import {
   type Tier,
   type TierFilter,
 } from '@/components/screener/types';
+import {
+  a0ViewSupported,
+  algorithmPreferencePendingSync,
+  algorithmPreferenceRevision,
+  bumpAlgorithmPreferenceRevision,
+  canCommitPreferenceWriteResult,
+  currentPreferenceIdentityEpoch,
+  markAlgorithmPreferencePendingSync,
+  preferencePrincipalFromAccess,
+  readAlgorithmPreferences,
+  shouldApplyFetchedPreferences,
+  writeAlgorithmPreferences,
+} from '@/lib/algorithmPreferences';
+import {
+  currentPreferenceWriteGeneration,
+  persistRemoteOrKeepLocal,
+} from '@/lib/viewPreferenceWrites';
 import { t } from '@/i18n/core';
 import { EASE_PAPER } from '@/lib/motion';
 import { usePolling } from '@/hooks/usePolling';
@@ -74,6 +93,7 @@ function buildParams(filters: ScanFilters): StrengthScanParams {
     min_avg_turnover: filters.minTurnover > 0 ? filters.minTurnover : undefined,
     tier: filters.tier !== 'all' ? filters.tier : undefined,
     min_score: filters.minScore ?? undefined,
+    ranking_algorithm: filters.rankingAlgorithm,
   };
 }
 
@@ -87,11 +107,12 @@ function summarizeFilters(filters: ScanFilters): string {
   if (filters.priceMin !== null || filters.priceMax !== null) parts.push(t('价格区间'));
   if (filters.minTurnover > 0) parts.push(t('成交额≥{v}', { v: fmtYenCompact(filters.minTurnover) }));
   if (filters.minScore !== null) parts.push(t('强度≥{n}', { n: filters.minScore }));
+  if (filters.rankingAlgorithm !== 'follow_default') parts.push(ALGORITHM_CN[filters.rankingAlgorithm]);
   return parts.join(' · ') || t('默认条件');
 }
 
 export default function Screener() {
-  const { canManageWatchlist, isOwner, accountUsername, loading: accessLoading } = useAccess();
+  const { canManageWatchlist, isOwner, accountUsername, isSignedIn, loading: accessLoading } = useAccess();
 
   const [meta, setMeta] = useState<StrengthProfilesMeta | null>(null);
   const [metaFailed, setMetaFailed] = useState(false);
@@ -110,6 +131,7 @@ export default function Screener() {
   const [refreshState, setRefreshState] = useState<'idle' | 'queued' | 'running' | 'waiting' | 'done' | 'error'>('idle');
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
   const [unverified, setUnverified] = useState(false);
+  const [prefUnsynced, setPrefUnsynced] = useState(false);
   const requestSeq = useRef(0);
   const verifySeq = useRef(0);
   const refreshSeq = useRef(0);
@@ -239,15 +261,112 @@ export default function Screener() {
     }
   }, []);
 
-  /* Wait for the first identity, then also restart reads after an account
-     change. Otherwise its generation guard drops the initial pending result
-     without ever settling the page's scanning state. */
   useEffect(() => {
     if (accessLoading) return;
-    void runScan(appliedRef.current, { cache: 'reload' });
-  }, [accessLoading, sessionKey, runScan]);
+    let active = true;
+    const startedEpoch = currentPreferenceIdentityEpoch();
+    const principal = preferencePrincipalFromAccess(isOwner, accountUsername);
+    const controller = new AbortController();
+    const local = readAlgorithmPreferences(principal);
+    const next = { ...appliedRef.current, rankingAlgorithm: local.screenerRankingAlgorithm };
+    setDraft((prev) => ({ ...prev, rankingAlgorithm: local.screenerRankingAlgorithm }));
+    setApplied((prev) => ({ ...prev, rankingAlgorithm: local.screenerRankingAlgorithm }));
+    appliedRef.current = next;
+    if (algorithmPreferencePendingSync(principal)) {
+      setPrefUnsynced(true);
+      void runScan(next);
+      return () => {
+        active = false;
+        controller.abort();
+      };
+    }
+    const startedRevision = algorithmPreferenceRevision(principal);
+    void runScan(next);
+    if (!isSignedIn) {
+      return () => {
+        active = false;
+        controller.abort();
+      };
+    }
+    void viewPreferencesApi
+      .get({ signal: controller.signal })
+      .then((remote) => {
+        if (!active) return;
+        if (
+          !shouldApplyFetchedPreferences(principal, startedRevision, remote.principal, {
+            startedEpoch,
+            currentEpoch: currentPreferenceIdentityEpoch(),
+            currentPrincipal: preferencePrincipalFromAccess(isOwner, accountUsername),
+          })
+        ) {
+          return;
+        }
+        const choice = (remote.preferences.screener_ranking_algorithm || local.screenerRankingAlgorithm) as ScanFilters['rankingAlgorithm'];
+        writeAlgorithmPreferences({ screenerRankingAlgorithm: choice }, principal);
+        setDraft((prev) => ({ ...prev, rankingAlgorithm: choice }));
+        setApplied((prev) => ({ ...prev, rankingAlgorithm: choice }));
+        setPrefUnsynced(false);
+        if (choice !== next.rankingAlgorithm) {
+          const updated = { ...appliedRef.current, rankingAlgorithm: choice };
+          appliedRef.current = updated;
+          void runScan(updated);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [accessLoading, accountUsername, isOwner, isSignedIn, runScan, sessionKey]);
 
-  const onScanClick = useCallback(() => void runScan(draft), [draft, runScan]);
+  const persistAlgorithmChoice = useCallback(
+    (choice: ScanFilters['rankingAlgorithm']) => {
+      const principal = preferencePrincipalFromAccess(isOwner, accountUsername);
+      const startedEpoch = currentPreferenceIdentityEpoch();
+      writeAlgorithmPreferences({ screenerRankingAlgorithm: choice }, principal);
+      bumpAlgorithmPreferenceRevision(principal);
+      markAlgorithmPreferencePendingSync(principal, true);
+      setPrefUnsynced(false);
+      void persistRemoteOrKeepLocal(
+        { screenerRankingAlgorithm: choice },
+        async (signal) => {
+          await viewPreferencesApi.put(
+            {
+              screener_ranking_algorithm: choice,
+              radar_sort_algorithm: readAlgorithmPreferences(principal).radarSortAlgorithm,
+            },
+            { signal },
+          );
+          return { screenerRankingAlgorithm: choice };
+        },
+        { principal, generation: currentPreferenceWriteGeneration() },
+      ).then((result) => {
+        if (
+          !canCommitPreferenceWriteResult(
+            startedEpoch,
+            preferencePrincipalFromAccess(isOwner, accountUsername),
+            principal,
+          )
+        ) {
+          return;
+        }
+        if (result.persisted === false) {
+          setPrefUnsynced(true);
+          return;
+        }
+        markAlgorithmPreferencePendingSync(principal, false);
+        setPrefUnsynced(false);
+      });
+    },
+    [accountUsername, isOwner],
+  );
+
+  const onScanClick = useCallback(() => {
+    if (draft.rankingAlgorithm !== applied.rankingAlgorithm) {
+      persistAlgorithmChoice(draft.rankingAlgorithm);
+    }
+    void runScan(draft);
+  }, [applied.rankingAlgorithm, draft, persistAlgorithmChoice, runScan]);
 
   const pollAction = useCallback(async (actionId: number, seq: number) => {
     const deadline = Date.now() + 90_000;
@@ -292,6 +411,7 @@ export default function Screener() {
       const promised = promisedPublication(finished as Record<string, unknown>);
       const previousId = response?.publication_id ?? null;
       const readFilters = appliedRef.current;
+      invalidateQueryPaths(['/strength/scan', '/radar/current'], { reload: true });
       const verified = await strengthApi.scan(buildParams(readFilters), { cache: 'reload' });
       if (refreshSeq.current !== seq || sessionGen.current !== sessionAtStart) return;
       const verdict = interpretOwnerRefresh({
@@ -340,11 +460,11 @@ export default function Screener() {
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return;
-      void runScan(applied, { silent: true, cache: 'reload' });
+      void runScan(applied, { silent: true });
     };
     const timer = window.setInterval(() => {
       if (document.visibilityState !== 'visible') return;
-      void runScan(applied, { silent: true, cache: 'reload' });
+      void runScan(applied, { silent: true });
     }, 120_000);
     document.addEventListener('visibilitychange', onVisible);
     return () => {
@@ -355,11 +475,17 @@ export default function Screener() {
 
   const patchAndScan = useCallback(
     (partial: Partial<ScanFilters>) => {
-      const next = { ...applied, ...partial };
+      let next = { ...applied, ...partial };
+      if (next.rankingAlgorithm === 'a0_mid_long' && !a0ViewSupported(next.timeframe, next.profile)) {
+        next = { ...next, rankingAlgorithm: 'production' };
+      }
       setDraft(next);
+      if (partial.rankingAlgorithm && partial.rankingAlgorithm !== applied.rankingAlgorithm) {
+        persistAlgorithmChoice(next.rankingAlgorithm);
+      }
       void runScan(next);
     },
-    [applied, runScan],
+    [applied, persistAlgorithmChoice, runScan],
   );
 
   /* ---------------- 盘中叠加（表示専用・スコアには入らない） ----------------
@@ -463,6 +589,13 @@ export default function Screener() {
       list.push({ key: 'tv', label: t('成交额 {v}', { v: option?.label ?? `≥${fmtYenCompact(f.minTurnover)}` }), onRemove: () => patchAndScan({ minTurnover: DEFAULT_FILTERS.minTurnover }) });
     }
     if (f.minScore !== null) list.push({ key: 'ms', label: t('强度 ≥{n}', { n: f.minScore }), onRemove: () => patchAndScan({ minScore: null, presetId: null }) });
+    if (f.rankingAlgorithm !== 'follow_default') {
+      list.push({
+        key: 'algo',
+        label: ALGORITHM_CN[f.rankingAlgorithm],
+        onRemove: () => patchAndScan({ rankingAlgorithm: 'follow_default' }),
+      });
+    }
     return list;
   }, [applied, meta, patchAndScan]);
 
@@ -519,7 +652,15 @@ export default function Screener() {
       <div className="mt-6">
         <FilterWorkbench
           draft={draft}
-          onChange={setDraft}
+          onChange={(next) => {
+            if (next.rankingAlgorithm === 'a0_mid_long' && !a0ViewSupported(next.timeframe, next.profile)) {
+              next = { ...next, rankingAlgorithm: 'production' };
+            }
+            setDraft(next);
+            if (next.rankingAlgorithm !== draft.rankingAlgorithm) {
+              persistAlgorithmChoice(next.rankingAlgorithm);
+            }
+          }}
           tierCounts={tierCounts}
           universeCount={response?.universe_count ?? null}
           meta={meta}
@@ -604,6 +745,26 @@ export default function Screener() {
           {response && response.score_compatible === false && (
             <SoftBadge tone="warn" className="mt-2">
               {t('已保存评分版本与当前代码不一致')}
+            </SoftBadge>
+          )}
+          {response?.a0_status === 'a0_scores_unavailable' && (
+            <SoftBadge tone="warn" className="mt-2" data-testid="screener-a0-unavailable">
+              {t('A0 分数不可计算，未宣称原排序为 A0')}
+            </SoftBadge>
+          )}
+          {response?.effective_algorithm && (
+            <p
+              className="mt-2 text-micro text-ink-400"
+              data-testid="screener-algorithm-status"
+              data-ranking-algorithm={applied.rankingAlgorithm}
+              data-effective-algorithm={response.effective_algorithm}
+            >
+              {t('当前排序')} {response.effective_algorithm} · {response.algorithm_version} · {response.sort_basis}
+            </p>
+          )}
+          {prefUnsynced && (
+            <SoftBadge tone="warn" className="mt-2" data-testid="screener-pref-unsynced">
+              {t('偏好未同步，本地选择仍有效')}
             </SoftBadge>
           )}
           {unverified && (
@@ -771,7 +932,18 @@ export default function Screener() {
             activeTier={applied.tier}
             onSelect={onTierFromHistogram}
           />
-          <MethodCard meta={meta} profileId={applied.profile} loading={!meta && !metaFailed} error={metaFailed} onRetry={loadMeta} />
+          <MethodCard
+            meta={meta}
+            profileId={applied.profile}
+            loading={!meta && !metaFailed}
+            error={metaFailed}
+            onRetry={loadMeta}
+            algorithmNote={
+              response?.effective_algorithm === 'a0_mid_long'
+                ? t('当前名次按 A0 = 0.5×中期 + 0.5×长期，分档仍用原综合分')
+                : t('当前名次按原版综合分')
+            }
+          />
           <AnimatePresence>
             {scanState === 'done' && sorted.length === 0 && (
               <motion.div

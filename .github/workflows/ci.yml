@@ -32,7 +32,7 @@ jobs:
 
       # CI は実 J-Quants・実 OpenAI に接続しない（テストは全て MockTransport/フィクスチャ）
       - name: Backend tests
-        run: python -m pytest tests/ -q
+        run: python -m pytest tests/ -q --ignore=tests/test_a0_t1_browser.py
 
       - name: Fixture pipeline smoke (radar + screener build)
         run: |
@@ -79,6 +79,12 @@ jobs:
       - name: Chart centered annotation gate
         run: node --experimental-strip-types --test frontend-src/tests/chart-labels.mjs
 
+      - name: Query registry identity gate
+        run: node --experimental-strip-types --test frontend-src/tests/query-registry-identity.mjs
+
+      - name: Algorithm preference gate
+        run: node --experimental-strip-types --test frontend-src/tests/algorithm-preferences.mjs
+
       # 後端が組み立てた文（テンプレート + パラメータ）を 3 言語で描画できるか。
       # 辞書に載っていても引き方を間違えれば画面には出ない ——「載っているか」の
       # 門（pytest 側）とは別に見る。
@@ -96,3 +102,43 @@ jobs:
             backend/app/services backend/app/api backend/app/repositories backend/app/providers \
             frontend-src/src/pages frontend-src/src/components frontend-src/src/api \
             || (echo "US-market residue found" && exit 1)
+
+      - name: Isolated backend A0/T1 integration
+        run: python -m pytest tests/test_a0_t1_container.py tests/test_t1_close_retry_budget.py tests/test_t1_close_date_groups.py -q
+
+      - name: Algorithm preference session gate
+        run: node --experimental-strip-types --test frontend-src/tests/algorithm-preference-session.mjs
+
+      - name: Production Docker image + isolated API
+        run: |
+          docker build -f backend/Dockerfile -t jp-option-pro-a0-t1:ci .
+          DATA=/tmp/jp-ci-docker
+          mkdir -p "$DATA"
+          DATA_DIR="$DATA" PYTHONPATH=backend python -m app.tools.dev_fixture --days 140
+          chmod -R a+rwX "$DATA"
+          docker rm -f jp-a0-t1-api >/dev/null 2>&1 || true
+          docker run -d --name jp-a0-t1-api -p 18080:8000 \
+            -e DATA_DIR=/data \
+            -v "$DATA:/data" \
+            jp-option-pro-a0-t1:ci
+          ok=0
+          for _ in $(seq 1 40); do
+            if curl -sf http://127.0.0.1:18080/ready >/dev/null; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ok" = 1
+          curl -sf http://127.0.0.1:18080/health >/dev/null
+          curl -sf 'http://127.0.0.1:18080/api/strength/scan?top=3&ranking_algorithm=a0' \
+            | python -c "import json,sys; body=json.load(sys.stdin); assert body['effective_algorithm']=='a0_mid_long', body"
+          docker rm -f jp-a0-t1-api
+
+      - name: Install Playwright Chromium
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Production-frontend A0/T1 Playwright gate
+        run: python -m pytest tests/test_a0_t1_browser.py -q

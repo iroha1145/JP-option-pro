@@ -34,6 +34,7 @@ from app.services.radar.lifecycle import TERMINAL_STATES
 from app.services.screener import build_screener_rows
 from app.services.publication import (
     OUTCOME_ALREADY_CURRENT,
+    OUTCOME_FAILED,
     OUTCOME_PUBLISHED,
     OUTCOME_RETAINED,
     OUTCOME_SKIPPED,
@@ -56,6 +57,7 @@ TASK_NEWS_SYNC = "news_sync"
 TASK_AI_JOBS = "ai_jobs"
 TASK_INTRADAY = "intraday_fetch"
 TASK_SHORT_MONITOR = "short_monitor_refresh"
+TASK_T1_CLOSE = "t1_close_completion"
 
 # 引け後バッチ時刻に J-Quants がまだ publish していない時の再試行間隔。
 POST_CLOSE_RETRY_SECONDS = 20 * 60.0
@@ -73,6 +75,7 @@ DEFAULT_TASK_NAMES: tuple[str, ...] = (
     TASK_AI_JOBS,
     TASK_INTRADAY,
     TASK_SHORT_MONITOR,
+    TASK_T1_CLOSE,
 )
 
 MANUAL_ACTION_TYPES: tuple[str, ...] = (
@@ -85,6 +88,7 @@ MANUAL_ACTION_TYPES: tuple[str, ...] = (
     "intraday_fetch",
     "tick_fetch",
     "short_monitor_refresh",
+    "t1_close_completion",
 )
 
 _BACKFILL_DATASET_ORDER = (
@@ -113,6 +117,33 @@ class TaskContext:
         from app.repositories.intraday_store import IntradayStore
 
         IntradayStore(self.paths.intraday_db).initialize()
+        self.t1_timeout_seconds = 120.0
+        self.t1_retry_base_seconds = 30.0
+        self.t1_bar_fetcher = self._default_t1_bar_fetcher if self.settings.jquants_configured() else None
+
+    async def _default_t1_bar_fetcher(self, codes, session_date):
+        """One date-scoped J-Quants pull for missing T bars. Not per-event N+1."""
+
+        import asyncio
+
+        from app.providers.jquants import mapping
+
+        wanted = {str(code) for code in codes if code}
+        grouped: dict[str, list] = {code: [] for code in wanted}
+
+        def work() -> dict[str, list]:
+            if not session_date or not wanted:
+                return grouped
+            for row in self.client.fetch_rows("/equities/bars/daily", {"date": session_date}):
+                mapped = mapping.map_daily_bar(row)
+                if not mapped:
+                    continue
+                code = str(mapped.get("canonical_code") or "")
+                if code in wanted:
+                    grouped.setdefault(code, []).append(mapped)
+            return grouped
+
+        return await asyncio.to_thread(work)
 
     @property
     def client(self) -> JQuantsClient:
@@ -589,6 +620,53 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             details=result,
         )
 
+    def t1_close_sync(_payload: dict[str, Any] | None) -> TaskResult:
+        from app.services.radar.t1_close import evaluate_t1_from_local_bars
+
+        if _payload and _payload.get("invalid"):
+            return TaskResult(
+                status="failed",
+                error_code="invalid_parameters",
+                next_delay_seconds=3600.0,
+                details={"reason": "invalid_parameters"},
+                outcome=OUTCOME_FAILED,
+            )
+        result = evaluate_t1_from_local_bars(context.repository, as_of=now_jst())
+        return TaskResult(
+            status="completed",
+            next_delay_seconds=seconds_until_next_jst_time((config.sync.daily_batch_time_jst,)),
+            details=result,
+        )
+
+    async def t1_close_async(_payload: dict[str, Any] | None) -> TaskResult:
+        from app.services.radar.t1_close import complete_pending_t1
+
+        if _payload and _payload.get("invalid"):
+            return TaskResult(
+                status="failed",
+                error_code="invalid_parameters",
+                next_delay_seconds=3600.0,
+                details={"reason": "invalid_parameters"},
+                outcome=OUTCOME_FAILED,
+            )
+        result = await complete_pending_t1(
+            context.repository,
+            as_of=now_jst(),
+            fetcher=getattr(context, "t1_bar_fetcher", None),
+            first_fetch_hhmm=config.sync.daily_batch_time_jst,
+            retry_base_seconds=getattr(context, "t1_retry_base_seconds", 30.0),
+        )
+        delay = float(result.get("retry_after_seconds") or 0.0)
+        if result.get("retry") and delay > 0:
+            next_delay = delay
+        else:
+            next_delay = seconds_until_next_jst_time((config.sync.daily_batch_time_jst,))
+        return TaskResult(
+            status="completed",
+            next_delay_seconds=next_delay,
+            details=result,
+        )
+
     return [
         TaskSpec(
             name=TASK_CALENDAR_MASTER,
@@ -637,6 +715,14 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             run=short_monitor_task,
             initial_delay_seconds=180.0,
             action_types=("short_monitor_refresh",),
+        ),
+        TaskSpec(
+            name=TASK_T1_CLOSE,
+            run=t1_close_sync,
+            run_async=t1_close_async,
+            initial_delay_seconds=30.0,
+            timeout_seconds=getattr(context, "t1_timeout_seconds", 120.0),
+            action_types=("t1_close_completion",),
         ),
     ]
 
@@ -838,6 +924,12 @@ def _run_radar_and_screener(context: TaskContext, target_date: str) -> dict[str,
     lookback_start = add_days(target_date, -context.config.radar.lookback_days * 2)
     engine = RadarEngine(context.repository, context.config.radar)
     summary = engine.scan(target_date, lookback_start=lookback_start)
+    if summary.get("coverage", {}).get("allows_complete_publish"):
+        from app.services.radar.t1_close import evaluate_t1_from_local_bars
+
+        summary["t1"] = evaluate_t1_from_local_bars(
+            context.repository, scan_date=target_date, as_of=now_jst()
+        )
     features_by_code = summary.pop("features_by_code")
     structure_by_code = summary.pop("structure_by_code")
     sector_median_returns = summary.pop("sector_median_returns")

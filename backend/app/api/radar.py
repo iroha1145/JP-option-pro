@@ -2,29 +2,137 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+import hashlib
+import json
+from typing import Any, Mapping, Sequence
 
-from app.api.deps import core_repository
+from fastapi import APIRouter, HTTPException, Query, Request, Response
+
+from app.access import request_is_owner_session
+from app.api.account import current_account
+from app.api.deps import app_store, core_repository
 from app.domain.symbols import display_code, normalize_input_code
+from app.services.algorithm_modes import (
+    T1_ALGORITHM,
+    UnknownAlgorithmError,
+    resolve_radar_algorithm,
+)
 from app.services.radar.engine import ALL_SIGNAL_TYPES
 from app.services.radar.lifecycle import ALL_STATES
+from app.services.radar.t1_priority import apply_t1_stable_boost, t1_view_token
 from app.services.short_monitor import radar_link
 from app.services.short_monitor.states import ORDERED_STATES as SHORT_STATES
+from app.services.view_preferences import (
+    preference_principal,
+    read_admin_defaults,
+    read_view_preferences,
+)
 
 router = APIRouter(prefix="/api/radar", tags=["radar"])
 
 
+def _request_radar_resolution(request: Request, sort_algorithm: str | None):
+    store = app_store()
+    defaults = read_admin_defaults(store)
+    account = current_account(request)
+    if account is not None:
+        principal = preference_principal("account", account.user_id)
+    elif request_is_owner_session(request):
+        principal = preference_principal("owner", None)
+    else:
+        principal = None
+    user_choice = None
+    if principal:
+        user_choice = read_view_preferences(store, principal).radar_sort_algorithm
+    return resolve_radar_algorithm(
+        requested=sort_algorithm,
+        user_choice=user_choice,
+        admin_default=defaults.get("radar_sort_algorithm"),
+    )
+
+
+def _maybe_304(request: Request, response: Response, etag: str) -> bool:
+    response.headers["ETag"] = f'"{etag}"'
+    response.headers["Cache-Control"] = "private, must-revalidate"
+    incoming = request.headers.get("if-none-match")
+    if incoming and incoming.strip() in {etag, f'"{etag}"'}:
+        response.status_code = 304
+        return True
+    return False
+
+
+def _canonical_event_view(view: Mapping[str, Any]) -> Any:
+    """Full returned event body. Nested scores/structure/snapshot are not optional."""
+
+    return json.loads(json.dumps(view, allow_nan=False, default=str, sort_keys=True))
+
+
+def _radar_content_etag(
+    *,
+    scan_date: str,
+    resolution,
+    states: str | None,
+    signals: str | None,
+    min_priority: float | None,
+    short_states: str | None,
+    short_flags: str | None,
+    exclude_short_flags: str | None,
+    min_short_confidence: float | None,
+    limit: int,
+    offset: int,
+    matched_count: int,
+    t1_view: str | None,
+    cursor_stale: bool,
+    page: Sequence[Mapping[str, Any]],
+) -> str:
+    payload = {
+        "scan_date": scan_date,
+        "algorithm": resolution.effective,
+        "version": resolution.version,
+        "source": resolution.source,
+        "filters": {
+            "states": states or "",
+            "signals": signals or "",
+            "min_priority": min_priority,
+            "short_states": short_states or "",
+            "short_flags": short_flags or "",
+            "exclude_short_flags": exclude_short_flags or "",
+            "min_short_confidence": min_short_confidence,
+        },
+        "limit": limit,
+        "offset": offset,
+        "matched_count": matched_count,
+        "t1_view": t1_view,
+        "cursor_stale": cursor_stale,
+        "events": [_canonical_event_view(item) for item in page],
+    }
+    encoded = json.dumps(payload, allow_nan=False, default=str, separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:32]
+
+
 @router.get("/current")
 def radar_current(
+    request: Request,
+    response: Response,
     states: str | None = Query(default=None),
     signals: str | None = Query(default=None),
     min_priority: float | None = Query(default=None, ge=0, le=100),
     limit: int = Query(default=120, ge=1, le=400),
+    offset: int = Query(default=0, ge=0),
+    cursor: str | None = Query(default=None),
     short_states: str | None = Query(default=None),
     short_flags: str | None = Query(default=None),
     exclude_short_flags: str | None = Query(default=None),
     min_short_confidence: float | None = Query(default=None, ge=0.0, le=1.0),
+    sort_algorithm: str | None = Query(default=None),
 ) -> dict:
+    try:
+        resolution = _request_radar_resolution(request, sort_algorithm)
+    except UnknownAlgorithmError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": exc.code, "family": exc.family, "value": exc.value},
+        ) from exc
     repository = core_repository()
     if not repository.exists():
         raise HTTPException(status_code=503, detail={"code": "data_not_initialized"})
@@ -35,7 +143,7 @@ def radar_current(
     if not scan_date:
         scan_date = repository.latest_bar_date()
     if not scan_date:
-        return {"scan_date": None, "events": [], "note": "レーダー未実行"}
+        return {"scan_date": None, "events": [], "note": "レーダー未実行", **resolution.as_public_dict()}
     state_filter = _csv_filter(states, ALL_STATES)
     signal_filter = _csv_filter(signals, ALL_SIGNAL_TYPES)
     events = repository.radar_events_scanned_on(
@@ -43,8 +151,9 @@ def radar_current(
         states=state_filter,
         signal_types=signal_filter,
         min_priority=min_priority,
-        limit=limit,
+        limit=None,
     )
+    events = repository.overlay_t1_evaluations(events)
     # 空売り行動は **重ねるだけ**。alert_priority だけを有界に動かし、
     # base_quality / breakout_confirmation / intrinsic_strength には触れない。
     snapshots = _short_behavior_map(repository, [e["canonical_code"] for e in events])
@@ -62,10 +171,47 @@ def radar_current(
                 exclude_flags=banned, min_confidence=min_short_confidence,
             )
         ]
+    t1_view = None
+    cursor_stale = False
+    restart_required = False
+    if resolution.effective == T1_ALGORITHM:
+        views = apply_t1_stable_boost(views)
+        t1_view = t1_view_token(scan_date, resolution.effective, views)
+        if cursor and cursor != t1_view:
+            cursor_stale = True
+            restart_required = True
+            offset = 0
+    page = views[offset: offset + limit]
+    etag = _radar_content_etag(
+        scan_date=scan_date,
+        resolution=resolution,
+        states=states,
+        signals=signals,
+        min_priority=min_priority,
+        short_states=short_states,
+        short_flags=short_flags,
+        exclude_short_flags=exclude_short_flags,
+        min_short_confidence=min_short_confidence,
+        limit=limit,
+        offset=offset,
+        matched_count=len(views),
+        t1_view=t1_view,
+        cursor_stale=cursor_stale,
+        page=page,
+    )
+    if _maybe_304(request, response, etag):
+        return {}
     return {
         "scan_date": scan_date,
         "granularity": "daily",
-        "events": views,
+        "events": page,
+        "matched_count": len(views),
+        "offset": offset,
+        "limit": limit,
+        "t1_view": t1_view,
+        "cursor_stale": cursor_stale,
+        "restart_required": restart_required,
+        **resolution.as_public_dict(),
     }
 
 
@@ -96,6 +242,7 @@ def radar_event(event_id: str) -> dict:
     event = repository.radar_event(event_id)
     if event is None:
         raise HTTPException(status_code=404, detail={"code": "unknown_event"})
+    event = repository.overlay_t1_evaluations([event])[0]
     return _event_view(repository, event, include_transitions=True)
 
 
@@ -105,7 +252,9 @@ def radar_for_security(code: str) -> dict:
     if canonical is None:
         raise HTTPException(status_code=422, detail={"code": "invalid_code_format"})
     repository = core_repository()
-    events = repository.radar_events_for_code(canonical, limit=40)
+    events = repository.overlay_t1_evaluations(
+        repository.radar_events_for_code(canonical, limit=40)
+    )
     return {
         "canonical_code": canonical,
         "display_code": display_code(canonical),
@@ -142,6 +291,8 @@ def _event_view(repository, event: dict, *, include_transitions: bool = False) -
         "scores": event.get("scores") or {},
         "snapshot": (event.get("features") or {}).get("snapshot") or {},
         "structure": (event.get("features") or {}).get("structure") or None,
+        "t1_anchor": event.get("t1_anchor") or (event.get("features") or {}).get("t1_anchor"),
+        "t1_priority": event.get("t1_priority") or (event.get("features") or {}).get("t1_priority"),
     }
     if include_transitions:
         view["transitions"] = event.get("transitions") or []

@@ -124,6 +124,8 @@ export default function ResultTable({
                     isOpen && 'bg-paper-2',
                   )}
                   aria-expanded={isOpen}
+                  data-testid={index === 0 ? 'screener-first-row' : undefined}
+                  data-canonical-code={row.canonical_code}
                 >
                   <td className="px-3 py-2 font-mono text-caption text-ink-400 tnum">{startIndex + index + 1}</td>
                   <td className="px-3 py-2">

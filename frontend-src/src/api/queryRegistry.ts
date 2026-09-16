@@ -47,12 +47,38 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const QUERY_CONFIG: Record<string, QueryConfig> = {
   '/market/overview': { ttlMs: 120_000, persist: true, maxRestoreAgeMs: 3 * DAY_MS },
   '/radar/current': { ttlMs: 120_000, persist: true, maxRestoreAgeMs: 3 * DAY_MS },
+  '/strength/scan': { ttlMs: 120_000, persist: true, maxRestoreAgeMs: 3 * DAY_MS },
+  '/strength/profiles': { ttlMs: 300_000, persist: true, maxRestoreAgeMs: 7 * DAY_MS },
+  '/strength/market': { ttlMs: 120_000, persist: true, maxRestoreAgeMs: 3 * DAY_MS },
   '/earnings/calendar': { ttlMs: 300_000, persist: true, maxRestoreAgeMs: 7 * DAY_MS },
   '/earnings/recent': { ttlMs: 300_000, persist: true, maxRestoreAgeMs: 7 * DAY_MS },
   '/data-status': { ttlMs: 60_000 },
   '/settings': { ttlMs: 300_000 },
   '/worker/status': { ttlMs: 15_000 },
 };
+
+function pathNameOf(path: string): string {
+  const queryAt = path.indexOf('?');
+  return queryAt === -1 ? path : path.slice(0, queryAt);
+}
+
+export function normalizeQueryPath(path: string): string {
+  const queryAt = path.indexOf('?');
+  if (queryAt === -1) return path;
+  const pathname = path.slice(0, queryAt);
+  const params = new URLSearchParams(path.slice(queryAt + 1));
+  const keys = [...new Set(params.keys())].sort();
+  const sorted = new URLSearchParams();
+  for (const key of keys) {
+    for (const value of params.getAll(key)) sorted.append(key, value);
+  }
+  const query = sorted.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
+
+function pathMatchesPrefix(path: string, prefix: string): boolean {
+  return path === prefix || path.startsWith(`${prefix}?`) || path.startsWith(`${prefix}/`);
+}
 
 interface Entry {
   inFlight: Promise<unknown> | null;
@@ -105,7 +131,7 @@ function entryFor(path: string): Entry {
 }
 
 export function queryConfigFor(path: string): QueryConfig | null {
-  return QUERY_CONFIG[path] ?? null;
+  return QUERY_CONFIG[pathNameOf(path)] ?? null;
 }
 
 /** useAccess 在身份确定/变化时调用;持久层记录按 principal 校验。 */
@@ -176,19 +202,20 @@ async function fetchInto(path: string, entry: Entry, config: QueryConfig): Promi
  * 读取一个白名单路径。非白名单路径请继续用各自的数据层(marketGet 等)。
  */
 export function registryGet<T>(path: string): Promise<T> {
-  const config = QUERY_CONFIG[path];
+  const identity = normalizeQueryPath(path);
+  const config = queryConfigFor(identity);
   if (!config) {
     return requestRaw(path, { method: 'GET' }).then(
       (res) => res.json() as Promise<T>,
     );
   }
-  const entry = entryFor(path);
+  const entry = entryFor(identity);
   const now = Date.now();
   if (entry.value !== undefined && now - entry.fetchedAt < config.ttlMs) {
     return Promise.resolve(entry.value as T);
   }
   if (entry.inFlight) return entry.inFlight as Promise<T>;
-  const request = fetchInto(path, entry, config).finally(() => {
+  const request = fetchInto(identity, entry, config).finally(() => {
     if (entry.inFlight === request) entry.inFlight = null;
   });
   entry.inFlight = request;
@@ -201,13 +228,14 @@ export function registryGet<T>(path: string): Promise<T> {
  * 发条件请求确认,304 则零正文)。
  */
 export async function restorePersistedQuery<T>(path: string): Promise<T | null> {
-  const config = QUERY_CONFIG[path];
+  const identity = normalizeQueryPath(path);
+  const config = queryConfigFor(identity);
   if (!config?.persist) return null;
-  const entry = entryFor(path);
+  const entry = entryFor(identity);
   if (entry.value !== undefined) return entry.value as T;
   if (entry.restored) return null;
   entry.restored = true;
-  const record = await readPersisted(path);
+  const record = await readPersisted(identity);
   if (!record || record.principal !== principalKey) return null;
   if (record.appCommit && (!knownAppCommit || record.appCommit !== knownAppCommit)) {
     // Fail closed: a record stamped with a build we can't confirm as current
@@ -217,7 +245,7 @@ export async function restorePersistedQuery<T>(path: string): Promise<T | null> 
   }
   if (!persistedRecordWithinAge(config, record, Date.now())) {
     // 超龄记录直接删掉:下次冷启动不再反复读到注定不可用的数据。
-    void deletePersisted(path);
+    void deletePersisted(identity);
     return null;
   }
   if (entry.value !== undefined) return entry.value as T;
@@ -239,7 +267,7 @@ export function invalidateQueryPaths(
   options?: { reload?: boolean },
 ): void {
   for (const [path, entry] of entries) {
-    if (prefixes.some((prefix) => path === prefix || path.startsWith(prefix))) {
+    if (prefixes.some((prefix) => pathMatchesPrefix(path, prefix))) {
       entry.generation += 1;
       entry.value = undefined;
       entry.etag = null;

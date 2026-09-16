@@ -6,8 +6,10 @@ sync for the same date set must be a no-op apart from ``ingested_at``.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Iterable, Iterator, Mapping, Sequence
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -206,6 +208,42 @@ class CoreRepository(SQLiteRepository):
                 (start_date, end_date, *divisions),
             ).fetchall()
         return [row[0] for row in rows]
+
+    def prior_trading_sessions(self, before_date: str, count: int) -> list[str] | None:
+        """Exactly ``count`` equity sessions strictly before ``before_date``.
+
+        Returns ``None`` when the calendar cannot prove a complete window
+        (missing rows or fewer than ``count`` known sessions). Callers must
+        not pad with earlier unofficial days.
+        """
+
+        if count <= 0:
+            return []
+        divisions = tuple(sorted(EQUITY_TRADING_DIVISIONS))
+        with self.read() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT calendar_date FROM trading_calendar
+                WHERE calendar_date < ?
+                  AND holiday_division IN ({', '.join('?' for _ in divisions)})
+                ORDER BY calendar_date DESC LIMIT ?
+                """,
+                (before_date, *divisions, int(count)),
+            ).fetchall()
+            if len(rows) != count:
+                return None
+            oldest = rows[-1][0]
+            present = connection.execute(
+                "SELECT COUNT(*) FROM trading_calendar WHERE calendar_date >= ? AND calendar_date < ?",
+                (oldest, before_date),
+            ).fetchone()[0]
+            span_days = (
+                date.fromisoformat(before_date) - date.fromisoformat(oldest)
+            ).days
+            # A hole in the calendar file (no row at all) is unknown, not a holiday.
+            if int(present) < span_days:
+                return None
+        return [row[0] for row in reversed(rows)]
 
     def latest_trading_day(self, on_or_before: str) -> str | None:
         divisions = tuple(sorted(EQUITY_TRADING_DIVISIONS))
@@ -1288,7 +1326,7 @@ class CoreRepository(SQLiteRepository):
     def radar_events_scanned_on(
         self, trade_date: str, *, states: Sequence[str] | None = None,
         signal_types: Sequence[str] | None = None, min_priority: float | None = None,
-        limit: int = 200,
+        limit: int | None = 200,
     ) -> list[dict[str, Any]]:
         clauses = ["last_scanned_date = ?"]
         params: list[Any] = [trade_date]
@@ -1301,13 +1339,15 @@ class CoreRepository(SQLiteRepository):
         if min_priority is not None:
             clauses.append("alert_priority >= ?")
             params.append(float(min_priority))
-        params.append(int(limit))
+        sql = (
+            f"SELECT * FROM radar_events WHERE {' AND '.join(clauses)} "
+            "ORDER BY alert_priority IS NULL, alert_priority DESC, event_id"
+        )
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(int(limit))
         with self.read() as connection:
-            rows = connection.execute(
-                f"SELECT * FROM radar_events WHERE {' AND '.join(clauses)} "
-                "ORDER BY alert_priority IS NULL, alert_priority DESC, event_id LIMIT ?",
-                params,
-            ).fetchall()
+            rows = connection.execute(sql, params).fetchall()
         return [self._radar_row(row) for row in rows]
 
     def radar_event(self, event_id: str) -> dict[str, Any] | None:
@@ -1710,6 +1750,362 @@ class CoreRepository(SQLiteRepository):
         except ValueError:
             item["checkpoint"] = {}
         return item
+
+    # ------------------------------------------------------------------
+    # T1 sidecar (worker writes; API overlays read-only)
+    # ------------------------------------------------------------------
+
+    T1_RETRY_MAX_ATTEMPTS = 8
+
+    def _t1_payloads_locked(self, connection, event_ids: Sequence[str]) -> dict[str, dict[str, Any]]:
+        wanted = [event_id for event_id in event_ids if event_id]
+        if not wanted:
+            return {}
+        placeholders = ", ".join("?" for _ in wanted)
+        rows = connection.execute(
+            f"""
+            SELECT c.event_id, e.payload_json
+            FROM radar_t1_current c
+            JOIN radar_t1_evaluations e
+              ON e.event_id = c.event_id AND e.eval_version = c.eval_version
+            WHERE c.event_id IN ({placeholders})
+            """,
+            wanted,
+        ).fetchall()
+        result: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            try:
+                payload = json.loads(row["payload_json"] or "{}")
+            except ValueError:
+                continue
+            if isinstance(payload, dict):
+                result[str(row["event_id"])] = payload
+        return result
+
+    def _upsert_t1_locked(self, connection, event_id: str, payload: Mapping[str, Any]) -> None:
+        from app.services.radar.t1_priority import T1_SETTLED_STATUSES, t1_identity_complete
+
+        published_at = utc_now_iso()
+        identity = str(payload.get("identity_hash") or "")
+        status = str(payload.get("status") or "")
+        computed_at = str(payload.get("computed_at") or published_at)
+        known_at = payload.get("known_at")
+        first_known = payload.get("first_known_at") or known_at
+        complete = bool(t1_identity_complete(payload) and status in T1_SETTLED_STATUSES)
+        current = connection.execute(
+            "SELECT eval_version, identity_hash, status, first_known_at, published_at "
+            "FROM radar_t1_current WHERE event_id=?",
+            (event_id,),
+        ).fetchone()
+        current_settled = (
+            current is not None and str(current["status"] or "") in T1_SETTLED_STATUSES
+        )
+        if current_settled and not complete:
+            stored_row = connection.execute(
+                "SELECT payload_json FROM radar_t1_evaluations WHERE event_id=? AND eval_version=?",
+                (event_id, int(current["eval_version"])),
+            ).fetchone()
+            stored = {}
+            if stored_row is not None:
+                try:
+                    stored = json.loads(stored_row["payload_json"] or "{}")
+                except ValueError:
+                    stored = {}
+            if isinstance(stored, dict):
+                stored = dict(stored)
+                stored["latest_attempt"] = {
+                    "status": status,
+                    "reason": payload.get("reason"),
+                    "computed_at": computed_at,
+                    "identity_complete": False,
+                }
+                connection.execute(
+                    "UPDATE radar_t1_evaluations SET payload_json=? WHERE event_id=? AND eval_version=?",
+                    (json.dumps(stored, ensure_ascii=False, sort_keys=True), event_id, int(current["eval_version"])),
+                )
+            return
+        if current is not None and complete and identity and current["identity_hash"] == identity:
+            stored_row = connection.execute(
+                "SELECT payload_json FROM radar_t1_evaluations WHERE event_id=? AND eval_version=?",
+                (event_id, int(current["eval_version"])),
+            ).fetchone()
+            stored = {}
+            if stored_row is not None:
+                try:
+                    stored = json.loads(stored_row["payload_json"] or "{}")
+                except ValueError:
+                    stored = {}
+            if isinstance(stored, dict):
+                stored = dict(stored)
+                stored["computed_at"] = computed_at
+                stored.pop("latest_attempt", None)
+                connection.execute(
+                    "UPDATE radar_t1_evaluations SET computed_at=?, payload_json=? "
+                    "WHERE event_id=? AND eval_version=?",
+                    (
+                        computed_at,
+                        json.dumps(stored, ensure_ascii=False, sort_keys=True),
+                        event_id,
+                        int(current["eval_version"]),
+                    ),
+                )
+            return
+        version = int(current["eval_version"]) + 1 if current is not None else 1
+        if not identity:
+            identity = hashlib.sha256(
+                json.dumps({"event_id": event_id, "kind": "incomplete_attempt"}, sort_keys=True).encode("utf-8")
+            ).hexdigest()
+        body = dict(payload)
+        body["eval_version"] = version
+        body["identity_hash"] = identity
+        body["identity_complete"] = complete
+        body["first_known_at"] = first_known or (current["first_known_at"] if current is not None else None)
+        if current is not None:
+            body["first_known_at"] = current["first_known_at"] or body["first_known_at"]
+        connection.execute(
+            """
+            INSERT INTO radar_t1_evaluations(
+                event_id, eval_version, identity_hash, status, first_known_at,
+                known_at, computed_at, published_at, payload_json
+            ) VALUES(?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                event_id, version, identity, status, body.get("first_known_at"),
+                known_at, computed_at, published_at,
+                json.dumps(body, ensure_ascii=False, sort_keys=True),
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO radar_t1_current(
+                event_id, eval_version, identity_hash, status, first_known_at, published_at
+            ) VALUES(?,?,?,?,?,?)
+            ON CONFLICT(event_id) DO UPDATE SET
+                eval_version=excluded.eval_version,
+                identity_hash=excluded.identity_hash,
+                status=excluded.status,
+                first_known_at=COALESCE(radar_t1_current.first_known_at, excluded.first_known_at),
+                published_at=excluded.published_at
+            """,
+            (event_id, version, identity, status, body.get("first_known_at"), published_at),
+        )
+
+    def save_t1_anchors(self, events: Sequence[Mapping[str, Any]]) -> int:
+        """Insert-or-ignore first-publish T1 anchors. Resistance is never updated."""
+
+        written = 0
+        now = utc_now_iso()
+        with self.write() as connection:
+            for event in events:
+                event_id = str(event.get("event_id") or "")
+                features = event.get("features") if isinstance(event.get("features"), Mapping) else {}
+                anchor = event.get("t1_anchor")
+                if not isinstance(anchor, Mapping):
+                    anchor = features.get("t1_anchor") if isinstance(features, Mapping) else None
+                if not event_id or not isinstance(anchor, Mapping):
+                    continue
+                try:
+                    resistance = float(anchor.get("resistance_high"))
+                except (TypeError, ValueError):
+                    continue
+                if resistance != resistance or resistance <= 0:
+                    continue
+                connection.execute(
+                    """
+                    INSERT OR IGNORE INTO radar_t1_anchors(
+                        event_id, session_date, platform_id, resistance_high,
+                        data_convention, version, source, created_at
+                    ) VALUES(?,?,?,?,?,?,?,?)
+                    """,
+                    (
+                        event_id,
+                        str(anchor.get("session_date") or event.get("discovered_date") or ""),
+                        (str(anchor.get("platform_id") or "") or None),
+                        resistance,
+                        str(anchor.get("data_convention") or "jp_adj_ohlcv_v1"),
+                        int(anchor.get("version") or 1),
+                        str(anchor.get("source") or "first_publish"),
+                        now,
+                    ),
+                )
+                written += 1
+        return written
+
+    def overlay_t1_anchors(self, events: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+        result = [dict(event) for event in events]
+        event_ids = [str(item.get("event_id") or "") for item in result if item.get("event_id")]
+        if not event_ids:
+            return result
+        try:
+            placeholders = ", ".join("?" for _ in event_ids)
+            with self.read() as connection:
+                rows = connection.execute(
+                    f"SELECT * FROM radar_t1_anchors WHERE event_id IN ({placeholders})",
+                    event_ids,
+                ).fetchall()
+        except Exception:
+            return result
+        stored = {str(row["event_id"]): dict(row) for row in rows}
+        overlaid: list[dict[str, Any]] = []
+        for item in result:
+            event_id = str(item.get("event_id") or "")
+            features = dict(item.get("features") or {})
+            existing = item.get("t1_anchor") if isinstance(item.get("t1_anchor"), Mapping) else None
+            if existing is None:
+                existing = features.get("t1_anchor") if isinstance(features.get("t1_anchor"), Mapping) else None
+            if isinstance(existing, Mapping) and existing.get("resistance_high") is not None:
+                merged = dict(item)
+                features["t1_anchor"] = dict(existing)
+                merged["features"] = features
+                merged["t1_anchor"] = dict(existing)
+                overlaid.append(merged)
+                continue
+            row = stored.get(event_id)
+            if not row:
+                overlaid.append(item)
+                continue
+            anchor = {
+                "event_id": row.get("event_id"),
+                "session_date": row.get("session_date"),
+                "platform_id": row.get("platform_id"),
+                "resistance_high": row.get("resistance_high"),
+                "data_convention": row.get("data_convention"),
+                "version": row.get("version"),
+                "source": row.get("source"),
+            }
+            merged = dict(item)
+            features["t1_anchor"] = anchor
+            merged["features"] = features
+            merged["t1_anchor"] = anchor
+            overlaid.append(merged)
+        return overlaid
+
+    def persist_t1_evaluations(self, events: Sequence[Mapping[str, Any]]) -> int:
+        items = [dict(event) for event in events if isinstance(event, Mapping)]
+        if not items:
+            return 0
+        written = 0
+        with self.write() as connection:
+            for event in items:
+                event_id = str(event.get("event_id") or "")
+                features = event.get("features") if isinstance(event.get("features"), Mapping) else {}
+                payload = event.get("t1_priority")
+                if not isinstance(payload, Mapping):
+                    payload = features.get("t1_priority") if isinstance(features, Mapping) else None
+                if not event_id or not isinstance(payload, Mapping):
+                    continue
+                self._upsert_t1_locked(connection, event_id, payload)
+                written += 1
+        return written
+
+    def overlay_t1_evaluations(self, events: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+        result = self.overlay_t1_anchors(events)
+        if not result:
+            return result
+        event_ids = [str(item.get("event_id") or "") for item in result]
+        try:
+            with self.read() as connection:
+                payloads = self._t1_payloads_locked(connection, event_ids)
+        except Exception:
+            return result
+        if not payloads:
+            return result
+        overlaid: list[dict[str, Any]] = []
+        for item in result:
+            event_id = str(item.get("event_id") or "")
+            payload = payloads.get(event_id)
+            if not isinstance(payload, Mapping):
+                overlaid.append(item)
+                continue
+            merged = dict(item)
+            features = dict(merged.get("features") or {})
+            features["t1_priority"] = dict(payload)
+            merged["features"] = features
+            merged["t1_priority"] = dict(payload)
+            overlaid.append(merged)
+        return overlaid
+
+    def load_t1_retry_states(self, keys: Sequence[str]) -> dict[str, dict[str, Any]]:
+        wanted = [key for key in keys if key]
+        if not wanted:
+            return {}
+        placeholders = ", ".join("?" for _ in wanted)
+        with self.read() as connection:
+            rows = connection.execute(
+                f"SELECT * FROM radar_t1_retry WHERE retry_key IN ({placeholders})",
+                wanted,
+            ).fetchall()
+        result: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            item = dict(row)
+            item["exhausted"] = bool(item.get("exhausted"))
+            result[str(item["retry_key"])] = item
+        return result
+
+    def save_t1_retry_states(self, states: Sequence[Mapping[str, Any]]) -> None:
+        if not states:
+            return
+        now = utc_now_iso()
+        with self.write() as connection:
+            for state in states:
+                key = str(state.get("retry_key") or "")
+                if not key:
+                    continue
+                connection.execute(
+                    """
+                    INSERT INTO radar_t1_retry(
+                        retry_key, event_id, session_date, algorithm, attempt, max_attempts,
+                        next_eligible_at, exhausted, last_reason, updated_at
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?)
+                    ON CONFLICT(retry_key) DO UPDATE SET
+                        event_id=excluded.event_id,
+                        session_date=excluded.session_date,
+                        algorithm=excluded.algorithm,
+                        attempt=excluded.attempt,
+                        max_attempts=excluded.max_attempts,
+                        next_eligible_at=excluded.next_eligible_at,
+                        exhausted=excluded.exhausted,
+                        last_reason=excluded.last_reason,
+                        updated_at=excluded.updated_at
+                    """,
+                    (
+                        key,
+                        str(state.get("event_id") or ""),
+                        str(state.get("session_date") or ""),
+                        str(state.get("algorithm") or ""),
+                        int(state.get("attempt") or 0),
+                        int(state.get("max_attempts") or self.T1_RETRY_MAX_ATTEMPTS),
+                        state.get("next_eligible_at"),
+                        1 if state.get("exhausted") else 0,
+                        state.get("last_reason"),
+                        now,
+                    ),
+                )
+
+    def clear_t1_retry_states(self, keys: Sequence[str]) -> None:
+        wanted = [key for key in keys if key]
+        if not wanted:
+            return
+        placeholders = ", ".join("?" for _ in wanted)
+        with self.write() as connection:
+            connection.execute(
+                f"DELETE FROM radar_t1_retry WHERE retry_key IN ({placeholders})",
+                wanted,
+            )
+
+    def applicable_t1_events(self, *, scan_date: str | None = None) -> list[dict[str, Any]]:
+        clauses = ["signal_type = 'base_breakout'"]
+        params: list[Any] = []
+        if scan_date:
+            clauses.append("last_scanned_date = ?")
+            params.append(scan_date)
+        with self.read() as connection:
+            rows = connection.execute(
+                f"SELECT * FROM radar_events WHERE {' AND '.join(clauses)} "
+                "ORDER BY discovered_date DESC, alert_priority IS NULL, alert_priority DESC, event_id",
+                params,
+            ).fetchall()
+        return [self._radar_row(row) for row in rows]
 
 
 __all__ = ["CoreRepository"]

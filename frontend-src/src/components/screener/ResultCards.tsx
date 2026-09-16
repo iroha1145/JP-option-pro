@@ -72,6 +72,8 @@ export default function ResultCards({
             }}
             whileHover={{ y: -3, transition: { duration: 0.24, ease: 'easeOut' } }}
             className="card-surface overflow-hidden transition-shadow duration-240 ease-out hover:shadow-sh-2"
+            data-testid={index === 0 ? 'screener-first-row' : undefined}
+            data-canonical-code={row.canonical_code}
           >
             <button type="button" onClick={() => onToggle(row.canonical_code)} aria-expanded={isOpen} className="flex w-full flex-col p-4 text-left">
               <span className="flex items-center gap-2.5">

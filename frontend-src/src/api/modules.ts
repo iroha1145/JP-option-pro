@@ -1,7 +1,7 @@
 /** 领域 API 模块：registry 走共享注册表，其余直连。 */
 
-import { del, get, patch as patchVerb, post, toQuery } from './client.ts';
-import { registryGet } from './queryRegistry.ts';
+import { del, get, patch as patchVerb, post, put, toQuery, type RequestOptions } from './client.ts';
+import { invalidateQueryPaths, registryGet } from './queryRegistry.ts';
 import type {
   AccessStatus,
   ResearchReport,
@@ -36,6 +36,7 @@ import type {
   StockOverview,
   StrengthProfilesMeta,
   StrengthScanResponse,
+  ViewPreferencesResponse,
   WatchlistItem,
 } from './types.ts';
 
@@ -158,9 +159,17 @@ export const quotesApi = {
 };
 
 export const radarApi = {
-  current(params?: { states?: string; signals?: string; min_priority?: number; limit?: number }): Promise<RadarCurrent> {
+  current(params?: {
+    states?: string;
+    signals?: string;
+    min_priority?: number;
+    limit?: number;
+    offset?: number;
+    cursor?: string;
+    sort_algorithm?: string;
+  }): Promise<RadarCurrent> {
     const query = params ? toQuery(params) : '';
-    return query ? get(`/radar/current?${query}`) : registryGet('/radar/current');
+    return query ? registryGet(`/radar/current?${query}`) : registryGet('/radar/current');
   },
   event(eventId: string): Promise<RadarEvent> {
     return get(`/radar/events/${encodeURIComponent(eventId)}`);
@@ -277,17 +286,34 @@ export interface StrengthScanParams {
   min_avg_turnover?: number;
   tier?: string;
   min_score?: number;
+  ranking_algorithm?: string;
 }
 
 export const strengthApi = {
   scan(params: StrengthScanParams = {}, options?: { cache?: RequestCache }): Promise<StrengthScanResponse> {
-    return get(`/strength/scan?${toQuery({ ...params })}`, options);
+    const path = `/strength/scan?${toQuery({ ...params })}`;
+    if (options?.cache === 'reload') {
+      invalidateQueryPaths(['/strength/scan'], { reload: true });
+    }
+    return registryGet<StrengthScanResponse>(path);
   },
   market(): Promise<{ trade_date: string; built_at: string; market_regime: MarketRegime; universe_count: number }> {
-    return get('/strength/market');
+    return registryGet('/strength/market');
   },
   profiles(): Promise<StrengthProfilesMeta> {
     return registryGet('/strength/profiles');
+  },
+};
+
+export const viewPreferencesApi = {
+  get(options?: RequestOptions): Promise<ViewPreferencesResponse> {
+    return get('/view-preferences', options);
+  },
+  put(
+    body: { screener_ranking_algorithm?: string; radar_sort_algorithm?: string },
+    options?: RequestOptions,
+  ) {
+    return put<ViewPreferencesResponse>('/view-preferences', body, options);
   },
 };
 
