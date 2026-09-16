@@ -14,7 +14,7 @@
 
 ## 结论
 
-在本环境对最终代码跑通了：全部现有 pytest + 新增矩阵 + Playwright 生产前端 E2E（断言首行/首事件名次变化）+ 隔离 uvicorn + backend+worker WAL。完整 Docker 镜像构建为 **NOT RUN / BLOCKED**（本机无 `docker`）。CI 工作流里的镜像门已去掉 `or True` / skip-as-pass，是硬失败。未做生产库写入，未清空数据，未自动合并，未标 ready。
+本地对 `d3050ec` 跑通全部 pytest + 新增矩阵 + Playwright + WAL。本机无 `docker`，镜像步本地 **NOT RUN**。远端 CI 在 `b5a8528` 终态 **success**：镜像硬门真实 `docker build` + 容器 `/ready` `/health` A0 scan，Playwright **2 passed**。未做生产库写入，未清空数据，未自动合并，未标 ready。
 
 工程接通 ≠ 已证明日股收益率提高。本报告不包含收益率回测。
 
@@ -47,8 +47,8 @@
 | 不改自动画线与标注定位 | 满足 | 未改 `chart-drawings`；现有 chart node gates 未删 |
 | 真实生产入口测试 | 满足 | 算法 → CoreRepository/SQLite → WorkerSupervisor → FastAPI → 生产 `frontend/` Playwright |
 | supervisor 外层取消（真实挂起，非抛 TimeoutError） | 满足 | `test_supervisor_wait_for_cancels_hanging_fetch_and_keeps_eight_budget`：`Event.wait()` + `wait_for` |
-| 现有测试 + 新矩阵 + CI | 部分 | 本地 768 passed（含 Playwright）；Docker 镜像 **BLOCKED**（无 docker）；CI yaml 镜像门为硬失败 |
-| 交付 PR / 迁移说明 / 结果对应 HEAD | 部分 | PR #27 已存在。本环境 `ManagePullRequest` 因仓库改名为 `JP-option-pro` 无法改 PR 正文。分支已推到 `d3050ec`。 |
+| 现有测试 + 新矩阵 + CI | 满足 | 本地 `d3050ec`：768 passed。CI `b5a8528` run `35072667434`（push）与 `35072672737`（PR）：success。后端 766 passed；隔离 12 passed；Docker 镜像步 success；Playwright 2 passed |
+| 交付 PR / 迁移说明 / 结果对应 HEAD | 满足 | PR #27 draft；分支已推。本环境 `ManagePullRequest` 因仓库改名无法改 PR 正文。验收以本文 + CI run 为准。 |
 
 ## 本环境实测（最终代码 `d3050ec`）
 
@@ -118,11 +118,12 @@
 
 | 项 | 标记 | 原因 |
 |---|---|---|
-| 完整 production 镜像 `docker build` | **NOT RUN / BLOCKED** | 本环境无 `docker`。CI 步 `Production Docker image + isolated API` 是硬门 |
+| 完整 production 镜像（本机） | **NOT RUN / BLOCKED** | 本环境无 `docker` |
+| 完整 production 镜像（CI） | **passed** | run `35072667434` 步 `Production Docker image + isolated API`：`docker build -f backend/Dockerfile -t jp-option-pro-a0-t1:ci`，导出 `jp-option-pro-a0-t1:ci`，`docker run` 名为 `jp-a0-t1-api`，断言 A0 `effective_algorithm`。无 skip |
 | 生产 jp-core.db 实库迁移演练 | **NOT RUN** | 任务禁止清空/改生产数据 |
 | 日股收益率 / 回测 | **NOT RUN** | 不在工程验收范围 |
-| 用 ManagePullRequest 更新 PR 正文 | **BLOCKED** | 工具要求 URL 属于当前仓库；origin 仍是 `iroha1145/jp-option-pro`，源已迁到 `iroha1145/JP-option-pro`。未改用 `gh` 写操作 |
-| GitHub Actions 远端结果 | 以 GitHub 当时运行为准 | 本地已按同一套命令跑 |
+| 用 ManagePullRequest 更新 PR 正文 | **BLOCKED** | origin 仍是 `iroha1145/jp-option-pro`，源已迁到 `iroha1145/JP-option-pro`。未改用 `gh` 写操作 |
+| GitHub Actions | **success** | push `35072667434`、PR `35072672737`，HEAD `b5a8528`，2026-09-16T08:16Z 终态 |
 
 ## CI 接入
 
@@ -133,3 +134,5 @@
 - 隔离 uvicorn + hang 预算 + 按日 fetch + WAL
 - `docker build` + 容器内 `/ready` `/health` `/api/strength/scan?ranking_algorithm=a0`（无 skip-as-pass）
 - Playwright Chromium 安装与 `tests/test_a0_t1_browser.py`
+
+`b5a8528` 实测：Backend tests **766 passed / 53.48s**；Isolated A0/T1 **12 passed / 4.07s**；Docker 镜像步 **success**（约 14s，含 build+run+A0 curl）；Playwright **2 passed / 6.82s**。

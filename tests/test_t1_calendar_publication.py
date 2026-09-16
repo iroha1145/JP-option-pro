@@ -25,7 +25,8 @@ def test_lunch_and_holiday_are_not_us_half_days():
     lunch = jst(12, 0)
     assert session_daily_complete(SESSION, as_of=lunch) is False
     holiday = date(2026, 1, 1)
-    assert vendor_publish_ready(holiday, as_of=jst(18, 0, holiday)) is True or True
+    assert session_daily_complete(holiday, as_of=jst(13, 0, holiday)) is False
+    assert vendor_publish_ready(holiday, as_of=jst(18, 0, holiday)) is True
 
 
 def test_missing_calendar_is_unavailable_not_assumed_trading(tmp_path):
@@ -57,7 +58,8 @@ def test_publication_fields_stay_separate_from_query_time(tmp_path, monkeypatch)
     second = client.get("/api/strength/scan", params={"top": 5, "ranking_algorithm": "a0"}).json()
     assert first["publication_id"] == second["publication_id"]
     assert first["input_data_through"] == second["input_data_through"]
-    assert first["queried_at"] != second["queried_at"] or True
+    assert first["queried_at"]
+    assert second["queried_at"]
     assert first["built_at"] == second["built_at"]
     freshness = evaluate_freshness(
         stored_trade_date=first["trade_date"],
