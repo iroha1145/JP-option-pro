@@ -19,6 +19,9 @@ RUN groupadd --system app && useradd --system --gid app --home /tmp/optixjp-home
 COPY backend/app /app/app
 COPY config/personal.toml /app/config/personal.toml
 COPY frontend /app/frontend
+# The shared-account deployment runs with the existing data-volume UID.
+# Checkout umask must not make application files unreadable by that UID.
+RUN chmod -R a+rX /app/app /app/config /app/frontend
 # Include every lazy chunk in readiness checks, rather than only index.html.
 RUN python -c "from pathlib import Path; root=Path('/app/frontend'); (root/'.integrity-manifest').write_text('\n'.join(sorted(str(p.relative_to(root)) for p in root.rglob('*') if p.is_file() and p.name != '.integrity-manifest')) + '\n')"
 

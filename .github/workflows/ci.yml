@@ -98,6 +98,14 @@ jobs:
       - name: Frontend artifact byte gate
         run: diff -r frontend-src/dist frontend
 
+      - name: Container shared-account UID smoke
+        run: |
+          # Match a server checkout made with umask 077.
+          chmod -R go-rwx backend/app config frontend
+          docker build -f backend/Dockerfile -t optix-japan-ci .
+          docker run --rm --network none --read-only --user 100:101 optix-japan-ci \
+            python -c "from app.main import _frontend_integrity; from app.repositories.intraday_store import IntradayStore; result = _frontend_integrity(); assert result['ready'], result; print('shared-account UID can import the backend and read all frontend assets')"
+
       - name: US-market residue gate
         run: |
           ! grep -rniE "America/New_York|premarket|postmarket|implied.?volatilit|option.?chain|\bSPY\b|\bQQQ\b" \
