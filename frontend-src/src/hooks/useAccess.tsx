@@ -47,6 +47,7 @@ export function AccessProvider({ children }: { children: ReactNode }) {
   const [identityUnavailable, setIdentityUnavailable] = useState(false);
   const generationRef = useRef(0);
   const lastPrincipalRef = useRef<string>('unknown');
+  const refreshInFlightRef = useRef<Promise<void> | null>(null);
 
   const applyStatus = useCallback((next: AccessStatus | null) => {
     if (next) {
@@ -66,6 +67,7 @@ export function AccessProvider({ children }: { children: ReactNode }) {
 
   const invalidateIdentity = useCallback(() => {
     ++generationRef.current;
+    refreshInFlightRef.current = null;
     lastPrincipalRef.current = 'unknown';
     setQueryPrincipal('unknown');
     void dropQueryRegistry();
@@ -73,17 +75,24 @@ export function AccessProvider({ children }: { children: ReactNode }) {
     setIdentityUnavailable(false);
   }, []);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback((): Promise<void> => {
+    if (refreshInFlightRef.current) return refreshInFlightRef.current;
     const generation = ++generationRef.current;
-    try {
-      const next = await accessApi.status();
-      if (generation === generationRef.current) {
-        applyStatus(next);
-        setIdentityUnavailable(false);
+    const pending = (async () => {
+      try {
+        const next = await accessApi.status();
+        if (generation === generationRef.current) {
+          applyStatus(next);
+          setIdentityUnavailable(false);
+        }
+      } catch {
+        if (generation === generationRef.current) setIdentityUnavailable(true);
+      } finally {
+        if (generation === generationRef.current) refreshInFlightRef.current = null;
       }
-    } catch {
-      if (generation === generationRef.current) setIdentityUnavailable(true);
-    }
+    })();
+    refreshInFlightRef.current = pending;
+    return pending;
   }, [applyStatus]);
 
   useEffect(() => {
@@ -91,7 +100,15 @@ export function AccessProvider({ children }: { children: ReactNode }) {
     const onVisible = () => {
       if (document.visibilityState === 'visible') void refresh();
     };
-    const onPrincipalInvalid = () => { invalidateIdentity(); void refresh(); };
+    const onPrincipalInvalid = () => {
+      // A protected endpoint rejecting a visitor does not change their identity.
+      // The first genuine expiry synchronously marks it unknown, coalescing
+      // concurrent 401s before another render can mount or clear anything.
+      const principal = lastPrincipalRef.current;
+      if (principal !== 'owner' && !principal.startsWith('account:')) return;
+      invalidateIdentity();
+      void refresh();
+    };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener(PRINCIPAL_INVALID_EVENT, onPrincipalInvalid);
     const timer = window.setInterval(() => void refresh(), 60_000);

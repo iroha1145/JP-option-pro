@@ -189,7 +189,7 @@ def _sector_forward_median(
 
 
 def _margin_rows_between(repository: CoreRepository, start: str, end: str) -> list[dict[str, Any]]:
-    """信用残高（週次）を期間で一括して読む。日ごとに全表を走査しない。"""
+    """信用残高（2026-09-25から日次、それ以前は週次）を期間で一括して読む。日ごとに全表を走査しない。"""
 
     with repository.read() as connection:
         rows = connection.execute(
@@ -202,11 +202,11 @@ def _margin_rows_between(repository: CoreRepository, start: str, end: str) -> li
 
 
 def _margin_map_as_of(rows: Sequence[Mapping[str, Any]], day: str) -> dict[str, dict[str, Any]]:
-    """その評価日に **公開済み** の直近 2 週分から、水準と変化を組む。
+    """従来の可用日近似に従い、直近2回の申込分から水準と変化を組む。
 
-    週次データは申込日の 2 営業日後 16:30 に出る（docs/jquants-v2-notes.md）。
-    ここでは申込日 <= 評価日 − 2 暦日 で近似する —— 当日の残高を当日に知って
-    いたことにはしない。
+    2026-09-25以降は日次・翌営業日公表、それ以前は週次。DBには実際の
+    PubDateを保存していないため、申込日 <= 評価日 − 2暦日という従来の
+    仮定を維持する。連休前後などの正確な公表時点を保証するものではない。
     """
 
     from datetime import date, timedelta
@@ -389,7 +389,7 @@ def replay(
             close_index = _CloseIndex(bars)
             sector_cache = {}
             peer_cache = {}
-            # 信用残高（週次）はチャンク範囲で一括読み。回放で読まないと
+            # 信用残高（日次と以前の週次履歴）はチャンク範囲で一括読み。回放で読まないと
             # crowded_margin が一度も立たず、信用拥挤という条件が未検証のまま残る。
             margin_rows = _margin_rows_between(
                 repository, _shift_calendar_days(chunk[0], -21), last,

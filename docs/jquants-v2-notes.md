@@ -25,7 +25,7 @@
 | 投资部门别 | `/equities/investor-types` | 周度 |
 | TOPIX 四本值 | `/indices/bars/daily/topix` | |
 | 指数四本值 | `/indices/bars/daily` | 部分指数仅收盘价（O/H/L 为 null） |
-| 信用取引周末残高 | `/markets/margin-interest` | 周度 |
+| 信用取引残高 | `/markets/margin-interest` | 2026-09-25申込分起日度；此前周度 |
 | 日々公表信用取引残高 | `/markets/margin-alert` | 日度（被公表/规制的个股） |
 | 业种别空卖比率 | `/markets/short-ratio` | 按 33 业种日度 |
 | 空卖残高报告 | `/markets/short-sale-report` | ≥0.5% 大额空头持仓报告 |
@@ -73,7 +73,7 @@
 
 ## 信用/空卖字段
 
-`/markets/margin-interest`（周度，申込日）: Date, Code, ShrtVol, LongVol, ShrtNegVol, LongNegVol, ShrtStdVol, LongStdVol, IssType(1 信用/2 貸借/3 其他)
+`/markets/margin-interest`：2026-09-25申込分起为日度，下一交易日发布，此前为周度。`Date`是申込日，`PubDate`是发布日期。当前同步在2026-09-28起使用`published_date`查询，之前使用`date`；回看最近14个自然日以补取迟到或修订记录。字段包括 Date, PubDate, Code, ShrtVol, LongVol, ShrtNegVol, LongNegVol, ShrtStdVol, LongStdVol, IssType(1 信用/2 貸借/3 其他)。数据库仍按申込日保存，历史回放延用申込日早于评估日2个自然日的旧近似；真实发布日期未保存，长假前后的发布时点不能严格复原。
 
 `/markets/margin-alert`（日々公表）: PubDate, AppDate, Code, ShrtOut, LongOut, SLRatio(取组比率), ShrtOutChg, LongOutChg, ShrtOutRatio, LongOutRatio, ShrtNegOut, ShrtStdOut, LongNegOut, LongStdOut, TSEMrgnRegCls(东证规制区分), PubReason(公表理由旗标组)；订正以同 AppDate 追加记录方式发布
 
@@ -101,7 +101,7 @@
 | investor-types | 每周第 4 营业日 ~18:00 |
 | EDINET 三表 | 平日 8:00–17:59 随时 |
 
-→ Worker 调度基线：**17:00 JST 日线批**、**18:30 JST 财务速报批**、**25:00(次日 01:00) JST 财务确报补扫**，每周二 17:30 信用残高、每周四 18:30 投资部门别。全部以交易日历为闸门。
+→ 原始 Worker 调度基线：**17:00 JST 日线批**、**18:30 JST 财务速报批**、**25:00(次日 01:00) JST 财务确报补扫**。信用残高已纳入每日收盘后同步；“每周二 17:30”是旧周度数据时期的设计。全部以交易日历为闸门；当前任务注册为准。
 
 ## 市场区分代码（Mkt）
 

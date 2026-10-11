@@ -4,6 +4,10 @@
  */
 
 export const DICT: Record<string, [string, string]> = {
+  '信用余额在2026-09-25起转为日度，此前为周度。历史回放沿用申込日早于评估日2个自然日的近似判断；未保存真实发布日期，长假前后不能保证严格复原发布时点。': ["Margin balances are daily from 2026-09-25; earlier history is weekly. Replay keeps the existing two-calendar-day availability estimate. Actual publication dates are not stored, so timing around long holidays cannot be reproduced exactly.", "信用残高は2026-09-25から日次、それ以前は週次。回放は申込日が評価日の2暦日前以前という従来の近似を継続。実際の公表日は未保存のため、連休前後の公表時点は厳密には再現できません。"],
+  '2026-09-25起为日度、下一交易日发布；此前为周度历史。': ["Daily from 2026-09-25, published on the next trading day; earlier history is weekly.", "2026-09-25から日次、翌営業日に公表。それ以前は週次履歴です。"],
+  '周度历史': ["Weekly history", "週次履歴"],
+  '日度': ["Daily", "日次"],
   '刷新空头监测': ["Refresh short monitor", "空売り監視を更新"],
   '尚未更新至 {date}': ["Not yet updated to {date}", "{date}までのデータは未取得です"],
   '最新交易日 {date} 暂无成交记录': ["No trades recorded for the latest trading day, {date}", "最新取引日 {date} の約定記録はありません"],
@@ -882,9 +886,9 @@ export const DICT: Record<string, [string, string]> = {
     'Applied as a penalty: the amount above 50 is multiplied by 0.25 and subtracted from the priority score.',
     'ペナルティ項として、50 を超えた分に ×0.25 を掛けて優先度から差し引きます。',
   ],
-  '信用倍率（信用买残 ÷ 卖残，周次数据）映射 2x~15x；倍率越高多头越拥挤。': [
-    'The margin ratio (margin longs ÷ shorts, weekly data) mapped over 2× to 15×; the higher the ratio, the more crowded the long side.',
-    '信用倍率（信用買い残 ÷ 売り残、週次データ）を 2 倍〜15 倍でマッピングします。倍率が高いほど買い方が混雑しています。',
+  '信用倍率（信用买残 ÷ 卖残）映射 2x~15x；倍率越高，多头越拥挤。2026-09-25起为日度，此前为周度历史。': [
+    'Margin longs ÷ shorts, mapped over 2× to 15×. A higher ratio means more crowded longs. Daily from 2026-09-25; earlier history is weekly.',
+    '信用買い残 ÷ 売り残を2倍〜15倍で評価。高いほど買い方が混雑しています。2026-09-25から日次、それ以前は週次の履歴です。',
   ],
   '作为惩罚项：超过 50 的部分 ×0.15 从优先级中扣除。': [
     'Applied as a penalty: the amount above 50 is multiplied by 0.15 and subtracted from the priority score.',

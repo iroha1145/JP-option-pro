@@ -284,7 +284,7 @@ def combined_visible_days_to_cover(
     margin_short_shares: float | None,
     adv20_shares: float | None,
 ) -> float | None:
-    """機関の可視分 + 信用売残（週次）を平常出来高で割った日数。
+    """機関の可視分 + 信用売残（2026-09-25から日次、以前は週次）を平常出来高で割った日数。
 
     信用売残は個人の空売り。機関の可視分だけより「回補されうる量」に近いが、
     それでも 0.5% 未満の機関建玉と貸株市場の残りは見えない —— 名前に

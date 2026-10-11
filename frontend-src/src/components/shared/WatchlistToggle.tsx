@@ -17,7 +17,10 @@ export default function WatchlistToggle({
   const { canManageWatchlist } = useAccess();
   const location = useLocation();
   const toast = useToast();
-  const query = usePolling(() => watchlistApi.list(), 120_000, [canonicalCode]);
+  const query = usePolling(
+    () => canManageWatchlist ? watchlistApi.list() : Promise.resolve<Awaited<ReturnType<typeof watchlistApi.list>>>({ items: [] }),
+    120_000, [canonicalCode, canManageWatchlist],
+  );
   const anonymous =
     query.error instanceof ApiError && query.error.bizCode === 'account_login_required';
   const selected =

@@ -325,7 +325,7 @@ def _events_by_code(
 
 
 def _margin_map(repository: CoreRepository) -> dict[str, dict[str, Any]]:
-    """直近 2 週分の信用残から、水準と変化を取る（週次データ）。"""
+    """直近2回の申込分から水準と変化を取る（2026-09-25から日次、以前は週次）。"""
 
     with repository.read() as connection:
         latest = connection.execute("SELECT MAX(application_date) FROM margin_interest").fetchone()[0]

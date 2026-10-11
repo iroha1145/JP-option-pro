@@ -53,6 +53,8 @@ ALL_DATASETS = (
 # Incremental catch-up guard: a fresh deployment must run the backfill lane,
 # not iterate thousands of per-date requests.
 MAX_INCREMENTAL_DAYS = 45
+MARGIN_PUBLICATION_START = "2026-09-28"
+MARGIN_PUBLICATION_LOOKBACK_DAYS = 14
 _BULK_BACKFILL_ENDPOINTS = {
     DATASET_DAILY_PRICES: "/equities/bars/daily",
     DATASET_INDEX_PRICES: "/indices/bars/daily",
@@ -358,7 +360,7 @@ class JQuantsSyncEngine:
         writer: Callable[[Iterable[Mapping[str, Any]]], int],
         target_date: str,
     ) -> SyncResult:
-        """Shared loop for margin-alert / margin-interest / short-ratio style
+        """Shared loop for margin-alert / short-ratio style
         endpoints where ``date`` walks calendar dates and empty days are
         cheap no-ops."""
 
@@ -389,16 +391,53 @@ class JQuantsSyncEngine:
         return SyncResult(dataset=dataset, status="ok", rows=total, data_through=synced_through)
 
     def sync_margin_interest(self, target_date: str) -> SyncResult:
-        return self._run_dataset(
-            DATASET_MARGIN_INTEREST,
-            lambda: self._sync_calendar_dated(
-                DATASET_MARGIN_INTEREST,
-                "/markets/margin-interest",
-                mapping.map_margin_interest,
-                self._repository.upsert_margin_interest,
-                target_date,
-            ),
-        )
+        """Revisit recent publication dates instead of skipping late application dates.
+
+        Daily balances (application dates from 2026-09-25) are published on the
+        next business day. The older weekly history still uses application dates.
+        Query coverage and the actual stored data date are tracked separately.
+        """
+        written = 0
+
+        def work() -> SyncResult:
+            nonlocal written
+            actual = self._repository.refresh_margin_interest_sync_stats()
+            if not actual["rows_total"]:
+                return SyncResult(dataset=DATASET_MARGIN_INTEREST, status="backfill_required", rows=0,
+                                  rows_total=0, data_through=None)
+            checkpoint = self._checkpoint(DATASET_MARGIN_INTEREST)
+            last_checked = checkpoint.get("last_checked_query_date") or checkpoint.get("last_checked_publication_date")
+            start = add_days(target_date, 1 - MARGIN_PUBLICATION_LOOKBACK_DAYS)
+            if last_checked and last_checked < start:
+                start = add_days(last_checked, 1 - MARGIN_PUBLICATION_LOOKBACK_DAYS)
+            elif not last_checked and actual["data_through"] < start:
+                start = add_days(actual["data_through"], 1)
+            end = min(target_date, add_days(start, MAX_INCREMENTAL_DAYS - 1))
+            day = start
+            while day <= end:
+                params = {"published_date": day} if day >= MARGIN_PUBLICATION_START else {"date": day}
+                rows = [mapped for row in self._client.fetch_rows("/markets/margin-interest", params)
+                        if (mapped := mapping.map_margin_interest(row))]
+                written += self._repository.upsert_margin_interest(rows)
+                day = add_days(day, 1)
+            actual = self._repository.refresh_margin_interest_sync_stats()
+            checked = {"last_synced_date": actual["data_through"], "last_checked_query_date": end}
+            if end >= MARGIN_PUBLICATION_START:
+                checked["last_checked_publication_date"] = end
+            self._repository.record_sync_success(
+                DATASET_MARGIN_INTEREST, checkpoint=checked,
+                rows_total=actual["rows_total"], data_through=actual["data_through"],
+            )
+            return SyncResult(dataset=DATASET_MARGIN_INTEREST, status="ok", rows=written,
+                              **actual, query_from=start, query_through=end, caught_up=end == target_date)
+
+        result = self._run_dataset(DATASET_MARGIN_INTEREST, work)
+        if result.get("status") == "error":
+            # Earlier days remain committed. Updating facts must not clear the
+            # original provider error or change the last successful query date.
+            actual = self._repository.refresh_margin_interest_sync_stats()
+            result.update(rows=written, **actual)
+        return result
 
     def sync_margin_alerts(self, target_date: str) -> SyncResult:
         return self._run_dataset(

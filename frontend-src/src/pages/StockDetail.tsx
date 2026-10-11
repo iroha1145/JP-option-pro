@@ -1013,7 +1013,8 @@ function MarginPanel({ rows }: { rows: MarginInterestRow[] }) {
         <MiniStat label={t('信用倍率')} value={ratio !== null ? `${ratio.toFixed(2)}x` : '—'} />
       </dl>
       <p className="text-right text-micro text-ink-400">
-        {t('数据截至')} {fmtDate(latest.application_date)}（{t('週次')}）
+        {t('数据截至')} {fmtDate(latest.application_date)}（{latest.application_date >= '2026-09-25' ? t('日度') : t('周度历史')}）
+        <span className="mt-1 block">{t('2026-09-25起为日度、下一交易日发布；此前为周度历史。')}</span>
       </p>
     </div>
   );

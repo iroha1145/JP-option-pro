@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from app.domain.timeutil import add_days
 from app.providers.jquants.capabilities import CAPABILITIES, SUBSCRIPTION_PLAN
 from app.repositories.core import CoreRepository
 
@@ -22,7 +23,7 @@ _STALE_HOURS = {
     "topix_prices": 30,
     "financial_summary": 30,
     "earnings_calendar": 36,
-    "margin_interest": 9 * 24,
+    "margin_interest": 40,
     "margin_alerts": 40,
     "short_sale_ratio": 40,
     "reported_short_positions": 4 * 24,
@@ -42,7 +43,13 @@ def _hours_since(iso_timestamp: str | None) -> float | None:
 
 def data_status(repository: CoreRepository, *, jquants_configured: bool) -> dict[str, Any]:
     states = {state["dataset"]: state for state in repository.all_sync_states()}
-    intraday = intraday_addon_status(repository.latest_bar_date())
+    market_date = repository.latest_bar_date()
+    intraday = intraday_addon_status(market_date)
+    margin_actual = repository.margin_interest_summary()
+    expected_margin_date = (
+        repository.latest_trading_day(add_days(market_date, -1))
+        if market_date and market_date >= "2026-09-28" else None
+    )
     datasets = []
     for capability in CAPABILITIES:
         state = states.get(_dataset_key(capability.key))
@@ -88,6 +95,20 @@ def data_status(repository: CoreRepository, *, jquants_configured: bool) -> dict
             )
         elif capability.status == "enabled":
             entry["freshness"] = "never_synced"
+        if capability.key == "margin_interest":
+            entry.update(margin_actual)
+            if entry["last_error_code"]:
+                entry["freshness"] = "error"
+            elif not entry["data_through"]:
+                entry["freshness"] = "never_synced"
+            elif expected_margin_date:
+                # Daily balances are published on the next business day; the
+                # latest Friday quote does not require Friday balances on Sunday.
+                entry["freshness"] = "stale" if entry["data_through"] < expected_margin_date else "fresh"
+            else:
+                age = _hours_since(entry["last_success_at"])
+                threshold = 9 * 24 if entry["data_through"] < "2026-09-25" else _STALE_HOURS["margin_interest"]
+                entry["freshness"] = "unknown" if age is None else "stale" if age > threshold else "fresh"
         datasets.append(entry)
 
     return {
