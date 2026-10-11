@@ -361,16 +361,16 @@ function StateDistribution({
               <button
                 type="button"
                 onClick={() => onPickView(item.view)}
-                className="group flex w-full items-center gap-2 rounded-xs text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
+                className="group grid w-full grid-cols-[0.375rem_minmax(0,8rem)_minmax(2.5rem,1fr)_2rem] items-center gap-2 rounded-xs text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
               >
                 <span
                   className={cn('size-1.5 shrink-0 rounded-full', STATE_DOTS[item.state] ?? 'bg-ink-300')}
                   aria-hidden
                 />
-                <span className="w-16 shrink-0 truncate text-caption text-ink-500 group-hover:text-ink-800">
+                <span className="min-w-0 whitespace-normal break-words text-caption text-ink-500 group-hover:text-ink-800">
                   {t(STATE_LABELS[item.state] ?? item.state)}
                 </span>
-                <span className="strength-track relative h-1 flex-1 overflow-hidden rounded-pill">
+                <span className="strength-track relative h-1 min-w-10 overflow-hidden rounded-pill">
                   <span
                     className={cn('absolute inset-y-0 left-0 rounded-pill', STATE_DOTS[item.state] ?? 'bg-ink-300')}
                     style={{ width: `${Math.max(2, (count / max) * 100)}%` }}
@@ -854,12 +854,12 @@ function MiniScore({
   const number = value ?? null;
   const hint = shortScoreHint(label);
   return (
-    <span className="flex items-center gap-1.5">
-      <span className="flex w-[4.75rem] shrink-0 items-center gap-0.5 text-micro text-ink-500">
-        <span className="truncate">{t(label)}</span>
-        {hint && <InfoHint hint={hint} size={11} />}
+    <span className="grid grid-cols-[minmax(0,8rem)_minmax(2.5rem,1fr)_1.5rem] items-center gap-1.5">
+      <span className="flex min-w-0 items-center gap-1 text-micro text-ink-500">
+        <span className="min-w-0 whitespace-normal break-words">{t(label)}</span>
+        {hint && <InfoHint hint={hint} size={11} className="shrink-0" />}
       </span>
-      <span className="strength-track relative h-1 flex-1 overflow-hidden rounded-pill">
+      <span className="strength-track relative h-1 min-w-10 overflow-hidden rounded-pill">
         {number !== null && (
           <span
             className={cn(

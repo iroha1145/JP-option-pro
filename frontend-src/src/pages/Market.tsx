@@ -170,20 +170,22 @@ export default function Market() {
         title={t('日本市场')}
         description={t('本页为日线数据，收盘后更新')}
         meta={
-          <div className="flex items-center gap-3">
-            <SessionLED session={session} />
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-3 gap-y-2">
+            <SessionLED session={session} className="shrink-0 whitespace-nowrap" />
             {market.lastUpdatedAt && (
-              <span className="tnum text-caption text-ink-400">
+              <span className="shrink-0 whitespace-nowrap tnum text-caption text-ink-400">
                 {t('更新')} {fmtTimeHHMMSS(market.lastUpdatedAt)}
               </span>
             )}
-            <DataThrough date={market.data?.data_through} />
-            <ForceRefreshButton
-              onClick={onRefreshMarket}
-              spinning={refreshingMarket}
-              label={t('刷新市场')}
-              title={t('刷新市场')}
-            />
+            <DataThrough date={market.data?.data_through} className="min-w-0 max-w-full [&_[data-soft-badge]]:whitespace-normal" />
+            <span className="shrink-0 whitespace-nowrap">
+              <ForceRefreshButton
+                onClick={onRefreshMarket}
+                spinning={refreshingMarket}
+                label={t('刷新市场')}
+                title={t('刷新市场')}
+              />
+            </span>
           </div>
         }
       />
@@ -418,12 +420,12 @@ function IndexTrendPanel({
 
   return (
     <section className="card-surface flex flex-col overflow-hidden p-0 lg:col-span-2">
-      <header className="flex items-center justify-between gap-3 px-4 pt-3">
+      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 pt-3">
         <div className="min-w-0">
 
           <h2 className="mt-0.5 text-h3 text-ink-900">{t('趋势快照')}</h2>
         </div>
-        <span className="rounded-full bg-paper-2 px-2.5 py-0.5 text-micro text-ink-500">{t('近半年')}</span>
+        <span className="shrink-0 whitespace-nowrap rounded-full bg-paper-2 px-2.5 py-0.5 text-micro text-ink-500">{t('近半年')}</span>
       </header>
       <div className="mt-3 border-t border-line px-4 pt-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
