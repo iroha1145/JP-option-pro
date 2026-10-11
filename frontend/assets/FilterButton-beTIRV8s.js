@@ -1,0 +1,1 @@
+import{j as s}from"./react-runtime-C6sZTaV_.js";import{c as a}from"./PointerTooltip-Y9lR7ZzO.js";function i({active:t,className:o,type:r="button",...n}){return s.jsx("button",{...n,type:r,"aria-pressed":t,className:a("control-button",o)})}export{i as F};

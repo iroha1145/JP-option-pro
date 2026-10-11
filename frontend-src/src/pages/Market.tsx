@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { AnimatePresence, motion } from 'framer-motion';
 import { marketApi, stocksApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { remoteState } from '@/hooks/remoteState';
@@ -10,14 +9,13 @@ import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
 import EmptyRetryButton from '@/components/shared/EmptyRetryButton';
 import ChangeBadge from '@/components/shared/ChangeBadge';
-import DataTable, { type Column } from '@/components/shared/DataTable';
 import Segmented from '@/components/shared/Segmented';
 import { SkeletonCard, SkeletonReveal } from '@/components/shared/Skeleton';
 import IndexTrendChart from '@/components/charts/IndexTrendChart';
 import { useChartCursor } from '@/components/charts/useChartCursor';
 import Sparkline from '@/components/charts/Sparkline';
-import { CodeCell, DataThrough } from '@/components/domain';
-import HeatMatrix, { HeatMatrixSkeleton, metricValue, type HeatMetric } from '@/components/sectors/HeatMatrix';
+import { DataThrough } from '@/components/domain';
+import HeatMatrix, { HeatMatrixSkeleton, rankByReturn, type HeatMetric } from '@/components/sectors/HeatMatrix';
 import SectorMembersPanel from '@/components/sectors/SectorMembersPanel';
 import StaleStrip from '@/components/shared/StaleStrip';
 import SessionLED from '@/components/shared/SessionLED';
@@ -33,7 +31,7 @@ import { t } from '@/i18n/core';
 import { quoteSourceLabel } from '@/lib/quoteSource';
 import { fmtPct, fmtPrice, fmtTimeHHMMSS, fmtTimeJst, fmtYenCompact } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import type { IntradayQuote, SectorMemberSort, SectorStrength } from '@/api/types';
+import type { IntradayQuote, SectorMemberSort } from '@/api/types';
 
 /** 与后端 `HOME_INDEX_CODES` 对齐：首页指数卡 / 顶部 tape 写入的 `?index=`。 */
 const HOME_INDEX_CODES = new Set(['0000', '0500', '0501', '0502', '0028', '002D']);
@@ -77,7 +75,6 @@ export default function Market() {
   const state = remoteState(market, (d) => d.indices.length === 0);
 
   const [heatMetric, setHeatMetric] = useState<HeatMetric>('r1');
-  const [sectorView, setSectorView] = useState<'heat' | 'list'>('heat');
   const [selectedSector, setSelectedSector] = useState<string | null>(null);
   const [memberSort, setMemberSort] = useState<SectorMemberSort>('turnover');
   const [tileSource, setTileSource] = useState<'official' | 'intraday'>('intraday');
@@ -90,11 +87,11 @@ export default function Market() {
     [tileSource],
   );
 
-  /* 砖块按当前口径排序：热力图第一眼要看到最强/最弱聚在两端。
+  /* 按所选中位收益排名，缺值最后、同值维持原顺序。
      ザラ場口径のときは遅延気配から作った 1 日騰落で差し替える（20 日は
      公式日足のまま —— 20 日リターンはザラ場気配からは作れない）。 */
   const liveByCode = useMemo(() => {
-    const map = new Map<string, { median_return_1d: number; advancers_share: number }>();
+    const map = new Map<string, { median_return_1d: number; advancers_share: number; covered: number }>();
     for (const row of liveSectors.data?.sectors ?? []) map.set(row.sector33_code, row);
     return map;
   }, [liveSectors.data]);
@@ -109,13 +106,7 @@ export default function Market() {
             : row;
         })
       : base;
-    return [...rows].sort((a, b) => {
-      const va = metricValue(a, heatMetric);
-      const vb = metricValue(b, heatMetric);
-      if (va === null) return 1;
-      if (vb === null) return -1;
-      return vb - va;
-    });
+    return rankByReturn(rows, heatMetric);
   }, [market.data, heatMetric, tileSource, liveByCode]);
 
   /* 未选板块时默认落在当前口径最强的那个（面板永远有内容，不是空壳） */
@@ -171,55 +162,6 @@ export default function Market() {
     scrolledForRef.current = indexCode;
     el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   }, [hasExplicitIndex, indexCode, market.data]);
-
-  const sectorColumns: Column<SectorStrength>[] = [
-    {
-      key: 'name',
-      title: t('行业'),
-      render: (row) => <span className="text-body-s text-ink-800">{row.sector33_name}</span>,
-    },
-    {
-      key: 'members',
-      title: '#',
-      align: 'right',
-      width: '60px',
-      sortable: true,
-      sortValue: (row) => row.member_count,
-      render: (row) => <span className="tnum text-body-s text-ink-500">{row.member_count}</span>,
-    },
-    {
-      key: 'r1',
-      title: t('近1日'),
-      align: 'right',
-      sortable: true,
-      sortValue: (row) => row.median_return_1d ?? Number.NEGATIVE_INFINITY,
-      render: (row) => <ChangeBadge value={row.median_return_1d} size="sm" />,
-    },
-    {
-      key: 'r20',
-      title: t('近20日'),
-      align: 'right',
-      sortable: true,
-      sortValue: (row) => row.median_return_20d ?? Number.NEGATIVE_INFINITY,
-      render: (row) => <ChangeBadge value={row.median_return_20d} size="sm" />,
-    },
-    {
-      key: 'leaders',
-      title: t('今日领涨'),
-      render: (row) => (
-        <span className="flex flex-wrap gap-2">
-          {row.leaders.map((leader) => (
-            <CodeCell
-              key={leader.canonical_code}
-              displayCode={leader.canonical_code.length === 5 && leader.canonical_code.endsWith('0') ? leader.canonical_code.slice(0, 4) : leader.canonical_code}
-              nameJa={leader.name_ja}
-              to={`/stock/${leader.canonical_code}`}
-            />
-          ))}
-        </span>
-      ),
-    },
-  ];
 
   return (
     <div className="space-y-6">
@@ -350,7 +292,7 @@ export default function Market() {
             </section>
           </div>
 
-          {/* 板块透视：热力砖（当日/近20日/今日领涨同砖）+ 列表视图 */}
+          {/* 板块透视：中位收益发散条排名，点击行业查看成员 */}
           <section className="card-surface p-4 md:p-6">
             <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
@@ -394,55 +336,19 @@ export default function Market() {
                   value={tileSource}
                   onChange={setTileSource}
                 />
-                <Segmented<'heat' | 'list'>
-                  options={[
-                    { value: 'heat', label: t('热力') },
-                    { value: 'list', label: t('列表') },
-                  ]}
-                  value={sectorView}
-                  onChange={setSectorView}
-                />
               </div>
             </header>
 
             {sectorsSorted.length === 0 ? (
               <HeatMatrixSkeleton />
             ) : (
-              <AnimatePresence mode="wait">
-                {sectorView === 'heat' ? (
-                  <motion.div
-                    key="heat"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <HeatMatrix
-                      sectors={sectorsSorted}
-                      metric={heatMetric}
-                      selectedCode={selectedSector}
-                      onSelect={setSelectedSector}
-                    />
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="list"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <DataTable
-                      columns={sectorColumns}
-                      rows={sectorsSorted}
-                      rowKey={(row) => row.sector33_code}
-                      rowHeight={44}
-                      defaultSort={{ key: heatMetric === 'r1' ? 'r1' : 'r20', desc: true }}
-                      onRowClick={(row) => setSelectedSector(row.sector33_code)}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <HeatMatrix
+                sectors={sectorsSorted}
+                metric={heatMetric}
+                selectedCode={selectedSector}
+                onSelect={setSelectedSector}
+                coverageByCode={tileSource === 'intraday' ? liveByCode : undefined}
+              />
             )}
           </section>
 

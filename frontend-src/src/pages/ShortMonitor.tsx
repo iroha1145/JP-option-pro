@@ -49,7 +49,6 @@ import { fmtDate, fmtDateShort, fmtPct, fmtPctLevel, fmtPrice, fmtScore, fmtShar
 import { explanationLine } from '@/lib/explainText';
 import SoftBadge from '@/components/shared/SoftBadge';
 import StaleStrip from '@/components/shared/StaleStrip';
-import StatusNotice from '@/components/shared/StatusNotice';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
 import SourceNote from '@/components/shared/SourceNote';
 import InfoHint from '@/components/shared/InfoHint';
@@ -158,9 +157,6 @@ export default function ShortMonitor() {
   }, [view, minConfidence]);
 
   const activeView = useMemo(() => VIEWS.find((v) => v.key === view) ?? VIEWS[0], [view]);
-  // 「还没验证」和「验证过但没通过」要分开说。
-  const validation = overview?.validation;
-  const unvalidated = overview?.validated && !overview.validated.score;
   const refreshOverview = overviewQuery.refresh;
   const refreshRanking = rankingQuery.refresh;
   const refreshingMonitor = overviewQuery.refreshing || rankingQuery.refreshing;
@@ -192,35 +188,6 @@ export default function ShortMonitor() {
           </>
         }
       />
-
-      <StatusNotice>
-        {t('本页面展示达到公开披露条件的机构空卖持仓，不代表市场全部空头仓位。跌破公开门槛不代表仓位归零。')}
-      </StatusNotice>
-
-      {validation?.status === 'failed' ? (
-        <section className="card-surface p-4">
-          <p className="flex items-center gap-2">
-            <span className="eyebrow">{t('历史验证结果')}</span>
-            <SoftBadge tone="warn">{t('未通过')}</SoftBadge>
-          </p>
-          <p className="mt-2 text-body-s text-ink-700">{t(validation.summary)}</p>
-          {validation.run && (
-            <p className="mt-1 tnum text-micro text-ink-400">
-              {validation.run} · {validation.signals ?? 0} {t('个信号')} · {validation.windows ?? 0}{' '}
-              {t('个走步窗口')}
-            </p>
-          )}
-          {overview?.radar_link && !overview.radar_link.enabled && (
-            <p className="mt-1.5 text-caption text-ink-600">
-              {t('雷达优先级联动已停用：验证未通过前，本模块不改变突破雷达的排序，只做展示、筛选与影子分。')}
-            </p>
-          )}
-        </section>
-      ) : unvalidated ? (
-        <StatusNotice>
-          {t('当前门槛与权重为初始参数，尚未通过历史验证，仅作研究排序使用。')}
-        </StatusNotice>
-      ) : null}
 
       {state === 'stale' && (
         <StaleStrip onRetry={() => rankingQuery.refresh()} refreshing={rankingQuery.refreshing} />

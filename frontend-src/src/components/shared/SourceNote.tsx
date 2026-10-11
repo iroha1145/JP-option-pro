@@ -6,7 +6,6 @@ export default function SourceNote({ className, text = t('行情为延迟数据 
   return (
     <p className={cn('flex items-center gap-1.5 border-t border-line pt-3 text-micro text-ink-400', className)}>
       <span>{text}</span>
-      <span className="text-[8px] leading-none text-ink-400" aria-hidden="true">◆</span>
     </p>
   );
 }
