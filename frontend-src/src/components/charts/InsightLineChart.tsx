@@ -460,7 +460,7 @@ const InsightLineChart = memo(function InsightLineChart({
           className="insight-cursor-pill pointer-events-none absolute -translate-x-1/2 rounded-md px-1.5 py-0.5"
           style={{ left: Math.min(Math.max(scrub.x, 36), width - 36), top: 2 }}
         >
-          <span className="font-mono text-micro tnum text-ink-800">
+          <span className="tnum text-micro text-ink-800">
             {formatValue ? formatValue(scrub.value) : scrub.value.toLocaleString('ja-JP')}
           </span>
           {scrub.label && <span className="ml-1 text-micro text-ink-400">{axisTick(scrub.label)}</span>}

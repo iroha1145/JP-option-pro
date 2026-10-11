@@ -1,3 +1,4 @@
+import { drawingPaint, drawingSurface } from '../drawingAppearance.ts';
 /** Map ChartAnalysisBundle overlays to ECharts marks/series. No algorithm logic. */
 
 import { autoPatternsToMarks, type DrawingMarks, type RenderContext } from '../renderer.ts';
@@ -166,13 +167,14 @@ export function overlaysToMarks(
 
   const pushLevel = (price: number, color: string = LINE_INK.neutral, label?: string, historical?: { start: number; end: number }, display?: AnalysisOverlay) => {
     if (price <= 0) return;
+    color = drawingPaint(color);
     const ink = automaticLineInk(display ? overlayTier(display) : undefined, Boolean(historical));
     lines.push([
       { coord: [historical?.start ?? ctx.xMin, price], clipToPlot: true,
         lineStyle: { ...manualLineInk(color, ink.width, historical ? [2, 4] : 'solid'), opacity: ink.opacity },
         label: label ? { show: true, formatter: `${label} · ${price.toLocaleString('en-US', { maximumFractionDigits: price < 1 ? 4 : 2 })}`,
           position: 'insideMiddleTop', fontSize: 11, lineHeight: 14, color, priority: ink.labelPriority + (display?.displayPriority ?? 0),
-          backgroundColor: 'rgba(255,255,255,0.96)', padding: [1, 4], borderRadius: 3 } : { show: false } },
+          backgroundColor: drawingSurface(0.96), padding: [1, 4], borderRadius: 3 } : { show: false } },
       { coord: [historical?.end ?? ctx.xMax, price] },
     ]);
   };
@@ -190,7 +192,7 @@ export function overlaysToMarks(
           symbol: overlay.kind === 'swing' ? 'triangle' : 'diamond',
           symbolRotate: overlay.kind === 'swing' && high ? 180 : 0,
           symbolSize: overlay.kind === 'swing' ? 8 : 7,
-          itemStyle: { color: overlay.kind === 'candle' ? '#5A6788' : (high ? '#BA7517' : '#0B6E99') },
+          itemStyle: { color: drawingPaint(overlay.kind === 'candle' ? '#5A6788' : (high ? '#BA7517' : '#0B6E99')) },
           label: { show: false },
         });
       }
@@ -241,7 +243,7 @@ export function overlaysToMarks(
           ? Math.max(start, ctx.bars.findIndex((bar) => barStampForRange(bar.t, ctx.range) === endKey))
           : ctx.xMax;
         areas.push([
-          { xAxis: start < 0 ? ctx.xMin : start, yAxis: lo, itemStyle: { color: '#8A94B0', opacity: 0.08 } },
+          { xAxis: start < 0 ? ctx.xMin : start, yAxis: lo, itemStyle: { color: drawingPaint('#8A94B0'), opacity: 0.08 } },
           { xAxis: end < 0 ? ctx.xMax : end, yAxis: hi },
         ]);
       }
@@ -251,7 +253,7 @@ export function overlaysToMarks(
       const window = Math.max(1, Math.round(asNumber(overlay.geometry.window) ?? 10));
       const start = Math.max(ctx.xMin, ctx.xMax - window + 1);
       areas.push([
-        { xAxis: start, yAxis: ctx.yMin, itemStyle: { color: '#8A94B0', opacity: 0.05 } },
+        { xAxis: start, yAxis: ctx.yMin, itemStyle: { color: drawingPaint('#8A94B0'), opacity: 0.05 } },
         { xAxis: ctx.xMax, yAxis: ctx.yMax },
       ]);
     }

@@ -844,12 +844,6 @@ export interface StrengthProfilesMeta {
   family_weights: Record<string, number>;
 }
 
-/** AI 分析的受影响股票：只有代码与理由，不含方向预测（v2 起产品移除）。 */
-export interface NewsAffected {
-  code: string;
-  reason_zh: string | null;
-}
-
 export interface NewsItem {
   news_id: string;
   source: string | null;
@@ -858,15 +852,6 @@ export interface NewsItem {
   source_language: string | null;
   original_title: string | null;
   original_summary: string | null;
-  translated_title_ja: string | null;
-  summary_ja: string | null;
-  analysis_zh: {
-    headline: string | null;
-    impact: string | null;
-    affected: NewsAffected[] | null;
-    insufficient_context: boolean | null;
-  } | null;
-  analysis_state?: 'completed' | 'pending' | 'failed' | 'disabled' | 'none';
   categories: string[];
   securities: { canonical_code: string; display_code: string; name_ja: string | null }[];
   importance: number | null;
@@ -901,7 +886,6 @@ export interface NewsSecurityRow {
   max_importance: number | null;
   categories: string[];
   latest: { title: string | null; published_at: string | null } | null;
-  ai: { analyzed: number } | null;
 }
 
 export interface NewsFeedState {
@@ -919,14 +903,6 @@ export interface NewsStatus {
   window_hours: number;
   entity_aliases: number;
   feeds: NewsFeedState[];
-  ai: {
-    enabled: boolean;
-    openai_configured: boolean;
-    translation_target: string;
-    analysis_language: string;
-    queue: Record<string, number>;
-    note_ja: string | null;
-  };
 }
 
 export interface EconEvent {
@@ -958,7 +934,6 @@ export interface AccessStatus {
 
 export interface SettingsView {
   jquants_configured: boolean;
-  openai_configured: boolean;
   access_mode: string;
   radar_enabled: boolean;
   news_mode: string;

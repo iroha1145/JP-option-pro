@@ -65,7 +65,7 @@ export default function SectorMembersPanel({
           <h2 className="mt-0.5 truncate text-h3 text-ink-900">
             {data?.sector33_name ?? '—'}
             {data && (
-              <span className="ml-2 font-mono text-caption font-normal text-ink-400 tnum">
+              <span className="ml-2 tnum text-caption font-normal text-ink-400">
                 {t('{n} 只', { n: data.member_count })} · {fmtYenCompact(data.sector_turnover_value)}
               </span>
             )}
@@ -80,7 +80,7 @@ export default function SectorMembersPanel({
         </div>
       ) : rows.length === 0 ? (
         <div className="mt-3">
-          <EmptyState image="/empty-chart.svg" title={t('暂无数据')} description={t('该业种在当前断面没有可用个股')} />
+          <EmptyState image="/empty-chart.svg" title={t('暂无数据')} description={t('该行业在当前断面没有可用个股')} />
         </div>
       ) : (
         <>
@@ -101,7 +101,7 @@ export default function SectorMembersPanel({
                     ROW_GRID,
                   )}
                 >
-                  <span className="font-mono text-micro text-ink-300 tnum">{index + 1}</span>
+                  <span className="tnum text-micro text-ink-300">{index + 1}</span>
                   <span className="flex min-w-0 items-center gap-1.5">
                     <CodeCell displayCode={row.display_code} nameJa={row.name_ja} to={`/stock/${row.display_code}`} />
                     {row.radar_state && <StateChip state={row.radar_state} />}
@@ -114,7 +114,7 @@ export default function SectorMembersPanel({
                         style={{ width: `${Math.max(2, Math.min(100, (row.turnover_share ?? 0) * 100))}%` }}
                       />
                     </span>
-                    <span className="w-10 shrink-0 text-right font-mono text-micro text-ink-500 tnum">
+                    <span className="w-10 shrink-0 text-right tnum text-micro text-ink-500">
                       {/* 份额是占比不是涨跌 —— 不能用 fmtPct（会带 +/− 符号） */}
                       {row.turnover_share != null ? `${(row.turnover_share * 100).toFixed(1)}%` : '—'}
                     </span>
@@ -122,8 +122,8 @@ export default function SectorMembersPanel({
                   <span className="text-right">
                     {liveQuotes?.[row.canonical_code] ? (
                       <>
-                        <span className="block font-mono text-body-s tnum text-ink-900">
-                          <TickPrice flash={flashes[row.canonical_code]} className="font-mono text-body-s text-ink-900">
+                        <span className="block tnum text-body-s text-ink-900">
+                          <TickPrice flash={flashes[row.canonical_code]} className="tnum text-body-s text-ink-900">
                             {fmtPrice(liveQuotes[row.canonical_code].price)}
                           </TickPrice>
                           <PointerTooltip
@@ -140,7 +140,7 @@ export default function SectorMembersPanel({
                       </>
                     ) : (
                       <>
-                        <TickPrice flash={flashes[row.canonical_code]} className="font-mono text-body-s text-ink-900">
+                        <TickPrice flash={flashes[row.canonical_code]} className="tnum text-body-s text-ink-900">
                           {fmtPrice(row.close)}
                         </TickPrice>
                         <ChangeBadge value={row.return_1d} size="sm" />
@@ -148,7 +148,7 @@ export default function SectorMembersPanel({
                     )}
                   </span>
                   <span className="text-right">
-                    <span className="block font-mono text-caption text-ink-700 tnum">
+                    <span className="block tnum text-caption text-ink-700">
                       {fmtYenCompact(row.turnover_value)}
                     </span>
                     <PointerTooltip
@@ -159,7 +159,7 @@ export default function SectorMembersPanel({
                     >
                       <span
                         className={cn(
-                          'block font-mono text-micro tnum',
+                          'block tnum text-micro tnum',
                           (row.turnover_ratio ?? 0) >= 2 ? 'font-semibold text-warn-700' : 'text-ink-400',
                         )}
                       >
@@ -183,7 +183,7 @@ export default function SectorMembersPanel({
             ? t('● = 延迟{n}分盘中价（非官方源）· 其余为 J-Quants 官方日线 · 量比=当日成交额/20日均额', {
                 n: delayedMinutes ?? 15,
               })
-            : t('量比=当日成交额/20日均额 · 份额=占本业种当日成交额比重')
+            : t('量比=当日成交额/20日均额 · 份额=占本行业当日成交额比重')
         }
       />
     </section>

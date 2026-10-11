@@ -25,14 +25,14 @@ export function tokyoSession(now: Date | number = Date.now()): TokyoSession {
 export function tokyoSessionLabel(session: TokyoSession): string {
   switch (session) {
     case 'pre':
-      return '寄り前';
+      return '开盘前';
     case 'morning':
-      return '前場';
+      return '上午交易';
     case 'lunch':
-      return '昼休み';
+      return '午间休市';
     case 'afternoon':
-      return '後場';
+      return '下午交易';
     default:
-      return '大引け後';
+      return '休市';
   }
 }

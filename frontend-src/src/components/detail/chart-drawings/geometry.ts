@@ -65,7 +65,6 @@ export function clipRayToRect(origin: Point, through: Point, rect: VisibleRect):
   if (!Number.isFinite(t1)) {
     // Ray is parallel to an infinite slab; still clip to the far rectangle edge
     // by intersecting with the four sides for t >= 0 inside the rect.
-    t1 = t0;
     const candidates: number[] = [];
     if (dx !== 0) {
       candidates.push((rect.xMin - origin.x) / dx, (rect.xMax - origin.x) / dx);

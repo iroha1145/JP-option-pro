@@ -173,20 +173,20 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
 
   if (items.length === 0) {
     return (
-      <section className="card-surface" aria-label={t('决算列表')}>
+      <section className="card-surface" aria-label={t('财报列表')}>
         <EmptyState
           image="/empty-chart.svg"
           title={
             featuredFilteredEmpty
-              ? filteredByDay ? t('当日没有重点公司决算') : t('当前范围内没有重点公司决算')
-              : filteredByDay ? t('当日无决算安排') : t('窗口内暂无决算')
+              ? filteredByDay ? t('当日没有重点公司财报') : t('当前范围内没有重点公司财报')
+              : filteredByDay ? t('当日无财报安排') : t('窗口内暂无财报')
           }
           description={
             featuredFilteredEmpty
               ? t('切到「全部公司」查看全市场日历。')
               : filteredByDay
-                ? t('选中的日期没有决算安排，切换日格或查看下周。')
-                : t('选中的日期没有决算安排，切换日格试试。')
+                ? t('选中的日期没有财报安排，切换日格或查看下周。')
+                : t('选中的日期没有财报安排，切换日格试试。')
           }
           action={
             featuredFilteredEmpty && onShowAll ? (
@@ -227,7 +227,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
   return (
     <section
       className="card-surface overflow-hidden md:max-h-[min(72vh,880px)] md:overflow-y-auto md:overscroll-contain [scrollbar-gutter:stable]"
-      aria-label={t('决算列表')}
+      aria-label={t('财报列表')}
     >
       {/* 桌面列头 */}
       <div className={cn('sticky top-0 z-20 hidden border-b border-line bg-card-warm px-4 py-2.5 md:grid md:gap-3', GRID)}>
@@ -258,7 +258,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                   <span className="rounded-xs bg-brand-600 px-1.5 py-px text-[10px] font-semibold leading-4 text-white">{t('今天')}</span>
                 )}
               </p>
-              <p className="font-mono text-micro text-ink-400 tnum">
+              <p className="tnum text-micro text-ink-400">
                 {group.date ? `${relativeDayCN(group.date)} · ` : ''}{group.rows.length} {t('件')}
               </p>
             </div>
@@ -300,7 +300,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                     )}
                   >
                     <span className="flex min-w-0 items-center gap-2">
-                      <span className="shrink-0 rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-body-s font-semibold text-brand-700">
+                      <span className="shrink-0 rounded-md bg-brand-50 px-1.5 py-0.5 tnum text-body-s font-semibold text-brand-700">
                         {row.display_code}
                       </span>
                       <span className="min-w-0">
@@ -323,7 +323,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                           forecast={released.compared_forecast ?? forecastValue}
                           actual={actualValue}
                         />
-                        <span className="min-w-0 font-mono text-caption tnum">
+                        <span className="min-w-0 tnum text-caption">
                           <span className="block truncate">
                             <span className="text-ink-500">{priorValue != null ? fmtYenCompact(priorValue) : '—'}</span>
                             <span className="mx-1 text-ink-300">→</span>
@@ -342,7 +342,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                     ) : (
                       <span className="flex min-w-0 items-center gap-2">
                         <ForecastBars prior={priorValue} forecast={forecastValue} />
-                        <span className="min-w-0 font-mono text-caption tnum">
+                        <span className="min-w-0 tnum text-caption">
                           <span className="block truncate">
                             <span className="text-ink-500">{priorValue != null ? fmtYenCompact(priorValue) : '—'}</span>
                             <span className="mx-1 text-ink-300">→</span>
@@ -359,10 +359,10 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                       </span>
                     )}
                     <span className="text-right">
-                      <span className="block font-mono text-body-s text-ink-900 tnum">{fmtPrice(row.close)}</span>
+                      <span className="block tnum text-body-s text-ink-900">{fmtPrice(row.close)}</span>
                       <ChangeBadge value={row.change_pct !== null ? row.change_pct / 100 : null} size="sm" />
                     </span>
-                    <span className="text-right font-mono text-caption text-ink-600 tnum">{fmtYenCompact(row.avg_turnover_20d)}</span>
+                    <span className="text-right tnum text-caption text-ink-600">{fmtYenCompact(row.avg_turnover_20d)}</span>
                     <span className="text-right">
                       {row.in_watchlist && <span className="text-warn-600">★</span>}
                       {row.radar_state && (
@@ -388,7 +388,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                     className="block w-full border-b border-line px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-paper-2 md:hidden"
                   >
                     <span className="flex items-center gap-2">
-                      <span className="shrink-0 rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-body-s font-semibold text-brand-700">
+                      <span className="shrink-0 rounded-md bg-brand-50 px-1.5 py-0.5 tnum text-body-s font-semibold text-brand-700">
                         {row.display_code}
                       </span>
                       <span className="min-w-0 flex-1">
@@ -402,7 +402,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                         )}
                       </span>
                       <span className="shrink-0 text-right">
-                        <span className="block font-mono text-body-s text-ink-900 tnum">{fmtPrice(row.close)}</span>
+                        <span className="block tnum text-body-s text-ink-900">{fmtPrice(row.close)}</span>
                         <ChangeBadge value={row.change_pct !== null ? row.change_pct / 100 : null} size="sm" />
                       </span>
                     </span>
@@ -415,7 +415,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                             forecast={released.compared_forecast ?? forecastValue}
                             actual={actualValue}
                           />
-                          <span className="min-w-0 text-right font-mono text-caption tnum">
+                          <span className="min-w-0 text-right tnum text-caption">
                             <span className="block truncate">
                               <span className="text-ink-500">{priorValue != null ? fmtYenCompact(priorValue) : '—'}</span>
                               <span className="mx-1 text-ink-300">→</span>
@@ -434,7 +434,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                       ) : (
                         <span className="flex min-w-0 items-center justify-end gap-2">
                           <ForecastBars prior={priorValue} forecast={forecastValue} />
-                          <span className="min-w-0 text-right font-mono text-caption tnum">
+                          <span className="min-w-0 text-right tnum text-caption">
                             <span className="block truncate">
                               <span className="text-ink-500">{priorValue != null ? fmtYenCompact(priorValue) : '—'}</span>
                               <span className="mx-1 text-ink-300">→</span>
@@ -452,7 +452,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                       )}
                     </span>
                     <span className="mt-1.5 flex items-center justify-between text-micro text-ink-400">
-                      <span className="font-mono tnum">
+                      <span className="tnum">
                         {t('20日均额')} {fmtYenCompact(row.avg_turnover_20d)}
                       </span>
                       <span>

@@ -200,7 +200,7 @@ export default function HistoryRail({
         <p className="flex items-baseline justify-between gap-2">
           <span className="text-body-s font-semibold text-ink-900">
             {t('历史事件回溯')}
-            <span className="font-mono tnum">
+            <span className="tnum">
               {' '}
               · {t('共')} {rows.length} {t('条')}
             </span>
@@ -263,7 +263,7 @@ export default function HistoryRail({
               <div key={day}>
                 <div className="radar-history-date flex items-baseline justify-between px-4 py-2">
                   <p className="text-[12px] font-medium leading-[18px] text-ink-500">{historyDayLabel(day)}</p>
-                  <span className="font-mono text-micro text-ink-400 tnum">
+                  <span className="tnum text-micro text-ink-400">
                     {items.length} {t('条')}
                   </span>
                 </div>
@@ -301,12 +301,12 @@ export default function HistoryRail({
                           })}
                           className="radar-history-row flex min-h-[60px] cursor-pointer items-center gap-2.5 px-4 py-2 transition-colors duration-fast hover:bg-paper-2"
                         >
-                          <span className="w-10 shrink-0 font-mono text-caption text-ink-400 tnum">
+                          <span className="w-10 shrink-0 tnum text-caption text-ink-400">
                             {fmtDateShort(row.date)}
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="flex items-baseline gap-1.5">
-                              <span className="shrink-0 font-mono text-body-s font-semibold text-ink-800">{row.code}</span>
+                              <span className="shrink-0 tnum text-body-s font-semibold text-ink-800">{row.code}</span>
                               <span className="truncate text-micro text-ink-400">{row.name ?? '—'}</span>
                             </span>
                             <span className="mt-0.5 flex items-center gap-1.5 text-micro leading-[14px]">
@@ -320,7 +320,7 @@ export default function HistoryRail({
                             </span>
                           </span>
                           <span className="flex shrink-0 items-center gap-1.5">
-                            <span className="font-mono text-caption text-ink-800 tnum">{fmtPrice(row.close)}</span>
+                            <span className="tnum text-caption text-ink-800">{fmtPrice(row.close)}</span>
                             <span className={cn('size-1.5 rounded-full', TONE_DOT[tone])} aria-hidden="true" />
                           </span>
                         </div>
@@ -341,10 +341,10 @@ export default function HistoryRail({
                 >
                   {loadingMore && <DotsLoader />}
                   {t('加载更多')}
-                  <span className="font-mono text-micro text-ink-400 tnum">{t('剩 {n} 条', { n: rows.length - visible })}</span>
+                  <span className="tnum text-micro text-ink-400">{t('剩 {n} 条', { n: rows.length - visible })}</span>
                 </button>
               ) : (
-                <p className="font-mono text-micro text-ink-300 tnum">{t('已加载全部 {n} 条', { n: rows.length })}</p>
+                <p className="tnum text-micro text-ink-300">{t('已加载全部 {n} 条', { n: rows.length })}</p>
               )}
             </div>
           </div>

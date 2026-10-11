@@ -13,9 +13,12 @@ import CommandPalette from '@/components/CommandPalette';
 import { pushRecent } from '@/lib/recentTickers';
 import { ShellContext } from '@/hooks/useShell';
 import { t } from '@/i18n/core';
+import { useAccess } from '@/hooks/useAccess';
 
 export default function Layout() {
   const location = useLocation();
+  const { loading, isOwner, username } = useAccess();
+  const pageKey = `${location.pathname}:${isOwner ? 'owner' : username ? `account:${username}` : 'visitor'}`;
   const navigate = useNavigate();
   const navigationType = useNavigationType();
   const previousPathname = useRef(location.pathname);
@@ -58,11 +61,11 @@ export default function Layout() {
         <a className="skip-link" href="#main-content">{t('跳到主要内容')}</a>
         <Navbar onOpenPalette={openPalette} />
         <IndexTape />
-        <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-shell flex-1 scroll-mt-24 px-4 pt-6 md:px-8 md:pt-8">
-          <div key={location.pathname} className="page-enter">
+        <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-shell min-h-[calc(100dvh-8rem)] flex-1 scroll-mt-24 px-4 pt-6 md:px-8 md:pt-8">
+          <div key={pageKey} className="page-enter">
             <RouteErrorBoundary>
               <Suspense fallback={<PageFallback />}>
-                <Outlet />
+                {loading ? <PageFallback /> : <Outlet />}
               </Suspense>
             </RouteErrorBoundary>
           </div>

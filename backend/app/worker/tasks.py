@@ -53,7 +53,6 @@ TASK_FINS_LATE = "fins_late_sync"
 TASK_BACKFILL = "history_backfill"
 TASK_MAINTENANCE = "maintenance"
 TASK_NEWS_SYNC = "news_sync"
-TASK_AI_JOBS = "ai_jobs"
 TASK_INTRADAY = "intraday_fetch"
 TASK_SHORT_MONITOR = "short_monitor_refresh"
 
@@ -70,7 +69,6 @@ DEFAULT_TASK_NAMES: tuple[str, ...] = (
     TASK_BACKFILL,
     TASK_MAINTENANCE,
     TASK_NEWS_SYNC,
-    TASK_AI_JOBS,
     TASK_INTRADAY,
     TASK_SHORT_MONITOR,
 )
@@ -374,6 +372,7 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             ("jp-app", context.paths.app_db),
             ("jp-worker", context.paths.worker_db),
             ("jp-news", context.paths.news_db),
+            # Archive existing history without opening or processing its queue.
             ("jp-ai-jobs", context.paths.ai_jobs_db),
         ):
             if not path.is_file():
@@ -419,8 +418,7 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
     def news_sync_task(_payload: dict[str, Any] | None) -> TaskResult:
         from app.repositories.news_store import NewsStore
         from app.repositories.app_store import AppStore
-        from app.services.ai_jobs.store import AIJobStore
-        from app.services.news.service import enqueue_ai_jobs, rebuild_entity_catalog, sync_feeds_once
+        from app.services.news.service import rebuild_entity_catalog, sync_feeds_once
         from app.services.radar.lifecycle import TERMINAL_STATES as RADAR_TERMINAL
 
         if config.features.news_mode == "off":
@@ -443,14 +441,6 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             core=context.repository, store=store,
             watchlist_codes=watchlist, radar_codes=radar_codes,
         )
-        if config.features.news_mode == "scheduled" and context.settings.openai_configured():
-            jobs = AIJobStore(context.paths.ai_jobs_db)
-            jobs.initialize()
-            summary["ai_enqueue"] = enqueue_ai_jobs(
-                store=store, jobs=jobs,
-                daily_token_limit=config.ai.daily_token_limit,
-                max_items=config.news.max_ai_items_per_run,
-            )
         cutoff_days = context.config.storage.news_retention_days
         from datetime import datetime, timedelta, timezone
 
@@ -533,29 +523,6 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             details={"code": code, "dataset": dataset, **result},
         )
 
-    def ai_jobs_task(_payload: dict[str, Any] | None) -> TaskResult:
-        from app.repositories.news_store import NewsStore
-        from app.services.ai_jobs.runtime import OpenAIRuntime
-        from app.services.ai_jobs.store import AIJobStore
-        from app.services.news.service import process_ai_jobs_once
-
-        if config.features.news_mode != "scheduled":
-            return TaskResult(status="skipped", next_delay_seconds=1800.0, details={"reason": "news_mode_not_scheduled"})
-        if not context.settings.openai_configured():
-            return TaskResult(status="skipped", next_delay_seconds=1800.0, details={"reason": "openai_api_key_not_configured"})
-        jobs = AIJobStore(context.paths.ai_jobs_db)
-        jobs.initialize()
-        store = NewsStore(context.paths.news_db)
-        store.initialize()
-        runtime = OpenAIRuntime(context.settings.OPENAI_API_KEY.get_secret_value())
-        outcome = process_ai_jobs_once(store=store, jobs=jobs, runtime=runtime)
-        busy = outcome.get("submitted") or outcome.get("pending")
-        return TaskResult(
-            status="completed",
-            next_delay_seconds=5.0 if busy else 30.0,
-            details={**outcome, "queue": jobs.status_counts()},
-        )
-
     def short_monitor_task(payload: dict[str, Any] | None) -> TaskResult:
         """手動更新の受け口。**定時では走らない。**
 
@@ -623,7 +590,6 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
             initial_delay_seconds=45.0,
             action_types=("news_sync",),
         ),
-        TaskSpec(name=TASK_AI_JOBS, run=ai_jobs_task, initial_delay_seconds=60.0),
         TaskSpec(
             name=TASK_INTRADAY,
             run=intraday_fetch_task,

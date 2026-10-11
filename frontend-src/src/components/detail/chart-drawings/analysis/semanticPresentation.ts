@@ -1,3 +1,4 @@
+import { drawingFill, drawingPaint } from '../drawingAppearance.ts';
 import type { StructuralOverlay } from './structuralOverlays.ts';
 import type { PatternInkInput } from '../linePresentation.ts';
 type Translate = (message: string, variables?: Record<string, string | number | null | undefined>) => string;
@@ -37,9 +38,9 @@ export function gapAreas(o: Pick<StructuralOverlay, 'geometry' | 'status'>, inde
   const historical = o.status === 'expired';
   return intervals.map((p, i) => [
     { xAxis: start, yAxis: p.low,
-      itemStyle: { color: historical ? 'rgba(82,97,122,0.025)' : 'rgba(184,120,33,0.10)',
-        borderColor: historical ? 'rgba(82,97,122,0.16)' : 'rgba(184,120,33,0.30)', borderWidth: 0.7, borderType: 'dashed' },
-      label: { show: i === largest, position: 'insideTopLeft', fontSize: 10, color: '#866026',
+      itemStyle: { color: historical ? drawingFill('#52617A', 0.025) : drawingFill('#B87821', 0.10),
+        borderColor: historical ? drawingFill('#52617A', 0.16) : drawingFill('#B87821', 0.30), borderWidth: 0.7, borderType: 'dashed' },
+      label: { show: i === largest, position: 'insideTopLeft', fontSize: 10, color: drawingPaint('#866026'),
         formatter: historical ? t('价格缺口 · 已回补') : t('价格缺口 · 未回补') } },
     { xAxis: end, yAxis: p.high },
   ]);

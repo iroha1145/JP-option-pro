@@ -46,7 +46,7 @@ export default function PriorityRing({
           )}
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="font-mono text-[15px] font-medium leading-[20px] text-ink-900 tnum">
+          <span className="tnum text-[15px] font-medium leading-[20px] text-ink-900">
             <span className="sr-only">{score === null ? '—' : Math.round(score)}</span>
             <span aria-hidden="true">{score === null ? '—' : Math.round(animated)}</span>
           </span>

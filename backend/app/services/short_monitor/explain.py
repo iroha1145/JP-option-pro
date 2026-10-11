@@ -37,7 +37,7 @@ STATE_LABELS: dict[str, str] = {
 #: 状態ごとの但し書き。**「挤空确认」には必ず付ける。**
 STATE_CAVEATS: dict[str, str] = {
     STATE_SQUEEZE_CONFIRMED: (
-        "「挤空确认」是基于公开空头变化和价格行为的模型分类，"
+        "「挤空确认」是基于公开空头变化和价格行为的规则分类，"
         "不表示掌握全部市场空头仓位。"
     ),
     STATE_ABSORPTION: "承接迹象来自价格对公开空头压力的反应，不代表机构正在吸筹。",
@@ -156,7 +156,7 @@ def describe(
     state = str(snapshot.get("primary_state") or STATE_NO_SIGNAL)
     label = STATE_LABELS.get(state, state)
     confidence = snapshot.get("data_confidence")
-    say("当前被分类为「{label}」，数据置信度 {confidence}。该结果是模型分类，不代表机构意图。",
+    say("当前被分类为「{label}」，数据置信度 {confidence}。该结果是规则分类，不代表机构意图。",
         label=label, confidence=_num(confidence, 2) or "—")
 
     return {

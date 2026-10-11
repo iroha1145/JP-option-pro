@@ -37,7 +37,6 @@ MACHINE_ENV_KEYS = frozenset(
 SECRET_ENV_KEYS = frozenset(
     {
         "JQUANTS_API_KEY",
-        "OPENAI_API_KEY",
         "APP_PASSWORD_HASH",
     }
 )
@@ -46,6 +45,9 @@ SECRET_ENV_KEYS = frozenset(
 def _key_belongs_to_file(path: Path, key: str) -> bool:
     """Enforce the canonical machine/secret file boundary during loading."""
 
+    # Retired credentials must never be loaded from any local runtime file.
+    if key == "OPENAI_API_KEY":
+        return False
     if path.name == MACHINE_ENV_FILE.name:
         return key in MACHINE_ENV_KEYS
     if path.name == SECRETS_ENV_FILE.name:

@@ -71,7 +71,7 @@ def test_long_aliases_unaffected_by_boundary_rule():
     assert any(m.canonical_code == "67580" for m in matcher.match("ソニーグループが上方修正"))
 
 
-def test_securities_view_aggregates_and_ai_null_without_analysis(tmp_path, monkeypatch, data_dir):
+def test_securities_view_aggregates_original_news(tmp_path, monkeypatch, data_dir):
     from datetime import datetime, timedelta, timezone
 
     # ビューは wall-clock の N 時間窓。固定日を書くと日付が転がった瞬間に 0 件になる。
@@ -113,7 +113,7 @@ def test_securities_view_aggregates_and_ai_null_without_analysis(tmp_path, monke
     assert row["display_code"] == "7203"
     assert row["news_count"] == 2
     assert row["max_importance"] == 88.0
-    assert row["ai"] is None  # 分析ゼロ件は null — 0 件を偽装しない
+    assert "ai" not in row
 
     hotspots = service_module.news_hotspots_view(hours=72)
     assert hotspots["groups"][0]["canonical_code"] == "72030"

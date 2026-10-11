@@ -19,7 +19,7 @@ const oldMinimal = {
   minShapeQuality: 0.45, onlyActive: true, showInvalidated: false,
   maxPatterns: 3, maxLabels: 6, labelDensity: 0.4,
 };
-const withoutVersion = ({ schemaVersion, ...settings }) => settings;
+const withoutVersion = (saved) => Object.fromEntries(Object.entries(saved).filter(([key]) => key !== 'schemaVersion'));
 const overlay = (id, status='forming', priority=1) => ({
   id, status, kind:'support_trend', shapeQuality:0.8, displayPriority:priority,
 });

@@ -1,3 +1,5 @@
+import { getAppearance } from '../../../lib/themePreference.ts';
+
 /** Recorded inside dataZoom window. Survives setOption / color / layer rebuilds. */
 
 export interface ZoomWindow {
@@ -45,7 +47,13 @@ export function insideZoom(
       height: 16,
       bottom: 0,
       borderColor: 'transparent',
-      fillerColor: 'rgba(46,70,224,0.12)',
+      fillerColor: getAppearance() === 'dark' ? 'rgba(107,130,255,0.20)' : 'rgba(46,70,224,0.12)',
+      backgroundColor: getAppearance() === 'dark' ? '#222224' : '#F5F5F5',
+      dataBackground: { lineStyle: { color: getAppearance() === 'dark' ? '#4D4D4F' : '#C4C4C4' },
+        areaStyle: { color: getAppearance() === 'dark' ? '#4D4D4F' : '#C4C4C4' } },
+      handleStyle: { color: getAppearance() === 'dark' ? '#161617' : '#FFFFFF',
+        borderColor: getAppearance() === 'dark' ? '#8F8F8F' : '#6E6E6E' },
+      moveHandleStyle: { color: getAppearance() === 'dark' ? '#8F8F8F' : '#6E6E6E' },
       handleSize: 12,
       showDetail: false,
     },

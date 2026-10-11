@@ -45,7 +45,7 @@ export default function DataStatus() {
       render: (row) => (
         <span>
           <span className="block text-body-s text-ink-800">{row.key}</span>
-          <span className="block font-mono text-micro text-ink-400">{row.endpoint}</span>
+          <span className="block tnum text-micro text-ink-400">{row.endpoint}</span>
         </span>
       ),
     },
@@ -58,14 +58,14 @@ export default function DataStatus() {
       key: 'through',
       title: t('数据截至'),
       align: 'right',
-      render: (row) => <span className="font-mono text-caption tnum text-ink-700">{row.data_through ?? '—'}</span>,
+      render: (row) => <span className="tnum text-caption text-ink-700">{row.data_through ?? '—'}</span>,
     },
     {
       key: 'success',
       title: t('最近成功'),
       align: 'right',
       render: (row) => (
-        <span className="font-mono text-caption tnum text-ink-500">{fmtJstDateTime(row.last_success_at)}</span>
+        <span className="tnum text-caption text-ink-500">{fmtJstDateTime(row.last_success_at)}</span>
       ),
     },
     {
@@ -73,7 +73,7 @@ export default function DataStatus() {
       title: t('行数'),
       align: 'right',
       render: (row) => (
-        <span className="font-mono text-caption tnum text-ink-500">
+        <span className="tnum text-caption text-ink-500">
           {row.rows_total !== null && row.rows_total !== undefined ? row.rows_total.toLocaleString('ja-JP') : '—'}
         </span>
       ),
@@ -83,7 +83,7 @@ export default function DataStatus() {
       title: t('回填余量'),
       align: 'right',
       render: (row) => (
-        <span className="font-mono text-caption tnum text-ink-500">
+        <span className="tnum text-caption text-ink-500">
           {row.backfill_pending !== null && row.backfill_pending !== undefined ? row.backfill_pending : '—'}
         </span>
       ),
@@ -92,7 +92,7 @@ export default function DataStatus() {
       key: 'error',
       title: t('最近错误'),
       render: (row) => (
-        <span className="truncate font-mono text-micro text-down-700">{row.last_error_code ?? ''}</span>
+        <span className="truncate tnum text-micro text-down-700">{row.last_error_code ?? ''}</span>
       ),
     },
   ];
@@ -100,8 +100,6 @@ export default function DataStatus() {
   return (
     <div className="space-y-6">
       <PageHeader
-        section="09"
-        eyebrow="DATA STATUS · J-QUANTS V2"
         title={t('数据状态')}
         description={t('本页为日线数据，收盘后更新')}
         meta={
@@ -113,7 +111,7 @@ export default function DataStatus() {
               </span>
             ) : null}
             {query.lastUpdatedAt && (
-              <span className="font-mono text-caption text-ink-400 tnum">
+              <span className="tnum text-caption text-ink-400">
                 {t('更新')} {fmtTimeHHMMSS(query.lastUpdatedAt)}
               </span>
             )}
@@ -175,7 +173,7 @@ export default function DataStatus() {
               icon="bell"
             />
             <StatCard
-              label="Worker"
+              label={t('后台任务')}
               value={Object.keys(query.data.worker?.tasks ?? {}).length}
               icon="refresh"
               sub={
@@ -223,13 +221,11 @@ export default function DataStatus() {
           )}
 
           <section>
-            <p className="eyebrow">DATASETS · J-QUANTS</p>
             <h2 className="mb-3 mt-1 text-h3 text-ink-900">{t('数据集')}</h2>
             <DataTable columns={columns} rows={query.data.datasets} rowKey={(row) => row.key} rowHeight={56} />
           </section>
 
           <section className="card-surface p-5">
-            <p className="eyebrow">INTRADAY</p>
             <h2 className="mb-2 mt-1 text-h3 text-ink-900">
               {query.data.intraday.enabled ? t('盘中数据') : t('盘中数据未接入')}
             </h2>
@@ -238,17 +234,16 @@ export default function DataStatus() {
 
           {query.data.worker && (
             <section className="card-surface p-5">
-              <p className="eyebrow">WORKER</p>
               <h2 className="mb-2 mt-1 flex items-center gap-2 text-h3 text-ink-900">
-                Worker
+                {t('后台任务')}
                 <SoftBadge tone={query.data.worker.healthy ? 'brand' : 'warn'}>
-                  {query.data.worker.healthy ? 'healthy' : 'degraded'}
+                  {query.data.worker.healthy ? t('运行正常') : t('已降级')}
                 </SoftBadge>
               </h2>
               <ul className="grid grid-cols-1 gap-1.5 text-body-s md:grid-cols-2">
                 {Object.entries(query.data.worker.tasks ?? {}).map(([name, task]) => (
                   <li key={name} className="flex items-center justify-between rounded-md bg-paper-2 px-2.5 py-1.5">
-                    <span className="font-mono text-caption text-ink-700">{name}</span>
+                    <span className="tnum text-caption text-ink-700">{name}</span>
                     <span className="flex items-center gap-2 text-micro text-ink-500">
                       <span>{task.status}</span>
                       {task.error_code && <span className="text-down-700">{task.error_code}</span>}
@@ -274,7 +269,7 @@ function CapabilityBadge({ status, freshness }: { status: DatasetStatus['status'
   if (status === 'planned') {
     return <SoftBadge tone="brand">{t('未接入')}</SoftBadge>;
   }
-  const tone = freshness === 'fresh' ? 'ai' : freshness === 'stale' || freshness === 'error' ? 'warn' : 'neutral';
+  const tone = freshness === 'fresh' ? 'brand' : freshness === 'stale' || freshness === 'error' ? 'warn' : 'neutral';
   const label =
     freshness === 'fresh' ? t('新鲜') : freshness === 'stale' ? t('过期') : freshness === 'never_synced' ? t('从未同步') : freshness ?? '—';
   return <SoftBadge tone={tone}>{label}</SoftBadge>;

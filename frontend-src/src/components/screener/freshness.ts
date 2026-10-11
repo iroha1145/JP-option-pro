@@ -2,8 +2,8 @@ import type { StrengthScanResponse } from '@/api/types';
 import type { ScanFilters } from '@/components/screener/types';
 
 /** A successful GET is a filter/query, never proof of a new nightly publication. */
-export function querySucceededAsNewComputation(response: StrengthScanResponse | null): boolean {
-  return false && Boolean(response);
+export function querySucceededAsNewComputation(_response: StrengthScanResponse | null): boolean {
+  return false;
 }
 
 export function publicationMatches(

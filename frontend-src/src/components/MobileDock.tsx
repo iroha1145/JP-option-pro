@@ -12,24 +12,21 @@ import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
 import { overlayVisible, useOverlayPhase } from '@/lib/transitions';
 import { isTopFocusScope } from '@/lib/focusScope';
 import Icon, { type IconName } from '@/components/icons';
-import Segmented from '@/components/shared/Segmented';
 import GlidePill from '@/components/shared/GlidePill';
-import { LOCALES, getLocale, setLocale, t } from '@/i18n/core';
-import { setColorMode, type ColorMode } from '@/lib/colorPreference';
-import { useColorMode } from '@/hooks/useColorMode';
+import { t } from '@/i18n/core';
+import { NAV_GROUPS, isNavGroupActive, navAriaCurrent } from '@/lib/navigation';
+import { useGlideLayoutId } from '@/hooks/useGlideLayoutId';
 
 const DOCK_ITEMS: { label: string; path: string; icon: IconName }[] = [
   { label: t('首页'), path: '/', icon: 'candle' },
-  { label: t('自选'), path: '/watchlist', icon: 'star-line' },
-  { label: t('筛选'), path: '/screener', icon: 'filter-funnel' },
-  { label: t('雷达'), path: '/radar', icon: 'radar' },
+  { label: t('关注'), path: '/watchlist', icon: 'star-line' },
+  { label: t('选股'), path: '/screener', icon: 'filter-funnel' },
+  { label: t('市场'), path: '/market', icon: 'layers' },
 ];
 
 const MORE_ITEMS: { label: string; path: string; icon: IconName; desc: string }[] = [
-  { label: t('市场'), path: '/market', icon: 'layers', desc: t('指数 · 业种 · 广度') },
-  { label: t('决算日历'), path: '/earnings', icon: 'calendar-spark', desc: t('確定 · 目安三态日历') },
-  { label: t('新闻'), path: '/news', icon: 'doc-quote', desc: t('催化剂 · 三源新闻流') },
-  { label: t('机构空卖行为监控'), path: '/short-monitor', icon: 'radar', desc: t('公开空头变化 · 价格反应') },
+  { label: t('财报日历'), path: '/earnings', icon: 'calendar-spark', desc: t('日期 · 业绩 · 公司公告') },
+  { label: t('新闻'), path: '/news', icon: 'doc-quote', desc: t('原文 · 来源 · 经济日历') },
   { label: t('数据状态'), path: '/data-status', icon: 'wallet-gauge', desc: t('同步进度 · 数据覆盖') },
   { label: t('历史验证'), path: '/research', icon: 'crosshair', desc: t('走步验证 · 分层收益') },
 ];
@@ -66,25 +63,25 @@ function MobileDockContent() {
     };
   }, [moreOpen]);
 
-  const colorMode = useColorMode();
   const moreActive = MORE_ITEMS.some((m) => isNavPathActive(location.pathname, m.path));
-  const dockGlideId = useId();
+  const dockGlideId = useGlideLayoutId('dock');
 
   const renderItem = (item: (typeof DOCK_ITEMS)[number]) => {
-    const active = isNavPathActive(location.pathname, item.path);
+    const group = NAV_GROUPS.find(group => group.path === item.path)!;
+    const active = isNavGroupActive(location.pathname, group);
     return (
-      <div key={item.path} className="relative flex flex-1">
+      <div key={item.path} className="relative flex min-w-0 flex-1 basis-0">
         {active && (
-          <GlidePill layoutId={dockGlideId} className="inset-1 rounded-md bg-brand-50 shadow-none" />
+          <GlidePill dependency={location.pathname} layoutId={dockGlideId} className="inset-1 rounded-md bg-brand-50 shadow-none" />
         )}
         <Link
           to={item.path}
-          className="relative z-10 flex min-h-[44px] flex-1 flex-col items-center justify-center gap-1 transition-transform duration-fast active:scale-[0.96]"
+          className="relative z-10 flex min-h-[44px] min-w-0 flex-1 flex-col items-center justify-center gap-1 transition-transform duration-fast active:scale-[0.96]"
           aria-label={item.label}
-          aria-current={active ? 'page' : undefined}
+          aria-current={navAriaCurrent(location.pathname, group)}
         >
           <Icon name={item.icon} size={19} className={active ? 'text-brand-600' : 'text-ink-400'} />
-          <span className={cn('text-[10px] leading-none', active ? 'font-medium text-brand-600' : 'text-ink-400')}>{item.label}</span>
+          <span className={cn('text-tag leading-none whitespace-nowrap', active ? 'font-medium text-brand-600' : 'text-ink-400')}>{item.label}</span>
         </Link>
       </div>
     );
@@ -93,14 +90,14 @@ function MobileDockContent() {
   return (
     <>
       <nav
-        className="glass fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-[60] mx-auto flex h-16 max-w-md items-stretch rounded-lg border border-line px-1.5 shadow-dock xl:hidden"
+        className="glass fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-[60] mx-auto flex min-h-16 max-w-md items-stretch rounded-lg border border-line px-1.5 shadow-dock xl:hidden"
         aria-label={t('移动端导航')}
       >
         <motion.div layoutRoot className="flex h-full w-full items-stretch">
           {DOCK_ITEMS.map(renderItem)}
-          <div className="relative flex flex-1">
+          <div className="relative flex min-w-0 flex-1 basis-0">
             {moreActive && (
-              <GlidePill layoutId={dockGlideId} className="inset-1 rounded-md bg-brand-50 shadow-none" />
+              <GlidePill dependency={location.pathname} layoutId={dockGlideId} className="inset-1 rounded-md bg-brand-50 shadow-none" />
             )}
             <button
               onClick={() => setMoreOpen(true)}
@@ -109,7 +106,7 @@ function MobileDockContent() {
               aria-current={moreActive ? 'page' : undefined}
             >
               <Icon name="menu" size={19} className={moreActive ? 'text-brand-600' : 'text-ink-400'} />
-              <span className={cn('text-[10px] leading-none', moreActive ? 'font-medium text-brand-600' : 'text-ink-400')}>{t('更多')}</span>
+              <span className={cn('text-tag leading-none whitespace-nowrap', moreActive ? 'font-medium text-brand-600' : 'text-ink-400')}>{t('更多')}</span>
             </button>
           </div>
         </motion.div>
@@ -145,36 +142,6 @@ function MobileDockContent() {
               </div>
               <p className="eyebrow px-5 pb-2 pt-1">{t('更多功能')}</p>
               <div className="px-3">
-                <div className="flex items-center justify-between gap-3 rounded-md px-3 py-3">
-                  <span className="flex items-center gap-3">
-                    <span className="flex size-9 items-center justify-center rounded-md border border-line bg-card-warm text-brand-600">
-                      <Icon name="languages" size={17} />
-                    </span>
-                    <span className="text-body-s font-medium text-ink-800">{t('界面语言')}</span>
-                  </span>
-                  <Segmented
-                    options={LOCALES.map((l) => ({ value: l.code, label: l.short }))}
-                    value={getLocale()}
-                    onChange={(code) => setLocale(code)}
-                  />
-                </div>
-                <div className="flex items-center justify-between gap-3 rounded-md px-3 py-3">
-                  <span className="flex items-center gap-3">
-                    <span className="flex size-9 items-center justify-center rounded-md border border-line bg-card-warm text-brand-600">
-                      <Icon name="candle" size={17} />
-                    </span>
-                    <span className="text-body-s font-medium text-ink-800">{t('涨跌色彩')}</span>
-                  </span>
-                  <Segmented<ColorMode>
-                    options={[
-                      { value: 'western', label: t('绿涨红跌') },
-                      { value: 'asian', label: t('红涨绿跌') },
-                    ]}
-                    value={colorMode}
-                    onChange={setColorMode}
-                  />
-                </div>
-                <div className="mx-3 my-2 border-t border-line" />
                 {MORE_ITEMS.map((m) => (
                   <button
                     key={m.path}
@@ -209,7 +176,7 @@ function MobileDockContent() {
                   onClick={() => {
                     if (!isSignedIn) {
                       setMoreOpen(false);
-                      navigate('/login');
+                      navigate('/login', { state: { from: location.pathname + location.search } });
                       return;
                     }
                     setLoggingOut(true);
@@ -227,12 +194,12 @@ function MobileDockContent() {
                   </span>
                   <span className="flex-1">
                     <span className="block text-body-s font-medium text-ink-800">
-                      {isOwner ? t('Owner 已登录') : isSignedIn ? t('已登录 {name}', { name: username ?? '' }) : t('访客只读模式')}
+                      {isOwner ? t('管理员 已登录') : isSignedIn ? t('已登录 {name}', { name: username ?? '' }) : t('访客只读模式')}
                     </span>
                     <span className="block text-micro text-ink-400">
                       {isOwner || isSignedIn
                         ? (loggingOut ? t('正在退出…') : t('退出登录'))
-                        : t('登录后可保存自选')}
+                        : t('登录后可保存关注')}
                     </span>
                   </span>
                 </button>
@@ -241,7 +208,7 @@ function MobileDockContent() {
                     type="button"
                     onClick={() => {
                       setMoreOpen(false);
-                      navigate('/login');
+                      navigate('/login', { state: { from: location.pathname + location.search } });
                     }}
                     className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-micro text-ink-500 transition-[background-color] hover:bg-paper-2 active:bg-line/60"
                   >

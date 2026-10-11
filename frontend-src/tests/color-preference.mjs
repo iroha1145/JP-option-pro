@@ -96,12 +96,13 @@ test('Tailwind up/down 色阶从 CSS 变量生成，而不是编译期写死 hex
   assert.doesNotMatch(config, /down:\s*\{[^}]*#E5484D/s);
 });
 
-test('顶栏与 Dock 共用 useColorMode，不再各自 useState', async () => {
-  const switcher = codeOf(await source('components/ColorModeSwitcher.tsx'));
+test('显示设置统一读取涨跌模式，移动菜单不再重复提供设置', async () => {
+  const switcher = codeOf(await source('components/SettingsMenu.tsx'));
+  const navbar = codeOf(await source('components/Navbar.tsx'));
   const dock = codeOf(await source('components/MobileDock.tsx'));
   assert.match(switcher, /useColorMode\(\)/);
-  assert.match(dock, /useColorMode\(\)/);
-  assert.doesNotMatch(switcher, /useState/);
+  assert.match(navbar, /<SettingsMenu/);
+  assert.doesNotMatch(dock, /useColorMode\(\)|setColorMode/);
   assert.doesNotMatch(dock, /setLocalColorMode|getColorMode\(\)/);
 });
 
@@ -112,7 +113,7 @@ test('健康态 SoftBadge 不借用涨跌 up/down', async () => {
   const domain = codeOf(await source('components/domain.tsx'));
   const research = codeOf(await source('pages/Research.tsx'));
   assert.match(news, /tone: 'warn',\s*label: t\('异常'\)/);
-  assert.match(news, /failed: \{ label: t\('分析失败'\), tone: 'warn' \}/);
+  assert.doesNotMatch(news, /analysis_zh|analysis_state|translated_title_ja|status\.ai|row\.ai/);
   assert.match(data, /worker\.healthy \? 'brand' : 'warn'/);
   assert.match(detail, /SoftBadge tone="warn"/);
   assert.match(research, /label: '分层单调',\s*tone: 'brand'/);

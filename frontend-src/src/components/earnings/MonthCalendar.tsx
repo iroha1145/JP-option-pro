@@ -162,7 +162,7 @@ export default function MonthCalendar({ items, selectedDay, onSelectDay, anchorD
 
       <div className="grid grid-cols-7 border-b border-line bg-card-warm/60">
         {WEEKDAYS.map((weekday, index) => (
-          <span key={weekday} className={cn('py-1.5 text-center font-mono text-micro', index >= 5 ? 'text-ink-300' : 'text-ink-400')}>
+          <span key={weekday} className={cn('py-1.5 text-center tnum text-micro', index >= 5 ? 'text-ink-300' : 'text-ink-400')}>
             {weekday}
           </span>
         ))}
@@ -195,7 +195,7 @@ export default function MonthCalendar({ items, selectedDay, onSelectDay, anchorD
                 role="button"
                 tabIndex={0}
                 aria-pressed={isSelected}
-                aria-label={t('{md}，{n} 件决算', { md: fmtMDCN(date), n: dayItems.length })}
+                aria-label={t('{md}，{n} 件财报', { md: fmtMDCN(date), n: dayItems.length })}
                 onClick={() => onSelectDay(isSelected ? null : date)}
                 onKeyDown={(event) => {
                   if (event.target !== event.currentTarget) return;
@@ -217,7 +217,7 @@ export default function MonthCalendar({ items, selectedDay, onSelectDay, anchorD
                 <div className="flex items-center justify-between">
                   <span
                     className={cn(
-                      'font-mono text-micro tnum',
+                      'tnum text-micro tnum',
                       isToday
                         ? 'flex h-6 min-w-6 items-center justify-center rounded-full bg-brand-600 px-1 font-semibold text-white'
                         : inMonth
@@ -228,7 +228,7 @@ export default function MonthCalendar({ items, selectedDay, onSelectDay, anchorD
                     {label}
                   </span>
                   {dayItems.length > 0 && (
-                    <span className="hidden rounded-pill bg-line/70 px-1 font-mono text-[10px] leading-4 text-ink-600 tnum sm:inline">
+                    <span className="hidden rounded-pill bg-line/70 px-1 tnum text-[10px] leading-4 text-ink-600 sm:inline">
                       {dayItems.length}
                     </span>
                   )}
@@ -257,12 +257,12 @@ export default function MonthCalendar({ items, selectedDay, onSelectDay, anchorD
                           className="flex h-5 w-full items-center gap-1 rounded-xs px-1 transition-colors duration-fast hover:bg-brand-50"
                         >
                           <span className={cn('size-1.5 shrink-0 rounded-full', meta.dotClass)} aria-hidden="true" />
-                          <span className="truncate font-mono text-[10px] font-medium leading-4 text-ink-800">{item.display_code}</span>
+                          <span className="truncate tnum text-[10px] font-medium leading-4 text-ink-800">{item.display_code}</span>
                         </motion.button>
                       </PointerTooltip>
                     );
                   })}
-                  {extra > 0 && <span className="px-1 font-mono text-[10px] leading-4 text-ink-400 tnum">+{extra}</span>}
+                  {extra > 0 && <span className="px-1 tnum text-[10px] leading-4 text-ink-400">+{extra}</span>}
                 </div>
 
                 <div className="mt-1 flex flex-1 items-end sm:hidden">
@@ -273,7 +273,7 @@ export default function MonthCalendar({ items, selectedDay, onSelectDay, anchorD
                           <span key={i} className={cn('size-1.5 rounded-full', statusMeta(item.status).dotClass)} />
                         ))}
                       </span>
-                      <span className="rounded-pill bg-line/70 px-1 font-mono text-[10px] leading-4 text-ink-600 tnum">
+                      <span className="rounded-pill bg-line/70 px-1 tnum text-[10px] leading-4 text-ink-600">
                         {dayItems.length}
                       </span>
                     </span>

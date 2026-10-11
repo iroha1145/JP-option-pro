@@ -126,7 +126,7 @@ export function ScoreBar({
           />
         )}
       </div>
-      <span className="w-8 text-right font-mono text-caption tnum text-ink-700">{fmtScore(value)}</span>
+      <span className="w-8 text-right tnum text-caption text-ink-700">{fmtScore(value)}</span>
     </div>
   );
 }
@@ -145,7 +145,7 @@ export function CodeCell({
      コード章は shrink-0 で守る。 */
   const body = (
     <span className="flex min-w-0 flex-1 items-center gap-2">
-      <span className="shrink-0 rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-body-s font-semibold text-brand-700">
+      <span className="shrink-0 rounded-md bg-brand-50 px-1.5 py-0.5 tnum text-body-s font-semibold text-brand-700">
         {displayCode}
       </span>
       <span className="min-w-0 truncate text-body-s text-ink-800">{nameJa ?? '—'}</span>

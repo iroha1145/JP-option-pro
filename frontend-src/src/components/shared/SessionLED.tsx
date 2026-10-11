@@ -4,9 +4,9 @@ import { t } from '@/i18n/core';
 
 const SESSION_STYLE: Record<TokyoSession, { dot: string }> = {
   pre: { dot: 'bg-warn-600' },
-  morning: { dot: 'bg-up-600' },
-  lunch: { dot: 'bg-ai-600' },
-  afternoon: { dot: 'bg-up-600' },
+  morning: { dot: 'bg-ok-600' },
+  lunch: { dot: 'bg-warn-600' },
+  afternoon: { dot: 'bg-ok-600' },
   closed: { dot: 'bg-ink-400' },
 };
 

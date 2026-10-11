@@ -6,7 +6,7 @@
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { fmtPct } from '@/lib/format';
-import { heatColor } from '@/lib/chart';
+import { heatColor, heatTextColor } from '@/lib/chart';
 import { SkeletonBlock } from '@/components/shared/Skeleton';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import { useColorMode } from '@/hooks/useColorMode';
@@ -24,13 +24,11 @@ export function metricValue(sector: SectorStrength, metric: HeatMetric): number 
 }
 
 /** 砖底色与文字明暗（明度阈值决定压白字还是墨字） */
-function tone(value: number | null): { bg: string; dark: boolean } {
+function tone(value: number | null): { bg: string; foreground?: string; dark: boolean } {
   if (value === null) return { bg: 'var(--card-warm, #FBFCFD)', dark: false };
   const bg = heatColor(value * 100);
-  const match = bg.match(/rgb\((\d+),(\d+),(\d+)\)/);
-  if (!match) return { bg, dark: false };
-  const [r, g, b] = [Number(match[1]), Number(match[2]), Number(match[3])];
-  return { bg, dark: (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.62 };
+  const foreground = heatTextColor(bg);
+  return { bg, foreground, dark: foreground === '#FFFFFF' };
 }
 
 function HeatTile({
@@ -57,11 +55,11 @@ function HeatTile({
      セクション見出しの日付で示す。 */
   const secondaryLabel = metric === 'r1' ? t('20日') : t('1日');
   const primaryLabel = metric === 'r1' ? t('1日 中位') : t('20日 中位');
-  const { bg, dark } = tone(primary);
-  const textMain = dark ? 'text-white' : 'text-ink-800';
-  const textSub = dark ? 'text-white/75' : 'text-ink-500';
-  const barTrack = dark ? 'bg-white/15' : 'bg-ink-900/[0.07]';
-  const barFill = dark ? 'bg-white/45' : 'bg-ink-900/25';
+  const { bg, foreground, dark } = tone(primary);
+  const textMain = primary === null ? 'text-ink-800' : 'text-inherit';
+  const textSub = primary === null ? 'text-ink-500' : 'text-inherit';
+  const barTrack = primary === null ? 'bg-ink-900/[0.07]' : dark ? 'bg-white/15' : 'bg-black/[0.07]';
+  const barFill = primary === null ? 'bg-ink-900/25' : dark ? 'bg-white/45' : 'bg-black/25';
   const share = sector.advancers_share;
 
   return (
@@ -77,22 +75,22 @@ function HeatTile({
           <span className="mt-1.5 block space-y-1 text-micro">
             <span className="flex items-center justify-between gap-2">
               <span className="text-ink-500">{t('1日 中位')}</span>
-              <span className="font-mono text-ink-800 tnum">{fmtPct(sector.median_return_1d)}</span>
+              <span className="tnum text-ink-800">{fmtPct(sector.median_return_1d)}</span>
             </span>
             <span className="flex items-center justify-between gap-2">
               <span className="text-ink-500">{t('20日 中位')}</span>
-              <span className="font-mono text-ink-800 tnum">{fmtPct(sector.median_return_20d)}</span>
+              <span className="tnum text-ink-800">{fmtPct(sector.median_return_20d)}</span>
             </span>
             {share !== null && (
               <span className="flex items-center justify-between gap-2 border-t border-line pt-1">
                 <span className="text-ink-500">{t('上涨占比')}</span>
-                <span className="font-mono text-ink-800 tnum">{Math.round(share * 100)}%</span>
+                <span className="tnum text-ink-800">{Math.round(share * 100)}%</span>
               </span>
             )}
             {sector.leaders[0] && (
               <span className="flex items-center justify-between gap-2">
                 <span className="text-ink-500">{t('今日领涨')}</span>
-                <span className="font-mono font-semibold text-ink-800">
+                <span className="tnum font-semibold text-ink-800">
                   {sector.leaders[0].canonical_code.length === 5 && sector.leaders[0].canonical_code.endsWith('0')
                     ? sector.leaders[0].canonical_code.slice(0, 4)
                     : sector.leaders[0].canonical_code}
@@ -121,7 +119,7 @@ function HeatTile({
           primary === null && 'border border-dashed border-line-strong',
           selected && 'shadow-sh-2',
         )}
-        style={{ backgroundColor: bg }}
+        style={{ backgroundColor: bg, color: foreground }}
       >
         {selected && (
           <motion.span
@@ -139,20 +137,20 @@ function HeatTile({
             <span className={cn('min-w-0 truncate text-[13px] font-semibold leading-[18px]', textMain)}>
               {sector.sector33_name}
             </span>
-            <span className={cn('shrink-0 font-mono text-micro tnum', textSub)}>
+            <span className={cn('shrink-0 tnum text-micro tnum', textSub)}>
               {t('{n} 只', { n: sector.member_count })}
             </span>
           </span>
           <span>
             <span className="flex items-baseline gap-1.5">
-              <span className={cn('font-mono text-[15px] font-semibold leading-5 tnum', textMain)}>
+              <span className={cn('tnum text-[15px] font-semibold leading-5 tnum', textMain)}>
                 {fmtPct(primary)}
               </span>
               {/* 窄屏の 149px タイルには入らない（英語 "1d median" で確実に切れる）。
                   口径は直上の Segmented が示しているので端末幅では省く。 */}
               <span className={cn('hidden truncate text-micro sm:inline', textSub)}>{primaryLabel}</span>
             </span>
-            <span className={cn('block truncate font-mono text-micro tnum', textSub)}>
+            <span className={cn('block truncate tnum text-micro tnum', textSub)}>
               {secondaryLabel} {fmtPct(secondary)}
             </span>
           </span>

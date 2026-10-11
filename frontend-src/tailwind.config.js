@@ -1,44 +1,61 @@
 /** @type {import('tailwindcss').Config} */
+const token = (name) =>
+  `color-mix(in srgb, var(${name}) calc(100% * <alpha-value>), transparent)`;
+
 module.exports = {
   darkMode: ["class"],
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  /* v8.3 的触屏 hover 粘滞修复此前只覆盖 index.css 里手写的几个类（.card-hover
+     等），250 多处 hover:/group-hover: 工具类照样粘：手机上点一下，按钮保持
+     悬停色、卡片保持上浮。打开后这些变体只在「可悬停的精确指针」下生成，
+     与 index.css 的 @media (hover: hover) and (pointer: fine) 同一口径。 */
+  future: {
+    hoverOnlyWhenSupported: true,
+  },
   theme: {
     extend: {
       colors: {
-        /* ---- Optix 纸面终端 tokens（design.md §1 精确 HEX）---- */
+        'on-accent': token('--on-accent'),
+        /* 2026-10-09 Arc 改版：主操作色（主按钮、当前页码）与其上的文字，见 index.css --action。 */
+        action: {
+          DEFAULT: token('--action'),
+          hover: token('--action-hover'),
+        },
+        'on-action': token('--on-action'),
+        /* ---- Optix 纸面终端 tokens：从 CSS 变量生成，html.dark 换盘后工具类一起换 ---- */
         paper: {
-          DEFAULT: '#F6F7F9', // --paper 页面主背景（v8 降温：冷灰蓝纸面）
-          2: '#FAFBFC',       // --paper-2 抬升区
+          DEFAULT: token('--paper'),
+          2: token('--paper-2'),
         },
         card: {
-          DEFAULT: '#FFFFFF',
-          warm: '#FBFCFD',
-          foreground: '#0D1626',
+          DEFAULT: token('--card'),
+          warm: token('--card-warm'),
+          foreground: token('--ink-900'),
         },
         ink: {
-          900: '#0D1626',
-          800: '#182338',
+          900: token('--ink-900'),
+          800: token('--ink-800'),
           /* 700：源码里 18 处「比正文重一档」的用法此前落在不存在的档位上，
              类名不生成任何规则、全部退回继承色（审计 2.4.7/3.2）。 */
-          700: '#2A3550',
-          600: '#3D4A68',
-          500: '#5A6788',
-          400: '#626F8B',
-          300: '#B7BFD3',
+          700: token('--ink-700'),
+          600: token('--ink-600'),
+          500: token('--ink-500'),
+          400: token('--ink-400'),
+          300: token('--ink-300'),
         },
         line: {
-          DEFAULT: '#E9ECF1', // v8.1 随纸面降温：冷纸面配暖灰线会显脏，同族蓝灰
-          strong: '#DBE0E8',
-          chart: '#EDF0F4',
+          DEFAULT: token('--line'),
+          strong: token('--line-strong'),
+          chart: token('--line-chart'),
         },
-        /* 群青只做同色相深浅：hover 一律深一档 brand-700（#2338C8），不用更浅的 500/400 */
+        /* 群青只做同色相深浅：hover 一律深一档 brand-700，夜间抬升对比度 */
         brand: {
-          700: '#2338C8', // hover / 按压态
-          600: '#2E46E0', // 主色（主按钮/激活态/关键数据）
-          500: '#3B59F2',
-          400: '#6B82FF',
-          100: '#E4E9FF',
-          50: '#F0F3FF',
+          700: token('--brand-700'),
+          600: token('--brand-600'),
+          500: token('--brand-500'),
+          400: token('--brand-400'),
+          100: token('--brand-100'),
+          50: token('--brand-50'),
         },
         /* 涨跌色走 CSS 变量，html[data-color-mode=asian] 换盘后工具类一起换。
            <alpha-value> 保住 bg-up-600/20 这类透明度变体。 */
@@ -52,18 +69,33 @@ module.exports = {
           600: 'color-mix(in srgb, var(--down-600) calc(100% * <alpha-value>), transparent)',
           50: 'color-mix(in srgb, var(--down-50) calc(100% * <alpha-value>), transparent)',
         },
+        /* 状态色（index.css 说明）：不随红涨绿跌互换。 */
+        ok: {
+          700: token('--ok-700'),
+          600: token('--ok-600'),
+          50: token('--ok-50'),
+        },
+        danger: {
+          700: token('--danger-700'),
+          600: token('--danger-600'),
+          50: token('--danger-50'),
+        },
         warn: {
           /* 700：警示横幅主文案用档（warn-50 底上比 600 重一档，审计 2.4.5） */
-          700: '#B87109',
-          600: '#E8930C',
-          50: '#FCF3E2',
+          700: token('--warn-700'),
+          600: token('--warn-600'),
+          50: token('--warn-50'),
         },
         /* v8.1 弃「AI 紫」：紫+AI 是生成式设计最强签名。青瓷 teal（印刷第二油墨色），
            与群青相距 60°+、与涨绿差 36°，不误读为行情方向。 */
         ai: {
-          600: '#0B7285',
-          50: '#E7F3F6',
+          600: token('--ai-600'),
+          50: token('--ai-50'),
         },
+        /* 2026-10-09 分类色：类别用（经济事件重要度、风险偏好），不表示好坏与涨跌。见 index.css。 */
+        'cat-sky': { 50: token('--cat-sky-50'), 600: token('--cat-sky-600'), 700: token('--cat-sky-700') },
+        'cat-amber': { 50: token('--cat-amber-50'), 600: token('--cat-amber-600'), 700: token('--cat-amber-700') },
+        'cat-orange': { 50: token('--cat-orange-50'), 600: token('--cat-orange-600'), 700: token('--cat-orange-700') },
         /* ---- shadcn/ui 兼容令牌（ui/ 基座仍可用）---- */
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -96,67 +128,75 @@ module.exports = {
         },
       },
       borderRadius: {
-        /* v8 清新回暖：chip/badge 4 · 按钮/输入 6 · 卡片/容器 12 · 抽屉/模态 16 */
+        /* 2026-10-09 Arc 改版：小件 6 · 控件 8 · 卡片 18（原 16）· 抽屉/模态 22 · 胶囊 999。
+           按钮、分段、徽章改用胶囊；输入与下拉触发 10 走 --r-control。 */
         xs: '4px',
-        sm: '4px',
-        md: '6px',
-        lg: '12px',
-        xl: '16px',
-        '2xl': '20px',
+        sm: '6px',
+        md: '8px',
+        lg: '18px',
+        xl: '22px',
+        '2xl': '26px',
         pill: '999px',
       },
       boxShadow: {
         /* v8 清新：墨色 rgba(16,24,40,*) 三层制，更柔更大；内高光 .7 保持；聚焦环即时出现 */
-        'sh-1': '0 1px 2px rgba(16,24,40,.03)',
-        'sh-2': '0 1px 2px rgba(16,24,40,.03), 0 12px 32px -14px rgba(16,24,40,.10)',
-        'sh-3': '0 2px 4px rgba(16,24,40,.04), 0 24px 56px -16px rgba(16,24,40,.16)',
-        'card': '0 2px 4px rgba(24,43,68,.02), 0 9px 25px -12px rgba(24,43,68,.12)',
-        'card-hover': '0 1px 2px rgba(16,24,40,.03), 0 12px 32px -14px rgba(16,24,40,.10), inset 0 1px 0 rgba(255,255,255,.7)',
-        'inset-hi': 'inset 0 1px 0 rgba(255,255,255,.7)',
-        'focus-ring': '0 0 0 3px rgba(46,70,224,.18)',
-        /* 开关旋钮：小件白色控件在彩色轨道上需要比 sh-1 更实的两层墨影才有层次 */
-        knob: '0 1px 3px rgba(16,24,40,.18), 0 1px 1px rgba(16,24,40,.10)',
-        /* 区带/轨道色块：内高光 + 一层薄墨影，翻出层次但不打破扁平轨道语言 */
-        zone: 'inset 0 1px 0 rgba(255,255,255,.45), 0 1px 2px rgba(16,24,40,.10)',
-        xs: '0 1px 2px 0 rgba(16,24,40,.05)', // v8.1 纯黑→墨色，与三层制同源
+        'sh-1': 'var(--shadow-sh-1)',
+        'sh-2': 'var(--shadow-sh-2)',
+        'sh-3': 'var(--shadow-sh-3)',
+        'card': 'var(--card-shadow)',
+        'card-hover': 'var(--card-hover-shadow)',
+        'inset-hi': 'var(--inset-hi-shadow)',
+        'focus-ring': '0 0 0 3px color-mix(in srgb, var(--brand-600) 25%, transparent)',
+        /* 开关旋钮、小件影、轨道井与悬浮层走 CSS 变量，便于夜间覆盖。 */
+        knob: 'var(--knob-shadow)',
+        xs: 'var(--shadow-xs)',
+        track: 'var(--track-shadow)',
+        overlay: 'var(--overlay-shadow)',
+        dock: 'var(--dock-shadow)',
+        zone: 'var(--zone-shadow)',
         /* 按钮立体三档（与 sh-* 同族墨影）：btn-hi 实心主按钮 > btn 描边次按钮 >
            幽灵/文字按钮平面。chip 给选中态胶囊/页码/分段滑块（介于两者之间）；
            track 是开关轨道的内凹井。按下收拢/禁用摊平的全局规则在 index.css。 */
         /* v8.2 收小：次按钮/选中胶囊多为 26–36px 小件，2px/6px 晕染层在这个
            尺度上发飘（用户实测反馈）——btn 只留 1px 贴身影，chip 收到 1px/3px。 */
-        btn: '0 1px 2px rgba(16,24,40,.07), inset 0 1px 0 rgba(255,255,255,.75)',
-        'btn-hi': 'inset 0 1px 0 rgba(255,255,255,.16), 0 1px 2px rgba(16,24,40,.18), 0 4px 12px -4px rgba(16,24,40,.34)',
-        chip: 'inset 0 1px 0 rgba(255,255,255,.14), 0 1px 3px -1px rgba(16,24,40,.25)',
-        track: 'inset 0 1px 2px rgba(16,24,40,.16)',
-        /* v8.3 悬浮层两档登记（原 CommandPalette/MobileDock 的任意值 shadow，同族墨影） */
-        overlay: '0 24px 64px -16px rgba(16,24,40,0.35), 0 6px 20px -8px rgba(16,24,40,0.16)',
-        dock: '0 18px 40px -14px rgba(16,24,40,0.30), 0 4px 14px -6px rgba(16,24,40,0.14)',
+        btn: 'var(--btn-shadow)',
+        'btn-hi': 'var(--btn-hi-shadow)',
+        chip: 'var(--chip-shadow)',
       },
       fontFamily: {
         /* v8：display 换系统 sans 栈（与 sans 相同但独立变量保留，大标不再用衬线） */
         display: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', '"PingFang SC"', '"Hiragino Sans GB"', '"Noto Sans SC"', '"Microsoft YaHei UI"', 'sans-serif'],
-        /* 衬线只保留给「编辑式引文」场景：font-quote */
+        /* 衬线只保留给新闻原文摘要这类「编辑式引文」：font-quote。模型与系统生成的文字用无衬线。 */
         quote: ['Georgia', '"Songti SC"', '"Noto Serif SC"', 'serif'],
         sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', '"PingFang SC"', '"Hiragino Sans GB"', '"Noto Sans SC"', '"Microsoft YaHei UI"', 'sans-serif'],
         mono: ['ui-monospace', 'SFMono-Regular', '"SF Mono"', 'Menlo', 'Consolas', '"Liberation Mono"', 'monospace'],
       },
       fontSize: {
         /* design.md §2.2 字阶（size/lineHeight，weight 由工具类控制） */
-        /* v8 display 字阶：tracking -0.02em · lineHeight 1.15 · 700/700/600（sans 大标） */
-        'display-xl': ['56px', { lineHeight: '64px', fontWeight: '700', letterSpacing: '-0.02em' }],
-        'display-l': ['40px', { lineHeight: '46px', fontWeight: '700', letterSpacing: '-0.02em' }],
-        'display-m': ['28px', { lineHeight: '32px', fontWeight: '600', letterSpacing: '-0.02em' }],
-        h2: ['20px', { lineHeight: '26px', fontWeight: '600' }],
-        h3: ['15px', { lineHeight: '22px', fontWeight: '600' }],
-        body: ['14px', { lineHeight: '22px', fontWeight: '400' }],
-        'body-s': ['13px', { lineHeight: '20px', fontWeight: '400' }],
-        caption: ['12px', { lineHeight: '16px', fontWeight: '500' }],
-        eyebrow: ['11px', { lineHeight: '14px', fontWeight: '600', letterSpacing: '0.08em' }], // v8 字距收紧 0.14→0.08em
-        'data-xxl': ['44px', { lineHeight: '48px', fontWeight: '500', letterSpacing: '-0.02em' }],
-        'data-xl': ['30px', { lineHeight: '36px', fontWeight: '500' }],
-        'data-l': ['20px', { lineHeight: '26px', fontWeight: '500' }],
-        'data-m': ['14px', { lineHeight: '20px', fontWeight: '400' }],
-        micro: ['11px', { lineHeight: '14px', fontWeight: '400' }],
+        /* 2026-10-06 字重只用 400/500：标题与数字中等，其余常规（中文 550 以上会落到
+           苹方「中粗」，整页发重）。display 字阶 tracking -0.02em · lineHeight 1.15。
+           2026-10-06 第二轮（参照 uiarc.dev）：小字整体上调一档——micro 12、caption 13、
+           body-s 14、body 15，行高放到 1.4–1.6；原 11–12px、行高 1.1 的密排读起来挤。
+           eyebrow 不再全大写加字距，只是一行中等字重的灰色小标签。 */
+        /* 2026-10-09 Arc 改版：大标题字距收紧到 -0.03em（Arc 40px 标题 -1.2px），行高 1.1。 */
+        'display-xl': ['56px', { lineHeight: '60px', fontWeight: '500', letterSpacing: '-0.03em' }],
+        'display-l': ['40px', { lineHeight: '44px', fontWeight: '500', letterSpacing: '-0.03em' }],
+        'display-m': ['28px', { lineHeight: '32px', fontWeight: '500', letterSpacing: '-0.03em' }],
+        h2: ['20px', { lineHeight: '26px', fontWeight: '500' }],
+        h3: ['16px', { lineHeight: '24px', fontWeight: '500' }],
+        body: ['15px', { lineHeight: '24px', fontWeight: '400' }],
+        'body-s': ['14px', { lineHeight: '21px', fontWeight: '400' }],
+        caption: ['13px', { lineHeight: '19px', fontWeight: '400' }],
+        /* 2026-10-09 Arc 改版：区块小标签改常规字重、13px（Arc 的标签就是一行灰色小字）。 */
+        eyebrow: ['13px', { lineHeight: '18px', fontWeight: '400' }],
+        'data-xxl': ['40px', { lineHeight: '44px', fontWeight: '500', letterSpacing: '-0.03em' }],
+        'data-xl': ['30px', { lineHeight: '36px', fontWeight: '500', letterSpacing: '-0.02em' }],
+        'data-l': ['22px', { lineHeight: '28px', fontWeight: '500', letterSpacing: '-0.01em' }],
+        'data-m': ['15px', { lineHeight: '22px', fontWeight: '400' }],
+        /* 2026-10-09 Arc 改版：micro 12→13（原先 12px 占全站文字三成多，Arc 只占一成）；
+           真要紧凑的地方（徽章、手机底栏、坐标轴、角标）改用 tag 12px。 */
+        micro: ['13px', { lineHeight: '18px', fontWeight: '400' }],
+        tag: ['12px', { lineHeight: '16px', fontWeight: '400' }],
       },
       maxWidth: {
         shell: '1440px',
@@ -177,85 +217,28 @@ module.exports = {
         section: '560ms',
       },
       keyframes: {
-        "accordion-down": {
-          from: { height: "0" },
-          to: { height: "var(--radix-accordion-content-height)" },
-        },
-        "accordion-up": {
-          from: { height: "var(--radix-accordion-content-height)" },
-          to: { height: "0" },
-        },
-        "caret-blink": {
-          "0%,70%,100%": { opacity: "1" },
-          "20%,50%": { opacity: "0" },
-        },
-        /* design.md §4.2 具名动效库 */
-        'rise-in': {
-          from: { opacity: '0', transform: 'translateY(14px)' },
-          to: { opacity: '1', transform: 'translateY(0)' },
-        },
-        'page-fade-in': {
-          from: { opacity: '0', transform: 'translateY(10px)' },
-          to: { opacity: '1', transform: 'translateY(0)' },
-        },
-        'page-fade-out': {
-          from: { opacity: '1' },
-          to: { opacity: '0' },
-        },
         /* v8.3 tick-flash keyframes 退役：keyframes 一旦触发必须跑完、无法中断，
            改为 index.css 的 .tick-flash*（常驻 600ms 回落 transition + 瞬时上色态）。 */
         'led-pulse': {
-          '0%': { boxShadow: '0 0 0 0 color-mix(in srgb, var(--up-600) 55%, transparent)' },
-          '70%': { boxShadow: '0 0 0 6px color-mix(in srgb, var(--up-600) 0%, transparent)' },
-          '100%': { boxShadow: '0 0 0 0 color-mix(in srgb, var(--up-600) 0%, transparent)' },
-        },
-        'radar-sweep': {
-          from: { transform: 'rotate(0deg)' },
-          to: { transform: 'rotate(360deg)' },
-        },
-        'blip-ripple': {
-          '0%': { transform: 'scale(0)', opacity: '.8' },
-          '100%': { transform: 'scale(1)', opacity: '0' },
+          '0%': { boxShadow: '0 0 0 0 color-mix(in srgb, var(--ok-600) 55%, transparent)' },
+          '70%': { boxShadow: '0 0 0 6px color-mix(in srgb, var(--ok-600) 0%, transparent)' },
+          '100%': { boxShadow: '0 0 0 0 color-mix(in srgb, var(--ok-600) 0%, transparent)' },
         },
         'grow-bar': {
           from: { transform: 'scaleX(0)' },
           to: { transform: 'scaleX(1)' },
         },
-        shimmer: {
-          from: { transform: 'translateX(-100%)' },
-          to: { transform: 'translateX(100%)' },
-        },
+        /* 动画元素只含第一套内容，其余副本绝对定位在它后面：每轮正好平移一套 */
         marquee: {
           from: { transform: 'translateX(0)' },
-          to: { transform: 'translateX(-50%)' },
-        },
-        'nudge-shake': {
-          '0%,100%': { transform: 'translateX(0)' },
-          '20%,60%': { transform: 'translateX(-6px)' },
-          '40%,80%': { transform: 'translateX(6px)' },
-        },
-        'spin-once': {
-          from: { transform: 'rotate(0deg)' },
-          to: { transform: 'rotate(360deg)' },
+          to: { transform: 'translateX(-100%)' },
         },
       },
       animation: {
-        "accordion-down": "accordion-down 0.2s ease-out",
-        "accordion-up": "accordion-up 0.2s ease-out",
-        "caret-blink": "caret-blink 1.25s ease-out infinite",
-        'rise-in': 'rise-in 560ms cubic-bezier(.16,1,.3,1) both',
-        'page-fade-in': 'page-fade-in 280ms cubic-bezier(.16,1,.3,1) both',
-        'page-fade-out': 'page-fade-out 160ms cubic-bezier(.16,1,.3,1) both',
         'led-pulse': 'led-pulse 1.5s cubic-bezier(.45,0,.15,1) infinite',
-        'radar-sweep': 'radar-sweep 3.2s linear infinite',
-        'blip-ripple': 'blip-ripple 2s cubic-bezier(.45,0,.15,1) infinite',
         'grow-bar': 'grow-bar 700ms cubic-bezier(.16,1,.3,1) both',
-        shimmer: 'shimmer 1.6s linear infinite',
         marquee: 'marquee 28s linear infinite',
-        'nudge-shake': 'nudge-shake 400ms cubic-bezier(.22,1,.36,1)',
-        'spin-once': 'spin-once 600ms cubic-bezier(.16,1,.3,1)',
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
 }

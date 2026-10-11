@@ -24,7 +24,7 @@ export interface ApiErrorShape {
 /**
  * 统一错误对象（对齐后端契约 {code, message, retryable, retry_after}）
  * - code: HTTP 状态码；bizCode: 后端业务码（如 analysis_required / version_conflict /
- *   ai_job_queue_full / login_cooldown / public_snapshot_unavailable / rate_limited）
+ *   login_cooldown / public_snapshot_unavailable / rate_limited）
  * - retryAfter: 秒（Retry-After 头或 body.retry_after_seconds）
  */
 export class ApiError extends Error implements ApiErrorShape {

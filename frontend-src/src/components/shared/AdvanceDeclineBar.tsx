@@ -1,5 +1,4 @@
 /** 涨跌宽度条：数字徽章 + 3px 比例条（对标美站 Watchlist AdvanceDeclineBar）。 */
-import SoftBadge from '@/components/shared/SoftBadge';
 import { t } from '@/i18n/core';
 
 function countLabel(value: number | null | undefined): string {
@@ -26,13 +25,11 @@ export default function AdvanceDeclineBar({
   return (
     <div className="mt-2">
       <p className="flex flex-wrap items-center gap-y-1 metric-value text-data-xl tnum">
-        <SoftBadge tone="up" size="md" className="metric-value text-data-l">
-          {countLabel(advancers)}
-        </SoftBadge>
+        <span className="inline-flex items-baseline gap-2 text-up-700"><span className="text-caption text-ink-500">{t('上涨')}</span><span className="text-data-l">
+          {countLabel(advancers)}</span></span>
         <span className="mx-1.5 text-ink-300">/</span>
-        <SoftBadge tone="down" size="md" className="metric-value text-data-l">
-          {countLabel(decliners)}
-        </SoftBadge>
+        <span className="inline-flex items-baseline gap-2 text-down-700"><span className="text-caption text-ink-500">{t('下跌')}</span><span className="text-data-l">
+          {countLabel(decliners)}</span></span>
         {flat > 0 && (
           <span className="ml-1.5 align-middle text-caption text-ink-400">
             · {flat} {t('平')}

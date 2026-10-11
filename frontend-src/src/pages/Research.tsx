@@ -82,8 +82,6 @@ export default function Research() {
   return (
     <div className="space-y-6">
       <PageHeader
-        section="10"
-        eyebrow="WALK-FORWARD VALIDATION"
         title={t('历史验证')}
         description={t('走步验证：分数是否真的具有排序能力')}
       />
@@ -98,7 +96,6 @@ export default function Research() {
 
       {state === 'running' && (
         <section className="card-surface p-5">
-          <p className="eyebrow">WALK-FORWARD</p>
           <h3 className="mt-1 text-h3 text-ink-900">{t('历史验证')}</h3>
           <EmptyState
             image="/empty-chart.svg"
@@ -110,7 +107,6 @@ export default function Research() {
 
       {state === 'empty' && (
         <section className="card-surface p-5">
-          <p className="eyebrow">WALK-FORWARD</p>
           <h3 className="mt-1 text-h3 text-ink-900">{t('历史验证')}</h3>
           <EmptyState
             image="/empty-chart.svg"
@@ -122,7 +118,6 @@ export default function Research() {
 
       {state === 'error' && (
         <section className="card-surface p-5">
-          <p className="eyebrow">WALK-FORWARD</p>
           <h3 className="mt-1 text-h3 text-ink-900">{t('历史验证')}</h3>
           <EmptyState
             image="/empty-chart.svg"
@@ -171,9 +166,9 @@ export default function Research() {
 
           {(report.windows ?? []).map((window) => (
             <section key={`${window.test[0]}-${window.test[1]}`} className="card-surface p-5">
-              <p className="eyebrow">WINDOW · {window.test[0]} — {window.test[1]}</p>
+              <p className="text-caption font-medium text-ink-500">{t('验证窗口')}</p>
               <header className="mb-2 mt-1 flex flex-wrap items-baseline justify-between gap-2">
-                <span className="font-mono text-caption text-ink-700">
+                <span className="tnum text-caption text-ink-700">
                   {window.test[0]} — {window.test[1]}
                 </span>
                 <span className="text-micro text-ink-400">
@@ -194,24 +189,24 @@ export default function Research() {
                   <tbody>
                     {(window.deciles ?? []).map((bucket) => (
                       <tr key={bucket.bucket} className="border-t border-line">
-                        <td className="py-1 font-mono text-ink-700">
+                        <td className="py-1 tnum text-ink-700">
                           {bucket.bucket}
                           {/* 標本不足を隠さない。消すと上位だけ綺麗に見える。 */}
                           {!bucket.reliable && (
                             <SoftBadge tone="warn" className="ml-1">{t('样本不足')}</SoftBadge>
                           )}
                         </td>
-                        <td className="py-1 text-right font-mono text-ink-600 tnum">
+                        <td className="py-1 text-right tnum text-ink-600">
                           {bucket.samples.toLocaleString('ja-JP')}
                         </td>
                         <td
-                          className={`py-1 text-right font-mono tnum ${
+                          className={`py-1 text-right tnum tnum ${
                             (bucket.median_excess_topix ?? 0) >= 0 ? 'text-up-600' : 'text-down-600'
                           }`}
                         >
                           {pct(bucket.median_excess_topix)}
                         </td>
-                        <td className="py-1 text-right font-mono text-ink-600 tnum">
+                        <td className="py-1 text-right tnum text-ink-600">
                           {pct(bucket.hit_rate, 1)}
                         </td>
                       </tr>
@@ -223,7 +218,7 @@ export default function Research() {
           ))}
 
           <section className="card-surface p-5 text-caption text-ink-600">
-            <p className="eyebrow">POINT-IN-TIME LIMITS</p>
+
             <h3 className="mb-1 mt-1 text-h3 text-ink-900">{t('点时限制')}</h3>
             <ul className="list-disc space-y-1 pl-5">
               {(report.point_in_time_limits ?? []).map((limit) => (

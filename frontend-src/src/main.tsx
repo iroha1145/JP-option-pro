@@ -5,8 +5,10 @@ import './index.css';
 import './styles/transitions-catalog.css';
 import { applyColorMode } from './lib/colorPreference.ts';
 import App from './App.tsx';
+import { applyAppearance } from './lib/themePreference.ts';
 
 applyColorMode();
+applyAppearance();
 
 window.addEventListener('vite:preloadError', (event) => {
   const KEY = 'optixjp:preload-reloaded';

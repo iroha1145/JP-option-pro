@@ -82,7 +82,7 @@ export default function WeekScrubber({
         >
           <Icon name="chevron-right" size={14} className="rotate-180" />
         </button>
-        <p className="font-mono text-caption text-ink-600 tnum" aria-live="polite">
+        <p className="tnum text-caption text-ink-600" aria-live="polite">
           {fmtMDCN(days[0])} – {fmtMDCN(days[6])}
           <span className="ml-2 font-sans text-micro text-ink-400">JST</span>
         </p>
@@ -123,7 +123,7 @@ export default function WeekScrubber({
                   role="button"
                   tabIndex={0}
                   aria-pressed={isSelected}
-                  aria-label={t('{weekday} {md}，{n} 件决算', { weekday: weekdayCN(date), md: fmtMMDD(date), n: dayItems.length })}
+                  aria-label={t('{weekday} {md}，{n} 件财报', { weekday: weekdayCN(date), md: fmtMMDD(date), n: dayItems.length })}
                   onClick={() => onSelectDay(isSelected ? null : date)}
                   onKeyDown={(event) => {
                     if (event.target !== event.currentTarget) return;
@@ -148,13 +148,13 @@ export default function WeekScrubber({
                     </span>
                     {isToday && <span className="size-1.5 rounded-full bg-brand-600" aria-label={t('今天')} />}
                   </div>
-                  <span className={cn('font-mono text-micro tnum', isToday ? 'text-brand-600' : 'text-ink-400')}>
+                  <span className={cn('tnum text-micro tnum', isToday ? 'text-brand-600' : 'text-ink-400')}>
                     {fmtMMDD(date)}
                   </span>
 
                   <div className="mt-2 flex flex-1 flex-col gap-1">
                     {dayItems.length === 0 ? (
-                      <span className="pt-1 font-mono text-micro text-ink-300" aria-hidden="true">—</span>
+                      <span className="pt-1 tnum text-micro text-ink-300" aria-hidden="true">—</span>
                     ) : (
                       <>
                         {shown.map((item, chipIndex) => {
@@ -188,18 +188,18 @@ export default function WeekScrubber({
                                 )}
                               >
                                 <span className={cn('size-1.5 shrink-0 rounded-full', meta.dotClass)} aria-hidden="true" />
-                                <span className="min-w-0 truncate font-mono text-micro font-medium text-ink-800">{item.display_code}</span>
-                                <span className="ml-auto shrink-0 font-mono text-[9px] text-ink-400">{periodShort(item.period_type)}</span>
+                                <span className="min-w-0 truncate tnum text-micro font-medium text-ink-800">{item.display_code}</span>
+                                <span className="ml-auto shrink-0 tnum text-[9px] text-ink-400">{periodShort(item.period_type)}</span>
                               </motion.button>
                             </PointerTooltip>
                           );
                         })}
-                        {extra > 0 && <span className="px-1 font-mono text-[10px] leading-4 text-ink-400">+{extra}</span>}
+                        {extra > 0 && <span className="px-1 tnum text-[10px] leading-4 text-ink-400">+{extra}</span>}
                       </>
                     )}
                   </div>
 
-                  <span className="mt-1 truncate whitespace-nowrap font-mono text-[10px] leading-4 text-ink-300 tnum">
+                  <span className="mt-1 truncate whitespace-nowrap tnum text-[10px] leading-4 text-ink-300">
                     {/* 7 日グリッドの 1 セルは端末幅で ~48px。確定内訳は sm 以上でのみ出す
                         （英語 "101 · 76 confirmed" は必ず切れる。状態は上のチップが示す） */}
                     {dayItems.length > 0 ? (

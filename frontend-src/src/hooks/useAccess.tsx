@@ -63,6 +63,15 @@ export function AccessProvider({ children }: { children: ReactNode }) {
     setStatus(next);
   }, []);
 
+  const invalidateIdentity = useCallback(() => {
+    ++generationRef.current;
+    lastPrincipalRef.current = 'unknown';
+    setQueryPrincipal('unknown');
+    void dropQueryRegistry();
+    setStatus(null);
+    setIdentityUnavailable(false);
+  }, []);
+
   const refresh = useCallback(async () => {
     const generation = ++generationRef.current;
     try {
@@ -81,7 +90,7 @@ export function AccessProvider({ children }: { children: ReactNode }) {
     const onVisible = () => {
       if (document.visibilityState === 'visible') void refresh();
     };
-    const onPrincipalInvalid = () => void refresh();
+    const onPrincipalInvalid = () => { invalidateIdentity(); void refresh(); };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener(PRINCIPAL_INVALID_EVENT, onPrincipalInvalid);
     const timer = window.setInterval(() => void refresh(), 60_000);
@@ -90,28 +99,31 @@ export function AccessProvider({ children }: { children: ReactNode }) {
       window.removeEventListener(PRINCIPAL_INVALID_EVENT, onPrincipalInvalid);
       window.clearInterval(timer);
     };
-  }, [refresh]);
+  }, [refresh, invalidateIdentity]);
 
   const login = useCallback(
     async (password: string, username = 'admin') => {
       await accessApi.login(password, username);
+      invalidateIdentity();
       await refresh();
     },
-    [refresh],
+    [refresh, invalidateIdentity],
   );
 
   const register = useCallback(
     async (username: string, password: string) => {
       await accountApi.register(username, password);
+      invalidateIdentity();
       await refresh();
     },
-    [refresh],
+    [refresh, invalidateIdentity],
   );
 
   const logout = useCallback(async () => {
     await accessApi.logout();
+    invalidateIdentity();
     await refresh();
-  }, [refresh]);
+  }, [refresh, invalidateIdentity]);
 
   const isOwner = Boolean(status?.is_owner);
   const accountUsername = status?.account?.logged_in ? (status.account.username ?? null) : null;

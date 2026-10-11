@@ -29,8 +29,6 @@ class Settings(BaseSettings):
     JQUANTS_API_KEY: SecretStr = SecretStr("")
     JQUANTS_BASE_URL: str = OFFICIAL_BASE_URL
 
-    OPENAI_API_KEY: SecretStr = SecretStr("")
-
     # Deployment boundary (validated by deployment_boundary at startup).
     ALLOWED_HOSTS: str = ""
     TRUST_PROXY_HEADERS: str = "false"
@@ -64,9 +62,6 @@ class Settings(BaseSettings):
 
     def jquants_configured(self) -> bool:
         return bool(self.JQUANTS_API_KEY.get_secret_value().strip())
-
-    def openai_configured(self) -> bool:
-        return bool(self.OPENAI_API_KEY.get_secret_value().strip())
 
     @property
     def data_paths(self) -> DataPaths:

@@ -135,9 +135,7 @@ export default function Earnings() {
     <div>
       {/* B0 页头带 */}
       <PageHeader
-        section="06"
-        eyebrow="EARNINGS · DISCLOSURE CALENDAR"
-        title={t('决算日历')}
+        title={t('财报日历')}
         description={t('確定日来自官方发表预定，其余为前年同期推导的目安。')}
         meta={
           <>
@@ -150,7 +148,7 @@ export default function Earnings() {
             )}
             <DataThrough date={q.data?.today} />
             {q.lastUpdatedAt && (
-              <span className="hidden font-mono text-caption text-ink-400 tnum sm:inline">
+              <span className="hidden tnum text-caption text-ink-400 sm:inline">
                 {t('更新')} {fmtTimeHHMMSS(q.lastUpdatedAt)}
               </span>
             )}
@@ -199,7 +197,7 @@ export default function Earnings() {
         ) : (
           <div>
             <div className="mb-3 flex items-center justify-between">
-              <p className="eyebrow">EARNINGS CALENDAR · JST</p>
+
               <Segmented
                 options={[
                   { value: 'week' as const, label: t('周') },
@@ -252,7 +250,7 @@ export default function Earnings() {
       </div>
 
       {/* B2 列表（8 列）· B3 右栏（4 列） */}
-      <div className="mt-6 grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-12" aria-label={t('决算主体')}>
+      <div className="mt-6 grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-12" aria-label={t('财报主体')}>
         <div className="min-w-0 space-y-6 xl:col-span-8">
           {error503 ? null : (
             <SkeletonReveal
@@ -276,7 +274,7 @@ export default function Earnings() {
                 {selectedDay && (
                   <div className="flex items-center gap-2">
                     <p className="text-caption text-ink-500">
-                      {t('已筛选')} <span className="font-mono text-brand-600">{fmtMDCN(selectedDay)}</span>
+                      {t('已筛选')} <span className="tnum text-brand-600">{fmtMDCN(selectedDay)}</span>
                     </p>
                     <button
                       type="button"
@@ -304,9 +302,9 @@ export default function Earnings() {
               {listState.visibleItems.length < listState.listItems.length && (
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-line bg-card px-4 py-3">
                   <p className="text-caption text-ink-500">
-                    {t('已显示')} <span className="font-mono text-ink-800 tnum">{listState.visibleItems.length}</span>
+                    {t('已显示')} <span className="tnum text-ink-800">{listState.visibleItems.length}</span>
                     {' / '}
-                    <span className="font-mono text-ink-800 tnum">{listState.listItems.length}</span> {t('件')}
+                    <span className="tnum text-ink-800">{listState.listItems.length}</span> {t('件')}
                   </p>
                   <button
                     type="button"
@@ -339,7 +337,7 @@ export default function Earnings() {
                     className="flex w-full items-center justify-between px-4 py-3"
                   >
                     <span className="text-body-s text-ink-700">
-                      {t('日期未定')} <span className="font-mono text-caption text-ink-400 tnum">{tbdItems.length}</span>
+                      {t('日期未定')} <span className="tnum text-caption text-ink-400">{tbdItems.length}</span>
                     </span>
                     <Icon name="chevron-down" size={14} className={cn('text-ink-400 transition-transform duration-200', showTbd && 'rotate-180')} />
                   </button>
@@ -347,7 +345,7 @@ export default function Earnings() {
                     <div className="flex flex-wrap gap-1.5 border-t border-line px-4 py-3">
                       {tbdItems.map((item) => (
                         <Link key={item.canonical_code} to={`/stock/${item.display_code}`}>
-                          <SoftBadge className="font-mono hover:bg-brand-50 hover:text-brand-700">
+                          <SoftBadge className="tnum hover:bg-brand-50 hover:text-brand-700">
                             {item.display_code} {item.name_ja ?? ''}
                           </SoftBadge>
                         </Link>
@@ -383,8 +381,8 @@ function RecentPanel({ items, loading }: { items: EarningsRecentItem[]; loading:
   if (loading) return <SkeletonCard />;
   const shown = items.slice(0, 8);
   return (
-    <section className="card-surface p-5" aria-label={t('最近决算')}>
-      <p className="eyebrow">{t('最近决算 · 7 天')}</p>
+    <section className="card-surface p-5" aria-label={t('最近财报')}>
+      <p className="eyebrow">{t('最近财报 · 7 天')}</p>
       {shown.length === 0 ? (
         <EmptyState size="compact" image="/empty-chart.svg" title={t('暂无数据')} className="mt-2" />
       ) : (
@@ -395,7 +393,7 @@ function RecentPanel({ items, loading }: { items: EarningsRecentItem[]; loading:
               to={`/stock/${row.display_code}`}
               className="flex items-center gap-2 rounded-md px-1 py-0.5 transition-colors hover:bg-paper-2"
             >
-              <span className="shrink-0 rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-caption font-semibold text-brand-700">
+              <span className="shrink-0 rounded-md bg-brand-50 px-1.5 py-0.5 tnum text-caption font-semibold text-brand-700">
                 {row.display_code}
               </span>
               <span className="min-w-0 flex-1">
@@ -406,7 +404,7 @@ function RecentPanel({ items, loading }: { items: EarningsRecentItem[]; loading:
                 </span>
               </span>
               <span className="shrink-0 text-right">
-                <span className="block font-mono text-caption text-ink-800 tnum">{fmtYenCompact(row.operating_profit)}</span>
+                <span className="block tnum text-caption text-ink-800">{fmtYenCompact(row.operating_profit)}</span>
                 {row.forecast_direction === 'upward' && (
                   <PointerTooltip
                     passthrough

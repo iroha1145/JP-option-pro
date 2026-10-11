@@ -2,6 +2,8 @@
  * 涨跌色彩习惯（美股绿涨红跌 / 亚洲红涨绿跌）。
  * 日本站默认 asian；用户切换后写入本地存储。
  */
+import { getAppearance, subscribeAppearance } from './themePreference.ts';
+
 export type ColorMode = 'western' | 'asian';
 
 const COLOR_MODE_KEY = 'optixjp_color_mode';
@@ -22,6 +24,25 @@ export const PRICE_COLORS = {
     down600: '#0E9F6E',
     down700: '#0B7A55',
     down50: '#E5F6EF',
+  },
+} as const;
+
+export const PRICE_COLORS_DARK = {
+  western: {
+    up600: '#62D0A5',
+    up700: '#7EE0B8',
+    up50: '#163D34',
+    down600: '#FF8A80',
+    down700: '#FFB4AE',
+    down50: '#3A1618',
+  },
+  asian: {
+    up600: '#FF8A80',
+    up700: '#FFB4AE',
+    up50: '#3A1618',
+    down600: '#62D0A5',
+    down700: '#7EE0B8',
+    down50: '#163D34',
   },
 } as const;
 
@@ -55,7 +76,7 @@ function emit(): void {
 }
 
 function onStorage(event: StorageEvent): void {
-  if (event.key !== COLOR_MODE_KEY) return;
+  if (event.key !== COLOR_MODE_KEY && event.key !== null) return;
   const next: ColorMode = event.newValue === 'western' ? 'western' : 'asian';
   if (next === currentMode) return;
   currentMode = next;
@@ -74,7 +95,7 @@ export function getColorMode(): ColorMode {
 }
 
 export function directionColors(mode: ColorMode = getColorMode()) {
-  return PRICE_COLORS[mode];
+  return getAppearance() === 'dark' ? PRICE_COLORS_DARK[mode] : PRICE_COLORS[mode];
 }
 
 export function applyColorMode(mode: ColorMode = getColorMode()): void {
@@ -101,3 +122,6 @@ export function subscribeColorMode(listener: () => void): () => void {
     listeners.delete(listener);
   };
 }
+
+// Canvas charts must repaint when the system or stored appearance changes.
+subscribeAppearance(emit);

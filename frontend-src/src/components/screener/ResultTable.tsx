@@ -125,7 +125,7 @@ export default function ResultTable({
                   )}
                   aria-expanded={isOpen}
                 >
-                  <td className="px-3 py-2 font-mono text-caption text-ink-400 tnum">{startIndex + index + 1}</td>
+                  <td className="px-3 py-2 tnum text-caption text-ink-400">{startIndex + index + 1}</td>
                   <td className="px-3 py-2">
                     <CodeCell displayCode={row.display_code} nameJa={row.name_ja} />
                     {row.sector33_name ? (
@@ -152,7 +152,7 @@ export default function ResultTable({
                   <td className="px-3 py-2 text-right">
                     <TickPrice
                       flash={flashes[row.canonical_code]}
-                      className="font-mono text-body-s text-ink-900"
+                      className="tnum text-body-s text-ink-900"
                     >
                       {fmtPrice(quote.price)}
                     </TickPrice>
@@ -163,7 +163,7 @@ export default function ResultTable({
                   <td className="px-3 py-2">
                     <NewsBadge summary={news[row.canonical_code]} loaded={newsLoaded} tipSide={index < 3 ? 'bottom' : 'top'} />
                   </td>
-                  <td className="px-3 py-2 text-right font-mono text-body-s text-ink-600 tnum">
+                  <td className="px-3 py-2 text-right tnum text-body-s text-ink-600">
                     {fmtYenCompact(row.avg_turnover_20d)}
                   </td>
                   <td className="px-3 py-2 text-right">
@@ -200,7 +200,7 @@ export default function ResultTable({
         </tbody>
       </table>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-card-warm px-4 py-2.5">
-        <p className="font-mono text-micro text-ink-400 tnum">
+        <p className="tnum text-micro text-ink-400">
           {t('每页 20 · 分档')}{' '}
           {rows.length > 0 && rows[0].ranking_score !== null
             ? `${tierOf(rows[0].ranking_score)}–${tierOf(rows[rows.length - 1].ranking_score ?? 0)}（${TIER_RANGE[tierOf(rows[0].ranking_score)]}）`
@@ -217,7 +217,7 @@ export default function ResultTable({
               onClick={() => onPageChange(p)}
               aria-current={p === page ? 'page' : undefined}
               className={cn(
-                'flex size-7 items-center justify-center rounded-sm border font-mono text-caption tnum transition-colors duration-fast',
+                'flex size-7 items-center justify-center rounded-sm border tnum text-caption tnum transition-colors duration-fast',
                 p === page
                   ? 'border-brand-600 bg-brand-600 text-white shadow-chip'
                   : 'border-line text-ink-500 hover:border-brand-400 hover:text-brand-600',

@@ -22,8 +22,8 @@ function AuctionCard({ label, print: entry, tone }: { label: string; print: Auct
       <p className="text-micro text-ink-400">{label}</p>
       {entry ? (
         <>
-          <p className="font-mono text-body-s tnum text-ink-900">{fmtPrice(entry.price)}</p>
-          <p className="font-mono text-micro tnum text-ink-500">
+          <p className="tnum text-body-s text-ink-900">{fmtPrice(entry.price)}</p>
+          <p className="tnum text-micro text-ink-500">
             {shares(entry.volume)}
             {entry.day_volume_share != null && (
               <span className={cn('ml-1 font-semibold', tone)}>
@@ -31,10 +31,10 @@ function AuctionCard({ label, print: entry, tone }: { label: string; print: Auct
               </span>
             )}
           </p>
-          <p className="font-mono text-micro text-ink-300">{entry.time}</p>
+          <p className="tnum text-micro text-ink-300">{entry.time}</p>
         </>
       ) : (
-        <p className="font-mono text-body-s text-ink-300">—</p>
+        <p className="tnum text-body-s text-ink-300">—</p>
       )}
     </div>
   );
@@ -56,13 +56,13 @@ export default function TickAnalyticsPanel({ analytics }: { analytics: TickAnaly
       <div className="mt-3 flex flex-wrap items-end gap-x-6 gap-y-2 border-b border-line pb-3">
         <span>
           <span className="block text-micro text-ink-400">{t('真实 VWAP')}</span>
-          <span className="font-mono text-data-l tnum text-ink-900">{fmtPrice(vwap?.vwap ?? null)}</span>
+          <span className="tnum text-data-l text-ink-900">{fmtPrice(vwap?.vwap ?? null)}</span>
         </span>
         <span>
           <span className="block text-micro text-ink-400">{t('现价对 VWAP')}</span>
           <span
             className={cn(
-              'font-mono text-data-m font-semibold tnum',
+              'tnum text-data-m font-semibold tnum',
               (vwap?.deviation_pct ?? 0) >= 0 ? 'text-up-600' : 'text-down-600',
             )}
           >
@@ -71,14 +71,14 @@ export default function TickAnalyticsPanel({ analytics }: { analytics: TickAnaly
         </span>
         <span>
           <span className="block text-micro text-ink-400">{t('成交笔数')}</span>
-          <span className="font-mono text-data-m tnum text-ink-700">
+          <span className="tnum text-data-m text-ink-700">
             {(analytics.tick_count ?? 0).toLocaleString()}
           </span>
         </span>
         {sessions && (
           <span>
             <span className="block text-micro text-ink-400">{t('前場 / 後場')}</span>
-            <span className="font-mono text-caption tnum text-ink-600">
+            <span className="tnum text-caption text-ink-600">
               {shares(sessions.morning.volume)} / {shares(sessions.afternoon.volume)}
             </span>
           </span>
@@ -108,7 +108,7 @@ export default function TickAnalyticsPanel({ analytics }: { analytics: TickAnaly
           <p className="mb-1.5 text-caption text-ink-500">
             {t('价格帯别成交量')}
             {profile?.poc != null && (
-              <span className="ml-2 font-mono text-micro text-brand-600">
+              <span className="ml-2 tnum text-micro text-brand-600">
                 POC {fmtPrice(profile.poc)}
               </span>
             )}
@@ -120,7 +120,7 @@ export default function TickAnalyticsPanel({ analytics }: { analytics: TickAnaly
                 && profile.poc <= bucket.price_high;
               return (
                 <div key={bucket.price_low} className="flex items-center gap-1.5">
-                  <span className="w-14 shrink-0 text-right font-mono text-[10px] text-ink-400 tnum">
+                  <span className="w-14 shrink-0 text-right tnum text-[10px] text-ink-400">
                     {Math.round(bucket.price_low).toLocaleString()}
                   </span>
                   <span className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-[2px] bg-line/60">
@@ -140,7 +140,7 @@ export default function TickAnalyticsPanel({ analytics }: { analytics: TickAnaly
           <p className="mb-1.5 text-caption text-ink-500">
             {t('大口成交')}
             {large?.threshold != null && (
-              <span className="ml-2 font-mono text-micro text-ink-400">
+              <span className="ml-2 tnum text-micro text-ink-400">
                 ≥{shares(large.threshold)} · {large.count} {t('笔')}
                 {large.volume_share != null && ` · ${(large.volume_share * 100).toFixed(1)}%`}
               </span>
@@ -149,7 +149,7 @@ export default function TickAnalyticsPanel({ analytics }: { analytics: TickAnaly
           {(large?.rows ?? []).length === 0 ? (
             <p className="text-caption text-ink-400">{t('当日无显著大口成交')}</p>
           ) : (
-            <table className="w-full border-collapse font-mono text-micro tnum">
+            <table className="w-full border-collapse tnum text-micro">
               <tbody>
                 {(large?.rows ?? []).slice(0, 8).map((row) => (
                   <tr key={`${row.time}-${row.volume}`} className="border-b border-line/60 last:border-b-0">

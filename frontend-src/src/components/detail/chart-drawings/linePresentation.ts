@@ -1,3 +1,4 @@
+import { drawingPaint, drawingSurface } from './drawingAppearance.ts';
 /** Chart ink is independent of the candle up/down preference. Values are CSS pixels. */
 export const LINE_INK = Object.freeze({
   support: '#0E647F', resistance: '#8D299B', channel: '#4F46E5',
@@ -50,9 +51,9 @@ export function normalizePatternSegments(input: Segment[], kind: string): Segmen
 
 /** Preserve explicitly saved manual widths. A small white keyline separates intersecting ink. */
 export function manualLineInk(color: string, width: number, dash: string | number[] = 'solid') {
-  return { color, width: Number.isFinite(width) ? Math.max(1, Math.min(4, width)) : 3,
+  return { color: drawingPaint(color), width: Number.isFinite(width) ? Math.max(1, Math.min(4, width)) : 3,
     type: dash, opacity: 1, cap: 'round' as const, join: 'round' as const,
-    shadowColor: 'rgba(255,255,255,0.95)', shadowBlur: 3 };
+    shadowColor: drawingSurface(0.95), shadowBlur: 3 };
 }
 
 /** Extend only to existing chart bars, never through a wedge apex or into negative prices. */
@@ -88,9 +89,9 @@ export function projectPatternRails(segments: Segment[], kind: string, status: s
 }
 
 export function autoLineColor(kind: string): string {
-  if (kind === 'support_trend') return LINE_INK.support;
-  if (kind === 'resistance_trend') return LINE_INK.resistance;
-  return PAIRED.has(kind) ? LINE_INK.channel : LINE_INK.neutral;
+  if (kind === 'support_trend') return drawingPaint(LINE_INK.support);
+  if (kind === 'resistance_trend') return drawingPaint(LINE_INK.resistance);
+  return drawingPaint(PAIRED.has(kind) ? LINE_INK.channel : LINE_INK.neutral);
 }
 
 /** Share the fallback role between the plotted level and its text description. */
@@ -128,14 +129,14 @@ export function renderPatternInk(
     const xs = fill.map(p => p.x), ys = fill.map(p => p.y);
     out.areas.push([
       { xAxis: Math.min(...xs), yAxis: Math.min(...ys),
-        itemStyle: { color: LINE_INK.neutral, opacity: broken ? 0.025 : 0.075 },
+        itemStyle: { color: drawingPaint(LINE_INK.neutral), opacity: broken ? 0.025 : 0.075 },
         label: { show: Boolean(pattern.label), formatter: pattern.label ?? '', position: 'insideTopLeft',
-          color: LINE_INK.neutral, fontSize: 10 } },
+          color: drawingPaint(LINE_INK.neutral), fontSize: 10 } },
       { xAxis: Math.max(...xs), yAxis: Math.max(...ys) },
     ]);
     for (const segment of segments) out.lines.push([
       { coord: [segment.a.x, segment.a.y], clipToPlot: true,
-        lineStyle: { color: LINE_INK.neutral, width: 0.9, opacity: broken ? 0.18 : 0.3,
+        lineStyle: { color: drawingPaint(LINE_INK.neutral), width: 0.9, opacity: broken ? 0.18 : 0.3,
           type: broken ? [2, 4] : [4, 4] }, label: { show: false } },
       { coord: [segment.b.x, segment.b.y] },
     ]);
@@ -155,7 +156,7 @@ export function renderPatternInk(
   const lower = paired && meanY(segments[0]) > meanY(segments[1]) ? 1 : 0;
   const priceText = (price: number) => price.toLocaleString('en-US', { maximumFractionDigits: price < 1 ? 4 : 2 });
   observed.forEach((segment, i) => {
-    const color = paired ? i === lower ? LINE_INK.support : LINE_INK.resistance : baseColor;
+    const color = drawingPaint(paired ? i === lower ? LINE_INK.support : LINE_INK.resistance : baseColor);
     const original = segments[i];
     const beyond = projections.find(p => p.a.x === original.b.x && p.a.y === original.b.y);
     const target = beyond?.b ?? original.b;
@@ -166,7 +167,7 @@ export function renderPatternInk(
       position: 'insideMiddleTop', distance: 4, fontSize: 11, lineHeight: 14,
       span: [[segment.a.x, segment.a.y], [target.x, target.y]],
       priority: (pattern.labelPriority ?? 0) + ink.labelPriority,
-      color, backgroundColor: 'rgba(255,255,255,0.97)', borderColor: color,
+      color, backgroundColor: drawingSurface(0.97), borderColor: color,
       borderWidth: 0.5, borderRadius: 4, padding: [2, 5],
     } : { show: false };
     out.lines.push([

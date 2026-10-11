@@ -30,7 +30,7 @@ jobs:
       - name: Compile backend
         run: python -m compileall -q backend/app
 
-      # CI は実 J-Quants・実 OpenAI に接続しない（テストは全て MockTransport/フィクスチャ）
+      # CI は外部データサービスに接続しない（テストは全て MockTransport/フィクスチャ）
       - name: Backend tests
         run: python -m pytest tests/ -q
 
@@ -63,6 +63,15 @@ jobs:
       # grep では見つからず、静かに片方が消える。
       - name: i18n dictionary duplicate gate
         run: node --experimental-strip-types frontend-src/tests/dict_no_duplicates.mjs
+
+      - name: Frontend lint
+        run: npm run lint --prefix frontend-src
+
+      - name: Navigation and theme regression gates
+        run: |
+          node --experimental-strip-types --test frontend-src/tests/ui-contracts.mjs
+          node --experimental-strip-types --test frontend-src/src/components/detail/chart-drawings/drawingAppearance.test.mjs
+          node --experimental-strip-types --test frontend-src/src/components/charts/heatContrast.test.mjs
 
       - name: Color-mode preference gate
         run: node --experimental-strip-types --test frontend-src/tests/color-preference.mjs

@@ -79,7 +79,7 @@ export default function DataTable<T>({
       if (typeof va === 'string' || typeof vb === 'string') return String(va).localeCompare(String(vb)) * dir;
       return ((va as number) - (vb as number)) * dir;
     });
-  }, [rows, sort, columns]);
+  }, [rows, sort, columns, preSorted]);
 
   const toggleSort = (key: string) => {
     setSort(sort?.key === key ? { key, desc: !sort.desc } : { key, desc: true });

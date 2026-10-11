@@ -1,7 +1,7 @@
 """jp-news.db — 日本株ニュースの保存層（worker 専用ライタ）。
 
-原文は不変で保持し、日本語訳・中文分析は独立フィールドに追記する。
-翻訳/分析はモデル・プロンプト版・指紋つきで保存し、静黙な上書きをしない。
+原文を保持し、旧翻訳・分析フィールドは履歴保護のためスキーマ内に残す。
+現在の同期・API は原文だけを使用する。
 """
 
 from __future__ import annotations
@@ -202,34 +202,6 @@ class NewsStore(SQLiteRepository):
             )
         return len(prepared)
 
-    def attach_translation(
-        self, news_id: str, *, title_ja: str, summary_ja: str | None,
-        model: str, version: str, fingerprint: str,
-    ) -> bool:
-        with self.write() as connection:
-            cursor = connection.execute(
-                "UPDATE news_items SET translated_title_ja = ?, translated_summary_ja = ?, "
-                "translation_model = ?, translation_version = ?, translation_fingerprint = ?, "
-                "translated_at = ? WHERE news_id = ?",
-                (title_ja, summary_ja, model, version, fingerprint, utc_now_iso(), news_id),
-            )
-            return bool(cursor.rowcount)
-
-    def attach_analysis(
-        self, news_id: str, *, analysis: Mapping[str, Any],
-        model: str, version: str, fingerprint: str,
-    ) -> bool:
-        with self.write() as connection:
-            cursor = connection.execute(
-                "UPDATE news_items SET analysis_zh_json = ?, analysis_model = ?, "
-                "analysis_version = ?, analysis_fingerprint = ?, analyzed_at = ? WHERE news_id = ?",
-                (
-                    json.dumps(analysis, ensure_ascii=False, sort_keys=True),
-                    model, version, fingerprint, utc_now_iso(), news_id,
-                ),
-            )
-            return bool(cursor.rowcount)
-
     def recent_items(self, *, since_iso: str, limit: int = 200) -> list[dict[str, Any]]:
         with self.read() as connection:
             rows = connection.execute(
@@ -247,53 +219,6 @@ class NewsStore(SQLiteRepository):
                 "SELECT * FROM news_items WHERE duplicate_of IS NULL AND securities_json LIKE ? "
                 "ORDER BY COALESCE(published_at, fetched_at) DESC LIMIT ?",
                 (pattern, int(limit)),
-            ).fetchall()
-        return [self._decode(row) for row in rows]
-
-    def pending_ai_candidates(
-        self,
-        *,
-        since_iso: str,
-        limit: int,
-        translation_version: str | None = None,
-        analysis_version: str | None = None,
-    ) -> list[dict[str, Any]]:
-        """重要度順で翻訳/分析が欠けている（または版が古い）アイテムを返す。
-
-        translation_version / analysis_version を渡すと、既訳・既分析でも保存された
-        版が現行 prompt 版と異なる行を再選択する（版更新時に旧結果を再処理するため）。
-
-        SQLite の ``col IS NOT ?`` は bind が非 NULL でも ``col IS NULL`` を真にする。
-        日本語原文は翻訳しないので ``translation_version`` がずっと NULL のままになり、
-        素の ``IS NOT ?`` だと「既に分析済みの日本語」が候補を埋め尽くす。
-        欠落、または「成果物があるのに版が違う」だけを拾う。
-        """
-
-        if translation_version is None and analysis_version is None:
-            predicate = "(translated_title_ja IS NULL OR analysis_zh_json IS NULL)"
-            params: tuple[Any, ...] = (since_iso, int(limit))
-        else:
-            # 翻訳: 日本語以外で未訳、または既訳だが版が違う / 版が空。
-            # 分析: 未分析、または既分析だが版が違う / 版が空。
-            predicate = """(
-                (translated_title_ja IS NULL AND source_language != 'ja')
-                OR (translated_title_ja IS NOT NULL AND (
-                    translation_version IS NULL OR translation_version IS NOT ?
-                ))
-                OR analysis_zh_json IS NULL
-                OR (analysis_zh_json IS NOT NULL AND (
-                    analysis_version IS NULL OR analysis_version IS NOT ?
-                ))
-            )"""
-            params = (since_iso, translation_version, analysis_version, int(limit))
-        with self.read() as connection:
-            rows = connection.execute(
-                "SELECT * FROM news_items WHERE duplicate_of IS NULL "
-                "AND COALESCE(published_at, fetched_at) >= ? "
-                f"AND {predicate} "
-                "AND securities_json != '[]' "
-                "ORDER BY importance IS NULL, importance DESC LIMIT ?",
-                params,
             ).fetchall()
         return [self._decode(row) for row in rows]
 

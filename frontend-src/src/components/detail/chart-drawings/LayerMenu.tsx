@@ -59,7 +59,7 @@ function ValueBadge({ text, className }: { text: string; className?: string }) {
   return (
     <span
       className={cn(
-        'inline-flex h-6 items-center justify-center rounded-sm bg-paper-2 font-mono leading-none text-ink-700 tnum',
+        'inline-flex h-6 items-center justify-center rounded-sm bg-paper-2 tnum leading-none text-ink-700 tnum',
         className,
       )}
     >
@@ -182,7 +182,7 @@ function Card({ title, meta, children, className }: { title: string; meta?: stri
     <section className={cn('rounded-lg border border-line bg-card p-2 shadow-card', className)}>
       <div className="mb-1 flex h-6 items-center justify-between px-1.5 pt-0.5">
         <h3 className="font-medium leading-none text-ink-600">{title}</h3>
-        {meta && <span className="font-mono text-micro leading-none text-ink-300 tnum">{meta}</span>}
+        {meta && <span className="tnum text-micro leading-none text-ink-300">{meta}</span>}
       </div>
       {children}
     </section>
