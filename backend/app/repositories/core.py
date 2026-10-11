@@ -627,6 +627,35 @@ class CoreRepository(SQLiteRepository):
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def margin_interest_summary(self) -> dict[str, Any]:
+        """Real stored record count and application date, independent of query dates."""
+        with self.read() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS rows_total, MAX(application_date) AS data_through FROM margin_interest"
+            ).fetchone()
+        return dict(row)
+
+    def refresh_margin_interest_sync_stats(self) -> dict[str, Any]:
+        """Repair stored facts without marking a partial query as successful."""
+        with self.write() as connection:
+            summary = dict(connection.execute(
+                "SELECT COUNT(*) AS rows_total, MAX(application_date) AS data_through FROM margin_interest"
+            ).fetchone())
+            row = connection.execute(
+                "SELECT checkpoint_json FROM sync_state WHERE dataset = 'margin_interest'"
+            ).fetchone()
+            try:
+                checkpoint = json.loads(row[0] or "{}") if row else {}
+            except ValueError:
+                checkpoint = {}
+            checkpoint["last_synced_date"] = summary["data_through"]
+            connection.execute(
+                "UPDATE sync_state SET rows_total = ?, data_through = ?, checkpoint_json = ? "
+                "WHERE dataset = 'margin_interest'",
+                (summary["rows_total"], summary["data_through"], json.dumps(checkpoint, ensure_ascii=False, sort_keys=True)),
+            )
+        return summary
+
     def latest_margin_map(self) -> dict[str, dict[str, Any]]:
         with self.read() as connection:
             rows = connection.execute(

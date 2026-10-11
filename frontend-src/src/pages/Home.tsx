@@ -6,6 +6,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { marketApi, radarApi, earningsApi, watchlistApi } from '@/api/modules';
 import type { EarningsRecentItem, IndexSummary, RadarEvent, WatchlistItem } from '@/api/types';
 import { ApiError } from '@/api/client';
+import { useAccess } from '@/hooks/useAccess';
 import { usePolling } from '@/hooks/usePolling';
 import { useNow } from '@/hooks/useNow';
 import { useTickFlash } from '@/hooks/useTickFlash';
@@ -109,10 +110,14 @@ function SignalListSkeleton({ rows }: { rows: number }) {
 }
 
 export default function Home() {
+  const { canManageWatchlist } = useAccess();
   const market = usePolling(() => marketApi.overview(), 120_000);
   const radar = usePolling(() => radarApi.current(), 120_000);
   const earnings = usePolling(() => earningsApi.recent(7), 300_000);
-  const watchlist = usePolling(() => watchlistApi.list(), 120_000);
+  const watchlist = usePolling(
+    () => canManageWatchlist ? watchlistApi.list() : Promise.resolve<Awaited<ReturnType<typeof watchlistApi.list>>>({ items: [] }),
+    120_000, [canManageWatchlist],
+  );
   const now = useNow(30_000);
   const session = tokyoSession(now);
   const todayKey = jstToday();
@@ -285,7 +290,14 @@ export default function Home() {
         </SectionCard>
 
         <SectionCard title={t('关注动态')} to="/watchlist" className="lg:col-span-2">
-          <ListBody
+          {!canManageWatchlist ? (
+            <EmptyState
+              image="/empty-watchlist.svg"
+              title={t('登录后可以把关注股票保存在账号里')}
+              description={t('账号与美股版通用，换设备也还在')}
+              action={<Link to="/login" className="btn-primary">{t('去登录 / 注册')}</Link>}
+            />
+          ) : <ListBody
             loading={watchlist.loading && !watchlist.data}
             error={watchlist.error}
             refreshing={watchlist.refreshing}
@@ -306,7 +318,7 @@ export default function Home() {
                 />
               ))}
             </div>
-          </ListBody>
+          </ListBody>}
         </SectionCard>
       </div>
     </div>

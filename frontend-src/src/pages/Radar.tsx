@@ -61,7 +61,7 @@ const GROUP_STATES: Record<StateGroup, string | undefined> = {
 };
 
 export default function Radar() {
-  const { canRefreshPublicData } = useAccess();
+  const { canRefreshPublicData, canManageWatchlist } = useAccess();
   const toast = useToast();
   const [group, setGroup] = useState<StateGroup>('active');
   const [view, setView] = useState<ViewMode>('cards');
@@ -99,7 +99,10 @@ export default function Radar() {
   const [onlyAbovePivot, setOnlyAbovePivot] = useState(false);
   const [minScore, setMinScore] = useState(0);
   const [onlyWatch, setOnlyWatch] = useState(false);
-  const watchQ = usePolling(() => watchlistApi.list(), 120_000);
+  const watchQ = usePolling(
+    () => canManageWatchlist ? watchlistApi.list() : Promise.resolve<Awaited<ReturnType<typeof watchlistApi.list>>>({ items: [] }),
+    120_000, [canManageWatchlist],
+  );
   const watchCodes = useMemo(
     () => new Set((watchQ.data?.items ?? []).map((item) => item.canonical_code)),
     [watchQ.data],

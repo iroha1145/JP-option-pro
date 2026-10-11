@@ -110,7 +110,10 @@ export default function Watchlist() {
   const now = useNow(30_000);
   const session = tokyoSession(now);
   const [searchParams, setSearchParams] = useSearchParams();
-  const query = usePolling(() => watchlistApi.list(), 120_000);
+  const query = usePolling(
+    () => canManageWatchlist ? watchlistApi.list() : Promise.resolve<Awaited<ReturnType<typeof watchlistApi.list>>>({ items: [] }),
+    120_000, [canManageWatchlist],
+  );
   const refreshWatchlist = query.refresh;
   const [view, setView] = useState<'cards' | 'table'>('cards');
   const [sort, setSort] = useState<SortState | null>(null);
@@ -166,7 +169,7 @@ export default function Watchlist() {
   }, [items]);
   const flashes = useTickFlash(items, (row) => row.canonical_code, (row) => row.quote?.close ?? null);
   const maxItems = query.data?.max_items ?? null;
-  const anonymous =
+  const anonymous = !canManageWatchlist ||
     query.error instanceof ApiError && query.error.bizCode === 'account_login_required';
 
   const doRemove = async (code: string) => {
