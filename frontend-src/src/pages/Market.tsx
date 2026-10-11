@@ -168,7 +168,7 @@ export default function Market() {
       <PageHeader
         section="market"
         title={t('日本市场')}
-        description={t('本页为日线数据，收盘后更新')}
+        description={t('日本主要指数、33 行业涨跌与市场广度')}
         meta={
           <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-3 gap-y-2">
             <SessionLED session={session} className="shrink-0 whitespace-nowrap" />

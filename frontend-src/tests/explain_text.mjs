@@ -71,9 +71,9 @@ function check(name, fn) {
   }
 }
 
-/** zh は msgid をそのまま返す言語。訳文の中身は en/ja でだけ確かめる。 */
+/** 日文のAPI分類キーも三言語で表示する。分類キー自体は変更しない。 */
 const expected = {
-  zh: { tailwind: '順風', earnings: '決算', weekly: '週次' },
+  zh: { tailwind: '顺风', earnings: '财报', weekly: '每周' },
   en: { tailwind: 'Tailwind', earnings: 'Earnings', weekly: 'weekly' },
   ja: { tailwind: '順風', earnings: '決算', weekly: '週次' },
 }[locale];
@@ -82,6 +82,25 @@ check('辞書が引ける', () => {
   assert.equal(t('順風'), expected.tailwind);
   assert.equal(t('決算'), expected.earnings);
   assert.equal(t('週次'), expected.weekly);
+});
+
+check('日文のAPI分類に中文表示を持てる', () => {
+  const expected = {
+    zh: ['股份回购', '已退市', '≥ 1亿日元'],
+    en: ['Buyback', 'Delisted', '≥ ¥100M'],
+    ja: ['自社株買い', '上場廃止', '≥ 1億円'],
+  }[locale];
+  assert.deepEqual(['自社株買い', '上場廃止', '≥ 1億円'].map(key => t(key)), expected);
+});
+
+check('中文上書きにも変数置換を適用する', () => {
+  const expected = { zh: '共 8 项 · 已确认 3 项', en: '8 · 3 confirmed', ja: '8 件 · 確定3' }[locale];
+  assert.equal(t('{n} 件 · 確定{c}', { n: 8, c: 3 }), expected);
+});
+
+check('未登録の会社名と中国語原文は保持する', () => {
+  assert.equal(t('トヨタ自動車'), 'トヨタ自動車');
+  assert.equal(t('未收录的说明 {n}', { n: 2 }), '未收录的说明 2');
 });
 
 check('数値入りテンプレートは置換後も訳せる', () => {
@@ -131,6 +150,7 @@ check('parts_key / parts_sep を指定した列挙（ニュースのイベント
   });
   assert.ok(!line.includes('{categories}'), `categories が埋まっていない: ${line}`);
   assert.ok(line.includes('/'), `区切りが落ちている: ${line}`);
+  if (locale === 'zh') assert.equal(line, '事件类别: 财报/分红');
   if (locale === 'en') assert.equal(line, 'Event type: Earnings/Dividend');
   if (locale === 'ja') assert.equal(line, 'イベント種別: 決算/配当');
 });

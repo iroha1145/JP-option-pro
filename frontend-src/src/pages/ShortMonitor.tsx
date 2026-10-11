@@ -266,20 +266,19 @@ export default function ShortMonitor() {
               </div>
               <div className="space-y-1 text-micro text-ink-400">
                 <p>
-                  {t('机构数后的 +N? 是实际持仓不可见的机构家数（跌破门槛，或未跌破但报告长期停止），均不计入合计')}
+                  {t('机构数仅统计近期公开持仓；低于门槛、久未更新和比例缺失的机构分别标注')}
                 </p>
-                {/* 同一页上「空头变化」和「相对收益」用同一组红绿，含义却不同 ——
-                    不写清楚，+0.71% 是绿、+11.94% 是红这件事就只能靠猜。 */}
+                {/* 空头变化与相对收益采用不同的方向约定，颜色随系统设置切换。 */}
                 <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span className="inline-flex items-center gap-1 text-down-600">
                     <span className="inline-block size-1.5 rounded-full bg-down-600" aria-hidden />
-                    {t('公开空头增加（卖压增强）')}
+                    {t('空头增加用跌色')}
                   </span>
                   <span className="inline-flex items-center gap-1 text-up-600">
                     <span className="inline-block size-1.5 rounded-full bg-up-600" aria-hidden />
-                    {t('公开空头减少（买方回补）')}
+                    {t('空头减少用涨色')}
                   </span>
-                  <span>{t('空头变化按对股价的方向着色；相对收益仍是红涨绿跌')}</span>
+                  <span>{t('相对收益按正负使用系统涨跌配色')}</span>
                 </p>
               </div>
             </>
@@ -402,7 +401,6 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
   );
   const detail = detailQuery.data;
   const events = eventQuery.data?.events ?? [];
-  const invisible = row.below_threshold_count + (row.stale_reporting_count ?? 0);
 
   return (
     <motion.article
@@ -440,14 +438,13 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
                 <p className="mt-0.5 tnum text-data-l text-ink-900">{fmtPrice(row.close)}</p>
               </div>
               <div className="radar-value-cell px-3 py-2.5">
-                <p className="text-micro text-ink-400">{t('公开可见空头')}</p>
+                <p className="text-micro text-ink-400">{t('近期公开持仓')} <InfoHint hint={SHORT_HINTS.visibleShort} size={11} /></p>
                 <p className="mt-0.5 tnum text-data-l text-ink-900">{fmtPctLevel(row.visible_short_ratio)}</p>
               </div>
               <div className="radar-value-cell px-3 py-2.5">
-                <p className="text-micro text-ink-400">{t('机构数')}</p>
+                <p className="text-micro text-ink-400">{t('近期机构数')} <InfoHint hint={institutionCountHint()} size={11} /></p>
                 <p className="mt-0.5 tnum text-data-l text-ink-900">
                   {row.visible_institution_count}
-                  {invisible > 0 && <span className="text-ink-400"> +{invisible}?</span>}
                 </p>
               </div>
             </div>
@@ -460,6 +457,7 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
               />
             </div>
           </div>
+          <InstitutionStatusNotes row={row} className="mt-2" />
           <div className="mb-3 mt-3 flex flex-wrap gap-x-4 gap-y-1 text-caption text-ink-500">
             {row.reported_in_scope_ratio != null &&
               row.reported_in_scope_ratio - (row.visible_short_ratio ?? 0) > 0.0005 && (
@@ -670,8 +668,6 @@ function EventLine({ event }: { event: ShortMonitorEvent }) {
  *  出ていない値はどこにも出ない）。塊ごとに小見出しを付けて、数字の壁に
  *  ならないようにする。 */
 function StockCard({ row, onSelect }: { row: ShortMonitorRow; onSelect: () => void }) {
-  const invisible = row.below_threshold_count + (row.stale_reporting_count ?? 0);
-  const unknown = row.unknown_institution_count ?? 0;
   // 公式ルール口径が新鮮な合計より大きいときだけ差が意味を持つ
   const inScope = row.reported_in_scope_ratio;
   return (
@@ -705,7 +701,7 @@ function StockCard({ row, onSelect }: { row: ShortMonitorRow; onSelect: () => vo
       <FactBlock
         title={t('公开空头规模')}
         facts={[
-          { label: t('公开可见空头'), value: fmtPctLevel(row.visible_short_ratio) },
+          { label: t('近期公开持仓'), value: fmtPctLevel(row.visible_short_ratio) },
           {
             label: t('在册合计'),
             value: fmtPctLevel(inScope),
@@ -713,13 +709,12 @@ function StockCard({ row, onSelect }: { row: ShortMonitorRow; onSelect: () => vo
           },
           { label: t('可见股数'), value: fmtShares(row.visible_short_shares) },
           {
-            label: t('机构数'),
+            label: t('近期机构数'),
             value: (
-              <>
+              <span className="inline-flex items-center gap-1">
                 {row.visible_institution_count}
-                {invisible > 0 && <span className="text-ink-400"> +{invisible}?</span>}
-                {unknown > 0 && <span className="text-ink-400"> ?{unknown}</span>}
-              </>
+                <InfoHint hint={institutionCountHint()} size={11} />
+              </span>
             ),
           },
           { label: t('最大机构'), value: fmtPctLevel(row.largest_institution_ratio) },
@@ -730,6 +725,8 @@ function StockCard({ row, onSelect }: { row: ShortMonitorRow; onSelect: () => vo
           },
         ]}
       />
+
+      <InstitutionStatusNotes row={row} />
 
       <FactBlock
         title={t('变化与压力')}
@@ -800,6 +797,49 @@ function StockCard({ row, onSelect }: { row: ShortMonitorRow; onSelect: () => vo
       </div>
       </div>
     </button>
+  );
+}
+
+function institutionCountHint() {
+  return {
+    title: t('近期机构数'),
+    body: t('仅统计最后报告达到 0.5% 披露门槛，且近 125 个交易日内有更新的机构。久未更新的机构仍保留在册合计。'),
+  };
+}
+
+/** 状态明细放在指标格外，给三种语言留出完整行宽。 */
+function InstitutionStatusNotes({ row, className }: { row: ShortMonitorRow; className?: string }) {
+  const statuses = [
+    {
+      count: row.below_threshold_count,
+      label: t('低于披露门槛'),
+      detail: t('最后报告比例低于 0.5%，不计入近期公开持仓或在册合计；不代表持仓已清零。'),
+    },
+    {
+      count: row.stale_reporting_count ?? 0,
+      label: t('久未更新'),
+      detail: t('最后报告仍达到 0.5%，但超过 125 个交易日未更新。不计入近期公开持仓，仍保留在册合计。'),
+    },
+    {
+      count: row.unknown_institution_count ?? 0,
+      label: t('比例缺失'),
+      detail: t('最新报告缺少可读持仓比例，无法判断持仓状态；不表示机构名称不明或持仓已清零。'),
+    },
+  ].filter((status) => status.count > 0);
+  if (!statuses.length) return null;
+  return (
+    <div className={cn('flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-micro text-ink-500', className)}>
+      {statuses.map((status) => (
+        <PointerTooltip
+          key={status.label}
+          label={`${status.label} ${status.count}`}
+          className="max-w-full rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
+          content={<span className="text-micro leading-relaxed text-ink-600">{status.detail}</span>}
+        >
+          <span className="min-w-0 whitespace-normal break-words">{status.label} <span className="tnum">{status.count}</span></span>
+        </PointerTooltip>
+      ))}
+    </div>
   );
 }
 

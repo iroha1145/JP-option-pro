@@ -255,8 +255,8 @@ export default function Home() {
             refreshing={radar.refreshing}
             onRetry={() => radar.refresh()}
             isEmpty={events.length === 0}
-            emptyTitle={t('雷达仍在盯')}
-            emptyDescription={radar.data?.note ?? t('新信号出现时会立刻出现在这里。')}
+            emptyTitle={radar.data?.scan_date ? t('暂无突破信号') : t('等待扫描结果')}
+            emptyDescription={radar.data?.note ? t(radar.data.note) : t('日线扫描完成后更新信号。')}
             emptyImage="/empty-radar.svg"
             skeleton={<SignalListSkeleton rows={8} />}
             rows={8}
@@ -294,7 +294,7 @@ export default function Home() {
             <EmptyState
               image="/empty-watchlist.svg"
               title={t('登录后可以把关注股票保存在账号里')}
-              description={t('账号与美股版通用，换设备也还在')}
+              description={t('与美股版共用账号，关注列表可跨设备查看')}
               action={<Link to="/login" className="btn-primary">{t('去登录 / 注册')}</Link>}
             />
           ) : <ListBody
@@ -304,7 +304,7 @@ export default function Home() {
             onRetry={() => watchlist.refresh()}
             isEmpty={movers.length === 0}
             emptyTitle={t('暂无关注')}
-            emptyDescription={t('在条件选股中加入关注')}
+            emptyDescription={t('打开股票详情，点击加入关注')}
             emptyImage="/empty-watchlist.svg"
             skeleton={<SignalListSkeleton rows={6} />}
           >

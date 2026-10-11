@@ -160,12 +160,12 @@ export default function Radar() {
       <PageHeader
         section="screener"
         title={t('突破雷达')}
-        description={t('本页为日线数据，收盘后更新')}
+        description={t('收盘后扫描日线，追踪价格突破与形态变化')}
         meta={
-          <div className="flex items-center gap-3">
-            <DataThrough date={query.data?.scan_date} />
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-3 gap-y-2 [&>button]:shrink-0 [&>button]:whitespace-nowrap">
+            <DataThrough date={query.data?.scan_date} className="min-w-0 max-w-full [&_[data-soft-badge]]:whitespace-normal" />
             {query.lastUpdatedAt && (
-              <span className="tnum text-caption text-ink-400">
+              <span className="shrink-0 whitespace-nowrap tnum text-caption text-ink-400">
                 {t('更新')} {fmtTimeHHMMSS(query.lastUpdatedAt)}
               </span>
             )}

@@ -2,8 +2,8 @@
  * 多语言内核（简体中文 / English / 日本語）
  *
  * 设计取舍：
- * - 词条以「简体中文原文」为 msgid（gettext 风格）。源码里读得懂、缺译时如实回退中文原文，
- *   且后端下发的中文标签（板块名、形态标签、公司名…）可以走同一张表，不需要第二套机制。
+ * - 界面词条通常以简体中文为 msgid；后端的日文分类键保留原值，通过可选中文译文显示。
+ *   只翻译显示文本，不改接口筛选值；未收录的公司名等仍保留原文。
  * - 语言在「页面加载期」定型：切换语言 = 落盘 + 整页重载。模块级常量、useMemo 缓存的
  *   文案都在加载期求值，只有重载才能保证全站文案不出现半中半日的混排。
  * - 词典静态引入（非按需 import）：t() 在模块顶层就可能被调用，异步加载会出现
@@ -109,13 +109,15 @@ function plural(text: string, vars?: TVars): string {
 const missing = new Set<string>();
 
 /**
- * 取译文。msgid 为简体中文原文；未收录时回退原文（AI 生成的中文正文即走此分支，
- * 属预期行为——那是模型写下的内容，不是界面文案）。
+ * 取译文。中文优先读取可选的第三项，否则使用原文；英文、日文分别读取前两项。
+ * 未收录的文字保持原文，避免把公司名或接口分类值当成缺失数据。
  */
 export function t(msgid: string, vars?: TVars): string {
   let text = msgid;
-  if (current !== 'zh') {
-    const entry = DICT[msgid];
+  const entry = DICT[msgid];
+  if (current === 'zh') {
+    text = entry?.[2] || msgid;
+  } else {
     const translated = entry?.[current === 'en' ? 0 : 1];
     if (translated) text = translated;
     else if (import.meta.env?.DEV && !missing.has(msgid)) {
