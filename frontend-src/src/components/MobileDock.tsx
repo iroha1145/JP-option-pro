@@ -93,7 +93,7 @@ function MobileDockContent() {
         className="glass fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-[60] mx-auto flex min-h-16 max-w-md items-stretch rounded-lg border border-line px-1.5 shadow-dock xl:hidden"
         aria-label={t('移动端导航')}
       >
-        <motion.div layoutRoot className="flex h-full w-full items-stretch">
+        <motion.div layoutRoot className="flex w-full items-stretch">
           {DOCK_ITEMS.map(renderItem)}
           <div className="relative flex min-w-0 flex-1 basis-0">
             {moreActive && (

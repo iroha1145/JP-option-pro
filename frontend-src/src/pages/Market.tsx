@@ -13,7 +13,8 @@ import ChangeBadge from '@/components/shared/ChangeBadge';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import Segmented from '@/components/shared/Segmented';
 import { SkeletonCard, SkeletonReveal } from '@/components/shared/Skeleton';
-import InsightLineChart, { type InsightScrub } from '@/components/charts/InsightLineChart';
+import IndexTrendChart from '@/components/charts/IndexTrendChart';
+import { useChartCursor } from '@/components/charts/useChartCursor';
 import Sparkline from '@/components/charts/Sparkline';
 import { CodeCell, DataThrough } from '@/components/domain';
 import HeatMatrix, { HeatMatrixSkeleton, metricValue, type HeatMetric } from '@/components/sectors/HeatMatrix';
@@ -482,7 +483,6 @@ function IndexTrendPanel({
 }) {
   /* 只画选中的指数这一条线。之前叠 TOPIX/プライム 对照线：两条线颜色接近、
      图例只是两个色点，用户看不出第二条是什么（首页同样已撤） */
-  const [scrub, setScrub] = useState<InsightScrub | null>(null);
   const points = useMemo(
     () =>
       bars
@@ -490,15 +490,18 @@ function IndexTrendPanel({
         .map((bar) => ({ value: bar.close, label: bar.trade_date })),
     [bars],
   );
+  const cursor = useChartCursor(points.map((point) => point.label), (index) =>
+    `${name} ${points[index].label} ${t('收盘')} ${fmtPrice(points[index].value)}`,
+  `${indexCode}:${seriesCode}`);
   const last = points[points.length - 1];
-  const shown = scrub ?? (last ? { index: points.length - 1, value: last.value, label: last.label, x: 0, y: 0 } : null);
+  const shown = points[cursor.index ?? points.length - 1];
   const windowReturn = points.length > 1 && points[0].value !== 0 ? last.value / points[0].value - 1 : null;
   const badgeValue = useMemo(() => {
-    if (!scrub || points.length < 2) return changePct;
-    const prev = points[Math.max(0, scrub.index - 1)];
-    if (!prev || prev.value === 0) return changePct;
-    return (scrub.value - prev.value) / prev.value;
-  }, [scrub, points, changePct]);
+    if (cursor.index === null) return changePct;
+    const prev = points[cursor.index - 1];
+    if (!prev || prev.value === 0) return null;
+    return (points[cursor.index].value - prev.value) / prev.value;
+  }, [cursor.index, points, changePct]);
 
   return (
     <section className="card-surface flex flex-col overflow-hidden p-0 lg:col-span-2">
@@ -522,31 +525,18 @@ function IndexTrendPanel({
           {points.length === 0 ? (
             <EmptyState image="/empty-chart.svg" title={t('暂无数据')} />
           ) : (
-            <InsightLineChart
-              key={seriesCode}
-              data={points}
-              height={228}
-              change={changePct ?? 0}
-              interactive
-              showLiveDot
-              showCursorValue
-              showGrid
-              showAxis
-              formatValue={(value) => fmtPrice(value)}
-              onScrub={setScrub}
-              ariaLabel={`${name} ${t('趋势快照')}`}
-            />
+            <IndexTrendChart key={seriesCode} points={points} cursor={cursor} name={name} />
           )}
         </SkeletonReveal>
       </div>
-      <div className="flex items-baseline justify-between gap-3 px-4 pb-4 pt-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-3 px-4 pb-4 pt-2">
         <div>
           <p className="metric-value text-data-xl tnum text-ink-900">{fmtPrice(shown?.value)}</p>
           <p className="mt-0.5 text-micro text-ink-400">
             {shown?.label ?? '—'} · {t('收盘')}
           </p>
         </div>
-        <span className="flex items-center gap-1.5">
+        <span className="flex flex-wrap items-center gap-1.5">
           <ChangeBadge value={badgeValue} />
           <span className="text-micro text-ink-400">
             {t('{n}日', { n: points.length || 1 })} {fmtPct(windowReturn)}
