@@ -114,11 +114,11 @@ export default function StockDetail() {
   // clobbering the cadence for a newer selection.
   useEffect(() => {
     const bound = intraday.data && codesMatch(intraday.data.canonical_code, code) ? intraday.data : null;
-    setIntradayPollMs(wantIntraday && bound?.reason === 'fetching' ? 5_000 : null);
+    setIntradayPollMs(wantIntraday && bound ? cachePollMs(bound, 5_000) : null);
   }, [wantIntraday, intraday.data, code]);
   useEffect(() => {
     const bound = ticks.data && codesMatch(ticks.data.canonical_code, code) ? ticks.data : null;
-    setTickPollMs(wantTicks && bound?.reason === 'fetching' ? 8_000 : null);
+    setTickPollMs(wantTicks && bound ? cachePollMs(bound, 8_000) : null);
   }, [wantTicks, ticks.data, code]);
   /* 遅延気配は 1 分ポーリング。J-Quants は場中に何も出さないので、
      「今いくらか」はこの非公式・15分遅延の値でしか埋められない。 */
@@ -128,7 +128,7 @@ export default function StockDetail() {
     [code],
     { identity: code },
   );
-  const { isOwner } = useAccess();
+  const { canRefreshPublicData } = useAccess();
   const toast = useToast();
   const [fetchNote, setFetchNote] = useState<string | null>(null);
   const now = useNow(30_000);
@@ -353,11 +353,13 @@ export default function StockDetail() {
             <TickPane
               data={ticksData ?? null}
               loading={ticks.loading}
-              isOwner={isOwner}
+              canFetch={canRefreshPublicData}
               fetchNote={fetchNote}
               onFetch={async () => {
                 try {
                   await workerApi.trigger('tick_fetch', { code: security.canonical_code });
+                  ticks.refresh({ force: true });
+                  setTickPollMs(8_000);
                   toast.success(t('逐笔'), t('已提交，数据到达后刷新本页'));
                   setFetchNote(t('已提交，数据到达后刷新本页'));
                 } catch (error) {
@@ -372,11 +374,13 @@ export default function StockDetail() {
             <IntradayPane
               data={intradayData ?? null}
               loading={intraday.loading}
-              isOwner={isOwner}
+              canFetch={canRefreshPublicData}
               fetchNote={fetchNote}
               onFetch={async () => {
                 try {
                   await workerApi.trigger('intraday_fetch', { code: security.canonical_code });
+                  intraday.refresh({ force: true });
+                  setIntradayPollMs(5_000);
                   toast.success(t('盘中'), t('已提交，数据到达后刷新本页'));
                   setFetchNote(t('已提交，数据到达后刷新本页'));
                 } catch (error) {
@@ -473,6 +477,31 @@ export default function StockDetail() {
   );
 }
 
+function cachePollMs(data: IntradayChart | TickView, activeMs: number): number | null {
+  if (data.refreshing || data.reason === 'fetching') return activeMs;
+  return data.retry_after_seconds ? Math.max(activeMs, data.retry_after_seconds * 1000) : null;
+}
+
+function CacheUpdateNote({ data, canFetch, onFetch }: { data: IntradayChart | TickView; canFetch: boolean; onFetch: () => void }) {
+  if (!data.stale) return null;
+  const date = data.target_date ?? '—';
+  const label = data.refreshing
+    ? t('正在更新至 {date}', { date })
+    : data.publication_pending
+      ? t('最新交易日数据尚未发布，稍后自动重试')
+      : data.latest_empty
+        ? t('最新交易日 {date} 暂无成交记录', { date })
+        : t('尚未更新至 {date}', { date });
+  return (
+    <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-caption text-ink-500" aria-live="polite">
+      <span>{label}</span>
+      {canFetch && !data.refreshing && !data.latest_empty && (
+        <button type="button" onClick={onFetch} className="text-brand-700 hover:underline">{t('重新取得')}</button>
+      )}
+    </div>
+  );
+}
+
 function PanelEmpty({ title, image = '/empty-chart.svg' }: { title: string; image?: string }) {
   return <EmptyState size="compact" image={image} title={title} />;
 }
@@ -508,14 +537,14 @@ function EarningsScheduleRow({ item, todayKey }: { item: Record<string, unknown>
 function IntradayPane({
   data,
   loading,
-  isOwner,
+  canFetch,
   fetchNote,
   onFetch,
   onRefresh,
 }: {
   data: IntradayChart | null;
   loading: boolean;
-  isOwner: boolean;
+  canFetch: boolean;
   fetchNote: string | null;
   onFetch: () => void;
   onRefresh: () => void;
@@ -574,6 +603,7 @@ function IntradayPane({
   if (data && data.available && option) {
     return (
       <div>
+        <CacheUpdateNote data={data} canFetch={canFetch} onFetch={onFetch} />
         <ReactECharts className="h-[360px] w-full" option={option} onInit={onInit} prepareOption={prepareOption} ariaLabel="intraday chart" />
         <p className="mt-1 text-right text-micro text-ink-400">
           {t('分钟数据为未复权原始价')} · {(data.days ?? []).length} {t('个交易日')} ·{' '}
@@ -584,6 +614,7 @@ function IntradayPane({
   }
   const planBlocked = data?.reason === 'plan_not_included';
   const empty = data?.reason === 'empty';
+  const pending = data?.reason === 'not_published';
   return (
     <div className="flex h-[360px] flex-col items-center justify-center gap-3 rounded-md bg-paper-2">
       <p className="max-w-md px-6 text-center text-body-s text-ink-600">
@@ -591,12 +622,14 @@ function IntradayPane({
           ? t('分钟线需要 J-Quants 分足加购（当前订阅未包含）')
           : data?.reason === 'fetching'
             ? t('正在取得分钟数据，请稍候刷新')
+            : pending
+              ? t('最新交易日数据尚未发布，稍后自动重试')
             : empty
               ? t('已取得，但没有可显示的分钟数据')
               : t('该股票的分钟数据尚未取得')}
       </p>
       {data?.note_ja && <p className="max-w-md px-6 text-center text-caption text-ink-400">{data.note_ja}</p>}
-      {isOwner && !planBlocked && (
+      {canFetch && !planBlocked && (
         <button
           type="button"
           onClick={onFetch}
@@ -605,7 +638,7 @@ function IntradayPane({
           {t('取得最近5个交易日的分钟数据')}
         </button>
       )}
-      {isOwner && planBlocked && (
+      {canFetch && planBlocked && (
         <button
           type="button"
           onClick={onFetch}
@@ -629,14 +662,14 @@ function IntradayPane({
 function TickPane({
   data,
   loading,
-  isOwner,
+  canFetch,
   fetchNote,
   onFetch,
   onRefresh,
 }: {
   data: TickView | null;
   loading: boolean;
-  isOwner: boolean;
+  canFetch: boolean;
   fetchNote: string | null;
   onFetch: () => void;
   onRefresh: () => void;
@@ -688,11 +721,12 @@ function TickPane({
   if (data && data.available && option) {
     return (
       <div className="space-y-3">
+      <CacheUpdateNote data={data} canFetch={canFetch} onFetch={onFetch} />
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_232px]">
         <div className="min-w-0">
           <ReactECharts className="h-[360px] w-full" option={option} ariaLabel="tick chart" />
           <p className="mt-1 text-right text-micro text-ink-400">
-            {data.trade_date} · {data.tick_count.toLocaleString()} {t('笔')} ·{' '}
+            {t('数据截至')} {data.trade_date} · {data.tick_count.toLocaleString()} {t('笔')} ·{' '}
             {t('约 {n} 秒/点', { n: data.bucket_seconds ?? 1 })}
             {data.truncated ? ` · ${t('已达单日行数上限，尾部截断')}` : ''} ·{' '}
             {t('逐笔为未复权原始价')}
@@ -733,6 +767,7 @@ function TickPane({
   const planBlocked = data?.reason === 'plan_not_included';
   const fetching = data?.reason === 'fetching';
   const empty = data?.reason === 'empty';
+  const pending = data?.reason === 'not_published';
   return (
     <div className="flex h-[360px] flex-col items-center justify-center gap-3 rounded-md bg-paper-2">
       <p className="max-w-md px-6 text-center text-body-s text-ink-600">
@@ -740,12 +775,14 @@ function TickPane({
           ? t('逐笔需要 J-Quants Tick 加购（刚购买时，API 侧生效可能有延迟）')
           : fetching
             ? t('正在取得逐笔数据（全市场日次文件约 50MB，稍候刷新）')
+            : pending
+              ? t('最新交易日数据尚未发布，稍后自动重试')
             : empty
               ? t('已取得，但没有可显示的逐笔数据（可能尚未配信）')
               : t('该股票的逐笔数据尚未取得')}
       </p>
       {data?.note_ja && <p className="max-w-md px-6 text-center text-caption text-ink-400">{data.note_ja}</p>}
-      {isOwner && !planBlocked && (
+      {canFetch && !planBlocked && (
         <button
           type="button"
           onClick={onFetch}
@@ -754,7 +791,7 @@ function TickPane({
           {t('取得最近交易日的逐笔数据')}
         </button>
       )}
-      {isOwner && planBlocked && (
+      {canFetch && planBlocked && (
         <button
           type="button"
           onClick={onFetch}

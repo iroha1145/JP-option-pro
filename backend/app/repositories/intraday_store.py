@@ -5,7 +5,8 @@ J-Quants 分足（OHLC-Min）とティック（Tick）はアドオン契約。�
 「未契約 / 未有効化」を正直に表示できるようにする。完了した取引日の分足・
 ティックは不変データとしてキャッシュされ、再取得しない。
 
-v2: ticks / tick_days / addon_state(dataset 別)。旧 intraday_state（単一行）は
+v3: 日別に配信待ちと取得完了を区別し、未配信を後ほど再取得する。
+旧 intraday_state（単一行）は
 addon_state('minute') へ移行して廃止。
 """
 
@@ -16,7 +17,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from .base import SQLiteRepository, utc_now_iso
 
-INTRADAY_SCHEMA_VERSION = "jp-intraday-v2"
+INTRADAY_SCHEMA_VERSION = "jp-intraday-v3"
 
 _ADDON_STATE_DDL = """
     CREATE TABLE IF NOT EXISTS addon_state (
@@ -46,6 +47,7 @@ _TICK_DAYS_DDL = """
         fetched_at TEXT NOT NULL,
         tick_count INTEGER NOT NULL,
         truncated INTEGER NOT NULL DEFAULT 0,
+        fetch_status TEXT NOT NULL DEFAULT 'complete',
         PRIMARY KEY (canonical_code, trade_date)
     ) WITHOUT ROWID
     """
@@ -67,6 +69,7 @@ INTRADAY_DDL: tuple[str, ...] = (
         trade_date TEXT NOT NULL,
         fetched_at TEXT NOT NULL,
         bar_count INTEGER NOT NULL,
+        fetch_status TEXT NOT NULL DEFAULT 'complete',
         PRIMARY KEY (canonical_code, trade_date)
     ) WITHOUT ROWID
     """,
@@ -85,6 +88,16 @@ INTRADAY_MIGRATIONS: dict[str, tuple[tuple[str, ...], str]] = {
             "SELECT 'minute', availability, last_checked_at, last_error_code "
             "FROM intraday_state WHERE id = 1",
             "DROP TABLE intraday_state",
+        ),
+        "jp-intraday-v2",
+    ),
+    "jp-intraday-v2": (
+        (
+            "ALTER TABLE fetched_days ADD COLUMN fetch_status TEXT NOT NULL DEFAULT 'complete'",
+            "ALTER TABLE tick_days ADD COLUMN fetch_status TEXT NOT NULL DEFAULT 'complete'",
+            # Old zero-count markers also meant 'file not published yet'. Recheck once.
+            "UPDATE fetched_days SET fetch_status = 'not_published' WHERE bar_count = 0",
+            "UPDATE tick_days SET fetch_status = 'not_published' WHERE tick_count = 0",
         ),
         INTRADAY_SCHEMA_VERSION,
     ),
@@ -164,14 +177,17 @@ class IntradayStore(SQLiteRepository):
             )
         return len(prepared)
 
-    def record_fetched_day(self, canonical_code: str, trade_date: str, bar_count: int) -> None:
+    def record_fetched_day(
+        self, canonical_code: str, trade_date: str, bar_count: int, *, fetch_status: str = "complete"
+    ) -> None:
         with self.write() as connection:
             connection.execute(
-                "INSERT INTO fetched_days (canonical_code, trade_date, fetched_at, bar_count) "
-                "VALUES (?, ?, ?, ?) "
+                "INSERT INTO fetched_days (canonical_code, trade_date, fetched_at, bar_count, fetch_status) "
+                "VALUES (?, ?, ?, ?, ?) "
                 "ON CONFLICT (canonical_code, trade_date) DO UPDATE SET "
-                "fetched_at = excluded.fetched_at, bar_count = excluded.bar_count",
-                (canonical_code, trade_date, utc_now_iso(), int(bar_count)),
+                "fetched_at = excluded.fetched_at, bar_count = excluded.bar_count, "
+                "fetch_status = excluded.fetch_status",
+                (canonical_code, trade_date, utc_now_iso(), int(bar_count), fetch_status),
             )
 
     def fetched_days_for(self, canonical_code: str) -> dict[str, dict[str, Any]]:
@@ -203,12 +219,14 @@ class IntradayStore(SQLiteRepository):
             rows = connection.execute(query, params).fetchall()
         return [dict(row) for row in rows]
 
-    def prune_older_than(self, cutoff_date: str) -> int:
+    def prune_older_than(self, cutoff_date: str, *, canonical_code: str | None = None) -> int:
+        scope = " AND canonical_code = ?" if canonical_code else ""
+        params = (cutoff_date, canonical_code) if canonical_code else (cutoff_date,)
         with self.write() as connection:
             cursor = connection.execute(
-                "DELETE FROM minute_bars WHERE trade_date < ?", (cutoff_date,)
+                "DELETE FROM minute_bars WHERE trade_date < ?" + scope, params
             )
-            connection.execute("DELETE FROM fetched_days WHERE trade_date < ?", (cutoff_date,))
+            connection.execute("DELETE FROM fetched_days WHERE trade_date < ?" + scope, params)
             return cursor.rowcount or 0
 
     # ---------------- ティック ----------------
@@ -220,6 +238,7 @@ class IntradayStore(SQLiteRepository):
         rows: Sequence[Mapping[str, Any]],
         *,
         truncated: bool = False,
+        fetch_status: str = "complete",
     ) -> int:
         """当日分を丸ごと置換（部分日→完全日への育ちを単純に保つ）。
 
@@ -244,12 +263,12 @@ class IntradayStore(SQLiteRepository):
                     prepared[start : start + _TICK_INSERT_CHUNK],
                 )
             connection.execute(
-                "INSERT INTO tick_days (canonical_code, trade_date, fetched_at, tick_count, truncated) "
-                "VALUES (?, ?, ?, ?, ?) "
+                "INSERT INTO tick_days (canonical_code, trade_date, fetched_at, tick_count, truncated, fetch_status) "
+                "VALUES (?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT (canonical_code, trade_date) DO UPDATE SET "
                 "fetched_at = excluded.fetched_at, tick_count = excluded.tick_count, "
-                "truncated = excluded.truncated",
-                (canonical_code, trade_date, utc_now_iso(), len(prepared), 1 if truncated else 0),
+                "truncated = excluded.truncated, fetch_status = excluded.fetch_status",
+                (canonical_code, trade_date, utc_now_iso(), len(prepared), 1 if truncated else 0, fetch_status),
             )
         return len(prepared)
 
@@ -259,6 +278,29 @@ class IntradayStore(SQLiteRepository):
                 "SELECT * FROM tick_days WHERE canonical_code = ?", (canonical_code,)
             ).fetchall()
         return {row["trade_date"]: dict(row) for row in rows}
+
+    def mark_ticks_not_published(self, canonical_code: str, trade_date: str) -> None:
+        """Record a retryable missing file without erasing an existing tape."""
+        with self.write() as connection:
+            connection.execute(
+                "INSERT INTO tick_days (canonical_code, trade_date, fetched_at, tick_count, fetch_status) "
+                "VALUES (?, ?, ?, 0, 'not_published') ON CONFLICT (canonical_code, trade_date) "
+                "DO UPDATE SET fetched_at = excluded.fetched_at, fetch_status = excluded.fetch_status",
+                (canonical_code, trade_date, utc_now_iso()),
+            )
+
+    def dataset_summary(self, dataset: str) -> dict[str, Any]:
+        """Summarize the real cache, independently of the daily sync checkpoints."""
+        table, days = ("ticks", "tick_days") if dataset == DATASET_TICK else ("minute_bars", "fetched_days")
+        with self.read() as connection:
+            row = connection.execute(
+                f"SELECT COUNT(*) AS rows_total, MAX(trade_date) AS data_through FROM {table}"
+            ).fetchone()
+            completed = connection.execute(
+                f"SELECT MAX(trade_date) AS checked_through, MAX(fetched_at) AS last_success_at "
+                f"FROM {days} WHERE fetch_status = 'complete'"
+            ).fetchone()
+        return {**self.availability(dataset), **dict(row), **dict(completed)}
 
     def ticks_for(self, canonical_code: str, trade_date: str) -> list[dict[str, Any]]:
         with self.read() as connection:
@@ -280,10 +322,12 @@ class IntradayStore(SQLiteRepository):
             ).fetchone()
         return row is not None
 
-    def prune_ticks_older_than(self, cutoff_date: str) -> int:
+    def prune_ticks_older_than(self, cutoff_date: str, *, canonical_code: str | None = None) -> int:
+        scope = " AND canonical_code = ?" if canonical_code else ""
+        params = (cutoff_date, canonical_code) if canonical_code else (cutoff_date,)
         with self.write() as connection:
-            cursor = connection.execute("DELETE FROM ticks WHERE trade_date < ?", (cutoff_date,))
-            connection.execute("DELETE FROM tick_days WHERE trade_date < ?", (cutoff_date,))
+            cursor = connection.execute("DELETE FROM ticks WHERE trade_date < ?" + scope, params)
+            connection.execute("DELETE FROM tick_days WHERE trade_date < ?" + scope, params)
             return cursor.rowcount or 0
 
 

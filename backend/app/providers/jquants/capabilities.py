@@ -1,8 +1,6 @@
 """Data capability declaration for the current J-Quants subscription.
 
-The product renders capability states honestly: a dataset the plan does not
-include is ``unavailable`` (never an empty array pretending to be "no data"),
-and a dataset we have not wired yet is ``planned``.
+Only connected datasets used by the application are listed.
 """
 
 from __future__ import annotations
@@ -17,7 +15,7 @@ SUBSCRIPTION_PLAN = "standard"
 class DataCapability:
     key: str
     endpoint: str
-    status: str  # enabled | planned | unavailable
+    status: str  # enabled
     cadence: str  # daily | weekly | irregular | static
     history_years: int | None
     note_ja: str = ""
@@ -42,16 +40,6 @@ CAPABILITIES: tuple[DataCapability, ...] = (
     DataCapability("margin_alerts", "/markets/margin-alert", "enabled", "daily", 10),
     DataCapability("short_sale_ratio", "/markets/short-ratio", "enabled", "daily", 10),
     DataCapability("reported_short_positions", "/markets/short-sale-report", "enabled", "daily", 10),
-    # Standard プランに含まれるが v1 では未接続。
-    DataCapability("investor_types", "/equities/investor-types", "planned", "weekly", 10, "週次・投資部門別売買状況"),
-    DataCapability("major_shareholders", "/edinet/major-shareholders", "planned", "irregular", 10),
-    DataCapability("cross_shareholdings", "/edinet/cross-shareholdings", "planned", "irregular", 10),
-    DataCapability("large_volume_reports", "/edinet/large-volume-shareholders", "planned", "irregular", 10),
-    # Standard プランに含まれない。
-    DataCapability("financial_details", "/fins/details", "unavailable", "irregular", None, "Premium 限定"),
-    DataCapability("dividend_details", "/fins/dividend", "unavailable", "irregular", None, "Premium 限定"),
-    DataCapability("trading_breakdown", "/markets/breakdown", "unavailable", "daily", None, "Premium 限定"),
-    DataCapability("morning_session_prices", "/equities/bars/daily/am", "unavailable", "daily", None, "Premium 限定"),
     # アドオン契約済み（2026-08: OHLC-Min + Tick 加購）。銘柄別オンデマンド取得。
     DataCapability("intraday_prices", "/equities/bars/minute", "enabled", "intraday", None, "分足アドオン契約済み・銘柄別オンデマンド"),
     DataCapability("tick_trades", "bulk:equities/trades", "enabled", "daily", 2, "Tick アドオン契約済み。CSV 一括配信のみ（REST 不可）・過去2年・東証銘柄限定"),

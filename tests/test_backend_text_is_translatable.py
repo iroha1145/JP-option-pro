@@ -29,7 +29,6 @@ from pathlib import Path
 
 import pytest
 
-from app.domain import econ_calendar
 from app.research.replay import POINT_IN_TIME_LIMITS
 from app.services import strength_scan
 from app.services.earnings_service import UPCOMING_COVERAGE_NOTE
@@ -157,9 +156,6 @@ def _label_constants() -> dict[str, str]:
                                         strength_scan.REGIME_SPREAD_LABEL],
         # ニュースの分類は **API の絞り込み値そのもの**（画面にも出る）。
         "news/classify.CATEGORY_WEIGHTS": list(CATEGORY_WEIGHTS),
-        "domain/econ_calendar": sorted(
-            {str(event["category"]) for event in econ_calendar.ECON_EVENTS}
-        ),
         "research/replay.POINT_IN_TIME_LIMITS": list(POINT_IN_TIME_LIMITS),
         "earnings_service.UPCOMING_COVERAGE_NOTE": [UPCOMING_COVERAGE_NOTE],
         "short_monitor/explain.STATE_LABELS": list(explain.STATE_LABELS.values()),

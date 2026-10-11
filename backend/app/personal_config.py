@@ -1,11 +1,12 @@
 """Owner-editable configuration from ``config/personal.toml``.
 
-Strict models: unknown keys are rejected so a typo fails at startup instead
-of silently doing nothing. Deployment boundary values are pinned with ``Literal``.
+Access settings remain strict; retired or unknown feature settings are
+ignored with a field-name warning. Values still receive type/range validation.
 """
 
 from __future__ import annotations
 
+import logging
 import os
 import tomllib
 from functools import lru_cache
@@ -33,6 +34,23 @@ class StrictConfigModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
+class FlexibleConfigModel(StrictConfigModel):
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_unknown_fields(cls, value):
+        if isinstance(value, dict):
+            known = set(cls.model_fields)
+            for field in cls.model_fields.values():
+                alias = field.validation_alias
+                if isinstance(alias, AliasChoices):
+                    known.update(alias.choices)
+            for name in sorted(set(value) - known):
+                logging.getLogger(__name__).warning("Ignoring unknown %s field: %s", cls.__name__, name)
+        return value
+
+
 class AccessConfig(StrictConfigModel):
     mode: Literal["private_network", "password"] = "private_network"
     allowed_private_cidrs: tuple[str, ...] = (
@@ -44,7 +62,7 @@ class AccessConfig(StrictConfigModel):
     )
 
 
-class FeatureConfig(StrictConfigModel):
+class FeatureConfig(FlexibleConfigModel):
     radar_enabled: bool = True
     news_mode: Literal["off", "read"] = "off"
     # 遅延ザラ場気配（Yahoo・非公式）。表示専用でスコアには一切入らない。
@@ -58,7 +76,7 @@ class FeatureConfig(StrictConfigModel):
         return value
 
 
-class SyncConfig(StrictConfigModel):
+class SyncConfig(FlexibleConfigModel):
     # 歴史回填の年数（Standard は最大 10 年）
     backfill_years: int = Field(default=10, ge=1, le=10)
     # 引け後バッチの起動時刻（JST, "HH:MM"）。公式更新 ~16:30 の後。
@@ -66,12 +84,10 @@ class SyncConfig(StrictConfigModel):
     # 財務速報バッチ（開示 18:00 の後）と確報補完（~24:30 の後 → 翌 01:10）
     fins_evening_time_jst: str = "18:40"
     fins_late_time_jst: str = "01:10"
-    # 週次: 信用残（第2営業日 16:30 の後）
-    margin_weekly_time_jst: str = "17:40"
     request_timeout_seconds: int = Field(default=30, ge=5, le=120)
 
 
-class RadarConfig(StrictConfigModel):
+class RadarConfig(FlexibleConfigModel):
     enabled: bool = True
     # 対象市場（プライム/スタンダード/グロース）
     market_codes: tuple[str, ...] = ("0111", "0112", "0113")
@@ -95,7 +111,7 @@ class RadarConfig(StrictConfigModel):
     )
 
 
-class NewsConfig(StrictConfigModel):
+class NewsConfig(FlexibleConfigModel):
     sync_seconds: int = Field(default=900, ge=120, le=86400)
     window_hours: int = Field(default=72, ge=24, le=336)
 
@@ -110,7 +126,7 @@ class NewsConfig(StrictConfigModel):
     feed_urls: tuple[str, ...] = ()
 
 
-class StorageConfig(StrictConfigModel):
+class StorageConfig(FlexibleConfigModel):
     backup_keep: int = Field(default=7, ge=1, le=60)
     news_retention_days: int = Field(default=30, ge=8, le=365)
 

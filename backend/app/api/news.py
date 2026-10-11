@@ -1,13 +1,9 @@
-"""原文ニュース・銘柄集計・フィード状態・経済カレンダー API。"""
+"""原文ニュース・銘柄集計・フィード状態 API。"""
 
 from __future__ import annotations
 
-from datetime import date
+from fastapi import APIRouter, Query
 
-from fastapi import APIRouter, HTTPException, Query
-
-from app.domain.econ_calendar import COVERAGE_NOTE_JA, econ_events_between
-from app.domain.timeutil import add_days, iso_date, today_jst
 from app.personal_config import get_personal_config
 
 router = APIRouter(prefix="/api/news", tags=["news"])
@@ -59,26 +55,3 @@ def news_status() -> dict:
     from app.services.news.service import news_pipeline_status_view
 
     return news_pipeline_status_view()
-
-
-@router.get("/econ-calendar")
-def econ_calendar(
-    start: str | None = Query(default=None, pattern="^\\d{4}-\\d{2}-\\d{2}$"),
-    end: str | None = Query(default=None, pattern="^\\d{4}-\\d{2}-\\d{2}$"),
-) -> dict:
-    today = iso_date(today_jst())
-    start_date = start or add_days(today, -7)
-    end_date = end or add_days(today, 120)
-    try:
-        first = date.fromisoformat(start_date)
-        last = date.fromisoformat(end_date)
-        if last < first:
-            raise ValueError("reversed_range")
-    except ValueError:
-        raise HTTPException(status_code=422, detail={"code": "invalid_calendar_range"}) from None
-    return {
-        "coverage_note_ja": COVERAGE_NOTE_JA,
-        "start_date": start_date,
-        "end_date": end_date,
-        "events": econ_events_between(start_date, end_date),
-    }

@@ -1,5 +1,5 @@
-# 起動は必ず ./scripts/compose.sh 経由（環境ファイルの読み込み順を固定するため）
-x-optixjp-entrypoint: ${OPTIXJP_COMPOSE_ENTRYPOINT:?Use ./scripts/compose.sh instead of raw docker compose}
+# Stable Japan-only project identity; explicit -p overrides it.
+name: jp-option-pro
 
 x-service-base: &service-base
   image: optix-japan:${APP_COMMIT:-local}

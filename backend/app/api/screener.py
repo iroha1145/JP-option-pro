@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
-from app.api.deps import app_store, core_repository
+from app.api.watchlist import _principal, _entries
+
+from app.api.deps import core_repository
 from app.domain.constants import MARKET_SEGMENTS, SECTOR33
 from app.services.screener import ScreenerFilters, run_screener
 
@@ -25,10 +27,11 @@ def screener_options() -> dict:
 
 
 @router.post("/query")
-def screener_query(filters: ScreenerFilters) -> dict:
+def screener_query(filters: ScreenerFilters, request: Request) -> dict:
     repository = core_repository()
     if not repository.exists():
         raise HTTPException(status_code=503, detail={"code": "data_not_initialized"})
     if filters.watchlist_codes == ["__watchlist__"]:
-        filters = filters.model_copy(update={"watchlist_codes": app_store().watchlist_codes()})
+        kind, user_id = _principal(request)
+        filters = filters.model_copy(update={"watchlist_codes": [item["canonical_code"] for item in _entries(kind, user_id)] or ["__empty_watchlist__"]})
     return run_screener(repository, filters)

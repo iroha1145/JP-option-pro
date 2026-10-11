@@ -1,8 +1,7 @@
-"""カタリストデスク・ビュー: 経済カレンダー・境界照合・銘柄別集計。"""
+"""カタリストデスク・ビュー: 境界照合・銘柄別集計。"""
 
 from datetime import datetime, timedelta, timezone
 
-from app.domain.econ_calendar import ECON_EVENTS, econ_events_between
 from app.repositories.news_store import NewsStore
 from app.services.news.classify import classify, market_relevance
 from app.services.news.entities import EntityMatcher, build_alias_rows
@@ -11,27 +10,6 @@ from app.services.news.entities import EntityMatcher, build_alias_rows
 def test_market_overview_keywords_do_not_swallow_us_summaries():
     assert market_relevance(classify("日経平均は続伸", None), []) == "market"
     assert market_relevance(classify("NY市場サマリー 米国株は続伸", "米国株式市場の概況。"), []) is None
-
-
-def test_econ_calendar_range_and_ordering():
-    events = econ_events_between("2026-09-01", "2026-10-31")
-    assert events, "9-10月には日銀会合・短観・CPIがあるはず"
-    dates = [event["date"] for event in events]
-    assert dates == sorted(dates)
-    assert all("2026-09-01" <= date <= "2026-10-31" for date in dates)
-    mpm = [event for event in events if "金融政策決定会合" in event["name_ja"]]
-    assert any(event["date"] == "2026-09-18" for event in mpm)
-    # 展望レポート回（10/30）が含まれる
-    assert any("展望レポート" in event["name_ja"] for event in events)
-
-
-def test_econ_calendar_derived_dates_are_flagged():
-    for event in ECON_EVENTS:
-        assert event["importance"] in ("high", "medium", "low")
-        assert event["source_url"].startswith("https://")
-        if not event["confirmed"]:
-            # 導出値には必ず根拠メモがある（UI の「目安」バッジの説明責任）
-            assert event.get("note"), event["name_ja"]
 
 
 def _matcher():

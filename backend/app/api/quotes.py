@@ -76,7 +76,7 @@ def _enabled() -> bool:
 
 @router.get("/sources")
 def quote_sources() -> dict:
-    """全供給元の状態。未接続のリレーも隠さずに出す（データ状態ページ用）。"""
+    """登録された供給元の状態（データ状態ページ用）。"""
 
     return {
         "version": QUOTES_VERSION,

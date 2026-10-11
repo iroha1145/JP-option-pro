@@ -60,14 +60,25 @@ _REQUEST_OWNER_ACCESS: ContextVar[bool | None] = ContextVar(
 )
 
 
+_REQUEST_PUBLIC_REFRESH: ContextVar[bool | None] = ContextVar(
+    "optixjp_request_public_refresh", default=None,
+)
+
+
 @contextmanager
-def request_owner_access_context(owner_access: bool) -> Iterator[None]:
+def request_owner_access_context(
+    owner_access: bool, *, can_refresh_public_data: bool | None = None,
+) -> Iterator[None]:
     """Bind the gateway's owner decision to the current request task."""
 
     token: Token[bool | None] = _REQUEST_OWNER_ACCESS.set(bool(owner_access))
+    refresh_token = _REQUEST_PUBLIC_REFRESH.set(
+        bool(owner_access) if can_refresh_public_data is None else bool(can_refresh_public_data)
+    )
     try:
         yield
     finally:
+        _REQUEST_PUBLIC_REFRESH.reset(refresh_token)
         _REQUEST_OWNER_ACCESS.reset(token)
 
 
@@ -76,6 +87,13 @@ def current_request_is_owner() -> bool:
 
     owner_access = _REQUEST_OWNER_ACCESS.get()
     return True if owner_access is None else owner_access
+
+
+def current_request_can_refresh_public_data() -> bool:
+    """Only authenticated readers may enqueue public-data refreshes."""
+
+    allowed = _REQUEST_PUBLIC_REFRESH.get()
+    return current_request_is_owner() if allowed is None else allowed
 
 
 def public_snapshot_unavailable(resource: str) -> HTTPException:
@@ -448,14 +466,21 @@ def require_owner_access(request: Request) -> None:
 
 
 async def require_public_read_or_owner_access(request: Request) -> AsyncIterator[None]:
-    """Password-mode GET/HEAD reads stay public; everything else is owner-only."""
+    """Public reads include the filter-only screener POST, with identity preserved."""
 
     runtime = _runtime(request)
     method = request.method.upper()
-    if runtime.mode == "password" and method in {"GET", "HEAD"}:
+    public_read = method in {"GET", "HEAD"} or (
+        method == "POST" and request.url.path == "/api/screener/query"
+    )
+    if runtime.mode == "password" and public_read:
         owner_access = runtime.request_is_owner(request)
         request.state.owner_access = owner_access
-        with request_owner_access_context(owner_access):
+        from app.api.account import current_account
+
+        can_refresh = owner_access or current_account(request) is not None
+        request.state.can_refresh_public_data = can_refresh
+        with request_owner_access_context(owner_access, can_refresh_public_data=can_refresh):
             yield
         return
     require_owner_access(request)
@@ -530,6 +555,7 @@ __all__ = [
     "OwnerAccessRuntime",
     "canonical_request_host",
     "current_request_is_owner",
+    "current_request_can_refresh_public_data",
     "get_access_runtime",
     "hash_owner_password",
     "owner_password_hash_is_valid",

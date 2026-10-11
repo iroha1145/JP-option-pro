@@ -525,7 +525,7 @@ export interface EarningsRecentItem {
 export interface DatasetStatus {
   key: string;
   endpoint: string;
-  status: 'enabled' | 'planned' | 'unavailable';
+  status: 'enabled';
   cadence: string;
   history_years: number | null;
   note_ja: string | null;
@@ -575,8 +575,14 @@ export interface IntradayChart {
   interval: '1m' | '5m' | '60m';
   available: boolean;
   availability?: string;
-  reason?: 'plan_not_included' | 'not_fetched' | 'fetching' | 'empty';
+  reason?: 'plan_not_included' | 'not_fetched' | 'fetching' | 'empty' | 'not_published';
   queued?: boolean;
+  refreshing?: boolean;
+  stale?: boolean;
+  target_date?: string | null;
+  retry_after_seconds?: number | null;
+  publication_pending?: boolean;
+  latest_empty?: boolean;
   note_ja?: string;
   days?: string[];
   data_through: string | null;
@@ -628,8 +634,15 @@ export interface TickView {
   display_code: string;
   available: boolean;
   availability?: string;
-  reason?: 'plan_not_included' | 'not_fetched' | 'fetching' | 'empty';
+  reason?: 'plan_not_included' | 'not_fetched' | 'fetching' | 'empty' | 'not_published';
   queued?: boolean;
+  refreshing?: boolean;
+  stale?: boolean;
+  target_date?: string | null;
+  data_through?: string | null;
+  retry_after_seconds?: number | null;
+  publication_pending?: boolean;
+  latest_empty?: boolean;
   note_ja?: string;
   trade_date: string | null;
   tick_count: number;
@@ -903,25 +916,6 @@ export interface NewsStatus {
   window_hours: number;
   entity_aliases: number;
   feeds: NewsFeedState[];
-}
-
-export interface EconEvent {
-  date: string;
-  time_jst: string;
-  name_ja: string;
-  category: string;
-  importance: 'high' | 'medium' | 'low';
-  organizer: string;
-  confirmed: boolean;
-  source_url?: string;
-  note?: string;
-}
-
-export interface EconCalendarResponse {
-  coverage_note_ja: string;
-  start_date: string;
-  end_date: string;
-  events: EconEvent[];
 }
 
 export interface AccessStatus {

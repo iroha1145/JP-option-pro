@@ -1,7 +1,6 @@
 """データ状態ページ: 各データセットの鮮度・チェックポイント・能力宣言。
 
-「使えない」は unavailable、「未接続」は planned、「古い」は stale として
-正直に返す。空配列で欠測を偽装しない。
+接続済みデータの実際の取得日時と保存日付を返す。
 """
 
 from __future__ import annotations
@@ -43,6 +42,7 @@ def _hours_since(iso_timestamp: str | None) -> float | None:
 
 def data_status(repository: CoreRepository, *, jquants_configured: bool) -> dict[str, Any]:
     states = {state["dataset"]: state for state in repository.all_sync_states()}
+    intraday = intraday_addon_status(repository.latest_bar_date())
     datasets = []
     for capability in CAPABILITIES:
         state = states.get(_dataset_key(capability.key))
@@ -60,7 +60,13 @@ def data_status(repository: CoreRepository, *, jquants_configured: bool) -> dict
             "freshness": None,
             "backfill_pending": None,
         }
-        if capability.status == "enabled" and state is not None:
+        addon_key = {"intraday_prices": "minute", "tick_trades": "tick"}.get(capability.key)
+        if addon_key:
+            addon = intraday[addon_key]
+            entry.update({key: addon.get(key) for key in (
+                "last_success_at", "last_error_code", "data_through", "rows_total", "freshness",
+            )})
+        elif capability.status == "enabled" and state is not None:
             age_hours = _hours_since(state.get("last_success_at"))
             threshold = _STALE_HOURS.get(_dataset_key(capability.key))
             freshness = "unknown"
@@ -91,11 +97,11 @@ def data_status(repository: CoreRepository, *, jquants_configured: bool) -> dict
         "api_key_configured": jquants_configured,
         "market_timezone": "Asia/Tokyo",
         "datasets": datasets,
-        "intraday": intraday_addon_status(),
+        "intraday": intraday,
     }
 
 
-def intraday_addon_status() -> dict[str, Any]:
+def intraday_addon_status(target_date: str | None = None) -> dict[str, Any]:
     """分足・ティックのアドオン実況: 能力宣言（契約状態）＋実データ可用性。
 
     以前は data_status() が enabled=False を直書きしており、CAPABILITIES で
@@ -123,18 +129,23 @@ def intraday_addon_status() -> dict[str, Any]:
         else "現プランは日足まで。分足・リアルタイムは将来の拡張ポイント（IntradayProvider）で追加予定。"
     )
     store = IntradayStore(get_data_paths().intraday_db, read_only=True)
-    if not store.exists():
-        return {
-            "enabled": enabled,
-            "note_ja": note,
-            "minute": {"availability": "unknown"},
-            "tick": {"availability": "unknown"},
-        }
+    def summary(dataset: str) -> dict:
+        if not store.exists():
+            return {"availability": "unknown", "freshness": "never_synced", "rows_total": 0}
+        actual = store.dataset_summary(dataset)
+        checked = actual.get("checked_through") or actual.get("data_through")
+        if actual.get("last_error_code"):
+            freshness = "error"
+        elif checked:
+            freshness = "stale" if target_date and checked < target_date else "fresh"
+        else:
+            freshness = "never_synced"
+        return {**actual, "freshness": freshness}
     return {
         "enabled": enabled,
         "note_ja": note,
-        "minute": store.availability(DATASET_MINUTE),
-        "tick": store.availability(DATASET_TICK),
+        "minute": summary(DATASET_MINUTE),
+        "tick": summary(DATASET_TICK),
     }
 
 

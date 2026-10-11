@@ -9,7 +9,6 @@ import type {
   EarningsCalendarItem,
   EarningsRecentItem,
   EarningsUpcomingResponse,
-  EconCalendarResponse,
   IntradayChart,
   TickView,
   MarketOverview,
@@ -307,8 +306,5 @@ export const newsApi = {
   },
   status() {
     return get<NewsStatus>('/news/status');
-  },
-  econCalendar(start?: string, end?: string) {
-    return get<EconCalendarResponse>(`/news/econ-calendar?${toQuery({ start, end })}`);
   },
 };

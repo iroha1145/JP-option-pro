@@ -17,7 +17,7 @@ from app.services.news import service
 from app.worker.tasks import DEFAULT_TASK_NAMES, MANUAL_ACTION_TYPES, build_default_tasks
 
 
-def test_existing_owner_config_is_read_only_news():
+def test_existing_owner_config_is_read_only_news(caplog):
     config = PersonalConfig.model_validate({
         "features": {"news_mode": "scheduled"},
         "ai": {"model": "retired-model", "daily_token_limit": 100000},
@@ -26,8 +26,12 @@ def test_existing_owner_config_is_read_only_news():
     assert config.features.news_mode == "read"
     assert "ai" not in config.model_dump()
     assert "max_ai_items_per_run" not in config.news.model_dump()
+    compatible = PersonalConfig.model_validate({"news": {"sync_second": 1234}})
+    assert compatible.news.sync_seconds == 900
+    assert "sync_second" not in compatible.news.model_dump()
+    assert "Ignoring unknown NewsConfig field: sync_second" in caplog.text
     with pytest.raises(ValidationError):
-        PersonalConfig.model_validate({"news": {"sync_second": 900}})
+        PersonalConfig.model_validate({"news": {"sync_seconds": 1}})
 
 
 def test_retired_key_is_never_loaded_from_runtime_files(tmp_path):
