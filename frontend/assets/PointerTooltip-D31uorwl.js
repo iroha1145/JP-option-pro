@@ -1,4 +1,4 @@
-import{r as u,j as l,a as Ut}from"./react-runtime-C6sZTaV_.js";import{l as _t,t as A}from"./i18n-1v5BN6Jy.js";/**
+import{r as u,j as l,a as Ut}from"./react-runtime-C6sZTaV_.js";import{l as _t,t as A}from"./i18n-BslI_YZ7.js";/**
  * react-router v7.18.3
  *
  * Copyright (c) Remix Software Inc.

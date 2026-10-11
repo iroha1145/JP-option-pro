@@ -53,6 +53,7 @@ export const DICT: Record<string, [string, string]> = {
   指数: ['Indices', '指数'],
   趋势快照: ['Trend snapshot', 'トレンドスナップショット'],
   快照: ['Snapshot', 'スナップショット'],
+  近半年: ['Last 6 months', '直近6か月'],
   对照: ['Compare', '比較'],
   '{n}日': ['{n}d', '{n}日'],
   在图表上滑动查看点位: ['Hover the chart to inspect a point', 'チャートをなぞって点を確認'],
