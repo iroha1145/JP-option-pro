@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from app.domain.constants import TOPIX_INDEX_CODE
 from app.domain.timeutil import add_days
 from app.providers.jquants.capabilities import CAPABILITIES, SUBSCRIPTION_PLAN
 from app.repositories.core import CoreRepository
@@ -45,6 +46,7 @@ def data_status(repository: CoreRepository, *, jquants_configured: bool) -> dict
     states = {state["dataset"]: state for state in repository.all_sync_states()}
     market_date = repository.latest_bar_date()
     intraday = intraday_addon_status(market_date)
+    topix_actual = repository.index_bar_summary(TOPIX_INDEX_CODE)
     margin_actual = repository.margin_interest_summary()
     expected_margin_date = (
         repository.latest_trading_day(add_days(market_date, -1))
@@ -53,6 +55,10 @@ def data_status(repository: CoreRepository, *, jquants_configured: bool) -> dict
     datasets = []
     for capability in CAPABILITIES:
         state = states.get(_dataset_key(capability.key))
+        if capability.key == "topix_prices":
+            # TOPIX is included in the daily shared index task. Older imports
+            # can still have a dedicated state, used only when no shared one exists.
+            state = states.get("index_prices") or state
         entry: dict[str, Any] = {
             "key": capability.key,
             "endpoint": capability.endpoint,
@@ -95,6 +101,19 @@ def data_status(repository: CoreRepository, *, jquants_configured: bool) -> dict
             )
         elif capability.status == "enabled":
             entry["freshness"] = "never_synced"
+        if capability.key == "topix_prices":
+            entry.update(topix_actual)
+            if not entry["data_through"]:
+                entry["freshness"] = "never_synced"
+            elif state is None:
+                entry["freshness"] = "unknown"
+        if capability.key in {"topix_prices", "margin_alerts", "short_sale_ratio"}:
+            if entry["last_error_code"]:
+                entry["freshness"] = "error"
+            elif entry["data_through"] and market_date:
+                # Non-trading days do not age data that already covers the
+                # latest completed market date. Real missing dates still do.
+                entry["freshness"] = "stale" if entry["data_through"] < market_date else "fresh"
         if capability.key == "margin_interest":
             entry.update(margin_actual)
             if entry["last_error_code"]:
