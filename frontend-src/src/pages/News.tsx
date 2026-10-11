@@ -1,4 +1,4 @@
-/** 新闻原文、关联股票、经济日历和采集状态。 */
+/** 新闻原文、关联股票和采集状态。 */
 
 import { useCallback, useMemo, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
@@ -16,7 +16,6 @@ import SoftBadge from '@/components/shared/SoftBadge';
 import StaleStrip from '@/components/shared/StaleStrip';
 import CodeMark from '@/components/shared/CodeMark';
 import InfoHint from '@/components/shared/InfoHint';
-import PointerTooltip from '@/components/shared/PointerTooltip';
 import HorizontalScroller from '@/components/shared/HorizontalScroller';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
 import Switch from '@/components/shared/Switch';
@@ -27,11 +26,10 @@ import Icon from '@/components/icons';
 import { NEWS_HINTS } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { explanationLines } from '@/lib/explainText';
-import { fmtDate, fmtJstDateShort, fmtJstDateTime, fmtJstTime, fmtRelative, fmtTimeHHMMSS } from '@/lib/format';
+import { fmtJstDateShort, fmtJstDateTime, fmtJstTime, fmtRelative, fmtTimeHHMMSS } from '@/lib/format';
 import { EASE_PAPER } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import type {
-  EconEvent,
   NewsFeedState,
   NewsHotspotGroup,
   NewsItem,
@@ -39,12 +37,12 @@ import type {
   NewsStatus,
 } from '@/api/types';
 
-type Tab = 'feed' | 'stocks' | 'econ' | 'sources';
+type Tab = 'feed' | 'stocks' | 'sources';
 
 /** 値は API に渡す絞り込みキー（後端 `classify.CATEGORY_RULES` の日本語 taxonomy）。
  *  **表示のときだけ `t()` を通す** —— ここで訳した文字列を送ると何も引っかからない。 */
 const CATEGORY_FILTERS = ['決算', '業績予想修正', 'M&A・TOB', '自社株買い', '配当', '日銀・金利', '規制・政策'];
-const TABS: Tab[] = ['feed', 'stocks', 'econ', 'sources'];
+const TABS: Tab[] = ['feed', 'stocks', 'sources'];
 const HOURS = [24, 72, 168] as const;
 
 function parseNewsSearch(sp: URLSearchParams): {
@@ -96,14 +94,12 @@ export default function News() {
   );
   const hotspots = usePolling(() => newsApi.hotspots(hours), 300_000, [hours], { identity: `news-hotspots:${hours}` });
   const securities = usePolling(() => newsApi.securities(hours), 300_000, [hours], { identity: `news-securities:${hours}` });
-  const econ = usePolling(() => newsApi.econCalendar(), 3_600_000);
   const status = usePolling(() => newsApi.status(), 300_000);
 
   const feedState = remoteState(feed, (d) => d.items.length === 0);
   const refreshingNews = status.refreshing || hotspots.refreshing
     || (tab === 'feed' && feed.refreshing)
-    || (tab === 'stocks' && securities.refreshing)
-    || (tab === 'econ' && econ.refreshing);
+    || (tab === 'stocks' && securities.refreshing);
 
   const onRefreshNews = useCallback(() => {
     if (refreshingNews) return;
@@ -111,14 +107,13 @@ export default function News() {
     hotspots.refresh({ force: true });
     if (tab === 'feed') feed.refresh({ force: true });
     if (tab === 'stocks') securities.refresh({ force: true });
-    if (tab === 'econ') econ.refresh({ force: true });
-  }, [econ, feed, hotspots, refreshingNews, securities, status, tab]);
+  }, [feed, hotspots, refreshingNews, securities, status, tab]);
 
   return (
     <div>
       <PageHeader
         title={t('新闻')}
-        description={t('查看新闻原文、关联股票与经济日历')}
+        description={t('查看新闻原文与关联股票')}
         meta={
           <>
             <StatusStrip status={status.data ?? null} />
@@ -146,7 +141,6 @@ export default function News() {
           options={[
             { value: 'feed', label: t('信息流') },
             { value: 'stocks', label: t('关联个股') },
-            { value: 'econ', label: t('经济日历') },
             { value: 'sources', label: t('数据源') },
           ]}
           value={tab}
@@ -243,16 +237,6 @@ export default function News() {
       {tab === 'stocks' && (
         <NewsPanelState error={securities.error} hasData={Boolean(securities.data)} onRetry={() => securities.refresh()} refreshing={securities.refreshing}>
           <StocksImpactPanel rows={securities.data?.rows ?? []} loading={securities.loading} />
-        </NewsPanelState>
-      )}
-
-      {tab === 'econ' && (
-        <NewsPanelState error={econ.error} hasData={Boolean(econ.data)} onRetry={() => econ.refresh()} refreshing={econ.refreshing}>
-        <EconCalendarPanel
-          events={econ.data?.events ?? []}
-          note={econ.data?.coverage_note_ja}
-          loading={econ.loading}
-        />
         </NewsPanelState>
       )}
 
@@ -688,115 +672,6 @@ function StocksImpactPanel({ rows, loading }: { rows: NewsSecurityRow[]; loading
     );
   }
   return <DataTable columns={columns} rows={rows} rowKey={(row) => row.canonical_code} rowHeight={44} />;
-}
-
-/* ---------------- 经济日历 ---------------- */
-
-function EconCalendarPanel({ events, note, loading }: { events: EconEvent[]; note?: string; loading: boolean }) {
-  if (loading && events.length === 0) {
-    return (
-      <section className="card-surface overflow-hidden">
-        <FeedSkeleton rows={8} />
-      </section>
-    );
-  }
-  if (events.length === 0) {
-    return (
-      <section className="card-surface">
-        <EmptyState image="/empty-news.svg" title={t('暂无数据')} />
-      </section>
-    );
-  }
-  const grouped = new Map<string, EconEvent[]>();
-  for (const event of events) {
-    const list = grouped.get(event.date) ?? [];
-    list.push(event);
-    grouped.set(event.date, list);
-  }
-  return (
-    <div className="space-y-3">
-      {note && <p className="text-caption text-ink-400">{note}</p>}
-      {Array.from(grouped.entries()).map(([date, dayEvents]) => (
-        <section key={date} className="card-surface overflow-hidden">
-          <div className="flex items-baseline gap-2 border-b border-line px-4 py-3 sm:px-5">
-            <span className="text-micro text-ink-400">{t('日本时间')}</span>
-            <h3 className="flex items-baseline gap-2">
-              <span className="tnum text-body font-semibold text-ink-900">{fmtDate(date)}</span>
-              <span className="text-micro text-ink-400">{weekdayJa(date)}</span>
-            </h3>
-          </div>
-          <ul>
-            {dayEvents.map((event, index) => (
-              <li
-                key={index}
-                className="group relative flex min-h-[60px] gap-3 px-4 py-[18px] transition-colors duration-fast hover:bg-paper-2/70 sm:px-5"
-              >
-                <TimeColClock time={event.time_jst} />
-                <div className="min-w-0 flex-1">
-                  <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-micro text-ink-400">
-                    <EconImportanceDot importance={event.importance} />
-                    <span className="font-medium text-ink-500">{event.organizer}</span>
-                    <SoftBadge>{t(event.category)}</SoftBadge>
-                    {!event.confirmed && (
-                      event.note ? (
-                        <PointerTooltip
-                          passthrough
-                          label={event.note}
-                          content={<span className="text-micro leading-[16px] text-ink-600">{event.note}</span>}
-                        >
-                          <SoftBadge tone="warn">{t('目安')}</SoftBadge>
-                        </PointerTooltip>
-                      ) : (
-                        <SoftBadge tone="warn">{t('目安')}</SoftBadge>
-                      )
-                    )}
-                    {event.source_url && (
-                      <a href={event.source_url} target="_blank" rel="noreferrer" className="ml-auto text-brand-700 hover:underline">
-                        {t('出处')}
-                      </a>
-                    )}
-                  </p>
-                  <h3 className="mt-1.5 text-[15px] font-semibold leading-[22px] text-ink-900">
-                    <span className="bg-[linear-gradient(currentColor,currentColor)] bg-[length:0%_1px] bg-left-bottom bg-no-repeat transition-[background-size,color] duration-200 group-hover:bg-[length:100%_1px] group-hover:text-brand-600">
-                      {event.name_ja}
-                    </span>
-                  </h3>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
-    </div>
-  );
-}
-
-function TimeColClock({ time }: { time: string }) {
-  return (
-    <div className="flex w-11 shrink-0 flex-col items-center pt-0.5">
-      <span className="tnum text-[11px] leading-[14px] text-ink-400">{time || '—'}</span>
-      <span className="mt-1.5 hidden w-[2px] flex-1 rounded-full bg-line sm:block" aria-hidden="true" />
-    </div>
-  );
-}
-
-function EconImportanceDot({ importance }: { importance: string }) {
-  const tone = importance === 'high' ? 'bg-warn-600' : importance === 'medium' ? 'bg-brand-500' : 'bg-ink-300';
-  const label = importance === 'high' ? t('高') : importance === 'medium' ? t('中') : t('低');
-  return (
-    <span className="flex w-8 shrink-0 items-center gap-1">
-      <span className={`inline-block h-2 w-2 rounded-full ${tone}`} aria-hidden />
-      <span className="text-micro text-ink-400">{label}</span>
-    </span>
-  );
-}
-
-function weekdayJa(isoDate: string): string {
-  // 正午 JST = 03:00 UTC 同日 → getUTCDay がそのまま JST の曜日。閲覧者 TZ 非依存。
-  const parsed = new Date(`${isoDate}T12:00:00+09:00`);
-  if (Number.isNaN(parsed.getTime())) return '';
-  const days = ['日', '月', '火', '水', '木', '金', '土'];
-  return `(${days[parsed.getUTCDay()]})`;
 }
 
 /* ---------------- 数据源 ---------------- */

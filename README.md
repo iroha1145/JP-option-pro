@@ -1,8 +1,8 @@
 # Optix Japan — 日本株リサーチワークベンチ
 
-個人投資家向け・プライベート配備・日本株専用のリサーチ環境。データソースは
-**J-Quants API V2（Standard プラン）** のみ。日足粒度で正直に動く——リアルタイム
-を装う UI は存在しない。
+個人投資家向け・プライベート配備・日本株専用のリサーチ環境。
+確定データは **J-Quants API V2（Standard プラン）**。画面の遅延気配は Yahoo 由来で、
+日足の分析とは分けて表示する。分足・ティックの取得状態はデータ状態ページで確認する。
 
 参照元の米国株プロジェクト（option-pro）から成熟した基盤（アクセス制御・
 キャッシュ・ワーカー・デザインシステム）を移植し、ドメインは
@@ -72,14 +72,7 @@ J-Quants API V2 ──(rate-limited client)── worker ──> jp-core.db (SQL
 - **原文ニュース**: 翻訳・モデル分析・モデル呼出しは行わない。旧ジョブ DB と
   保存済み分析フィールドは履歴として保持する。旧 `scheduled` 設定は `read` として
   扱い、`[ai]` と `max_ai_items_per_run` は無視する。
-- **能力宣言**: Standard プランに無いデータ（fins/details・配当・分足など）は
-  `unavailable` と表示する。空配列で「データなし」を偽装しない。
+- **データ状態**: 接続済みのデータだけを掲載し、同期日時・エラー・履歴回填の進捗を表示する。
+  未接続の能力、証券端末の骨組みと手動経済カレンダーは含めない。
 
 詳細: [docs/architecture.md](docs/architecture.md) / [docs/jquants-v2-notes.md](docs/jquants-v2-notes.md) / [docs/operations.md](docs/operations.md)
-
-## 将来のリアルタイム拡張
-
-`backend/app/providers/intraday.py` の `IntradayQuoteProvider / IntradayBarProvider /
-RealtimeRankingProvider` プロトコルが唯一の接続点。J-Quants 分足オプションや証券会社
-API を足すときはこの実装を追加するだけで、マスタ・ニュース・日足レーダーは無改修。
-現在は `DisabledIntradayProvider` が「未接続」を正直に返す。

@@ -11,6 +11,8 @@
 from __future__ import annotations
 
 import csv
+import math
+from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping
 
 from app.providers.jquants.client import JQuantsClient
@@ -28,6 +30,43 @@ INTRADAY_INTERVALS = ("1m", "5m", "60m")
 CHART_INTERVALS = ("1d", *INTRADAY_INTERVALS)
 FETCH_TRADING_DAYS = 5
 RETENTION_TRADING_DAYS = 30
+PUBLICATION_RETRY_SECONDS = 15 * 60
+
+
+def cache_freshness(
+    store: IntradayStore, canonical_code: str, dataset: str, target_date: str | None
+) -> dict[str, Any]:
+    """Use completed trading dates; weekends do not make the cache stale.
+
+    A confirmed empty trading day is complete. A file that has not arrived is
+    retried after a short delay, without repeatedly downloading on every poll.
+    """
+    meta = None
+    availability = {}
+    if store.exists():
+        days = store.tick_days_for(canonical_code) if dataset == DATASET_TICK else store.fetched_days_for(canonical_code)
+        meta = days.get(target_date)
+        availability = store.availability(dataset)
+    pending = bool(meta and meta.get("fetch_status") == "not_published")
+    retry = 0
+    checked = (meta or {}).get("fetched_at")
+    if pending or availability.get("availability") == AVAILABILITY_PLAN_NOT_INCLUDED:
+        checked = checked or availability.get("last_checked_at")
+        if checked:
+            try:
+                moment = datetime.fromisoformat(str(checked).replace("Z", "+00:00"))
+                retry = max(0, math.ceil(PUBLICATION_RETRY_SECONDS - (datetime.now(timezone.utc) - moment).total_seconds()))
+            except (ValueError, TypeError):
+                pass
+    complete = bool(meta and not pending)
+    count = (meta or {}).get("tick_count" if dataset == DATASET_TICK else "bar_count", 0)
+    return {
+        "target_date": target_date,
+        "needs_fetch": bool(target_date and not complete and retry == 0),
+        "retry_after_seconds": retry or None,
+        "latest_empty": bool(complete and count == 0),
+        "publication_pending": pending,
+    }
 
 # ティック: 1 銘柄 1 日で数万〜数十万行になり得る。取得は直近取引日のみ、
 # 行数に硬い上限を置き（超過は truncated として正直に記録）、チャート用には
@@ -50,9 +89,9 @@ def fetch_recent_minutes(
 ) -> dict[str, Any]:
     """直近 N 取引日の分足を取得してキャッシュ（完了日は再取得しない）。"""
 
-    latest = core.latest_bar_date() or core.latest_trading_day("2099-12-31")
+    latest = core.latest_bar_date()
     if latest is None:
-        return {"status": "error", "error_code": "trading_calendar_empty"}
+        return {"status": "error", "error_code": "daily_prices_empty"}
     from app.domain.timeutil import add_days
 
     window = core.trading_days_between(add_days(latest, -30), latest)
@@ -61,7 +100,7 @@ def fetch_recent_minutes(
     fetched = 0
     bars_total = 0
     for day in trading_days:
-        if day in already and already[day]["bar_count"] > 0 and day != latest:
+        if day in already and already[day].get("fetch_status") == "complete" and day != latest:
             continue  # 完了日のキャッシュは不変
         try:
             rows = [
@@ -77,13 +116,20 @@ def fetch_recent_minutes(
             )
             return {"status": "plan_not_included", "fetched_days": fetched}
         except JQuantsError as exc:
+            store.record_availability(store.availability()["availability"], error_code=exc.code)
             return {"status": "error", "error_code": exc.code, "fetched_days": fetched}
         store.upsert_minute_bars(rows)
-        store.record_fetched_day(canonical_code, day, len(rows))
+        daily = core.bars_for_code(canonical_code, start_date=day, end_date=day, limit=1)
+        no_trades = bool(daily and all(daily[0].get(key) is None for key in ("open", "high", "low", "close", "volume", "turnover_value")))
+        store.record_fetched_day(
+            canonical_code, day, len(rows),
+            fetch_status="complete" if rows or no_trades else "not_published",
+        )
         fetched += 1
         bars_total += len(rows)
     store.record_availability(AVAILABILITY_AVAILABLE)
-    return {"status": "ok", "fetched_days": fetched, "bars": bars_total, "days": trading_days}
+    pending = store.fetched_days_for(canonical_code).get(latest, {}).get("fetch_status") == "not_published"
+    return {"status": "not_published" if pending else "ok", "fetched_days": fetched, "bars": bars_total, "days": trading_days}
 
 
 def _bucket_key(bar_time: str, interval: str) -> str:
@@ -154,7 +200,8 @@ def intraday_chart(
             "bars": [],
         }
     state = store.availability()
-    if state["availability"] == AVAILABILITY_PLAN_NOT_INCLUDED:
+    minute_rows = store.minute_bars(canonical_code)
+    if state["availability"] == AVAILABILITY_PLAN_NOT_INCLUDED and not minute_rows:
         return {
             "available": False,
             "reason": "plan_not_included",
@@ -162,13 +209,12 @@ def intraday_chart(
             "note_ja": "分足は J-Quants のオプション（アドオン）契約が必要です。現在の契約では取得できません。",
             "bars": [],
         }
-    minute_rows = store.minute_bars(canonical_code)
     fetched = store.fetched_days_for(canonical_code)
     if not minute_rows:
         if fetched:
             return {
                 "available": False,
-                "reason": "empty",
+                "reason": "not_published" if fetched[max(fetched)].get("fetch_status") == "not_published" else "empty",
                 "availability": state["availability"],
                 "note_ja": "この銘柄の分足は取得済みですが、表示できるバーがありません。",
                 "days": sorted(fetched.keys()),
@@ -214,11 +260,11 @@ def fetch_latest_ticks(
     extra_codes を渡すと同じダウンロード 1 パスでまとめて抽出する。
     """
 
-    latest = core.latest_bar_date() or core.latest_trading_day("2099-12-31")
+    latest = core.latest_bar_date()
     if latest is None:
-        return {"status": "error", "error_code": "trading_calendar_empty"}
+        return {"status": "error", "error_code": "daily_prices_empty"}
     cached = store.tick_days_for(canonical_code).get(latest)
-    if cached and cached["tick_count"] > 0 and not cached["truncated"]:
+    if cached and cached.get("fetch_status") == "complete" and cached["tick_count"] > 0 and not cached["truncated"]:
         # 「完了日は不変」だが、こちらのマッパーが壊れていた時期に取り込んだ行は
         # 不変ではなく単に間違っている（実例: 数量列を取り違えて volume が全 NULL）。
         # 数量が 1 件も入っていない日はキャッシュとして信用せず取り直す。
@@ -243,11 +289,11 @@ def fetch_latest_ticks(
         )
         return {"status": "plan_not_included", "trade_date": latest}
     except JQuantsError as exc:
+        store.record_availability(store.availability(DATASET_TICK)["availability"], error_code=exc.code, dataset=DATASET_TICK)
         return {"status": "error", "error_code": exc.code, "trade_date": latest}
     if key is None:
-        # 営業日なのにファイルが無い = まだ publish されていない（当日は引け後）。
-        # 0 件の tick_day を残さないとビューが not_fetched のまま自動再投入が回る。
-        store.replace_ticks(str(canonical_code), latest, [], truncated=False)
+        # Keep a retryable marker, distinct from a published file with no trades.
+        store.mark_ticks_not_published(str(canonical_code), latest)
         store.record_availability(AVAILABILITY_AVAILABLE, dataset=DATASET_TICK)
         return {"status": "not_published", "trade_date": latest}
 
@@ -273,6 +319,7 @@ def fetch_latest_ticks(
         )
         return {"status": "plan_not_included", "trade_date": latest}
     except JQuantsError as exc:
+        store.record_availability(store.availability(DATASET_TICK)["availability"], error_code=exc.code, dataset=DATASET_TICK)
         return {"status": "error", "error_code": exc.code, "trade_date": latest}
 
     stored_by_code = {}
@@ -397,7 +444,8 @@ def tick_view(
     if not store.exists():
         return {"available": False, "reason": "not_fetched", "availability": "unknown", **empty}
     state = store.availability(DATASET_TICK)
-    if state["availability"] == AVAILABILITY_PLAN_NOT_INCLUDED:
+    days = store.tick_days_for(canonical_code)
+    if state["availability"] == AVAILABILITY_PLAN_NOT_INCLUDED and not any(day["tick_count"] > 0 for day in days.values()):
         return {
             "available": False,
             "reason": "plan_not_included",
@@ -405,7 +453,6 @@ def tick_view(
             "note_ja": "ティックは J-Quants の Tick アドオン契約が必要です（CSV 一括配信）。",
             **empty,
         }
-    days = store.tick_days_for(canonical_code)
     if not days:
         return {
             "available": False,
@@ -422,7 +469,7 @@ def tick_view(
         newest = max(days.keys())
         return {
             "available": False,
-            "reason": "empty",
+            "reason": "not_published" if days[newest].get("fetch_status") == "not_published" else "empty",
             "availability": state["availability"],
             "note_ja": "ティックは取得済みですが、この銘柄の約定が無い、または日次ファイルが未配信です。",
             "trade_date": newest,
@@ -452,8 +499,10 @@ def tick_view(
 
 __all__ = [
     "CHART_INTERVALS",
+    "cache_freshness",
     "FETCH_TRADING_DAYS",
     "INTRADAY_INTERVALS",
+    "PUBLICATION_RETRY_SECONDS",
     "RETENTION_TRADING_DAYS",
     "TICK_CHART_MAX_POINTS",
     "TICK_FETCH_MAX_ROWS",

@@ -5,7 +5,19 @@ from __future__ import annotations
 import secrets
 import sqlite3
 
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, HTTPException, Request
+
+from app.access import request_is_owner_session, require_owner_access, require_same_origin_json
+from app.api.account import current_account
+
+PUBLIC_REFRESH_ACTIONS = frozenset({"radar_refresh", "news_sync", "short_monitor_refresh", "intraday_fetch", "tick_fetch"})
+
+def _require_refresh_access(request: Request, action_type: str | None = None) -> None:
+    if request_is_owner_session(request):
+        return
+    if (action_type is None or action_type in PUBLIC_REFRESH_ACTIONS) and current_account(request) is not None:
+        return
+    require_owner_access(request)
 
 from app.api.deps import worker_state_read, worker_state_write
 from app.domain.symbols import normalize_input_code
@@ -43,7 +55,8 @@ def _retryable_queue_error(error: Exception, schema_name: str) -> bool:
 
 
 @router.get("/status")
-def worker_status() -> dict:
+def worker_status(request: Request) -> dict:
+    _require_refresh_access(request)
     repository = worker_state_read()
     if not repository.exists():
         return {"available": False, "healthy": False, "tasks": {}}
@@ -56,8 +69,11 @@ def worker_status() -> dict:
 @router.post("/actions/{action_type}", status_code=202)
 def request_action(
     action_type: str,
+    request: Request,
     code: str | None = Body(default=None, embed=True, max_length=8),
 ) -> dict:
+    _require_refresh_access(request, action_type)
+    require_same_origin_json(request)
     if action_type not in MANUAL_ACTION_TYPES:
         raise HTTPException(status_code=404, detail={"code": "unknown_action"})
     payload: dict = {}
@@ -89,11 +105,13 @@ def request_action(
 
 
 @router.get("/actions/{action_id}")
-def get_action(action_id: int) -> dict:
+def get_action(action_id: int, request: Request) -> dict:
+    _require_refresh_access(request)
     repository = worker_state_read()
     if not repository.exists():
         raise HTTPException(status_code=404, detail={"code": "action_not_found"})
     item = repository.get_action(action_id)
     if item is None:
         raise HTTPException(status_code=404, detail={"code": "action_not_found"})
+    _require_refresh_access(request, item["action_type"])
     return item

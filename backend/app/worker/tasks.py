@@ -502,15 +502,20 @@ def build_default_tasks(context: TaskContext) -> list[TaskSpec]:
                 client=context.client, store=store, core=context.repository,
                 canonical_code=str(code), extra_codes=extra,
             )
-            store.prune_ticks_older_than(
-                add_days(iso_date(today_jst()), -TICK_RETENTION_TRADING_DAYS * 2)
-            )
+            if result.get("status") == "ok" and result.get("ticks", 0) > 0:
+                store.prune_ticks_older_than(
+                    add_days(iso_date(today_jst()), -TICK_RETENTION_TRADING_DAYS * 2),
+                    canonical_code=str(code),
+                )
         else:
             result = fetch_recent_minutes(
                 client=context.client, store=store, core=context.repository,
                 canonical_code=str(code), days=FETCH_TRADING_DAYS,
             )
-            store.prune_older_than(add_days(iso_date(today_jst()), -RETENTION_TRADING_DAYS * 2))
+            if result.get("status") == "ok" and result.get("bars", 0) > 0:
+                store.prune_older_than(
+                    add_days(iso_date(today_jst()), -RETENTION_TRADING_DAYS * 2), canonical_code=str(code)
+                )
         status = (
             "completed"
             if result.get("status") in ("ok", "plan_not_included", "not_published")

@@ -32,6 +32,7 @@ interface AccessContextValue {
   loading: boolean;
   /** 自选可写主体：owner 或已登录的访客账号。 */
   canManageWatchlist: boolean;
+  canRefreshPublicData: boolean;
   identityUnavailable: boolean;
   refresh: () => Promise<void>;
   login: (password: string, username?: string) => Promise<void>;
@@ -141,6 +142,7 @@ export function AccessProvider({ children }: { children: ReactNode }) {
       isCustomer,
       loading: status === null && !identityUnavailable,
       canManageWatchlist: isSignedIn,
+      canRefreshPublicData: isSignedIn,
       identityUnavailable,
       refresh,
       login,

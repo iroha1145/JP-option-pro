@@ -31,7 +31,6 @@ from app.access import (  # noqa: E402
     get_access_runtime,
     request_owner_access_context,
     require_public_read_or_owner_access,
-    require_same_origin_action,
 )
 from app.api import (
     # noqa: E402,
@@ -243,9 +242,10 @@ class _GatewayMiddleware:
         path = scope.get("path", "")
         is_api = path.startswith("/api/")
         client_ip = client_ip_from_scope(scope)
+        heavy = scope.get("method") not in {"GET", "HEAD"} and path.startswith(_HEAVY_PREFIXES)
         if is_api and _rate_limited(
-            f"{client_ip}:{'h' if path.startswith(_HEAVY_PREFIXES) else 'l'}",
-            heavy=path.startswith(_HEAVY_PREFIXES),
+            f"{client_ip}:{'h' if heavy else 'l'}",
+            heavy=heavy,
         ):
             response = JSONResponse(
                 {"detail": {"code": "rate_limited"}}, status_code=429,
@@ -294,7 +294,6 @@ app.add_middleware(_GatewayMiddleware)
 # ---------------------------------------------------------------------------
 
 _PUBLIC_READ = [Depends(require_public_read_or_owner_access)]
-_OWNER_ACTION = [Depends(require_public_read_or_owner_access), Depends(require_same_origin_action)]
 
 app.include_router(market_api.router, dependencies=_PUBLIC_READ)
 app.include_router(stocks_api.router, dependencies=_PUBLIC_READ)
@@ -311,7 +310,7 @@ app.include_router(short_monitor_api.router, dependencies=_PUBLIC_READ)
 # 自選はルート内で主体（オーナー / 訪客アカウント）を解決し、書き込みは
 # 同一オリジンガードを各ルートで掛ける — ルータ級のオーナー強制を外す。
 app.include_router(watchlist_api.router)
-app.include_router(worker_api.router, dependencies=_OWNER_ACTION)
+app.include_router(worker_api.router)
 app.include_router(access_api.router)
 app.include_router(account_api.router)
 

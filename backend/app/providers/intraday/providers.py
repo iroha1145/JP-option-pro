@@ -1,8 +1,6 @@
 """具体的な供給元。いまは Yahoo 遅延と「無効」の 2 つだけが動く。
 
-証券端末リレー（kabu ステーション / マーケットスピード）は骨組みだけ置いて
-未接続にしてある。ここに実装が入っても業務側は 1 行も変わらない、という
-配置になっていること自体がこの層の目的なので、契約に合う空実装を先に置く。
+Yahoo の遅延気配を共通の契約に載せ、機能が無効なら空の実装を返す。
 """
 
 from __future__ import annotations
@@ -21,7 +19,6 @@ from app.providers.yahoo_quotes import (
 
 from .contract import (
     DELAY_DELAYED,
-    DELAY_REALTIME,
     DELAY_UNKNOWN,
     JST,
     ProviderStatus,
@@ -130,45 +127,4 @@ class YahooDelayedProvider:
         return out
 
 
-class _UnconnectedRelayProvider:
-    """証券端末リレーの骨組み（未接続）。
-
-    将来像: Windows 端末が候補銘柄を購読 → ローカル Relay が正規化 → TLS で
-    サーバへ push。ここは受け口の型だけを先に確定させておくためのもので、
-    `available=False` を返す以外の振る舞いは持たない。**リアルタイムを名乗る
-    以上、繋がっていないのに古い値を返すことは絶対にしない。**
-    """
-
-    delay_class = DELAY_REALTIME
-    is_official = True
-    is_realtime = True
-
-    def status(self) -> ProviderStatus:
-        return ProviderStatus(
-            name=self.name, available=False, delay_class=self.delay_class,
-            is_official=self.is_official, is_realtime=self.is_realtime,
-            delay_minutes=0, detail="not_connected",
-        )
-
-    def quotes_for_codes(self, canonical_codes: Iterable[str]) -> dict[str, Quote]:
-        return {}
-
-    def index_quotes(self) -> dict[str, Quote]:
-        return {}
-
-
-class KabuStationRelayProvider(_UnconnectedRelayProvider):
-    name = "kabu-station-relay"
-
-
-class MarketSpeedRelayProvider(_UnconnectedRelayProvider):
-    name = "market-speed-relay"
-
-
-__all__ = [
-    "DisabledProvider",
-    "KabuStationRelayProvider",
-    "MarketSpeedRelayProvider",
-    "YahooDelayedProvider",
-    "canonical_to_symbol",
-]
+__all__ = ["DisabledProvider", "YahooDelayedProvider", "canonical_to_symbol"]

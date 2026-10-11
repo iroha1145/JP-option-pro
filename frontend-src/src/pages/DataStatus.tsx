@@ -28,11 +28,13 @@ const MANUAL_ACTIONS: { type: string; label: string }[] = [
   { type: 'fins_sync', label: '触发财务同步' },
   { type: 'backfill_step', label: '推进历史回填' },
   { type: 'radar_refresh', label: '重算雷达' },
+  { type: 'news_sync', label: '刷新新闻' },
+  { type: 'short_monitor_refresh', label: '刷新空头监测' },
 ];
 
 export default function DataStatus() {
   const query = usePolling(() => dataStatusApi.get(), 60_000);
-  const { isOwner } = useAccess();
+  const { isOwner, canRefreshPublicData } = useAccess();
   const toast = useToast();
   const state = remoteState(query);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
@@ -52,7 +54,7 @@ export default function DataStatus() {
     {
       key: 'status',
       title: t('状态'),
-      render: (row) => <CapabilityBadge status={row.status} freshness={row.freshness} />,
+      render: (row) => <CapabilityBadge freshness={row.freshness} />,
     },
     {
       key: 'through',
@@ -186,10 +188,10 @@ export default function DataStatus() {
             />
           </section>
 
-          {isOwner && (
+          {canRefreshPublicData && (
             <div className="card-surface flex flex-wrap items-center gap-2 p-5">
               <p className="eyebrow w-full">{t('手动刷新')}</p>
-              {MANUAL_ACTIONS.map((action) => (
+              {MANUAL_ACTIONS.filter((action) => isOwner || ["radar_refresh", "news_sync", "short_monitor_refresh"].includes(action.type)).map((action) => (
                 <button
                   key={action.type}
                   type="button"
@@ -262,13 +264,7 @@ export default function DataStatus() {
   );
 }
 
-function CapabilityBadge({ status, freshness }: { status: DatasetStatus['status']; freshness?: string | null }) {
-  if (status === 'unavailable') {
-    return <SoftBadge>{t('不可用')}</SoftBadge>;
-  }
-  if (status === 'planned') {
-    return <SoftBadge tone="brand">{t('未接入')}</SoftBadge>;
-  }
+function CapabilityBadge({ freshness }: { freshness?: string | null }) {
   const tone = freshness === 'fresh' ? 'brand' : freshness === 'stale' || freshness === 'error' ? 'warn' : 'neutral';
   const label =
     freshness === 'fresh' ? t('新鲜') : freshness === 'stale' ? t('过期') : freshness === 'never_synced' ? t('从未同步') : freshness ?? '—';

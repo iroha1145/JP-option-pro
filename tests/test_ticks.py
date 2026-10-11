@@ -275,7 +275,7 @@ def test_fetch_ticks_reports_not_published_when_file_missing(tmp_path):
     assert store.availability(DATASET_TICK)["availability"] != AVAILABILITY_PLAN_NOT_INCLUDED
     assert store.tick_days_for("72030")["2026-07-31"]["tick_count"] == 0
     view = tick_view(store, "72030")
-    assert view["reason"] == "empty"
+    assert view["reason"] == "not_published"
     assert view["available"] is False
 
 
@@ -340,7 +340,7 @@ def test_intraday_v1_database_migrates_forward(tmp_path):
         ).fetchone()[0]
     assert "intraday_state" not in tables
     assert {"ticks", "tick_days", "addon_state"} <= tables
-    assert version == "jp-intraday-v2"
+    assert version == "jp-intraday-v3"
 
 
 def test_volume_null_day_is_refetched_not_served_from_cache(tmp_path, monkeypatch):

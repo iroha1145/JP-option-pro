@@ -22,8 +22,6 @@ from .contract import (
 )
 from .providers import (
     DisabledProvider,
-    KabuStationRelayProvider,
-    MarketSpeedRelayProvider,
     YahooDelayedProvider,
 )
 
@@ -39,8 +37,6 @@ ProviderFactory = Callable[[], IntradayQuoteProvider]
 
 #: 登録順は優先順ではない（実際の選択は等級と available で決まる）。
 PROVIDER_FACTORIES: dict[str, ProviderFactory] = {
-    "kabu-station-relay": KabuStationRelayProvider,
-    "market-speed-relay": MarketSpeedRelayProvider,
     "yahoo-delayed": YahooDelayedProvider,
     "disabled": DisabledProvider,
 }
@@ -71,7 +67,7 @@ def select_provider() -> IntradayQuoteProvider:
 
 
 def provider_statuses() -> list[ProviderStatus]:
-    """全供給元の状態（データ状態ページ用。未接続も含めて見せる）。"""
+    """登録された供給元の状態（データ状態ページ用）。"""
 
     return [
         factory().status()

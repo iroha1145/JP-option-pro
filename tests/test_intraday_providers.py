@@ -17,8 +17,6 @@ from app.providers.intraday import contract as ct
 from app.providers.intraday import registry
 from app.providers.intraday.providers import (
     DisabledProvider,
-    KabuStationRelayProvider,
-    MarketSpeedRelayProvider,
 )
 
 
@@ -107,17 +105,6 @@ def test_missing_quote_time_counts_as_stale():
 # ---------------------------------------------------------------------------
 
 
-def test_unconnected_relays_report_unavailable_and_return_nothing():
-    """繋がっていないリアルタイム源が選ばれて空を返し続ける、を防ぐ。"""
-
-    for provider in (KabuStationRelayProvider(), MarketSpeedRelayProvider()):
-        status = provider.status()
-        assert status.available is False
-        assert status.detail == "not_connected"
-        assert provider.quotes_for_codes(["72030"]) == {}
-        assert provider.index_quotes() == {}
-
-
 def test_selection_prefers_the_best_available_delay_class(monkeypatch):
     class _FakeRealtime:
         name = "fake-realtime"
@@ -168,9 +155,9 @@ def test_selection_falls_back_to_disabled_never_raises(monkeypatch):
     assert provider.quotes_for_codes(["72030"]) == {}
 
 
-def test_statuses_expose_unconnected_relays_too():
+def test_statuses_report_connected_quote_source():
     names = {status.name for status in registry.provider_statuses()}
-    assert {"kabu-station-relay", "market-speed-relay"} <= names
+    assert names == {"yahoo-delayed"}
 
 
 # ---------------------------------------------------------------------------

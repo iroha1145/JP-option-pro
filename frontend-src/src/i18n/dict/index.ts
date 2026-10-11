@@ -4,6 +4,11 @@
  */
 
 export const DICT: Record<string, [string, string]> = {
+  '刷新空头监测': ["Refresh short monitor", "空売り監視を更新"],
+  '尚未更新至 {date}': ["Not yet updated to {date}", "{date}までのデータは未取得です"],
+  '最新交易日 {date} 暂无成交记录': ["No trades recorded for the latest trading day, {date}", "最新取引日 {date} の約定記録はありません"],
+  '最新交易日数据尚未发布，稍后自动重试': ["Latest trading-day data has not been published; retrying later", "最新取引日のデータは未配信です。後ほど再取得します"],
+  '正在更新至 {date}': ["Updating to {date}", "{date}までのデータを更新中"],
   'Optix Japan — 日股研究工作台': ['Optix Japan — Japan Equity Research', 'Optix Japan — 日本株リサーチ'],
   首页: ['Home', 'ホーム'],
   日本市场: ['Market', '日本市場'],
@@ -148,8 +153,6 @@ export const DICT: Record<string, [string, string]> = {
   数据源: ['Data source', 'データソース'],
   订阅计划: ['Plan', '契約プラン'],
   可用: ['Enabled', '利用可能'],
-  未接入: ['Planned', '未接続'],
-  不可用: ['Unavailable', '利用不可'],
   新鲜: ['Fresh', '最新'],
   过期: ['Stale', '陳腐化'],
   从未同步: ['Never synced', '未同期'],
@@ -226,7 +229,6 @@ export const DICT: Record<string, [string, string]> = {
   ],
   信息流: ['Feed', 'フィード'],
   个股影响: ['Stock impact', '銘柄別インパクト'],
-  经济日历: ['Econ calendar', '経済指標カレンダー'],
   仅看关联个股: ['With securities only', '銘柄関連のみ'],
   已启用: ['Enabled', '有効'],
   未启用: ['Disabled', '無効'],
@@ -1105,12 +1107,6 @@ export const DICT: Record<string, [string, string]> = {
   市場概況: ['Market overview', '市場概況'],
   '信用・空売り': ['Margin / Short selling', '信用・空売り'],
   その他: ['Other', 'その他'],
-
-  /* 経済カレンダーの分類（`domain/econ_calendar.py`） */
-  金融政策: ['Monetary policy', '金融政策'],
-  物価: ['Prices', '物価'],
-  景気: ['Business conditions', '景気'],
-  '統計(金融)': ['Financial statistics', '統計(金融)'],
 
   /* 後端 news/classify: 重要度の根拠 */
   '事件类别: {categories}': ['Event type: {categories}', 'イベント種別: {categories}'],
@@ -2275,8 +2271,8 @@ export const DICT: Record<string, [string, string]> = {
   '市场页面': ["Market pages","市場のページ"],
   '研究工具': ["Research tools","リサーチツール"],
   '日期 · 业绩 · 公司公告': ["Dates · Results · Announcements","日程・業績・会社発表"],
-  '原文 · 来源 · 经济日历': ["Original news · Sources · Calendar","原文・情報源・経済カレンダー"],
-  '查看新闻原文、关联股票与经济日历': ["Read source news, linked stocks and the economic calendar","ニュース原文、関連銘柄、経済カレンダーを確認"],
+  '原文 · 来源': ["Original news · Sources","原文・情報源"],
+  '查看新闻原文与关联股票': ["Read source news and linked stocks","ニュース原文と関連銘柄を確認"],
   '关联个股': ["Related stocks","関連銘柄"],
   '近 24 小时': ["Past 24 hours","過去24時間"],
   '近 3 天': ["Past 3 days","過去3日間"],

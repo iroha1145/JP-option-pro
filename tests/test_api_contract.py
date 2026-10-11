@@ -131,7 +131,7 @@ def test_data_status_declares_capabilities(client):
     body = client.get("/api/data-status").json()
     keys = {dataset["key"]: dataset for dataset in body["datasets"]}
     assert keys["daily_prices"]["status"] == "enabled"
-    assert keys["financial_details"]["status"] == "unavailable"  # Premium 限定は正直に
+    assert all(dataset["status"] == "enabled" for dataset in body["datasets"])
     # intraday add-on is declared enabled in CAPABILITIES (2026-08 OHLC-Min + Tick);
     # data-status must report it consistently rather than hard-coding False.
     assert keys["intraday_prices"]["status"] == "enabled"
@@ -307,13 +307,10 @@ def test_quote_sources_endpoint_declares_every_provider(client):
     body = client.get("/api/quotes/sources").json()
     assert body["selected"]["name"]
     names = {provider["name"] for provider in body["providers"]}
-    # 未接続のリレーも隠さずに出す（「なぜリアルタイムでないか」が説明できる）
-    assert {"kabu-station-relay", "market-speed-relay", "yahoo-delayed"} <= names
+    assert names == {"yahoo-delayed"}
     for provider in body["providers"]:
         for field in ("available", "delay_class", "is_official", "is_realtime", "delay_minutes"):
             assert field in provider, f"{provider['name']}: {field} が無い"
-    relay = next(p for p in body["providers"] if p["name"] == "kabu-station-relay")
-    assert relay["available"] is False and relay["is_realtime"] is True
 
 
 def test_intraday_quotes_envelope_keeps_legacy_and_new_fields(client, monkeypatch):
@@ -346,8 +343,5 @@ def test_retired_model_features_absent_from_settings_and_news(client):
     assert not any("/ai" in path or "generate" in path for path in routes)
 
 
-@pytest.mark.parametrize("query", ["start=2026-02-31", "start=2026-10-12&end=2026-10-11"])
-def test_econ_calendar_invalid_range_is_client_error(client, query):
-    response = client.get(f"/api/news/econ-calendar?{query}")
-    assert response.status_code == 422
-    assert response.json()["detail"]["code"] == "invalid_calendar_range"
+def test_retired_economic_calendar_route_is_absent(client):
+    assert client.get("/api/news/econ-calendar").status_code == 404

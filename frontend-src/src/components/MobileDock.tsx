@@ -26,7 +26,7 @@ const DOCK_ITEMS: { label: string; path: string; icon: IconName }[] = [
 
 const MORE_ITEMS: { label: string; path: string; icon: IconName; desc: string }[] = [
   { label: t('财报日历'), path: '/earnings', icon: 'calendar-spark', desc: t('日期 · 业绩 · 公司公告') },
-  { label: t('新闻'), path: '/news', icon: 'doc-quote', desc: t('原文 · 来源 · 经济日历') },
+  { label: t('新闻'), path: '/news', icon: 'doc-quote', desc: t('原文 · 来源') },
   { label: t('数据状态'), path: '/data-status', icon: 'wallet-gauge', desc: t('同步进度 · 数据覆盖') },
   { label: t('历史验证'), path: '/research', icon: 'crosshair', desc: t('走步验证 · 分层收益') },
 ];

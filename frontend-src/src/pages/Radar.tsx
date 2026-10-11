@@ -61,7 +61,7 @@ const GROUP_STATES: Record<StateGroup, string | undefined> = {
 };
 
 export default function Radar() {
-  const { isOwner } = useAccess();
+  const { canRefreshPublicData } = useAccess();
   const toast = useToast();
   const [group, setGroup] = useState<StateGroup>('active');
   const [view, setView] = useState<ViewMode>('cards');
@@ -166,7 +166,7 @@ export default function Radar() {
                 {t('更新')} {fmtTimeHHMMSS(query.lastUpdatedAt)}
               </span>
             )}
-            {isOwner && (
+            {canRefreshPublicData && (
               <ForceRefreshButton
                 onClick={async () => {
                   if (rescanning) return;
