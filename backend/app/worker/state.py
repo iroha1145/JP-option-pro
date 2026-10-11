@@ -252,7 +252,7 @@ class WorkerStateRepository(SQLiteRepository):
         success: bool | None = None,
     ) -> None:
         now = utc_now_iso()
-        details_json = json.dumps(details or {}, ensure_ascii=False)[:16384]
+        details_json = json.dumps(details or {}, ensure_ascii=False)
         with self.write() as connection:
             self._assert_fence(connection, owner_id, fencing_token)
             row = connection.execute(
@@ -519,7 +519,7 @@ class WorkerStateRepository(SQLiteRepository):
                 "result_json = ? WHERE action_id = ?",
                 (
                     status, utc_now_iso(), error_code,
-                    json.dumps(result or {}, ensure_ascii=False)[:16384], action_id,
+                    json.dumps(result or {}, ensure_ascii=False), action_id,
                 ),
             )
 
