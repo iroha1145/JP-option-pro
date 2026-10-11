@@ -448,6 +448,15 @@ class CoreRepository(SQLiteRepository):
             row = connection.execute("SELECT MAX(trade_date) FROM index_bars").fetchone()
         return row[0] if row and row[0] else None
 
+    def index_bar_summary(self, index_code: str) -> dict[str, Any]:
+        with self.read() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS rows_total, MAX(trade_date) AS data_through "
+                "FROM index_bars WHERE index_code = ?",
+                (index_code,),
+            ).fetchone()
+        return dict(row)
+
     # ------------------------------------------------------------------
     # financial summaries
     # ------------------------------------------------------------------
