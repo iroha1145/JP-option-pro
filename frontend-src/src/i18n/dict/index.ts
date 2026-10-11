@@ -682,6 +682,8 @@ export const DICT: Record<string, [string, string]> = {
 
   /* ---- 第九轮：板块透视 ---- */
   板块透视: ['Sector Matrix', 'セクター俯瞰'],
+  行业中位收益排名: ['Sector median return ranking', '業種別中央値リターン順位'],
+  '盘中覆盖 {covered}/{total}': ['Intraday coverage {covered}/{total}', 'ザラ場カバー {covered}/{total}'],
   热力: ['Heat', 'ヒート'],
   无领涨数据: ['No leader data', '値上がり上位なし'],
   '{name}，当日 {r1}，近20日 {r20}': ['{name}, today {r1}, 20d {r20}', '{name}、当日 {r1}、20日 {r20}'],

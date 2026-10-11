@@ -58,7 +58,6 @@ function TapeItem({
       >
         {tone === 'missing' ? '—' : tone === 'flat' ? '0.00%' : fmtPct(q.change_pct)}
       </span>
-      <span className="ml-2 text-[8px] text-ink-300" aria-hidden="true">◆</span>
     </button>
   );
 }
