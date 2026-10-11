@@ -13,7 +13,7 @@ export interface IndexTrendPoint { value: number; label: string }
 function trendOption(points: IndexTrendPoint[], narrow: boolean, dark: boolean): ChartOption {
   const color = CH.brand500;
   const last = points[points.length - 1];
-  // 250 日窗口只标约 5 个日期，窄屏减为约 3 个；按图台实际宽度判断。
+  // 只标约 5 个日期，窄屏减为约 3 个；按图台实际宽度判断。
   const tickStep = Math.max(1, Math.ceil(points.length / (narrow ? 3 : 5)));
   return {
     ...baseAnimation,

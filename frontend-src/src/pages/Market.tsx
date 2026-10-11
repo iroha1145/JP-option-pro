@@ -483,13 +483,20 @@ function IndexTrendPanel({
 }) {
   /* 只画选中的指数这一条线。之前叠 TOPIX/プライム 对照线：两条线颜色接近、
      图例只是两个色点，用户看不出第二条是什么（首页同样已撤） */
-  const points = useMemo(
-    () =>
-      bars
-        .filter((bar): bar is { trade_date: string; close: number } => bar.close != null && Number.isFinite(bar.close))
-        .map((bar) => ({ value: bar.close, label: bar.trade_date })),
-    [bars],
-  );
+  const points = useMemo(() => {
+    const latestDate = bars.at(-1)?.trade_date;
+    if (!latestDate) return [];
+    const end = new Date(`${latestDate}T00:00:00Z`);
+    const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - 6, 1));
+    const lastDay = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)).getUTCDate();
+    // 按最近交易日回看六个日历月；月底日期落在目标月的最后一天。
+    start.setUTCDate(Math.min(end.getUTCDate(), lastDay));
+    const cutoff = start.toISOString().slice(0, 10);
+    return bars
+      .filter((bar): bar is { trade_date: string; close: number } =>
+        bar.trade_date >= cutoff && bar.close != null && Number.isFinite(bar.close))
+      .map((bar) => ({ value: bar.close, label: bar.trade_date }));
+  }, [bars]);
   const cursor = useChartCursor(points.map((point) => point.label), (index) =>
     `${name} ${points[index].label} ${t('收盘')} ${fmtPrice(points[index].value)}`,
   `${indexCode}:${seriesCode}`);
@@ -510,7 +517,7 @@ function IndexTrendPanel({
 
           <h2 className="mt-0.5 text-h3 text-ink-900">{t('趋势快照')}</h2>
         </div>
-        <span className="rounded-full bg-paper-2 px-2.5 py-0.5 text-micro text-ink-500">{t('快照')}</span>
+        <span className="rounded-full bg-paper-2 px-2.5 py-0.5 text-micro text-ink-500">{t('近半年')}</span>
       </header>
       <div className="mt-3 border-t border-line px-4 pt-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
