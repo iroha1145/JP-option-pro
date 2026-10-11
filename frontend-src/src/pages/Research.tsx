@@ -20,7 +20,8 @@ import EmptyRetryButton from '@/components/shared/EmptyRetryButton';
 import SoftBadge, { type BadgeTone } from '@/components/shared/SoftBadge';
 import { SkeletonCard } from '@/components/shared/Skeleton';
 import StatCard from '@/components/shared/StatCard';
-import { t } from '@/i18n/core';
+import InfoHint from '@/components/shared/InfoHint';
+import { hasTranslation, t } from '@/i18n/core';
 
 const VERDICT_TEXT: Record<string, { label: string; tone: BadgeTone; note: string }> = {
   monotonic: {
@@ -48,6 +49,21 @@ const VERDICT_TEXT: Record<string, { label: string; tone: BadgeTone; note: strin
 function pct(value: number | null | undefined, digits = 2): string {
   if (value === null || value === undefined) return '—';
   return `${(value * 100).toFixed(digits)}%`;
+}
+
+function SpreadExplanation() {
+  return (
+    <span className="inline-flex items-center gap-1">
+      {t('计算口径')}
+      <InfoHint
+        hint={{
+          title: t('高低分组超额收益差'),
+          body: t('每个评估日按评分选出前 10% 和后 10% 的股票。在每个验证窗口内汇总两组样本，分别计算相对 TOPIX 收益的中位数并相减，再汇总窗口结果。'),
+          note: t('这是分组统计，不是实际交易组合的收益。'),
+        }}
+      />
+    </span>
+  );
 }
 
 export default function Research() {
@@ -150,16 +166,18 @@ export default function Research() {
             <StatCard label={t('验证窗口')} value={report.summary?.windows ?? 0} icon="layers" />
             {report.summary?.median_top_bottom_spread != null ? (
               <StatCard
-                label={t('上位10%−下位10%')}
+                label={t('高低分组超额收益差')}
                 value={report.summary.median_top_bottom_spread * 100}
                 digits={2}
-                suffix="%"
+                suffix={t('百分点')}
                 icon="wallet-gauge"
+                sub={<SpreadExplanation />}
               />
             ) : (
               <div className="card-surface metric-card p-5">
-                <p className="text-caption font-medium text-ink-500">{t('上位10%−下位10%')}</p>
+                <p className="text-caption font-medium text-ink-500">{t('高低分组超额收益差')}</p>
                 <p className="metric-value mt-3 text-data-xl text-ink-900">—</p>
+                <div className="mt-1.5 text-caption text-ink-500"><SpreadExplanation /></div>
               </div>
             )}
           </section>
@@ -190,7 +208,7 @@ export default function Research() {
                     {(window.deciles ?? []).map((bucket) => (
                       <tr key={bucket.bucket} className="border-t border-line">
                         <td className="py-1 tnum text-ink-700">
-                          {bucket.bucket}
+                          {hasTranslation(bucket.bucket) ? t(bucket.bucket) : bucket.bucket}
                           {/* 標本不足を隠さない。消すと上位だけ綺麗に見える。 */}
                           {!bucket.reliable && (
                             <SoftBadge tone="warn" className="ml-1">{t('样本不足')}</SoftBadge>

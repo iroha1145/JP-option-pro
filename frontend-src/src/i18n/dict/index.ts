@@ -3,7 +3,7 @@
  * 界面默认简体中文；日文公司名/财经专名不进词典（按原文渲染）。
  */
 
-export const DICT: Record<string, [string, string]> = {
+export const DICT: Record<string, [string, string, string?]> = {
   '信用余额在2026-09-25起转为日度，此前为周度。历史回放沿用申込日早于评估日2个自然日的近似判断；未保存真实发布日期，长假前后不能保证严格复原发布时点。': ["Margin balances are daily from 2026-09-25; earlier history is weekly. Replay keeps the existing two-calendar-day availability estimate. Actual publication dates are not stored, so timing around long holidays cannot be reproduced exactly.", "信用残高は2026-09-25から日次、それ以前は週次。回放は申込日が評価日の2暦日前以前という従来の近似を継続。実際の公表日は未保存のため、連休前後の公表時点は厳密には再現できません。"],
   '2026-09-25起为日度、下一交易日发布；此前为周度历史。': ["Daily from 2026-09-25, published on the next trading day; earlier history is weekly.", "2026-09-25から日次、翌営業日に公表。それ以前は週次履歴です。"],
   '周度历史': ["Weekly history", "週次履歴"],
@@ -159,7 +159,7 @@ export const DICT: Record<string, [string, string]> = {
   订阅计划: ['Plan', '契約プラン'],
   可用: ['Enabled', '利用可能'],
   新鲜: ['Fresh', '最新'],
-  过期: ['Stale', '陳腐化'],
+  过期: ["Stale","未更新"],
   从未同步: ['Never synced', '未同期'],
   回填余量: ['Backfill pending', 'バックフィル残り'],
   数据集: ['Dataset', 'データセット'],
@@ -530,7 +530,7 @@ export const DICT: Record<string, [string, string]> = {
   '注册过于频繁，请稍后再试': ['Too many registrations; try later', '登録が多すぎます。後で再試行してください'],
   用户名或密码不正确: ['Invalid username or password', 'ユーザー名またはパスワードが違います'],
   最新标题: ['Latest headline', '最新見出し'],
-  目安: ['Tentative', '目安'],
+  目安: ["Estimated","目安","预估"],
   出处: ['Source', '出典'],
   高: ['High', '高'],
   中: ['Med', '中'],
@@ -542,14 +542,11 @@ export const DICT: Record<string, [string, string]> = {
   管道: ['Pipeline', 'パイプライン'],
   任务队列: ['Job queue', 'ジョブキュー'],
   /* ---------------- 决算日历（美版形态） ---------------- */
-  '確定日来自官方发表预定，其余为前年同期推导的目安。': [
-    'Confirmed dates come from the official schedule; the rest are estimates derived from last year\'s disclosure dates.',
-    '確定日は公式発表予定、それ以外は前年同期の開示日から導出した目安です。',
-  ],
+  '確定日来自官方发表预定，其余为前年同期推导的目安。': ["Confirmed dates come from the official schedule; the rest are estimates derived from last year's disclosure dates.","確定日は公式発表予定、それ以外は前年同期の開示日から導出した目安です。","已确认日期来自官方计划；其余参考上年同期披露日期估算。"],
   已公布: ['Released', '開示済み'],
-  確定: ['Confirmed', '確定'],
+  確定: ["Confirmed","確定","已确认"],
   '{n} 件': ['{n} items', '{n} 件'],
-  '{n} 件 · 確定{c}': ['{n} · {c} confirmed', '{n} 件 · 確定{c}'],
+  '{n} 件 · 確定{c}': ["{n} · {c} confirmed","{n} 件 · 確定{c}","共 {n} 项 · 已确认 {c} 项"],
   '{n} 天前': ['{n}d ago', '{n} 日前'],
   '{weekday} {md}，{n} 件决算': ['{weekday} {md}, {n} earnings', '{weekday} {md}、決算 {n} 件'],
   '{md}，{n} 件决算': ['{md}, {n} earnings', '{md}、決算 {n} 件'],
@@ -591,11 +588,8 @@ export const DICT: Record<string, [string, string]> = {
   // 通期の「達成率」と四半期の「進捗率」は別物。訳語も混ぜない。
   '対予想': ['vs forecast', '対予想'],
   '進捗': ['Progress', '進捗'],
-  '前年同期': ['YoY', '前年同期'],
-  '前年同期开示日推导的目安，以公司正式公告为准': [
-    'Estimated from last year\'s disclosure date; the official notice prevails.',
-    '前年同期の開示日から導出した目安。正式な会社公表が優先します。',
-  ],
+  '前年同期': ["YoY","前年同期","上年同期"],
+  '前年同期开示日推导的目安，以公司正式公告为准': ["Estimated from last year's disclosure date; the official notice prevails.","前年同期の開示日から導出した目安。正式な会社公表が優先します。","按上年同期披露日期估算，以公司公告为准"],
   重点公司: ['Featured', '重点企業'],
   全部公司: ['All companies', '全企業'],
   已筛选: ['Filtered', '絞り込み'],
@@ -623,15 +617,9 @@ export const DICT: Record<string, [string, string]> = {
   纯利: ['NP', '純利'],
   销售: ['Sales', '売上'],
   覆盖口径: ['Coverage', 'カバレッジ'],
-  '確定/已公布': ['Confirmed/released', '確定/開示済み'],
-  '確定=J-Quants 发表预定 · 目安=前年同期开示日推导': [
-    'Confirmed = J-Quants schedule · estimates from last year\'s dates',
-    '確定=J-Quants発表予定 · 目安=前年同期開示日から導出',
-  ],
-  '目安以公司正式公告为准，可能前后变动': [
-    'Estimates may shift; official notices prevail.',
-    '目安は会社の正式公表が優先。前後にずれることがあります。',
-  ],
+  '確定/已公布': ["Confirmed/released","確定/開示済み","已确认/已公布"],
+  '確定=J-Quants 发表预定 · 目安=前年同期开示日推导': ["Confirmed = J-Quants schedule · estimates from last year's dates","確定=J-Quants発表予定 · 目安=前年同期開示日から導出","已确认：J-Quants 计划 · 预估：上年同期披露日期推算"],
+  '目安以公司正式公告为准，可能前后变动': ["Estimates may shift; official notices prevail.","目安は会社の正式公表が優先。前後にずれることがあります。","预估日期可能调整，请以公司公告为准。"],
   '金额为营业利益 · 修正箭头表示会社预想方向': [
     'Amounts are operating profit · arrows show forecast revisions',
     '金額は営業利益 · 矢印は会社予想の修正方向',
@@ -647,7 +635,7 @@ export const DICT: Record<string, [string, string]> = {
   移动端导航: ['Mobile navigation', 'モバイルナビゲーション'],
   界面语言: ['Language', '表示言語'],
   '总览 · 今日市场焦点': ['Overview · today’s focus', '総覧 · 本日の市場フォーカス'],
-  '確定 · 目安三态日历': ['Confirmed · estimated calendar', '確定 · 目安の三態カレンダー'],
+  '確定 · 目安三态日历': ["Confirmed · estimated calendar","確定 · 目安の三態カレンダー","已公布、已确认与预估日期"],
   '催化剂 · 三源新闻流': ['Catalysts · news feed', 'カタリスト · ニュースフィード'],
   '同步进度 · 数据覆盖': ['Sync status · data coverage', '同期状況 · データカバレッジ'],
   'Owner 已登录': ['Owner signed in', 'Owner ログイン中'],
@@ -935,7 +923,7 @@ export const DICT: Record<string, [string, string]> = {
   K线结构分析: ['Chart structure analysis', 'チャート構造分析'],
   图例: ['Legend', '凡例'],
   失效位: ['Invalidation', '失効ライン'],
-  上場廃止: ['Delisted', '上場廃止'],
+  上場廃止: ["Delisted","上場廃止","已退市"],
   摆动阻力: ['Swing resistance', 'スイング上値抵抗'],
   摆动支撑: ['Swing support', 'スイング下値支持'],
   阻力带: ['Resistance band', 'レジスタンス帯'],
@@ -1072,20 +1060,14 @@ export const DICT: Record<string, [string, string]> = {
      —— 画面用 label は中文 msgid（顺风/中立/逆风，上で定義済み）。
      順風/逆風 は定数 REGIME_LABELS と旧スナップショット用の別名。
      中立は中日同形なので上の 1 件だけ残す。 */
-  順風: ['Tailwind', '順風'],
-  逆風: ['Headwind', '逆風'],
+  順風: ["Tailwind","順風","顺风"],
+  逆風: ["Headwind","逆風","逆风"],
   'グロース対プライム 20日中央値差': [
     'Growth vs Prime · 20-day median spread',
     'グロース対プライム 20日中央値差',
   ],
-  'TOPIX が200日線を下回っている': [
-    'TOPIX is below its 200-day line',
-    'TOPIX が200日線を下回っている',
-  ],
-  '200日線超の銘柄が3割未満（ブレッドス弱い）': [
-    'Fewer than 30% of issues are above the 200-day line (weak breadth)',
-    '200日線超の銘柄が3割未満（ブレッドス弱い）',
-  ],
+  'TOPIX が200日線を下回っている': ["TOPIX is below its 200-day line","TOPIX が200日線を下回っている","TOPIX 位于 200 日均线下方"],
+  '200日線超の銘柄が3割未満（ブレッドス弱い）': ["Fewer than 30% of issues are above the 200-day line (weak breadth)","200日線超の銘柄が3割未満（ブレッドス弱い）","位于 200 日均线上方的股票不足 30%（市场广度偏弱）"],
 
   /* 後端 vol_price_match: 境界状態（フロントは t() 済み・辞書だけ欠けていた） */
   量价样本不足: ['Not enough volume/price samples', '量価のサンプルが不足'],
@@ -1094,26 +1076,26 @@ export const DICT: Record<string, [string, string]> = {
 
   /* 後端 news/classify: イベント分類（日本語 taxonomy がそのまま画面に出る）。
      **鍵は API の絞り込み値そのもの** —— 訳した文字列を送っても何も引けない。 */
-  決算: ['Earnings', '決算'],
-  業績予想修正: ['Guidance revision', '業績予想修正'],
-  'M&A・TOB': ['M&A / Tender offer', 'M&A・TOB'],
-  自社株買い: ['Buyback', '自社株買い'],
-  配当: ['Dividend', '配当'],
-  '増資・資金調達': ['Equity raise / Financing', '増資・資金調達'],
-  大口受注: ['Large order', '大口受注'],
-  株式分割: ['Stock split', '株式分割'],
-  '事故・訴訟': ['Incident / Litigation', '事故・訴訟'],
-  '規制・政策': ['Regulation / Policy', '規制・政策'],
-  '日銀・金利': ['BOJ / Rates', '日銀・金利'],
-  人事: ['Management change', '人事'],
-  '製品・技術': ['Product / Technology', '製品・技術'],
-  供給網: ['Supply chain', '供給網'],
-  ガバナンス: ['Governance', 'ガバナンス'],
-  為替: ['FX', '為替'],
-  業界景況: ['Industry conditions', '業界景況'],
-  市場概況: ['Market overview', '市場概況'],
-  '信用・空売り': ['Margin / Short selling', '信用・空売り'],
-  その他: ['Other', 'その他'],
+  決算: ["Earnings","決算","财报"],
+  業績予想修正: ["Guidance revision","業績予想修正","业绩预告修正"],
+  'M&A・TOB': ["M&A / Tender offer","M&A・TOB","并购/要约收购"],
+  自社株買い: ["Buyback","自社株買い","股份回购"],
+  配当: ["Dividend","配当","分红"],
+  '増資・資金調達': ["Equity raise / Financing","増資・資金調達","增资/融资"],
+  大口受注: ["Large order","大口受注","大额订单"],
+  株式分割: ["Stock split","株式分割","股票拆分"],
+  '事故・訴訟': ["Incident / Litigation","事故・訴訟","事故/诉讼"],
+  '規制・政策': ["Regulation / Policy","規制・政策","监管/政策"],
+  '日銀・金利': ["BOJ / Rates","日銀・金利","日本央行/利率"],
+  人事: ["Management change","人事","高管变动"],
+  '製品・技術': ["Product / Technology","製品・技術","产品/技术"],
+  供給網: ["Supply chain","供給網","供应链"],
+  ガバナンス: ["Governance","ガバナンス","公司治理"],
+  為替: ["FX","為替","汇率"],
+  業界景況: ["Industry conditions","業界景況","行业景气"],
+  市場概況: ["Market overview","市場概況","市场概况"],
+  '信用・空売り': ["Margin / Short selling","信用・空売り","信用交易/卖空"],
+  その他: ["Other","その他","其他"],
 
   /* 後端 news/classify: 重要度の根拠 */
   '事件类别: {categories}': ['Event type: {categories}', 'イベント種別: {categories}'],
@@ -1129,40 +1111,25 @@ export const DICT: Record<string, [string, string]> = {
 
   /* 後端 research/replay.py: 点時化の限界（結果に必ず添える 3 文） */
   'sector33_code/market_code は現在のマスタ断面のみ。過去に業種・市場区分が変わった銘柄は、当時ではなく現在の分類で集計される。':
-    [
-      'sector33_code / market_code reflect only the current master snapshot. Issues whose sector or market segment changed in the past are aggregated under today’s classification, not the one in force at the time.',
-      'sector33_code/market_code は現在のマスタ断面のみ。過去に業種・市場区分が変わった銘柄は、当時ではなく現在の分類で集計される。',
-    ],
+    ["sector33_code / market_code reflect only the current master snapshot. Issues whose sector or market segment changed in the past are aggregated under today’s classification, not the one in force at the time.","sector33_code/market_code は現在のマスタ断面のみ。過去に業種・市場区分が変わった銘柄は、当時ではなく現在の分類で集計される。","行业与市场分类采用当前主数据。历史上曾变更分类的股票也按当前分类汇总，而非当时分类。"],
   '信用規制・空売り比率は履歴を保持しているが、訂正（同一申込日の再公表）は最新版で上書きされるため、当時見えていた初報とは一致しない場合がある。':
-    [
-      'Margin restrictions and short-sale ratios are kept as history, but a correction (a re-publication for the same application date) overwrites the earlier version, so the figures may not match the first report visible at the time.',
-      '信用規制・空売り比率は履歴を保持しているが、訂正（同一申込日の再公表）は最新版で上書きされるため、当時見えていた初報とは一致しない場合がある。',
-    ],
-  '財務データは開示日ベースで持つが、後日の訂正報告は反映済みの値で残る。': [
-    'Financial data is held on a disclosure-date basis, but later corrective filings remain as already-applied values.',
-    '財務データは開示日ベースで持つが、後日の訂正報告は反映済みの値で残る。',
-  ],
+    ["Margin restrictions and short-sale ratios are kept as history, but a correction (a re-publication for the same application date) overwrites the earlier version, so the figures may not match the first report visible at the time.","信用規制・空売り比率は履歴を保持しているが、訂正（同一申込日の再公表）は最新版で上書きされるため、当時見えていた初報とは一致しない場合がある。","信用交易限制与卖空比例保留历史记录，但同一申请日的更正公告会覆盖旧版，可能与当时可见的初次报告不同。"],
+  '財務データは開示日ベースで持つが、後日の訂正報告は反映済みの値で残る。': ["Financial data is held on a disclosure-date basis, but later corrective filings remain as already-applied values.","財務データは開示日ベースで持つが、後日の訂正報告は反映済みの値で残る。","财务数据按披露日期保存，但数值已经包含后续更正，可能与最初披露时不同。"],
   '上場廃止・長期売買停止で価格系列が窓の途中で途切れた銘柄は、その期間のリターンが欠損（None）となり集計から除外される。破滅的な結末が黙って落ちるため、生存者バイアスで結果はやや上振れしうる（意図的に「最終バーで実現」はしない —— 直近シグナルの未経過窓を誤って損益確定させないため）。':
-    [
-      'Names whose price series ends mid-window (delisting or a long trading halt) have their return for that period as missing (None) and are dropped from the aggregation. Because the catastrophic outcome silently falls out, results can be slightly upward-biased by survivorship (we deliberately do NOT realize at the last bar, so a recent signal whose window has not fully elapsed is not wrongly booked).',
-      '上場廃止・長期売買停止で価格系列が窓の途中で途切れた銘柄は、その期間のリターンが欠損（None）となり集計から除外される。破滅的な結末が黙って落ちるため、生存者バイアスで結果はやや上振れしうる（意図的に「最終バーで実現」はしない —— 直近シグナルの未経過窓を誤って損益確定させないため）。',
-    ],
+    ["Names whose price series ends mid-window (delisting or a long trading halt) have their return for that period as missing (None) and are dropped from the aggregation. Because the catastrophic outcome silently falls out, results can be slightly upward-biased by survivorship (we deliberately do NOT realize at the last bar, so a recent signal whose window has not fully elapsed is not wrongly booked).","上場廃止・長期売買停止で価格系列が窓の途中で途切れた銘柄は、その期間のリターンが欠損（None）となり集計から除外される。破滅的な結末が黙って落ちるため、生存者バイアスで結果はやや上振れしうる（意図的に「最終バーで実現」はしない —— 直近シグナルの未経過窓を誤って損益確定させないため）。","退市或长期停牌导致价格序列在验证窗口中断时，该股票的收益记为缺失并从统计中剔除。这可能漏掉极端亏损，使结果因幸存者偏差而偏高。系统不会在最后一根价格柱上强行结算，以免把尚未走完整个窗口的信号误记为已实现收益。"],
 
   /* 後端 earnings_service: 決算カレンダーの「覆盖口径」 */
   '確定日はJ-Quants発表予定（翌営業日分のみ・3月期/9月期）。それ以外の日付は前年同期の開示日から導出した目安で、会社都合で前後する。':
-    [
-      'Confirmed dates come from the J-Quants announcement schedule (next business day only, March/September year-ends). Every other date is an estimate derived from the same quarter’s disclosure date a year earlier, and can shift at the company’s discretion.',
-      '確定日はJ-Quants発表予定（翌営業日分のみ・3月期/9月期）。それ以外の日付は前年同期の開示日から導出した目安で、会社都合で前後する。',
-    ],
+    ["Confirmed dates come from the J-Quants announcement schedule (next business day only, March/September year-ends). Every other date is an estimate derived from the same quarter’s disclosure date a year earlier, and can shift at the company’s discretion.","確定日はJ-Quants発表予定（翌営業日分のみ・3月期/9月期）。それ以外の日付は前年同期の開示日から導出した目安で、会社都合で前後する。","已确认日期来自 J-Quants 发布计划，仅覆盖下一交易日及财年结束于3月或9月的公司。其余日期按上年同期披露日期估算，可能随公司安排调整。"],
 
   /* t() を通っていなかったベタ書き */
-  週次: ['weekly', '週次'],
-  'SECTOR MATRIX · 33 業種': ['SECTOR MATRIX · 33 SECTORS', 'SECTOR MATRIX · 33 業種'],
-  '≥ 1億円': ['≥ ¥100M', '≥ 1億円'],
-  '≥ 5億円': ['≥ ¥500M', '≥ 5億円'],
-  '≥ 10億円': ['≥ ¥1B', '≥ 10億円'],
-  '≥ 50億円': ['≥ ¥5B', '≥ 50億円'],
-  '≥ 100億円': ['≥ ¥10B', '≥ 100億円'],
+  週次: ["weekly","週次","每周"],
+  'SECTOR MATRIX · 33 業種': ["SECTOR MATRIX · 33 SECTORS","SECTOR MATRIX · 33 業種","板块透视 · 东证 33 行业"],
+  '≥ 1億円': ["≥ ¥100M","≥ 1億円","≥ 1亿日元"],
+  '≥ 5億円': ["≥ ¥500M","≥ 5億円","≥ 5亿日元"],
+  '≥ 10億円': ["≥ ¥1B","≥ 10億円","≥ 10亿日元"],
+  '≥ 50億円': ["≥ ¥5B","≥ 50億円","≥ 50亿日元"],
+  '≥ 100億円': ["≥ ¥10B","≥ 100億円","≥ 100亿日元"],
 
   /* ---- i18n 監査 4: 後端のプロファイル説明文 ---- */
   '波动惩罚更重、流动性权重更高': [
@@ -1212,7 +1179,7 @@ export const DICT: Record<string, [string, string]> = {
   '信号样本': ['Signals', 'シグナル数'],
   '评估日': ['Evaluation dates', '評価日'],
   '验证窗口': ['Windows', '検証窓'],
-  '上位10%−下位10%': ['Top 10% − bottom 10%', '上位10% − 下位10%'],
+  '上位10%−下位10%': ["Top 10% − bottom 10%","上位10% − 下位10%","高低分组超额收益差"],
   '分层': ['Bucket', '層'],
   '样本': ['Samples', '標本'],
   '超额中位': ['Median excess', '超過中位'],
@@ -1506,7 +1473,7 @@ export const DICT: Record<string, [string, string]> = {
   '减仓机构': ['Reducing', '減らした機関'],
   '监视优先级': ['Watch priority', '監視優先度'],
   '在册合计（官方口径）': ['In-scope total (official rule)', '在册合計（公式ルール口径）'],
-  '状态未知': ['Unknown', '状態不明'],
+  '状态未知': ["Status unknown","状態不明"],
   '近125个交易日有更新的报告义务中机构之和': [
     'Sum of reporting institutions with an update in the last 125 trading days',
     '直近125営業日に更新のある報告義務中機関の和',
@@ -2400,4 +2367,46 @@ export const DICT: Record<string, [string, string]> = {
   '自动画线': ['Automatic lines', '自動ライン'],
   '当前被分类为「{label}」，数据置信度 {confidence}。该结果是规则分类，不代表机构意图。': ['Classified as {label}, with data confidence {confidence}. This is a rule-based classification, not an assessment of institutional intent.', '現在の分類は「{label}」、データの信頼度は{confidence}です。ルールに基づく分類であり、機関の意図を示すものではありません。'],
   '「挤空确认」是基于公开空头变化和价格行为的规则分类，不表示掌握全部市场空头仓位。': ['Squeeze confirmation is a rule-based classification using disclosed short positions and price behavior. It does not cover all market short positions.', '「踏み上げ確認」は公開空売り残高の変化と株価の動きに基づくルール分類であり、市場の全空売り残高を把握しているわけではありません。'],
+
+  /* 文案口径与三语补全 */
+  'D1(上位10%)': ['D1 (Top 10%)', 'D1（上位10%）', 'D1（前10%）'],
+  'D10(下位10%)': ['D10 (Bottom 10%)', 'D10（下位10%）', 'D10（后10%）'],
+  '日本主要指数、33 行业涨跌与市场广度': ["Major Japanese indices, 33-sector returns and market breadth","日本の主要指数・東証33業種の騰落・市場の広がり"],
+  '查看数据更新时间、同步状态和后台任务': ["Data update times, sync status and background jobs","データの更新日時・同期状況・バックグラウンド処理"],
+  '更新正常': ["Up to date","正常"],
+  '待更新或异常': ["Pending or failed updates","未更新・異常"],
+  '待更新': ["Update overdue","未更新"],
+  '同步失败': ["Sync failed","同期失敗"],
+  '收盘后扫描日线，追踪价格突破与形态变化': ["Daily scans after the close track price breakouts and chart patterns","大引け後の日足スキャンで価格の突破とチャート形状の変化を確認"],
+  '暂无突破信号': ["No breakout signals","ブレイクアウトシグナルなし"],
+  '等待扫描结果': ["Awaiting scan results","スキャン結果待ち"],
+  '日线扫描完成后更新信号。': ["Signals update after the daily scan completes.","日足スキャンの完了後にシグナルを更新します。"],
+  'レーダー未実行': ["No completed radar scan yet","レーダー未実行","尚未完成雷达扫描"],
+  '与美股版共用账号，关注列表可跨设备查看': ["Use the same account as US Optix and access your watchlist across devices","米国株版と共通のアカウントで、端末を問わずウォッチリストを確認できます"],
+  '打开股票详情，点击加入关注': ["Open a stock detail page and select Add to watchlist","銘柄の詳細を開き、「ウォッチリストに追加」を押します"],
+  '已确认日期来自官方计划；其余参考上年同期披露日期估算。': ["Confirmed dates come from official schedules; other dates are estimated from the prior-year disclosure.","確定日は公式発表予定、それ以外は前年同期の開示日から推計した目安です。"],
+  '预估日期可能调整，请以公司公告为准。': ["Estimated dates may change; the company announcement takes precedence.","目安は変更される場合があります。会社の正式発表を優先してください。"],
+  '已确认/已公布': ["Confirmed / Reported","確定・開示済み"],
+  '已确认：J-Quants 计划 · 预估：上年同期披露日期推算': ["Confirmed: J-Quants schedule · Estimated: prior-year disclosure date","確定：J-Quants発表予定 · 目安：前年同期の開示日から推計"],
+  '历史价格区间': ["Historical price range","収録期間の価格帯"],
+  '高低分组超额收益差': ["High–low excess return spread","高低スコア群の超過収益差"],
+  '计算口径': ["Calculation","算出方法"],
+  '百分点': ["pp","ポイント"],
+  '每个评估日按评分选出前 10% 和后 10% 的股票。在每个验证窗口内汇总两组样本，分别计算相对 TOPIX 收益的中位数并相减，再汇总窗口结果。': ["On each evaluation date, select the top and bottom 10% by score. Pool each group within a validation window, subtract their median returns relative to TOPIX, then aggregate the window results.","各評価日にスコア上位10%と下位10%を選びます。検証期間内で各群のサンプルをまとめ、TOPIX対比リターン中央値の差を計算して、期間ごとの結果を集約します。"],
+  '这是分组统计，不是实际交易组合的收益。': ["This is a group statistic, not the return of a traded portfolio.","これはグループ別の統計値であり、実際に売買したポートフォリオの収益ではありません。"],
+  '分足・ティックはアドオン契約済み。銘柄別オンデマンド取得（全市場の常時取得ではない）。': ["Minute and tick data are enabled. They are fetched per stock on demand, rather than continuously for the whole market.","分足・ティックはアドオン契約済み。銘柄別オンデマンド取得（全市場の常時取得ではない）。","已开通分钟线与逐笔数据，按股票按需获取，并非持续采集全市场。"],
+  '現プランは日足まで。分足・リアルタイムは将来の拡張ポイント（IntradayProvider）で追加予定。': ["Minute and tick data are not available in the current plan.","現在のプランでは分足・ティックデータを利用できません。","当前套餐不提供分钟线与逐笔数据。"],
+  '机构数仅统计近期公开持仓；低于门槛、久未更新和比例缺失的机构分别标注': ["The institution count covers recent disclosed positions only. Below-threshold, outdated and missing-ratio reports are listed separately.","機関数は最近の公開残高のみを集計します。開示基準未満・長期未更新・残高比率欠損は別々に表示します。"],
+  '空头增加用跌色': ["Short increases use the down color","空売り増加は下落色"],
+  '空头减少用涨色': ["Short decreases use the up color","空売り減少は上昇色"],
+  '相对收益按正负使用系统涨跌配色': ["Relative returns use the system up/down colors for positive/negative values","相対リターンは正負に応じて設定の上昇色・下落色で表示"],
+  '近期公开持仓': ["Recent disclosed positions","最近の公開残高"],
+  '近期机构数': ["Recent filers","最近の報告機関数"],
+  '仅统计最后报告达到 0.5% 披露门槛，且近 125 个交易日内有更新的机构。久未更新的机构仍保留在册合计。': ["Counts institutions whose last report meets the 0.5% disclosure threshold and was updated within 125 trading days. Outdated reports remain in the in-scope total.","最終報告が0.5%の開示基準を満たし、直近125営業日以内に更新された機関を集計します。長期未更新の残高は開示対象合計に残ります。"],
+  '低于披露门槛': ["Below threshold","開示基準未満"],
+  '最后报告比例低于 0.5%，不计入近期公开持仓或在册合计；不代表持仓已清零。': ["The last reported ratio is below 0.5%. It is excluded from recent disclosed positions and the in-scope total; this does not mean the position is zero.","最終報告の残高比率が0.5%未満のため、最近の公開残高と開示対象合計には含めません。残高ゼロを意味するものではありません。"],
+  '久未更新': ["Not updated","長期未更新"],
+  '最后报告仍达到 0.5%，但超过 125 个交易日未更新。不计入近期公开持仓，仍保留在册合计。': ["The last reported ratio still meets 0.5%, but has not been updated for more than 125 trading days. It is excluded from recent disclosed positions and retained in the in-scope total.","最終報告は0.5%以上ですが、125営業日を超えて更新されていません。最近の公開残高には含めず、開示対象合計には残します。"],
+  '比例缺失': ["Ratio missing","比率欠損"],
+  '最新报告缺少可读持仓比例，无法判断持仓状态；不表示机构名称不明或持仓已清零。': ["The latest report has no readable position ratio, so the position status cannot be determined. This does not mean the institution is unidentified or its position is zero.","最新報告の残高比率が読み取れず、持ち高の状態を判定できません。機関名が不明、または残高ゼロという意味ではありません。"],
 };

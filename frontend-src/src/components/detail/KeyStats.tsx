@@ -1,7 +1,7 @@
 /**
  * 个股侧栏关键数据（对标美站 KeyStats 纸面）。
  * 只展示日本站真实字段：今开/昨收/高低/收盘/成交量/成交额 + 区间标尺。
- * 不编造市值、PE、IV、均量。K 线不够约 240 根时标「期间区间」，不假装 52 周。
+ * 不编造市值、PE、IV、均量。K 线不够约 240 根时标「历史价格区间」，不假装 52 周。
  */
 import { stocksApi } from '@/api/modules';
 import type { StockOverview } from '@/api/types';
@@ -66,7 +66,7 @@ export default function KeyStats({
       </dl>
       <div className="mt-3 border-t border-line pt-3">
         <div className="flex items-center justify-between text-micro text-ink-400">
-          <span>{yearLike ? t('52 周区间') : t('期间区间')}</span>
+          <span>{yearLike ? t('52 周区间') : t('历史价格区间')}</span>
           <span className="tnum">
             {hasRange ? `${fmtPrice(extremes.low)} — ${fmtPrice(extremes.high)}` : '—'}
           </span>

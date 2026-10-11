@@ -136,7 +136,7 @@ export default function Earnings() {
       {/* B0 页头带 */}
       <PageHeader
         title={t('财报日历')}
-        description={t('確定日来自官方发表预定，其余为前年同期推导的目安。')}
+        description={t('已确认日期来自官方计划；其余参考上年同期披露日期估算。')}
         meta={
           <>
             {counts && (
@@ -367,7 +367,7 @@ export default function Earnings() {
             <div className="card-surface p-5">
               <p className="eyebrow">{t('覆盖口径')}</p>
               <p className="mt-2.5 text-caption leading-[19px] text-ink-500">{t(q.data.coverage_note)}</p>
-              <SourceNote className="mt-3" text={t('目安以公司正式公告为准，可能前后变动')} />
+              <SourceNote className="mt-3" text={t('预估日期可能调整，请以公司公告为准。')} />
             </div>
           )}
         </aside>

@@ -103,7 +103,7 @@ export default function DataStatus() {
     <div className="space-y-6">
       <PageHeader
         title={t('数据状态')}
-        description={t('本页为日线数据，收盘后更新')}
+        description={t('查看数据更新时间、同步状态和后台任务')}
         meta={
           <>
             {query.data ? (
@@ -165,12 +165,12 @@ export default function DataStatus() {
               icon="layers"
             />
             <StatCard
-              label={t('新鲜')}
+              label={t('更新正常')}
               value={query.data.datasets.filter((row) => row.freshness === 'fresh').length}
               icon="check"
             />
             <StatCard
-              label={t('过期')}
+              label={t('待更新或异常')}
               value={query.data.datasets.filter((row) => row.freshness === 'stale' || row.freshness === 'error').length}
               icon="bell"
             />
@@ -231,7 +231,7 @@ export default function DataStatus() {
             <h2 className="mb-2 mt-1 text-h3 text-ink-900">
               {query.data.intraday.enabled ? t('盘中数据') : t('盘中数据未接入')}
             </h2>
-            <p className="text-body-s text-ink-500">{query.data.intraday.note_ja ?? ''}</p>
+            <p className="text-body-s text-ink-500">{t(query.data.intraday.note_ja ?? '')}</p>
           </section>
 
           {query.data.worker && (
@@ -266,7 +266,13 @@ export default function DataStatus() {
 
 function CapabilityBadge({ freshness }: { freshness?: string | null }) {
   const tone = freshness === 'fresh' ? 'brand' : freshness === 'stale' || freshness === 'error' ? 'warn' : 'neutral';
-  const label =
-    freshness === 'fresh' ? t('新鲜') : freshness === 'stale' ? t('过期') : freshness === 'never_synced' ? t('从未同步') : freshness ?? '—';
+  const labels: Record<string, string> = {
+    fresh: t('更新正常'),
+    stale: t('待更新'),
+    error: t('同步失败'),
+    never_synced: t('从未同步'),
+    unknown: t('状态未知'),
+  };
+  const label = freshness ? labels[freshness] ?? freshness : '—';
   return <SoftBadge tone={tone}>{label}</SoftBadge>;
 }

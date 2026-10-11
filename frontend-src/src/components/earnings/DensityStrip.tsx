@@ -126,10 +126,10 @@ export default function DensityStrip({ items, onJumpDay }: DensityStripProps) {
         <span>+34</span>
       </div>
       <div className="mt-2 flex items-center gap-3 text-micro text-ink-400">
-        <span className="flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-[2px] bg-brand-500" />{t('確定/已公布')}</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-[2px] bg-brand-500" />{t('已确认/已公布')}</span>
         <span className="flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-[2px] bg-brand-300/50" />{t('目安')}</span>
       </div>
-      <SourceNote className="mt-3" text={t('確定=J-Quants 发表预定 · 目安=前年同期开示日推导')} />
+      <SourceNote className="mt-3" text={t('已确认：J-Quants 计划 · 预估：上年同期披露日期推算')} />
     </section>
   );
 }
