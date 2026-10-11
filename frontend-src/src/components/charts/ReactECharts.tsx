@@ -12,15 +12,19 @@ interface ReactEChartsProps {
   onInit?: (chart: EChartsInstance) => void;
   /** 提交前改 option（例如写回用户滚过的 dataZoom），不要在这里做算法。 */
   prepareOption?: (option: ChartOption) => ChartOption;
+  /** option 写入后恢复正在查看的游标位置。 */
+  onOptionApplied?: (chart: EChartsInstance) => void;
   ariaLabel?: string;
 }
 
-export default function ReactECharts({ option, className, style, onClick, onInit, prepareOption, ariaLabel }: ReactEChartsProps) {
+export default function ReactECharts({ option, className, style, onClick, onInit, prepareOption, onOptionApplied, ariaLabel }: ReactEChartsProps) {
   const appearance = useAppearance();
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<EChartsInstance | null>(null);
   const onInitRef = useRef(onInit);
   onInitRef.current = onInit;
+  const onOptionAppliedRef = useRef(onOptionApplied);
+  onOptionAppliedRef.current = onOptionApplied;
 
   useEffect(() => {
     if (!ref.current) return;
@@ -44,6 +48,7 @@ export default function ReactECharts({ option, className, style, onClick, onInit
     if (!chart) return;
     chart.setOption({ backgroundColor: 'transparent', textStyle: { color: CH.tooltipFg },
       ...(prepareOption ? prepareOption(option) : option) }, { notMerge: true });
+    onOptionAppliedRef.current?.(chart);
     // Always detach first so a transition to onClick=undefined removes the stale
     // handler (previously the off() lived inside the if and leaked the old binding).
     chart.off('click');
