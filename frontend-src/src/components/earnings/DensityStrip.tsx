@@ -37,9 +37,9 @@ export default function DensityStrip({ items, onJumpDay }: DensityStripProps) {
   const max = Math.max(...days.map((day) => day.rows.length), 1);
 
   return (
-    <section className="card-surface p-5" aria-label={t('决算密度')}>
-      <p className="eyebrow">{t('决算密度 · 未来 35 天')}</p>
-      <div className="mt-3 flex h-16 items-end gap-[2px]" role="list" aria-label={t('每日决算件数')}>
+    <section className="card-surface p-5" aria-label={t('财报密度')}>
+      <p className="eyebrow">{t('财报密度 · 未来 35 天')}</p>
+      <div className="mt-3 flex h-16 items-end gap-[2px]" role="list" aria-label={t('每日财报件数')}>
         {days.map((day, index) => {
           const n = day.rows.length;
           const solid = day.rows.filter((row) => row.status !== 'estimated').length;
@@ -54,7 +54,7 @@ export default function DensityStrip({ items, onJumpDay }: DensityStripProps) {
                 contentClassName="px-2.5 py-1.5"
                 content={
                   <span className="block text-left">
-                    <span className="block font-mono text-[10px] text-ink-500">
+                    <span className="block tnum text-[10px] text-ink-500">
                       {fmtMMDD(day.date)} {weekdayCN(day.date)}
                       {n > 0 && (
                         <span className="ml-1 text-ink-400">
@@ -63,16 +63,16 @@ export default function DensityStrip({ items, onJumpDay }: DensityStripProps) {
                       )}
                     </span>
                     {n === 0 ? (
-                      <span className="block text-[10px] text-ink-300">{t('无决算')}</span>
+                      <span className="block text-[10px] text-ink-300">{t('无财报')}</span>
                     ) : (
                       <span className="mt-0.5 flex flex-wrap gap-1">
                         {day.rows.slice(0, MAX_TOOLTIP_CODES).map((row) => (
-                          <span key={`${row.canonical_code}-${row.period_type}`} className="font-mono text-[10px] font-semibold text-ink-800">
+                          <span key={`${row.canonical_code}-${row.period_type}`} className="tnum text-[10px] font-semibold text-ink-800">
                             {row.display_code}
                           </span>
                         ))}
                         {n > MAX_TOOLTIP_CODES && (
-                          <span className="font-mono text-[10px] text-ink-400">+{n - MAX_TOOLTIP_CODES}</span>
+                          <span className="tnum text-[10px] text-ink-400">+{n - MAX_TOOLTIP_CODES}</span>
                         )}
                       </span>
                     )}
@@ -82,7 +82,7 @@ export default function DensityStrip({ items, onJumpDay }: DensityStripProps) {
               <button
                 type="button"
                 onClick={() => onJumpDay(day.date)}
-                aria-label={t('{date} {weekday}，{n} 件决算，跳转', { date: fmtMDCN(day.date), weekday: weekdayCN(day.date), n })}
+                aria-label={t('{date} {weekday}，{n} 件财报，跳转', { date: fmtMDCN(day.date), weekday: weekdayCN(day.date), n })}
                 className={cn(
                   'group relative flex h-full w-full items-end focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400/60',
                   /* 今天 = 整列淡底 + 列顶圆点（环套在数像素高的柱段上会成一个怪方块） */
@@ -120,7 +120,7 @@ export default function DensityStrip({ items, onJumpDay }: DensityStripProps) {
           );
         })}
       </div>
-      <div className="mt-1.5 flex justify-between font-mono text-[9px] text-ink-300">
+      <div className="mt-1.5 flex justify-between tnum text-[9px] text-ink-300">
         <span>{t('今天')}</span>
         <span>+17</span>
         <span>+34</span>

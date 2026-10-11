@@ -16,7 +16,6 @@ export function useCountUp(target: number, duration = 900): number {
       || !Number.isFinite(duration) || duration <= 0 || duration > 2_147_483_567 || Object.is(from, target);
     if (instant) {
       // 同步动画时钟的终点；依赖中没有 value，不会由本次更新重新触发效果。
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setValue(target);
       displayedRef.current = target;
       return;

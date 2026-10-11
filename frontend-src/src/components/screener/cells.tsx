@@ -17,7 +17,7 @@ import { t } from '@/i18n/core';
 /* ---------------- 强度分：Mono 15 600 + 64px 强度条（固定分档着色） ---------------- */
 export function ScoreCell({ score }: { score: number | null; index?: number }) {
   if (score === null) {
-    return <span className="font-mono text-caption text-ink-300">—</span>;
+    return <span className="tnum text-caption text-ink-300">—</span>;
   }
   const strength = strengthPresentation(score);
   return (
@@ -30,7 +30,7 @@ export function ScoreCell({ score }: { score: number | null; index?: number }) {
           <span className="block text-caption font-semibold text-ink-800">
             {strength.band} · {strength.label}
           </span>
-          <span className="mt-1 block font-mono text-micro text-ink-500 tnum">{score.toFixed(1)}</span>
+          <span className="mt-1 block tnum text-micro text-ink-500">{score.toFixed(1)}</span>
         </>
       }
     >
@@ -70,7 +70,7 @@ export function SubscoreTicks({ row, tipSide = 'top' }: { row: StrengthRow; tipS
       content={dims.map(({ key, label, value }) => (
         <span key={key} className="flex items-center justify-between gap-3 py-0.5 text-micro">
           <span className="text-ink-500">{label}</span>
-          <span className="font-mono text-ink-800 tnum">{value !== null ? Math.round(value) : '—'}</span>
+          <span className="tnum text-ink-800">{value !== null ? Math.round(value) : '—'}</span>
         </span>
       ))}
     >
@@ -121,7 +121,7 @@ export function NewsBadge({
             {summary.max_importance !== null && (
               <>
                 {' · '}
-                {t('最高重要度')} <span className="font-mono tnum">{Math.round(importance)}</span>
+                {t('最高重要度')} <span className="tnum">{Math.round(importance)}</span>
               </>
             )}
           </span>
@@ -129,7 +129,7 @@ export function NewsBadge({
             <span className="mt-1.5 line-clamp-3 break-words text-caption text-ink-800">{summary.latest.title}</span>
           )}
           {summary.latest?.published_at && (
-            <span className="mt-0.5 block font-mono text-micro text-ink-400 tnum">{fmtRelativeShort(summary.latest.published_at)}</span>
+            <span className="mt-0.5 block tnum text-micro text-ink-400">{fmtRelativeShort(summary.latest.published_at)}</span>
           )}
           <span className="mt-1 block text-[10px] text-ink-300">{t('仅覆盖已接入的 RSS 新闻源')}</span>
         </>
@@ -137,9 +137,9 @@ export function NewsBadge({
     >
       <SoftBadge tone={tone}>
         <Icon name="bolt" size={11} />
-        <span className="font-mono tnum">{summary.news_count}</span>
+        <span className="tnum">{summary.news_count}</span>
         {summary.max_importance !== null && (
-          <span className="font-mono text-[10px] tnum opacity-80">· {Math.round(importance)}</span>
+          <span className="tnum text-[10px] opacity-80">· {Math.round(importance)}</span>
         )}
       </SoftBadge>
     </PointerTooltip>

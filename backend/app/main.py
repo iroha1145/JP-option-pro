@@ -13,7 +13,9 @@ import os
 import threading
 import time
 from collections import deque
+from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 from app.runtime_environment import load_runtime_environment
 
@@ -89,23 +91,105 @@ else:
 
 _INDEX_PATH = FRONTEND_DIR / "index.html"
 _integrity_lock = threading.Lock()
-_integrity_cache: tuple[tuple[int, int], dict] | None = None
+_integrity_cache: tuple[tuple, dict] | None = None
+
+
+class _FrontendLinks(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.links: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        attributes = dict(attrs)
+        if tag == "script" and attributes.get("src"):
+            self.links.append(attributes["src"])
+        elif tag == "link" and attributes.get("href") and attributes.get("rel") in {
+            "stylesheet", "modulepreload", "preload", "icon",
+        }:
+            self.links.append(attributes["href"])
+
+
+def _frontend_files() -> tuple[tuple[str, ...], list[str]]:
+    """Check both the HTML references and optional complete build inventory."""
+    required = {"index.html"}
+    try:
+        parser = _FrontendLinks()
+        parser.feed(_INDEX_PATH.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError):
+        return ("index.html",), ["index.html"]
+    for link in parser.links:
+        try:
+            parsed = urlsplit(link)
+        except ValueError:
+            return ("index.html",), ["invalid_asset_path"]
+        if parsed.scheme or parsed.netloc or link.startswith("//"):
+            return ("index.html",), ["external_asset"]
+        relative = unquote(parsed.path).lstrip("/")
+        if (not relative or ".." in Path(relative).parts or "\\" in relative
+                or any(ord(char) < 32 for char in relative)):
+            return ("index.html",), ["invalid_asset_path"]
+        required.add(relative)
+    manifest = FRONTEND_DIR / ".integrity-manifest"
+    if manifest.is_file():
+        try:
+            lines = manifest.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeError):
+            return tuple(sorted(required)), [".integrity-manifest"]
+        if not lines:
+            return tuple(sorted(required)), [".integrity-manifest"]
+        for line in lines:
+            relative = line.strip().removeprefix("./")
+            if (not relative or relative.startswith("/") or ".." in Path(relative).parts
+                    or "\\" in relative or relative == ".integrity-manifest"
+                    or any(ord(char) < 32 for char in relative)):
+                return tuple(sorted(required)), [".integrity-manifest"]
+            required.add(relative)
+    else:
+        # Existing builds have no manifest; still hash the emitted lazy chunks.
+        required.update(
+            str(path.relative_to(FRONTEND_DIR))
+            for path in (FRONTEND_DIR / "assets").rglob("*") if path.is_file()
+        )
+    return tuple(sorted(required)), []
 
 
 def _frontend_integrity() -> dict:
     global _integrity_cache
-    try:
-        stat = _INDEX_PATH.stat()
-        signature = (stat.st_mtime_ns, stat.st_size)
-    except OSError:
-        return {"ready": False, "sha256": None}
     with _integrity_lock:
+        files, invalid = _frontend_files()
+        stamps = []
+        for relative in files:
+            path = FRONTEND_DIR / relative
+            try:
+                stat = path.stat()
+                stamps.append((str(path), stat.st_mtime_ns, stat.st_size))
+            except OSError:
+                stamps.append((str(path), None))
+        signature = (tuple(stamps), tuple(invalid))
         if _integrity_cache and _integrity_cache[0] == signature:
-            return _integrity_cache[1]
-        digest = hashlib.sha256(_INDEX_PATH.read_bytes()).hexdigest()
-        payload = {"ready": True, "sha256": digest}
+            return dict(_integrity_cache[1])
+        digest = hashlib.sha256()
+        missing = list(invalid)
+        for relative in files:
+            path = FRONTEND_DIR / relative
+            try:
+                if not path.resolve().is_relative_to(FRONTEND_DIR.resolve()):
+                    raise OSError("asset_outside_frontend")
+                content = path.read_bytes()
+            except (OSError, RuntimeError):
+                missing.append(relative)
+                continue
+            digest.update(relative.encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(content)
+        payload = {
+            "ready": not missing,
+            "sha256": digest.hexdigest() if not missing else None,
+            "required_files": len(files),
+            "missing": missing,
+        }
         _integrity_cache = (signature, payload)
-        return payload
+        return dict(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -279,7 +363,10 @@ def _index_html_bytes() -> bytes | None:
     with _index_html_lock:
         if _index_html_cache and _index_html_cache[0] == signature:
             return _index_html_cache[1]
-        raw = _INDEX_PATH.read_text(encoding="utf-8")
+        try:
+            raw = _INDEX_PATH.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            return None
         meta = f'<meta name="x-app-commit" content="{_settings.APP_COMMIT}">{_COMMIT_META_MARKER}'
         stamped = raw.replace(_COMMIT_META_MARKER, meta, 1).encode("utf-8")
         _index_html_cache = (signature, stamped)

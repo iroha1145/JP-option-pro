@@ -2,7 +2,7 @@
 
 import { useMemo, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { marketApi, radarApi, earningsApi, watchlistApi } from '@/api/modules';
 import type { EarningsRecentItem, IndexSummary, RadarEvent, WatchlistItem } from '@/api/types';
 import { ApiError } from '@/api/client';
@@ -13,7 +13,7 @@ import TickPrice from '@/components/shared/TickPrice';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
 import ChangeBadge from '@/components/shared/ChangeBadge';
-import { SkeletonBlock, SkeletonCard, SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
+import { SkeletonCard, SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
 import StaleStrip from '@/components/shared/StaleStrip';
 import SessionLED from '@/components/shared/SessionLED';
 import SectionCard from '@/components/shared/SectionCard';
@@ -24,15 +24,15 @@ import CodeMark from '@/components/shared/CodeMark';
 import { CodeCell, DataThrough, SignalChip } from '@/components/domain';
 import { tokyoSession } from '@/lib/tokyoSession';
 import { t } from '@/i18n/core';
-import { dateAnchorParts, fmtPct, fmtPrice, fmtRelative, fmtTimeHHMMSS, fmtYenCompact } from '@/lib/format';
+import { dateAnchorParts, fmtPctLevel, fmtPrice, fmtTimeHHMMSS, fmtYenCompact } from '@/lib/format';
 import { jstToday } from '@/components/earnings/types';
-import { DUR_SECTION, EASE_PAPER } from '@/lib/motion';
+import { EASE_PAPER } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
 const EMPTY_INDICES: IndexSummary[] = [];
 
 function staggerDelay(index: number): number {
-  return Math.min(index * 0.04, 0.3);
+  return Math.min(index * 0.02, 0.12);
 }
 
 function snapshotNumber(snapshot: RadarEvent['snapshot'], key: string): number | null {
@@ -104,46 +104,8 @@ function ListBody({
   );
 }
 
-function SignalGridSkeleton({ cards }: { cards: number }) {
-  return (
-    <div
-      className="grid grid-cols-1 gap-2.5 px-4 pb-4 pt-3 sm:grid-cols-2 md:px-5 md:pb-5 xl:grid-cols-2"
-      aria-hidden="true"
-    >
-      {Array.from({ length: cards }, (_, index) => (
-        <div key={index} className="card-surface rounded-lg p-3">
-          <div className="flex items-center gap-2">
-            <SkeletonBlock className="size-6 rounded-sm" />
-            <SkeletonBlock className="h-3 w-12" />
-            <SkeletonBlock className="h-4 w-14 rounded-xs" />
-            <SkeletonBlock className="ml-auto h-3 w-8" />
-          </div>
-          <div className="mt-2 flex items-center gap-2">
-            <SkeletonBlock className="h-3 w-24" />
-            <SkeletonBlock className="ml-auto h-3 w-12" />
-          </div>
-          <SkeletonBlock className="mt-2.5 h-[3px] w-14 rounded-pill" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function MoverGridSkeleton({ cards }: { cards: number }) {
-  return (
-    <div className="grid grid-cols-1 gap-2.5 px-4 pb-4 pt-3 sm:grid-cols-2 md:px-5 md:pb-5" aria-hidden="true">
-      {Array.from({ length: cards }, (_, index) => (
-        <div key={index} className="card-surface rounded-lg p-4">
-          <div className="flex items-center gap-2">
-            <SkeletonBlock className="h-3 w-10" />
-            <SkeletonBlock className="h-3 w-20" />
-            <SkeletonBlock className="ml-auto h-4 w-14" />
-          </div>
-          <SkeletonBlock className="mt-3 h-7 w-24" />
-        </div>
-      ))}
-    </div>
-  );
+function SignalListSkeleton({ rows }: { rows: number }) {
+  return <div className="mt-3 border-t border-line"><SkeletonRows rows={rows} /></div>;
 }
 
 export default function Home() {
@@ -181,15 +143,12 @@ export default function Home() {
   return (
     <div>
       <PageHeader
-        section="01"
-        eyebrow="OPTIX JAPAN · DAILY RESEARCH"
         title={t('首页')}
-        description={t('指数、信号与自选的全景。')}
         meta={
           <>
             <SessionLED session={session} />
             {market.lastUpdatedAt && (
-              <span className="font-mono text-caption text-ink-400 tnum">
+              <span className="tnum text-caption text-ink-400">
                 {t('更新')} {fmtTimeHHMMSS(market.lastUpdatedAt)}
               </span>
             )}
@@ -202,7 +161,7 @@ export default function Home() {
         <SkeletonReveal
           loading={market.loading && !market.data}
           skeleton={
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:[grid-template-columns:repeat(auto-fit,minmax(170px,1fr))]">
+            <div className="index-summary-grid grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
               {Array.from({ length: 6 }).map((_, index) => (
                 <SkeletonCard key={index} className="h-24" />
               ))}
@@ -224,7 +183,8 @@ export default function Home() {
               {market.error && (
                 <StaleStrip onRetry={() => market.refresh()} refreshing={market.refreshing} className="mb-3" />
               )}
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:[grid-template-columns:repeat(auto-fit,minmax(170px,1fr))]">
+              {indices.length === 0 && <div className="card-surface"><EmptyState image="/empty-chart.svg" title={t('暂无数据')} /></div>}
+              <div className="index-summary-grid grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
                 {indices.map((index, cardIndex) => (
                   <IndexInsightCard
                     key={index.index_code}
@@ -239,7 +199,7 @@ export default function Home() {
         </SkeletonReveal>
       </section>
 
-      <div className="mt-8 grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
+      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <SectionCard title={t('市场广度')} to="/market" className="lg:col-span-1">
           <ListBody
             loading={market.loading && !market.data}
@@ -266,12 +226,10 @@ export default function Home() {
                   <span className="text-ink-500">{t('成交额')}</span>
                   <span className="metric-value tnum text-ink-900">{fmtYenCompact(market.data.breadth.total_turnover_value)}</span>
                 </div>
-                {market.data.short_selling ? (
-                  <div className="flex items-center justify-between text-body-s">
+                <div className="flex items-center justify-between text-body-s">
                     <span className="text-ink-500">{t('市场空卖占比')}</span>
-                    <span className="metric-value tnum text-ink-900">{fmtPct(market.data.short_selling.market_short_ratio)}</span>
-                  </div>
-                ) : null}
+                    <span className="metric-value tnum text-ink-900">{fmtPctLevel(market.data.short_selling?.market_short_ratio)}</span>
+                </div>
                 <ol className="space-y-1 border-t border-line pt-2">
                   {market.data.sectors.slice(0, 6).map((sector) => (
                     <li key={sector.sector33_code} className="flex items-center justify-between text-body-s">
@@ -285,7 +243,7 @@ export default function Home() {
           </ListBody>
         </SectionCard>
 
-        <SectionCard title={t('雷达信号')} to="/radar" className="lg:col-span-2">
+        <SectionCard title={t('雷达信号')} to="/radar" className="order-first lg:order-none lg:col-span-2">
           <ListBody
             loading={radar.loading && !radar.data}
             error={radar.error}
@@ -295,10 +253,10 @@ export default function Home() {
             emptyTitle={t('雷达仍在盯')}
             emptyDescription={radar.data?.note ?? t('新信号出现时会立刻出现在这里。')}
             emptyImage="/empty-radar.svg"
-            skeleton={<SignalGridSkeleton cards={8} />}
+            skeleton={<SignalListSkeleton rows={8} />}
             rows={8}
           >
-            <div className="grid grid-cols-1 gap-2.5 px-4 pb-4 pt-3 sm:grid-cols-2 md:px-5 md:pb-5 xl:grid-cols-2">
+            <div className="mt-3 divide-y divide-line border-t border-line">
               {events.map((event, index) => (
                 <RadarSignalCard key={event.event_id} event={event} index={index} />
               ))}
@@ -307,8 +265,8 @@ export default function Home() {
         </SectionCard>
       </div>
 
-      <div className="mt-8 grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-        <SectionCard title={t('最近决算')} to="/earnings">
+      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <SectionCard title={t('近期财报')} to="/earnings">
           <ListBody
             loading={earnings.loading && !earnings.data}
             error={earnings.error}
@@ -326,19 +284,19 @@ export default function Home() {
           </ListBody>
         </SectionCard>
 
-        <SectionCard title={t('自选异动')} to="/watchlist">
+        <SectionCard title={t('关注动态')} to="/watchlist" className="lg:col-span-2">
           <ListBody
             loading={watchlist.loading && !watchlist.data}
             error={watchlist.error}
             refreshing={watchlist.refreshing}
             onRetry={() => watchlist.refresh()}
             isEmpty={movers.length === 0}
-            emptyTitle={t('暂无自选')}
-            emptyDescription={t('在筛选器中添加')}
+            emptyTitle={t('暂无关注')}
+            emptyDescription={t('在条件选股中加入关注')}
             emptyImage="/empty-watchlist.svg"
-            skeleton={<MoverGridSkeleton cards={6} />}
+            skeleton={<SignalListSkeleton rows={6} />}
           >
-            <div className="grid grid-cols-1 gap-2.5 px-4 pb-4 pt-3 sm:grid-cols-2 md:px-5 md:pb-5">
+            <div className="mt-3 divide-y divide-line border-t border-line">
               {movers.map((item, index) => (
                 <WatchlistMoverCard
                   key={item.canonical_code}
@@ -364,13 +322,14 @@ function IndexInsightCard({
   cardIndex: number;
   flash?: 'up' | 'down';
 }) {
+  const reduceMotion = useReducedMotion();
   const spark = index.sparkline.filter((value) => Number.isFinite(value));
   const change = index.change_pct ?? 0;
   return (
     <motion.div
-      initial={{ opacity: 0, y: 14 }}
+      initial={reduceMotion ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: DUR_SECTION, ease: EASE_PAPER, delay: Math.min(cardIndex * 0.045, 0.4) }}
+      transition={{ duration: 0.22, ease: EASE_PAPER, delay: Math.min(cardIndex * 0.02, 0.12) }}
     >
       <Link
         to={`/market?index=${encodeURIComponent(index.index_code)}`}
@@ -391,37 +350,36 @@ function IndexInsightCard({
 }
 
 function RadarSignalCard({ event, index }: { event: RadarEvent; index: number }) {
+  const reduceMotion = useReducedMotion();
   const close = snapshotNumber(event.snapshot, 'close');
   const ret5 = snapshotNumber(event.snapshot, 'return_5d');
   return (
     <motion.div
-      initial={{ opacity: 0, y: 14 }}
+      initial={reduceMotion ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: DUR_SECTION, ease: EASE_PAPER, delay: staggerDelay(index) }}
+      transition={{ duration: 0.22, ease: EASE_PAPER, delay: staggerDelay(index) }}
     >
-      <Link to={`/stock/${event.display_code}`} className="card-surface card-hover block rounded-lg p-3">
-        <div className="flex items-center gap-2">
-          <CodeMark code={event.display_code} size={24} />
-          <span className="shrink-0 font-mono text-caption font-semibold text-ink-800">{event.display_code}</span>
-          <span className="min-w-0 truncate">
-            <SignalChip signal={event.signal_type} />
-          </span>
-          <span className="ml-auto shrink-0 text-micro text-ink-400">
-            {fmtRelative(event.last_scanned_date || event.discovered_date)}
+      <Link to={`/stock/${event.display_code}`} className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors duration-150 hover:bg-paper-2/70 focus-visible:bg-paper-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400/60 md:px-5">
+        <div className="flex min-w-0 flex-1 basis-40 items-center gap-2">
+          <CodeMark code={event.display_code} size={28} />
+          <div className="min-w-0">
+            <p className="text-body-s font-semibold text-ink-900 tnum">{event.display_code}</p>
+            <p className="truncate text-caption text-ink-500">{event.name_ja ?? '—'}</p>
+          </div>
+        </div>
+        <div className="flex min-w-0 flex-1 basis-28 flex-col items-start gap-1">
+          <SignalChip signal={event.signal_type} />
+          <span className="text-micro text-ink-400">{t('数据截至')} {event.last_scanned_date || event.discovered_date || '—'}</span>
+        </div>
+        <div className="ml-auto flex shrink-0 flex-col items-end gap-1">
+          <TickPrice className="text-body-s font-semibold text-ink-900 tnum">{fmtPrice(close)}</TickPrice>
+          <span className="flex items-center gap-1 text-micro text-ink-400">
+            {t('{n}日', { n: 5 })}<ChangeBadge value={ret5} size="sm" />
           </span>
         </div>
-        <div className="mt-2 flex items-center gap-2">
-          <span className="min-w-0 flex-1 truncate text-caption text-ink-500">{event.name_ja ?? '—'}</span>
-          <TickPrice className="shrink-0 font-mono text-caption text-ink-800 tnum">{fmtPrice(close)}</TickPrice>
-          {ret5 !== null && (
-            <span className="flex shrink-0 items-center gap-1">
-              <span className="text-micro text-ink-400">{t('{n}日', { n: 5 })}</span>
-              <ChangeBadge value={ret5} size="sm" />
-            </span>
-          )}
-        </div>
-        <div className="mt-2">
-          <StrengthBar score={event.alert_priority} width={56} showScore />
+        <div className="hidden w-20 shrink-0 sm:block">
+          <span className="text-micro text-ink-400">{t('告警优先级')}</span>
+          <StrengthBar score={event.alert_priority} width={56} showScore className="mt-1" />
         </div>
       </Link>
     </motion.div>
@@ -443,7 +401,7 @@ function EarningsAnchorRow({ item, todayKey }: { item: EarningsRecentItem; today
           isToday ? 'bg-brand-50' : 'bg-paper-2/80',
         )}
       >
-        <span className={cn('block font-mono text-body-s font-semibold tnum', isToday ? 'text-brand-700' : 'text-ink-900')}>
+        <span className={cn('block tnum text-body-s font-semibold tnum', isToday ? 'text-brand-700' : 'text-ink-900')}>
           {anchor ? anchor.day : '—'}
         </span>
         <span className="block text-micro text-ink-400">{anchor?.monthShort ?? ''}</span>
@@ -459,35 +417,29 @@ function EarningsAnchorRow({ item, todayKey }: { item: EarningsRecentItem; today
 }
 
 function WatchlistMoverCard({
-  item,
-  index,
-  flash,
+  item, index, flash,
 }: {
   item: WatchlistItem;
   index: number;
   flash?: 'up' | 'down';
 }) {
+  const reduceMotion = useReducedMotion();
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: DUR_SECTION, ease: EASE_PAPER, delay: staggerDelay(index) }}
-    >
-      <Link to={`/stock/${item.display_code}`} className="card-surface card-hover block overflow-hidden rounded-lg p-4">
-        <div className="flex items-center gap-2">
-          <CodeMark code={item.display_code} size={24} />
-          <span className="shrink-0 font-mono text-caption font-semibold text-ink-800">{item.display_code}</span>
-          <span className="min-w-0 flex-1 truncate text-caption text-ink-500">{item.name_ja ?? '—'}</span>
-          <span className="flex shrink-0 items-center gap-1.5">
-            <span className="text-micro text-ink-400">{t('当日')}</span>
-            <ChangeBadge value={item.quote?.change_pct} size="sm" />
-          </span>
+    <motion.div initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.22, ease: EASE_PAPER, delay: staggerDelay(index) }}>
+      <Link to={`/stock/${item.display_code}`} className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors duration-150 hover:bg-paper-2/70 focus-visible:bg-paper-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400/60 md:px-5">
+        <CodeMark code={item.display_code} size={28} />
+        <div className="min-w-0 flex-1 basis-20">
+          <span className="text-body-s font-semibold text-ink-900 tnum">{item.display_code}</span>
+          <p className="truncate text-caption text-ink-500">{item.name_ja ?? '—'}</p>
         </div>
-        <div className="mt-2 flex items-end justify-between gap-2">
-          <TickPrice flash={flash} className="metric-value text-data-l text-ink-900 tnum">
-            {fmtPrice(item.quote?.close)}
-          </TickPrice>
-          <span className="font-mono text-micro text-ink-400 tnum">{fmtYenCompact(item.quote?.turnover_value)}</span>
+        <div className="flex flex-1 basis-24 flex-col gap-1 text-micro text-ink-400">
+          <span>{t('成交额')} {fmtYenCompact(item.quote?.turnover_value)}</span>
+          <span>{t('数据截至')} {item.quote?.trade_date ?? '—'}</span>
+        </div>
+        <div className="ml-auto flex shrink-0 flex-col items-end gap-1">
+          <TickPrice flash={flash} className="text-body-s font-semibold text-ink-900 tnum">{fmtPrice(item.quote?.close)}</TickPrice>
+          <span className="flex items-center gap-1 text-micro text-ink-400">{t('当日')}<ChangeBadge value={item.quote?.change_pct} size="sm" /></span>
         </div>
       </Link>
     </motion.div>

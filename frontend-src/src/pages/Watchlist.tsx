@@ -231,7 +231,7 @@ export default function Watchlist() {
         sortable: true,
         sortValue: (row) => row.quote?.close ?? Number.NEGATIVE_INFINITY,
         render: (row) => (
-          <TickPrice flash={flashes[row.canonical_code]} className="font-mono text-[15px] leading-6 text-ink-900">
+          <TickPrice flash={flashes[row.canonical_code]} className="tnum text-[15px] leading-6 text-ink-900">
             {fmtPrice(row.quote?.close)}
           </TickPrice>
         ),
@@ -251,7 +251,7 @@ export default function Watchlist() {
         sortable: true,
         sortValue: (row) => row.quote?.turnover_value ?? -1,
         render: (row) => (
-          <span className="font-mono text-body-s tnum text-ink-600">{fmtYenCompact(row.quote?.turnover_value)}</span>
+          <span className="tnum text-body-s text-ink-600">{fmtYenCompact(row.quote?.turnover_value)}</span>
         ),
       },
       {
@@ -291,13 +291,13 @@ export default function Watchlist() {
               </PointerTooltip>
               <PointerTooltip
                 passthrough
-                label={t('从自选移除 {code}', { code: row.display_code })}
-                content={<span className="text-micro leading-[16px] text-ink-600">{t('移出自选')}</span>}
+                label={t('从关注移除 {code}', { code: row.display_code })}
+                content={<span className="text-micro leading-[16px] text-ink-600">{t('移出关注')}</span>}
               >
                 <button
                   type="button"
                   disabled={busy === row.canonical_code}
-                  aria-label={t('从自选移除 {code}', { code: row.display_code })}
+                  aria-label={t('从关注移除 {code}', { code: row.display_code })}
                   className="rounded-md border border-line px-2 py-0.5 text-micro text-down-700 shadow-btn opacity-0 transition-[opacity,color] duration-fast hover:bg-down-50 focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
                   onClick={(event) => {
                     event.stopPropagation();
@@ -322,9 +322,7 @@ export default function Watchlist() {
   return (
     <div>
       <PageHeader
-        section="02"
-        eyebrow="WATCHLIST · PERSONAL"
-        title={t('自选股')}
+        title={t('我的关注')}
         description={t('本页为日线数据，收盘后更新')}
         meta={
           <>
@@ -339,16 +337,16 @@ export default function Watchlist() {
             <ForceRefreshButton
               onClick={onForceRefresh}
               spinning={query.refreshing}
-              title={t('重新获取自选行情')}
+              title={t('重新获取关注行情')}
             />
           </>
         }
       />
 
       {(query.loading && !query.data) || items.length > 0 ? (
-        <section className="mt-6" aria-label={t('自选统计')}>
+        <section className="mt-6" aria-label={t('关注统计')}>
           {query.loading && !query.data ? (
-            <HorizontalScroller className="-mx-1 sm:mx-0" scrollerClassName="px-1 sm:px-0" label={t('自选统计')}>
+            <HorizontalScroller className="-mx-1 sm:mx-0" scrollerClassName="px-1 sm:px-0" label={t('关注统计')}>
               <div className="flex snap-x snap-mandatory gap-4 pb-1 sm:grid sm:grid-cols-3">
                 <SkeletonCard className="min-w-[240px] sm:min-w-0" />
                 <SkeletonCard className="min-w-[240px] sm:min-w-0" />
@@ -356,7 +354,7 @@ export default function Watchlist() {
               </div>
             </HorizontalScroller>
           ) : (
-            <HorizontalScroller className="-mx-1 sm:mx-0" scrollerClassName="px-1 sm:px-0" label={t('自选统计')}>
+            <HorizontalScroller className="-mx-1 sm:mx-0" scrollerClassName="px-1 sm:px-0" label={t('关注统计')}>
               <motion.div
                 initial="hidden"
                 animate="show"
@@ -396,7 +394,7 @@ export default function Watchlist() {
         <section className="mt-8 card-surface">
           <EmptyState
             image="/empty-watchlist.svg"
-            title={t('登录后可以把自选股保存在账号里')}
+            title={t('登录后可以把关注股票保存在账号里')}
             description={t('账号与美股版通用，换设备也还在')}
             action={
               <Link
@@ -439,12 +437,12 @@ export default function Watchlist() {
         </div>
         <div className="flex flex-wrap items-center justify-end gap-3">
           {query.lastUpdatedAt && (
-            <span className="font-mono text-caption text-ink-400 tnum">
+            <span className="tnum text-caption text-ink-400">
               {t('更新')} {fmtTimeHHMMSS(query.lastUpdatedAt)}
             </span>
           )}
           <p className="text-right text-caption text-ink-400">
-            <span className="font-mono tnum">{items.length}</span> {t('只标的')}
+            <span className="tnum">{items.length}</span> {t('只标的')}
             {maxItems !== null && <span className="ml-1 text-ink-300">{t('/ 上限')} {maxItems}</span>}
             {isOwner && <span className="ml-1 text-ink-300">· {t('所有者清单')}</span>}
           </p>
@@ -479,7 +477,7 @@ export default function Watchlist() {
                 <EmptyState
                   image="/empty-watchlist.svg"
                   title={t('清单还是空的')}
-                  description={canManageWatchlist ? t('在上方搜索代码或公司名，加入第一只自选') : t('在筛选器中添加')}
+                  description={canManageWatchlist ? t('在上方搜索代码或公司名，加入第一只关注') : t('在筛选器中添加')}
                 />
               </section>
             ) : view === 'table' ? (
@@ -534,7 +532,7 @@ export default function Watchlist() {
                   className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line-strong bg-card px-4 py-2 text-caption text-ink-600 shadow-btn transition-colors hover:bg-paper-2"
                 >
                   {t('加载更多')}
-                  <span className="font-mono text-micro text-ink-400 tnum">
+                  <span className="tnum text-micro text-ink-400">
                     {t('还有 {n} 只', { n: progressive.remaining })}
                   </span>
                 </button>
@@ -632,8 +630,8 @@ function AddStockForm({ onAdded, onError }: { onAdded: () => void; onError: (mes
           onFocus={() => suggestions.length > 0 && setOpen(true)}
           placeholder={t('代码或公司名')}
           maxLength={24}
-          aria-label={t('添加自选股票')}
-          className="h-8 w-[150px] rounded-sm border border-line-strong bg-card px-2 font-mono text-caption text-ink-800 outline-none transition-[border-color] duration-fast placeholder:font-sans placeholder:text-ink-300 focus:border-brand-600"
+          aria-label={t('添加关注股票票')}
+          className="h-8 w-[150px] rounded-sm border border-line-strong bg-card px-2 tnum text-caption text-ink-800 outline-none transition-[border-color] duration-fast placeholder:font-sans placeholder:text-ink-300 focus:border-brand-600"
         />
         <button
           type="submit"
@@ -654,7 +652,7 @@ function AddStockForm({ onAdded, onError }: { onAdded: () => void; onError: (mes
               className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-brand-50"
             >
               <CodeMark code={result.display_code} size={22} />
-              <span className="font-mono text-caption font-semibold text-brand-700">{result.display_code}</span>
+              <span className="tnum text-caption font-semibold text-brand-700">{result.display_code}</span>
               <span className="min-w-0 flex-1 truncate text-caption text-ink-700">{result.name_ja ?? result.name_en ?? '—'}</span>
               {result.sector33_name ? (
                 <SoftBadge className="max-w-[7.5rem]" title={result.sector33_name}>
@@ -703,7 +701,7 @@ function WatchCard({
       >
         <span className="flex items-center gap-2.5">
           {item.marked_important && <span className="shrink-0 text-warn-600">★</span>}
-          <span className="rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-body-s font-semibold text-brand-700">
+          <span className="rounded-md bg-brand-50 px-1.5 py-0.5 tnum text-body-s font-semibold text-brand-700">
             {item.display_code}
           </span>
           <span className="min-w-0 flex-1">
@@ -728,7 +726,7 @@ function WatchCard({
           <TickPrice flash={flash} className="metric-value text-data-l text-ink-900 tnum">
             {fmtPrice(item.quote?.close)}
           </TickPrice>
-          <span className="font-mono text-caption text-ink-500 tnum">{fmtYenCompact(item.quote?.turnover_value)}</span>
+          <span className="tnum text-caption text-ink-500">{fmtYenCompact(item.quote?.turnover_value)}</span>
         </span>
         {item.note && (
           <span className="mt-2 block truncate border-t border-line pt-2 text-caption text-ink-500">{item.note}</span>
@@ -738,7 +736,7 @@ function WatchCard({
       {onRemove && (
         <button
           type="button"
-          aria-label={t('从自选移除 {code}', { code: item.display_code })}
+          aria-label={t('从关注移除 {code}', { code: item.display_code })}
           onClick={(event) => {
             event.stopPropagation();
             onRemove();

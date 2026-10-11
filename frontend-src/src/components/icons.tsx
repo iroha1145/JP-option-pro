@@ -11,7 +11,7 @@ export type IconName =
   | 'arrow-up-right' | 'arrow-down-right' | 'external' | 'chevron-down' | 'chevron-right'
   | 'dots-grid' | 'flame-line' | 'spark-ai' | 'shield' | 'target' | 'flag' | 'x' | 'plus'
   | 'refresh' | 'wallet-gauge' | 'doc-quote' | 'logout' | 'arrow-up' | 'arrow-down' | 'minus'
-  | 'check' | 'menu' | 'list' | 'cards' | 'languages'
+  | 'display' | 'sliders' | 'check' | 'menu' | 'list' | 'cards' | 'languages'
   | 'trend-line' | 'ray-right' | 'channel' | 'rect' | 'fib' | 'text-note'
   | 'lock' | 'unlock' | 'eye' | 'eye-off' | 'undo' | 'redo' | 'expand' | 'compress';
 
@@ -21,6 +21,8 @@ interface IconProps extends SVGProps<SVGSVGElement> {
 }
 
 const PATHS: Record<IconName, ReactElement> = {
+  display: <><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></>,
+  sliders: <><path d="M4 7h7M15 7h5M4 17h3M11 17h9" /><circle cx="13" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></>,
   /* 雷达：碟形天线 —— 斜切碟面朝右上 + 馈源杆与信号球 + 左下三角支架 */
   radar: (
     <>

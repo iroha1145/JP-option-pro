@@ -192,7 +192,7 @@ function Metric({ label, value, hint }: { label: string; value: string; hint?: S
         <span className="truncate">{t(label)}</span>
         {hint && <InfoHint hint={hint} size={11} side="bottom" />}
       </div>
-      <div className="font-mono text-data-s tnum text-ink-900">{value}</div>
+      <div className="tnum text-data-s text-ink-900">{value}</div>
     </div>
   );
 }
@@ -203,7 +203,7 @@ function HolderRow({ holder }: { holder: ShortMonitorHolder }) {
   return (
     <li className="flex min-h-[60px] items-center gap-3 px-1 py-[14px] transition-colors duration-fast hover:bg-paper-2/70">
       <div className="flex w-11 shrink-0 flex-col items-center self-stretch pt-0.5">
-        <span className="font-mono text-[11px] leading-[14px] text-ink-400 tnum">
+        <span className="tnum text-[11px] leading-[14px] text-ink-400">
           {fmtDateShort(holder.last_position_date)}
         </span>
         <span className="mt-1.5 hidden w-[2px] flex-1 rounded-full bg-line sm:block" aria-hidden="true" />
@@ -222,7 +222,7 @@ function HolderRow({ holder }: { holder: ShortMonitorHolder }) {
               : t('跌破门槛')}
       </span>
       <span
-        className={`shrink-0 font-mono text-caption tnum ${known ? 'text-ink-900' : 'text-ink-500 underline decoration-dotted underline-offset-2'}`}
+        className={`shrink-0 tnum text-caption tnum ${known ? 'text-ink-900' : 'text-ink-500 underline decoration-dotted underline-offset-2'}`}
       >
         {fmtPctLevel(holder.last_reported_ratio)}
       </span>
@@ -236,7 +236,7 @@ function EventRow({ event }: { event: ShortMonitorEvent }) {
     <li className="px-1 transition-colors duration-fast hover:bg-paper-2/70">
       <div className="flex min-h-[60px] items-center gap-3 py-[14px]">
         <div className="flex w-11 shrink-0 flex-col items-center self-stretch pt-0.5">
-          <span className="font-mono text-[11px] leading-[14px] text-ink-400 tnum">
+          <span className="tnum text-[11px] leading-[14px] text-ink-400">
             {fmtDateShort(event.position_date)}
           </span>
           <span className="mt-1.5 hidden w-[2px] flex-1 rounded-full bg-line sm:block" aria-hidden="true" />
@@ -248,7 +248,7 @@ function EventRow({ event }: { event: ShortMonitorEvent }) {
         {event.correction_status === 'correction' && (
           <span className="shrink-0 whitespace-nowrap text-micro text-ink-400">{t('订正')}</span>
         )}
-        <span className="shrink-0 font-mono text-caption tnum text-ink-900">{fmtPctLevel(event.short_ratio)}</span>
+        <span className="shrink-0 tnum text-caption text-ink-900">{fmtPctLevel(event.short_ratio)}</span>
         <PointerTooltip
           passthrough
           label={t('仓位日期 → 公开日期')}
@@ -256,7 +256,7 @@ function EventRow({ event }: { event: ShortMonitorEvent }) {
           contentClassName="p-2"
           content={<span className="text-micro text-ink-600">{t('仓位日期 → 公开日期')}</span>}
         >
-          <span className="hidden shrink-0 whitespace-nowrap font-mono text-micro tnum text-ink-400 sm:inline">
+          <span className="hidden shrink-0 whitespace-nowrap tnum text-micro text-ink-400 sm:inline">
             {fmtDate(event.position_date)} → {fmtDate(event.published_date)}
           </span>
         </PointerTooltip>

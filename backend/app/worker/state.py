@@ -666,7 +666,10 @@ class WorkerStateRepository(SQLiteRepository):
     # -- health ------------------------------------------------------------
 
     def health(self, expected_tasks: tuple[str, ...]) -> dict[str, Any]:
-        statuses = {item["task_name"]: item for item in self.task_statuses()}
+        # Retired task history remains in SQLite, but cannot affect live health
+        # or appear as an active lane after an upgrade.
+        statuses = {item["task_name"]: item for item in self.task_statuses()
+                    if item["task_name"] in expected_tasks}
         # 再起動で中断された行は「壊れている」ではなく「まだ走り直していない」。
         # 各タスクは自分の初回遅延で必ず走り直すので、これを degraded に数えると
         # **再起動のたびに、いちばん遅延の長いタスクの時間だけコンテナが

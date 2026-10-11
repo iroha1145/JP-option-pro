@@ -5,7 +5,7 @@
 を装う UI は存在しない。
 
 参照元の米国株プロジェクト（option-pro）から成熟した基盤（アクセス制御・
-キャッシュ・ワーカー・AI ジョブ規律・デザインシステム）を移植し、ドメインは
+キャッシュ・ワーカー・デザインシステム）を移植し、ドメインは
 全面的に日本株用に再設計した。詳細は [docs/migration-decisions.md](docs/migration-decisions.md)。
 
 ## 主な機能
@@ -18,7 +18,7 @@
 | 筛选器 | SQL 断面フィルタ（市場区分/33業種/売買代金/RS/MA/52週高値乖離） | 日足 |
 | 自选股 | ウォッチリスト（オーナーのみ書込） | 日足 |
 | 决算日历 | 発表予定（J-Quants 制限を明記）+ 直近開示 + 会社予想の修正方向 | 開示 |
-| 新闻 | RSS 取込 → 実体照合 → 去重 → **日本語訳** + **簡体中文影響分析** | 随時 |
+| 新闻 | RSS 原文取込 → 実体照合 → 分類 → 去重 | 随時 |
 | 数据状态 | データセット鮮度・能力宣言・ワーカー状態・手動更新 | — |
 
 ## セットアップ
@@ -51,7 +51,7 @@ cd frontend-src && npm install && npm run dev   # :3100 → /api は :2100 へ�
 ### テスト
 
 ```bash
-.venv/bin/python -m pytest tests/ -q          # 48 tests — 実 API に一切接続しない
+.venv/bin/python -m pytest tests/ -q          # 実 API に一切接続しない
 npm run build --prefix frontend-src           # tsc + vite build
 ```
 
@@ -60,8 +60,8 @@ npm run build --prefix frontend-src           # tsc + vite build
 ```
 J-Quants API V2 ──(rate-limited client)── worker ──> jp-core.db (SQLite/WAL)
    bulk CSV ────(backfill lane)──────────┘   │            │ read-only
-   RSS feeds ──> jp-news.db <── AI jobs ─────┤            ▼
-   OpenAI (background, 並行度1) <────────────┘        FastAPI ──> React SPA
+   RSS feeds ──(原文同期)───────────────┤            ▼
+                                      └──> jp-news.db   FastAPI ──> React SPA
 ```
 
 - **書込境界**: worker だけが jp-core.db / jp-news.db を書く。API は read-only 接続
@@ -69,9 +69,9 @@ J-Quants API V2 ──(rate-limited client)── worker ──> jp-core.db (SQL
 - **冪等**: 全同期は UPSERT + チェックポイント。同じ日付の再実行は無害。
 - **スケジュール**: Asia/Tokyo 固定。17:00 引け後バッチ / 18:40 財務速報 / 01:10 確報
   補完 / バックフィルは常駐レーン。取引日判定は J-Quants カレンダー（半日立会=営業日）。
-- **AI 言語契約**: 翻訳=日本語（仮名検証つき）、影響分析=簡体中文（仮名混入で棄却）、
-  出力の銘柄コードは allowed_codes 束縛。プロンプト版更新は request_hash を動かし、
-  古い結果を静かに再利用しない。
+- **原文ニュース**: 翻訳・モデル分析・モデル呼出しは行わない。旧ジョブ DB と
+  保存済み分析フィールドは履歴として保持する。旧 `scheduled` 設定は `read` として
+  扱い、`[ai]` と `max_ai_items_per_run` は無視する。
 - **能力宣言**: Standard プランに無いデータ（fins/details・配当・分足など）は
   `unavailable` と表示する。空配列で「データなし」を偽装しない。
 

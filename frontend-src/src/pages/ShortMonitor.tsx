@@ -172,15 +172,14 @@ export default function ShortMonitor() {
   return (
     <div className="space-y-6">
       <PageHeader
-        section="08"
-        eyebrow="SHORT MONITOR · POST-CLOSE"
-        title={t('机构空卖行为监控')}
+        section="market"
+        title={t('机构空卖')}
         description={t('公开披露的机构空卖持仓发生了什么变化，股价对这部分压力作出了什么反应')}
         meta={
           <>
             <DataThrough date={overview?.as_of_date} />
             {overviewQuery.lastUpdatedAt && (
-              <span className="font-mono text-caption text-ink-400 tnum">
+              <span className="tnum text-caption text-ink-400">
                 {t('更新')} {fmtTimeHHMMSS(overviewQuery.lastUpdatedAt)}
               </span>
             )}
@@ -206,7 +205,7 @@ export default function ShortMonitor() {
           </p>
           <p className="mt-2 text-body-s text-ink-700">{t(validation.summary)}</p>
           {validation.run && (
-            <p className="mt-1 font-mono text-micro tnum text-ink-400">
+            <p className="mt-1 tnum text-micro text-ink-400">
               {validation.run} · {validation.signals ?? 0} {t('个信号')} · {validation.windows ?? 0}{' '}
               {t('个走步窗口')}
             </p>
@@ -410,7 +409,7 @@ function StateDistribution({
                     style={{ width: `${Math.max(2, (count / max) * 100)}%` }}
                   />
                 </span>
-                <span className="w-8 shrink-0 text-right font-mono text-caption tnum text-ink-800">{count}</span>
+                <span className="w-8 shrink-0 text-right tnum text-caption text-ink-800">{count}</span>
               </button>
             </li>
           );
@@ -471,15 +470,15 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
             <div className="grid flex-1 grid-cols-1 gap-2.5 sm:grid-cols-3">
               <div className="radar-value-cell px-3 py-2.5">
                 <p className="text-micro text-ink-400">{t('收盘')}</p>
-                <p className="mt-0.5 font-mono text-data-l text-ink-900 tnum">{fmtPrice(row.close)}</p>
+                <p className="mt-0.5 tnum text-data-l text-ink-900">{fmtPrice(row.close)}</p>
               </div>
               <div className="radar-value-cell px-3 py-2.5">
                 <p className="text-micro text-ink-400">{t('公开可见空头')}</p>
-                <p className="mt-0.5 font-mono text-data-l text-ink-900 tnum">{fmtPctLevel(row.visible_short_ratio)}</p>
+                <p className="mt-0.5 tnum text-data-l text-ink-900">{fmtPctLevel(row.visible_short_ratio)}</p>
               </div>
               <div className="radar-value-cell px-3 py-2.5">
                 <p className="text-micro text-ink-400">{t('机构数')}</p>
-                <p className="mt-0.5 font-mono text-data-l text-ink-900 tnum">
+                <p className="mt-0.5 tnum text-data-l text-ink-900">
                   {row.visible_institution_count}
                   {invisible > 0 && <span className="text-ink-400"> +{invisible}?</span>}
                 </p>
@@ -501,14 +500,14 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
                   {t('在册合计')}
                   <InfoHint hint={SHORT_HINTS.inScope} size={11} />
                   {' '}
-                  <span className="font-mono tnum text-ink-800">
+                  <span className="tnum text-ink-800">
                     {fmtPctLevel(row.reported_in_scope_ratio)}
                   </span>
                 </span>
               )}
             <span>
               {t('公开可见回补天数')}{' '}
-              <span className="font-mono tnum text-ink-800">
+              <span className="tnum text-ink-800">
                 {row.visible_days_to_cover != null ? row.visible_days_to_cover.toFixed(2) : '—'}
               </span>
             </span>
@@ -558,11 +557,11 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
           <dl className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line pt-2.5 text-caption">
             <div className="flex items-baseline gap-1.5">
               <dt className="text-ink-400">{t('数据置信度')}</dt>
-              <dd className="font-mono tnum text-ink-800">{row.data_confidence?.toFixed(2) ?? '—'}</dd>
+              <dd className="tnum text-ink-800">{row.data_confidence?.toFixed(2) ?? '—'}</dd>
             </div>
             <div className="flex items-baseline gap-1.5">
               <dt className="text-ink-400">{t('监视优先级')}</dt>
-              <dd className="font-mono tnum text-ink-800">{fmtScore(row.monitor_priority)}</dd>
+              <dd className="tnum text-ink-800">{fmtScore(row.monitor_priority)}</dd>
             </div>
           </dl>
 
@@ -686,13 +685,13 @@ function EventLine({ event }: { event: ShortMonitorEvent }) {
   return (
     <li className="flex min-h-[60px] items-center gap-3 px-1 py-[14px] transition-colors duration-fast hover:bg-paper-2/70">
       <div className="flex w-11 shrink-0 flex-col items-center pt-0.5">
-        <span className="font-mono text-[11px] leading-[14px] text-ink-400 tnum">
+        <span className="tnum text-[11px] leading-[14px] text-ink-400">
           {fmtDateShort(event.effective_trade_date)}
         </span>
         <span className="mt-1.5 hidden w-[2px] flex-1 rounded-full bg-line sm:block" aria-hidden="true" />
       </div>
       <span className="min-w-0 flex-1 truncate text-body-s text-ink-700">{event.institution}</span>
-      <span className="shrink-0 font-mono text-caption tnum text-ink-500">{fmtPctLevel(event.short_ratio)}</span>
+      <span className="shrink-0 tnum text-caption text-ink-500">{fmtPctLevel(event.short_ratio)}</span>
       <ShortDelta value={delta} className="w-16 shrink-0 text-right" />
     </li>
   );
@@ -727,7 +726,7 @@ function StockCard({ row, onSelect }: { row: ShortMonitorRow; onSelect: () => vo
         <span>{row.market_name ?? '—'}</span>
         <span aria-hidden>·</span>
         <span>
-          {t('收盘')} <span className="font-mono tnum text-ink-600">{fmtPrice(row.close)}</span>
+          {t('收盘')} <span className="tnum text-ink-600">{fmtPrice(row.close)}</span>
         </span>
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
@@ -821,7 +820,7 @@ function StockCard({ row, onSelect }: { row: ShortMonitorRow; onSelect: () => vo
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-2 font-mono text-micro tnum text-ink-400">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-2 tnum text-micro text-ink-400">
         <span className="inline-flex items-center gap-0.5">
           {t('数据置信度')}
           <InfoHint hint={SHORT_HINTS.confidence} size={11} />
@@ -860,7 +859,7 @@ function FactBlock({ title, facts }: { title: string; facts: Fact[] }) {
                 <span className="truncate">{fact.label}</span>
               </PointerTooltip>
             </dt>
-            <dd className={cn('font-mono text-body-s tnum', fact.muted ? 'text-ink-400' : 'text-ink-800')}>
+            <dd className={cn('tnum text-body-s tnum', fact.muted ? 'text-ink-400' : 'text-ink-800')}>
               {fact.value}
             </dd>
           </div>
@@ -904,7 +903,7 @@ function MiniScore({
           />
         )}
       </span>
-      <span className="w-6 shrink-0 text-right font-mono text-micro tnum text-ink-700">
+      <span className="w-6 shrink-0 text-right tnum text-micro text-ink-700">
         {fmtScore(number)}
       </span>
     </span>
@@ -962,9 +961,9 @@ function FlagList({
 
 /** 相对收益。红涨绿跌 —— 这里的正负就是股价相对强弱本身。 */
 function RelSigned({ value }: { value: number | null }) {
-  if (value == null) return <span className="font-mono tnum text-ink-400">—</span>;
+  if (value == null) return <span className="tnum text-ink-400">—</span>;
   return (
-    <span className={cn('font-mono tnum', value > 0 ? 'text-up-600' : value < 0 ? 'text-down-600' : 'text-ink-400')}>
+    <span className={cn('tnum tnum', value > 0 ? 'text-up-600' : value < 0 ? 'text-down-600' : 'text-ink-400')}>
       {fmtPct(value)}
     </span>
   );
@@ -976,13 +975,13 @@ function RelSigned({ value }: { value: number | null }) {
  *  是买方回补（红）—— 与个股页「机构空卖行为」区块的事件配色一致。同一件事
  *  在两个页面上是相反的颜色，比任何一种约定都糟。 */
 function ShortDelta({ value, className }: { value: number | null; className?: string }) {
-  if (value == null) return <span className={cn('font-mono tnum text-ink-400', className)}>—</span>;
+  if (value == null) return <span className={cn('tnum tnum text-ink-400', className)}>—</span>;
   const tip =
     value > 0 ? t('公开空头增加（卖压增强）') : value < 0 ? t('公开空头减少（买方回补）') : null;
   const node = (
     <span
       className={cn(
-        'font-mono tnum',
+        'tnum tnum',
         value > 0 ? 'text-down-600' : value < 0 ? 'text-up-600' : 'text-ink-400',
         className,
       )}

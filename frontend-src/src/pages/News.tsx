@@ -1,9 +1,8 @@
-/** 新闻催化剂桌面 — 对齐美版信息设计：
- *  信息流（过滤+热点条+重要度+AI状态） / 个股影响 / 经济日历 / 数据源。 */
+/** 新闻原文、关联股票、经济日历和采集状态。 */
 
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { newsApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { remoteState } from '@/hooks/remoteState';
@@ -21,8 +20,6 @@ import PointerTooltip from '@/components/shared/PointerTooltip';
 import HorizontalScroller from '@/components/shared/HorizontalScroller';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
 import Switch from '@/components/shared/Switch';
-import AnalysisIcon from '@/components/shared/AnalysisIcon';
-import PulseDot from '@/components/shared/PulseDot';
 import FilterButton from '@/components/shared/FilterButton';
 import SelectionViewport from '@/components/shared/SelectionViewport';
 import SourceNote from '@/components/shared/SourceNote';
@@ -31,7 +28,7 @@ import { NEWS_HINTS } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 import { explanationLines } from '@/lib/explainText';
 import { fmtDate, fmtJstDateShort, fmtJstDateTime, fmtJstTime, fmtRelative, fmtTimeHHMMSS } from '@/lib/format';
-import { DUR_SECTION, EASE_PAPER } from '@/lib/motion';
+import { EASE_PAPER } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import type {
   EconEvent,
@@ -95,38 +92,38 @@ export default function News() {
     () => newsApi.feed({ hours, category: category ?? undefined, only_securities: onlySecurities }),
     300_000,
     [hours, category, onlySecurities],
+    { identity: `news-feed:${hours}:${category ?? 'all'}:${onlySecurities}` },
   );
-  const hotspots = usePolling(() => newsApi.hotspots(hours), 300_000, [hours]);
-  const securities = usePolling(() => newsApi.securities(hours), 300_000, [hours]);
+  const hotspots = usePolling(() => newsApi.hotspots(hours), 300_000, [hours], { identity: `news-hotspots:${hours}` });
+  const securities = usePolling(() => newsApi.securities(hours), 300_000, [hours], { identity: `news-securities:${hours}` });
   const econ = usePolling(() => newsApi.econCalendar(), 3_600_000);
   const status = usePolling(() => newsApi.status(), 300_000);
 
   const feedState = remoteState(feed, (d) => d.items.length === 0);
-  const [refreshingNews, setRefreshingNews] = useState(false);
+  const refreshingNews = status.refreshing || hotspots.refreshing
+    || (tab === 'feed' && feed.refreshing)
+    || (tab === 'stocks' && securities.refreshing)
+    || (tab === 'econ' && econ.refreshing);
 
   const onRefreshNews = useCallback(() => {
     if (refreshingNews) return;
-    setRefreshingNews(true);
     status.refresh({ force: true });
     hotspots.refresh({ force: true });
     if (tab === 'feed') feed.refresh({ force: true });
     if (tab === 'stocks') securities.refresh({ force: true });
     if (tab === 'econ') econ.refresh({ force: true });
-    window.setTimeout(() => setRefreshingNews(false), 800);
   }, [econ, feed, hotspots, refreshingNews, securities, status, tab]);
 
   return (
     <div>
       <PageHeader
-        section="07"
-        eyebrow="NEWS & CATALYSTS · JAPAN EQUITIES"
         title={t('新闻')}
-        description={t('本页为日线数据，收盘后更新')}
+        description={t('查看新闻原文、关联股票与经济日历')}
         meta={
           <>
             <StatusStrip status={status.data ?? null} />
             {status.lastUpdatedAt && (
-              <span className="font-mono text-caption text-ink-400 tnum">
+              <span className="tnum text-caption text-ink-400">
                 {t('更新')} {fmtTimeHHMMSS(status.lastUpdatedAt)}
               </span>
             )}
@@ -140,15 +137,15 @@ export default function News() {
         }
       />
 
-      <div className="mt-6">
-        <StatusHero status={status.data ?? null} loading={status.loading && !status.data} />
-      </div>
+      {status.error && status.data && (
+        <StaleStrip onRetry={() => status.refresh()} refreshing={status.refreshing} className="mt-4" />
+      )}
 
       <div className="mt-8 flex min-w-0 flex-wrap items-center justify-between gap-2">
         <Segmented<Tab>
           options={[
             { value: 'feed', label: t('信息流') },
-            { value: 'stocks', label: t('个股影响') },
+            { value: 'stocks', label: t('关联个股') },
             { value: 'econ', label: t('经济日历') },
             { value: 'sources', label: t('数据源') },
           ]}
@@ -158,9 +155,9 @@ export default function News() {
         {(tab === 'feed' || tab === 'stocks') && (
           <Segmented<'24' | '72' | '168'>
             options={[
-              { value: '24', label: '24h' },
-              { value: '72', label: '72h' },
-              { value: '168', label: '7d' },
+              { value: '24', label: t('近 24 小时') },
+              { value: '72', label: t('近 3 天') },
+              { value: '168', label: t('近 7 天') },
             ]}
             value={String(hours) as '24' | '72' | '168'}
             onChange={(value) => setHours(Number(value) as 24 | 72 | 168)}
@@ -229,7 +226,7 @@ export default function News() {
                 }
               />
             </section>
-          ) : feedState === 'empty' ? (
+          ) : feedState === 'empty' || (feedState === 'stale' && feed.data?.items.length === 0) ? (
             <section className="card-surface">
               <EmptyState image="/empty-news.svg" title={t('暂无数据')} description={feed.data?.note_ja ?? ''} />
             </section>
@@ -243,23 +240,56 @@ export default function News() {
         </>
       )}
 
-      {tab === 'stocks' && <StocksImpactPanel rows={securities.data?.rows ?? []} loading={securities.loading} />}
+      {tab === 'stocks' && (
+        <NewsPanelState error={securities.error} hasData={Boolean(securities.data)} onRetry={() => securities.refresh()} refreshing={securities.refreshing}>
+          <StocksImpactPanel rows={securities.data?.rows ?? []} loading={securities.loading} />
+        </NewsPanelState>
+      )}
 
       {tab === 'econ' && (
+        <NewsPanelState error={econ.error} hasData={Boolean(econ.data)} onRetry={() => econ.refresh()} refreshing={econ.refreshing}>
         <EconCalendarPanel
           events={econ.data?.events ?? []}
           note={econ.data?.coverage_note_ja}
           loading={econ.loading}
         />
+        </NewsPanelState>
       )}
 
-      {tab === 'sources' && <SourcesPanel status={status.data ?? null} loading={status.loading} />}
+      {tab === 'sources' && (
+        <NewsPanelState error={status.data ? null : status.error} hasData={Boolean(status.data)} onRetry={() => status.refresh()} refreshing={status.refreshing}>
+          <div className="space-y-4">
+            <StatusHero status={status.data ?? null} loading={status.loading && !status.data} />
+            <SourcesPanel status={status.data ?? null} loading={status.loading} />
+          </div>
+        </NewsPanelState>
+      )}
       </div>
     </div>
   );
 }
 
 /* ---------------- 状态条 ---------------- */
+
+function NewsPanelState({
+  error, hasData, onRetry, refreshing, children,
+}: {
+  error: { message: string } | null;
+  hasData: boolean;
+  onRetry: () => void;
+  refreshing: boolean;
+  children: ReactNode;
+}) {
+  if (error && !hasData) {
+    return (
+      <section className="card-surface">
+        <EmptyState variant="error" image="/empty-news.svg" title={t('加载失败')} description={error.message}
+          action={<EmptyRetryButton onClick={onRetry} refreshing={refreshing} />} />
+      </section>
+    );
+  }
+  return <>{error && <StaleStrip onRetry={onRetry} refreshing={refreshing} />}{children}</>;
+}
 
 function StatusStrip({ status }: { status: NewsStatus | null }) {
   if (!status) return null;
@@ -269,10 +299,6 @@ function StatusStrip({ status }: { status: NewsStatus | null }) {
       <span>
         {t('数据源')} {feedsOk}/{status.feeds.length}
       </span>
-      <SoftBadge tone={status.ai.enabled ? 'ai' : 'neutral'}>
-        {status.ai.enabled ? <PulseDot className="bg-ai-600" size={7} /> : <AnalysisIcon size={13} />}
-        AI {status.ai.enabled ? t('已启用') : t('未启用')}
-      </SoftBadge>
     </span>
   );
 }
@@ -282,23 +308,12 @@ function HeroCell({ label, index, children }: { label: string; index: number; ch
     <div
       className={cn(
         'min-w-0 border-line px-4 py-4 sm:px-5',
-        index >= 2 && 'border-t xl:border-t-0',
-        index % 2 === 1 && 'border-l',
-        index === 2 && 'xl:border-l',
+        index > 0 && 'border-t sm:border-l sm:border-t-0',
       )}
     >
       <p className="eyebrow">{label}</p>
       <div className="mt-2">{children}</div>
     </div>
-  );
-}
-
-const PENDING_AI_QUEUE = new Set(['queued', 'submitted', 'unknown', 'in_progress']);
-
-function pendingAiQueueCount(queue: Record<string, number>): number {
-  return Object.entries(queue).reduce(
-    (sum, [status, n]) => (PENDING_AI_QUEUE.has(status) ? sum + n : sum),
-    0,
   );
 }
 
@@ -323,13 +338,13 @@ function StatusLed({
 }
 
 function StatusHero({ status, loading }: { status: NewsStatus | null; loading: boolean }) {
+  const reduceMotion = useReducedMotion();
   const feedsOk = status?.feeds.filter((feed) => !feed.last_error_code && feed.last_fetched_at).length ?? 0;
   const lastFetch = status?.feeds
     .map((feed) => feed.last_fetched_at)
     .filter((value): value is string => Boolean(value))
     .sort()
     .at(-1);
-  const queued = status ? pendingAiQueueCount(status.ai.queue) : 0;
   const sourceTone: 'brand' | 'warn' | 'muted' = !status
     ? 'muted'
     : feedsOk === status.feeds.length && status.feeds.length > 0
@@ -337,13 +352,13 @@ function StatusHero({ status, loading }: { status: NewsStatus | null; loading: b
       : 'warn';
   return (
     <motion.section
-      initial={{ opacity: 0, y: 14 }}
+      initial={reduceMotion ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: DUR_SECTION, ease: EASE_PAPER }}
+      transition={{ duration: 0.22, ease: EASE_PAPER }}
       aria-label={t('数据源')}
       className="card-surface"
     >
-      <div className="grid grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3">
         <HeroCell label={t('数据源')} index={0}>
           {loading ? (
             <div className="space-y-2">
@@ -362,40 +377,26 @@ function StatusHero({ status, loading }: { status: NewsStatus | null; loading: b
             </>
           )}
         </HeroCell>
-        <HeroCell label="AI" index={1}>
+        <HeroCell label={t('最近采集')} index={1}>
           {loading ? (
-            <SkeletonBlock className="h-5 w-28 max-w-full" />
+            <SkeletonBlock className="h-5 w-28" />
           ) : (
-            <SoftBadge tone={status?.ai.enabled ? 'ai' : 'neutral'} size="md">
-              {status?.ai.enabled || queued > 0 ? (
-                <PulseDot className="bg-ai-600" size={7} />
-              ) : (
-                <AnalysisIcon size={14} />
-              )}
-              <span>{status?.ai.enabled ? t('已启用') : t('未启用')}</span>
-            </SoftBadge>
+            <p className="text-body-s text-ink-900 tnum">{lastFetch ? fmtJstDateTime(lastFetch) : '—'}</p>
           )}
         </HeroCell>
-        <HeroCell label={t('分析队列')} index={2}>
-          {loading ? (
-            <SkeletonBlock className="h-5 w-16" />
-          ) : (
-            <p className="metric-value text-data-m text-ink-900 tnum">{status ? queued : '—'}</p>
-          )}
-        </HeroCell>
-        <HeroCell label={t('采集窗口')} index={3}>
+        <HeroCell label={t('采集窗口')} index={2}>
           {loading ? (
             <SkeletonBlock className="h-5 w-14" />
           ) : (
             <p className="metric-value text-data-m text-ink-900 tnum">
-              {status ? `${status.window_hours}h` : '—'}
+              {status ? t('{n} 小时', { n: status.window_hours }) : '—'}
             </p>
           )}
         </HeroCell>
       </div>
       <details className="group border-t border-line px-4 py-1 sm:px-5">
         <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 text-caption text-ink-500 marker:content-none [&::-webkit-details-marker]:hidden">
-          {t('数据与分析说明')}
+          {t('数据说明')}
           <Icon
             name="chevron-down"
             size={14}
@@ -404,7 +405,7 @@ function StatusHero({ status, loading }: { status: NewsStatus | null; loading: b
         </summary>
         <SourceNote
           className="border-0 pb-3 pt-1"
-          text={t('新闻来自已配置的 RSS 源；每条标注原始来源；滞后表示上次采集时间；AI 状态与队列来自本站翻译管线')}
+          text={t('新闻按原始语言展示，标题与摘要来自新闻源。关联个股依据代码与名称匹配，重要度依据规则评分。')}
         />
       </details>
     </motion.section>
@@ -444,14 +445,14 @@ function TimeCol({ iso }: { iso: string | null }) {
   if (!iso) {
     return (
       <div className="flex w-11 shrink-0 flex-col items-center pt-0.5">
-        <span className="font-mono text-[11px] leading-[14px] text-ink-400 tnum">—</span>
+        <span className="tnum text-[11px] leading-[14px] text-ink-400">—</span>
       </div>
     );
   }
   const sameDay = JST_DAY.format(new Date(iso)) === JST_DAY.format(new Date());
   return (
     <div className="flex w-11 shrink-0 flex-col items-center pt-0.5">
-      <span className="font-mono text-[11px] leading-[14px] text-ink-400 tnum">
+      <span className="tnum text-[11px] leading-[14px] text-ink-400">
         {sameDay ? fmtJstTime(iso) : fmtJstDateShort(iso)}
       </span>
       <span className="mt-1.5 hidden w-[2px] flex-1 rounded-full bg-line sm:block" aria-hidden="true" />
@@ -473,25 +474,12 @@ function ImportanceBadge({ value }: { value: number | null }) {
   );
 }
 
-function AnalysisStateChip({ state }: { state: NewsItem['analysis_state'] }) {
-  if (state === 'completed' || !state) return null;
-  const map: Record<string, { label: string; tone: 'brand' | 'warn' | 'neutral' }> = {
-    pending: { label: t('分析排队中'), tone: 'brand' },
-    failed: { label: t('分析失败'), tone: 'warn' },
-    disabled: { label: t('AI 未启用'), tone: 'neutral' },
-    none: { label: t('未分析'), tone: 'neutral' },
-  };
-  const item = map[state];
-  if (!item) return null;
-  return <SoftBadge tone={item.tone}>{item.label}</SoftBadge>;
-}
-
 function HotspotStrip({
   groups,
   loading,
   error,
   onRetry,
-  refreshing,
+  refreshing = false,
 }: {
   groups: NewsHotspotGroup[];
   loading: boolean;
@@ -501,8 +489,8 @@ function HotspotStrip({
 }) {
   return (
     <section aria-label={t('热点主题')}>
-      <p className="eyebrow">HOT THEMES</p>
       <h3 className="mb-2 mt-1 text-h3 text-ink-900">{t('热点主题')}</h3>
+      {Boolean(error) && groups.length > 0 && <StaleStrip onRetry={onRetry} refreshing={refreshing} className="mb-2" />}
       {loading ? (
         <HorizontalScroller className="mt-1" scrollerClassName="pb-1" label={t('热点主题带，可横向滚动')}>
           <div className="flex gap-2">
@@ -541,12 +529,13 @@ function HotspotStrip({
 }
 
 function HotspotCard({ group, index }: { group: NewsHotspotGroup; index: number }) {
+  const reduceMotion = useReducedMotion();
   const heat = Math.max(0, Math.min(100, group.max_importance ?? 0));
   return (
     <motion.div
-      initial={{ opacity: 0, y: 14 }}
+      initial={reduceMotion ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.48, ease: EASE_PAPER, delay: Math.min(index * 0.05, 0.4) }}
+      transition={{ duration: 0.22, ease: EASE_PAPER, delay: Math.min(index * 0.02, 0.12) }}
     >
     <Link
       to={`/stock/${group.display_code}`}
@@ -554,7 +543,7 @@ function HotspotCard({ group, index }: { group: NewsHotspotGroup; index: number 
     >
       <span className="flex items-center gap-1.5">
         <CodeMark code={group.display_code} size={22} />
-        <span className="font-mono text-caption font-semibold text-brand-700">{group.display_code}</span>
+        <span className="tnum text-caption font-semibold text-brand-700">{group.display_code}</span>
         <span className="min-w-0 truncate text-caption text-ink-700">{group.name_ja ?? '—'}</span>
         <span className="ml-auto">
           <ImportanceBadge value={group.max_importance} />
@@ -576,122 +565,61 @@ function HotspotCard({ group, index }: { group: NewsHotspotGroup; index: number 
 }
 
 function NewsRow({ item, index, animate = true }: { item: NewsItem; index: number; animate?: boolean }) {
-  const [expanded, setExpanded] = useState(false);
-  const title = item.translated_title_ja ?? item.original_title ?? '—';
-  const toggle = () => setExpanded((value) => !value);
+  const reduceMotion = useReducedMotion();
+  const title = item.original_title ?? '—';
   return (
     <motion.li
-      initial={animate ? { opacity: 0, y: 14 } : false}
+      initial={animate && !reduceMotion ? { opacity: 0, y: 8 } : false}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: EASE_PAPER, delay: animate ? Math.min(index * 0.03, 0.3) : 0 }}
-      className="group relative flex gap-3 px-4 py-[18px] transition-colors duration-fast hover:bg-paper-2/70 sm:px-5"
+      transition={{ duration: 0.22, ease: EASE_PAPER, delay: animate ? Math.min(index * 0.02, 0.12) : 0 }}
+      className="flex gap-3 px-4 py-5 sm:px-5"
     >
-      <button
-        type="button"
-        onClick={toggle}
-        aria-expanded={expanded}
-        aria-label={title}
-        className="absolute inset-0 z-0 focus-visible:bg-paper-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400/60"
-      />
       <TimeCol iso={item.published_at} />
-      <div
-        className="relative z-10 min-w-0 flex-1 cursor-pointer"
-        onClick={(event) => {
-          const target = event.target as Element;
-          if (target.closest('button, a, [role="button"], input, select, textarea')) return;
-          if (window.getSelection()?.toString()) return;
-          toggle();
-        }}
-      >
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-micro text-ink-400">
-          <span className="font-medium text-ink-500">{item.source ?? '—'}</span>
+      <article className="min-w-0 flex-1">
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-micro text-ink-400">
+          <span className="font-medium text-ink-600">{item.source ?? '—'}</span>
           <span aria-hidden="true">·</span>
-          <span className="font-mono tnum">{fmtRelative(item.published_at)}</span>
-          <span className="ml-auto">
-            <ImportanceBadge value={item.importance} />
-          </span>
+          <time dateTime={item.published_at ?? undefined} className="tnum">{fmtRelative(item.published_at)}</time>
+          <span className="ml-auto"><ImportanceBadge value={item.importance} /></span>
         </p>
-        <h3 className="mt-1.5 text-[15px] font-semibold leading-[22px] text-ink-900">
-          <span className="bg-[linear-gradient(currentColor,currentColor)] bg-[length:0%_1px] bg-left-bottom bg-no-repeat transition-[background-size,color] duration-200 group-hover:bg-[length:100%_1px] group-hover:text-brand-600">
-            {title}
-          </span>
+        <h3 className="mt-2 text-[16px] font-semibold leading-6 text-ink-900">
+          {item.source_url ? (
+            <a href={item.source_url} target="_blank" rel="noreferrer" className="rounded-xs underline-offset-4 hover:text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/60">
+              {title}
+              <Icon name="arrow-up-right" size={13} className="ml-1.5 inline-block text-ink-400" />
+              <span className="sr-only">{t('原文')}</span>
+            </a>
+          ) : title}
         </h3>
-        {item.translated_title_ja && item.original_title && item.translated_title_ja !== item.original_title && (
-          <p className="mt-0.5 truncate text-caption text-ink-400">{item.original_title}</p>
-        )}
-        {item.summary_ja && <p className="mt-1 line-clamp-2 text-body-s text-ink-500">{item.summary_ja}</p>}
-
-        {item.analysis_zh && (
-          <div className="mt-2 rounded-md bg-ai-50 p-2.5 text-body-s text-ink-800">
-            <span className="mr-1.5 rounded-sm bg-ai-600 px-1 py-0.5 text-micro font-bold text-white">{t('中文分析')}</span>
-            {item.analysis_zh.headline && <strong className="mr-1">{item.analysis_zh.headline}</strong>}
-            {item.analysis_zh.impact}
-            {(item.analysis_zh.affected?.length ?? 0) > 0 && (
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {item.analysis_zh.affected!.map((affected) => {
-                  const code =
-                    affected.code.endsWith('0') && affected.code.length === 5
-                      ? affected.code.slice(0, 4)
-                      : affected.code;
-                  const chip = (
-                    <Link to={`/stock/${code}`}>
-                      <SoftBadge className="font-mono hover:bg-brand-50 hover:text-brand-700">{code}</SoftBadge>
-                    </Link>
-                  );
-                  return affected.reason_zh ? (
-                    <PointerTooltip
-                      key={affected.code}
-                      passthrough
-                      label={affected.reason_zh}
-                      content={<span className="text-micro leading-[16px] text-ink-600">{affected.reason_zh}</span>}
-                    >
-                      {chip}
-                    </PointerTooltip>
-                  ) : (
-                    <span key={affected.code}>{chip}</span>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-micro text-ink-400">
-          {(item.categories ?? []).slice(0, 3).map((cat) => (
-            <SoftBadge key={cat}>{t(cat)}</SoftBadge>
-          ))}
+        {item.original_summary && <p className="mt-2 line-clamp-3 text-body-s leading-relaxed text-ink-600">{item.original_summary}</p>}
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          {(item.categories ?? []).slice(0, 3).map((cat) => <SoftBadge key={cat}>{t(cat)}</SoftBadge>)}
           {item.securities.map((security) => (
             <Link key={security.canonical_code} to={`/stock/${security.display_code}`}>
-              <SoftBadge tone="brand" className="font-mono hover:underline">
-                {security.display_code}
+              <SoftBadge tone="brand" className="hover:underline">
+                <span className="tnum">{security.display_code}</span>
                 {security.name_ja ? ` ${security.name_ja}` : ''}
               </SoftBadge>
             </Link>
           ))}
-          <AnalysisStateChip state={item.analysis_state} />
-          {item.source_url && (
-            <a href={item.source_url} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
-              {t('原文')}
-            </a>
-          )}
         </div>
-
-        {expanded && (
-          <div className="mt-2 space-y-1.5 border-t border-line pt-2 text-caption text-ink-500">
-            {item.original_summary && <p className="text-ink-600">{item.original_summary}</p>}
+        <details className="group mt-3 border-t border-line pt-2 text-caption text-ink-500">
+          <summary className="flex min-h-8 cursor-pointer list-none items-center gap-1.5 rounded-xs marker:content-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/60 [&::-webkit-details-marker]:hidden">
+            <Icon name="chevron-down" size={13} className="transition-transform duration-150 group-open:rotate-180 motion-reduce:transition-none" />
+            {t('新闻详情')}
+          </summary>
+          <div className="space-y-2 pb-1 pt-1">
+            {item.original_summary && <p className="leading-relaxed text-ink-600">{item.original_summary}</p>}
             {(item.importance_reason_items?.length ?? item.importance_reasons?.length ?? 0) > 0 && (
-              <p>
-                {t('重要度依据')}:{' '}
-                {explanationLines(item.importance_reason_items, item.importance_reasons).join(' · ')}
-              </p>
+              <p>{t('重要度依据')}: {explanationLines(item.importance_reason_items, item.importance_reasons).join(' · ')}</p>
             )}
-            <p>
-              {t('发布')}: {fmtJstDateTime(item.published_at)} · {t('语言')}: {item.source_language}
+            <p>{t('发布')}: {fmtJstDateTime(item.published_at)} · {t('语言')}: {item.source_language ?? '—'}
               {item.market_relevance === 'market' && <span> · {t('市场级新闻')}</span>}
             </p>
+            {item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-brand-700 hover:underline">{t('原文')}<Icon name="arrow-up-right" size={12} /></a>}
           </div>
-        )}
-      </div>
+        </details>
+      </article>
     </motion.li>
   );
 }
@@ -707,7 +635,7 @@ function StocksImpactPanel({ rows, loading }: { rows: NewsSecurityRow[]; loading
         width: '30%',
         render: (row) => (
           <Link to={`/stock/${row.display_code}`} className="flex min-w-0 items-center gap-2 hover:underline">
-            <span className="rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-body-s font-semibold text-brand-700">
+            <span className="rounded-md bg-brand-50 px-1.5 py-0.5 tnum text-body-s font-semibold text-brand-700">
               {row.display_code}
             </span>
             <span className="min-w-0 truncate text-body-s text-ink-800">{row.name_ja ?? '—'}</span>
@@ -720,7 +648,7 @@ function StocksImpactPanel({ rows, loading }: { rows: NewsSecurityRow[]; loading
         align: 'right',
         sortable: true,
         sortValue: (row) => row.news_count,
-        render: (row) => <span className="font-mono text-body-s tnum">{row.news_count}</span>,
+        render: (row) => <span className="tnum text-body-s">{row.news_count}</span>,
       },
       {
         key: 'importance',
@@ -741,19 +669,6 @@ function StocksImpactPanel({ rows, loading }: { rows: NewsSecurityRow[]; loading
             ))}
           </span>
         ),
-      },
-      {
-        key: 'ai',
-        title: t('AI 分析'),
-        align: 'right',
-        render: (row) =>
-          row.ai ? (
-            <span className="font-mono text-caption text-ink-600 tnum">
-              {t('已分析')} {row.ai.analyzed}
-            </span>
-          ) : (
-            <span className="text-micro text-ink-300">{t('未分析')}</span>
-          ),
       },
       {
         key: 'latest',
@@ -804,9 +719,9 @@ function EconCalendarPanel({ events, note, loading }: { events: EconEvent[]; not
       {Array.from(grouped.entries()).map(([date, dayEvents]) => (
         <section key={date} className="card-surface overflow-hidden">
           <div className="flex items-baseline gap-2 border-b border-line px-4 py-3 sm:px-5">
-            <p className="eyebrow">ECON · JST</p>
+            <span className="text-micro text-ink-400">{t('日本时间')}</span>
             <h3 className="flex items-baseline gap-2">
-              <span className="font-mono text-body font-semibold tnum text-ink-900">{fmtDate(date)}</span>
+              <span className="tnum text-body font-semibold text-ink-900">{fmtDate(date)}</span>
               <span className="text-micro text-ink-400">{weekdayJa(date)}</span>
             </h3>
           </div>
@@ -859,7 +774,7 @@ function EconCalendarPanel({ events, note, loading }: { events: EconEvent[]; not
 function TimeColClock({ time }: { time: string }) {
   return (
     <div className="flex w-11 shrink-0 flex-col items-center pt-0.5">
-      <span className="font-mono text-[11px] leading-[14px] text-ink-400 tnum">{time || '—'}</span>
+      <span className="tnum text-[11px] leading-[14px] text-ink-400">{time || '—'}</span>
       <span className="mt-1.5 hidden w-[2px] flex-1 rounded-full bg-line sm:block" aria-hidden="true" />
     </div>
   );
@@ -901,6 +816,7 @@ function feedHealth(feed: NewsFeedState): { tone: 'brand' | 'warn' | 'neutral'; 
 }
 
 function SourcesPanel({ status, loading }: { status: NewsStatus | null; loading: boolean }) {
+  const reduceMotion = useReducedMotion();
   if (loading && !status) {
     return (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -910,7 +826,7 @@ function SourcesPanel({ status, loading }: { status: NewsStatus | null; loading:
       </div>
     );
   }
-  if (!status) {
+  if (!status || status.feeds.length === 0) {
     return (
       <section className="card-surface">
         <EmptyState image="/empty-news.svg" title={t('暂无数据')} />
@@ -920,9 +836,9 @@ function SourcesPanel({ status, loading }: { status: NewsStatus | null; loading:
   return (
     <div className="space-y-4">
       <motion.div
-        initial="hidden"
+        initial={reduceMotion ? false : 'hidden'}
         animate="show"
-        variants={{ show: { transition: { staggerChildren: 0.05 } } }}
+        variants={{ show: { transition: { staggerChildren: 0.02 } } }}
         className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
       >
         {status.feeds.map((feed) => {
@@ -931,16 +847,16 @@ function SourcesPanel({ status, loading }: { status: NewsStatus | null; loading:
             <motion.section
               key={feed.feed_url}
               variants={{
-                hidden: { opacity: 0, y: 14 },
-                show: { opacity: 1, y: 0, transition: { duration: 0.48, ease: EASE_PAPER } },
+                hidden: { opacity: 0, y: 8 },
+                show: { opacity: 1, y: 0, transition: { duration: 0.22, ease: EASE_PAPER } },
               }}
               className="card-surface p-5"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="eyebrow">RSS</p>
+                  <p className="text-micro text-ink-400">{t('新闻源')}</p>
                   <h3 className="mt-1 truncate text-h3 text-ink-900">{feedHost(feed.feed_url)}</h3>
-                  <p className="mt-0.5 truncate font-mono text-micro text-ink-400">{feed.feed_url}</p>
+                  <p className="mt-0.5 truncate tnum text-micro text-ink-400">{feed.feed_url}</p>
                 </div>
                 <SoftBadge tone={health.tone}>
                   <span
@@ -959,56 +875,18 @@ function SourcesPanel({ status, loading }: { status: NewsStatus | null; loading:
                   <p className="mt-0.5 text-micro text-ink-400">{t('累计')}</p>
                 </div>
                 <div>
-                  <p className="font-mono text-data-l text-ink-900 tnum">
+                  <p className="tnum text-data-l text-ink-900">
                     {feed.last_fetched_at ? fmtRelative(feed.last_fetched_at) : '—'}
                   </p>
                   <p className="mt-0.5 text-micro text-ink-400">{t('最近取得')}</p>
                 </div>
               </div>
               {feed.last_error_code && (
-                <p className="mt-3 border-t border-line pt-2.5 font-mono text-micro text-down-700">{feed.last_error_code}</p>
+                <p className="mt-3 border-t border-line pt-2.5 tnum text-micro text-down-700">{feed.last_error_code}</p>
               )}
             </motion.section>
           );
         })}
-        <motion.section
-          variants={{
-            hidden: { opacity: 0, y: 14 },
-            show: { opacity: 1, y: 0, transition: { duration: 0.48, ease: EASE_PAPER } },
-          }}
-          className="card-surface p-5"
-        >
-          <p className="eyebrow">AI PIPELINE</p>
-          <h3 className="mb-2 mt-1 flex items-center gap-1.5 text-h3 text-ink-900">
-            <AnalysisIcon size={16} className="text-ai-600" />
-            AI {t('管道')}
-          </h3>
-          <dl className="space-y-1.5 text-body-s">
-            <div className="flex justify-between">
-              <dt className="text-ink-500">{t('状态')}</dt>
-              <dd className={status.ai.enabled ? 'text-ai-600' : 'text-ink-400'}>
-                {status.ai.enabled ? t('已启用') : t('未启用')}
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-ink-500">{t('翻译目标语言')}</dt>
-              <dd className="font-mono text-ink-800">{status.ai.translation_target}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-ink-500">{t('分析语言')}</dt>
-              <dd className="font-mono text-ink-800">{status.ai.analysis_language}</dd>
-            </div>
-            {Object.keys(status.ai.queue).length > 0 && (
-              <div className="flex justify-between">
-                <dt className="text-ink-500">{t('任务队列')}</dt>
-                <dd className="font-mono text-caption tnum text-ink-700">
-                  {Object.entries(status.ai.queue).map(([key, count]) => `${key}:${count}`).join(' ')}
-                </dd>
-              </div>
-            )}
-          </dl>
-          {status.ai.note_ja && <p className="mt-2 rounded-md bg-paper-2 p-2 text-caption text-ink-500">{status.ai.note_ja}</p>}
-        </motion.section>
       </motion.div>
       <p className="text-micro text-ink-400">
         {t('实体目录')}: {status.entity_aliases.toLocaleString('ja-JP')} · {t('同步间隔')}: {status.sync_seconds}s

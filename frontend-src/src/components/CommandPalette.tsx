@@ -24,7 +24,7 @@ import CodeMark from '@/components/shared/CodeMark';
 import DotsLoader from '@/components/shared/DotsLoader';
 import SoftBadge from '@/components/shared/SoftBadge';
 import PointerTooltip from '@/components/shared/PointerTooltip';
-import { NAV_ITEMS } from '@/components/Navbar';
+import { NAV_PAGES } from '@/lib/navigation';
 import { t } from '@/i18n/core';
 
 interface PaletteProps {
@@ -151,14 +151,13 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
 
   const featureEntries = useMemo<Entry[]>(() => {
     const list: Entry[] = [];
-    NAV_ITEMS.forEach((n) =>
+    NAV_PAGES.forEach((n) =>
       list.push({
         id: `f-${n.path}`,
         group: t('功能'),
-        no: n.no,
         title: n.label,
         hint: t('前往{label}', { label: n.label }),
-        keywords: `${n.no} ${n.path}`,
+        keywords: n.path,
         icon: 'chevron-right',
         action: () => {
           onClose();
@@ -196,8 +195,8 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
       list.push({
         id: 'f-refresh',
         group: t('功能'),
-        title: t('强制刷新自选'),
-        hint: t('重新获取自选行情'),
+        title: t('强制刷新关注'),
+        hint: t('重新获取关注行情'),
         icon: 'refresh',
         action: () => {
           onClose();
@@ -207,7 +206,7 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
       list.push({
         id: 'f-logout',
         group: t('功能'),
-        title: t('退出 Owner 登录'),
+        title: t('退出 管理员 登录'),
         hint: t('结束本机会话'),
         icon: 'shield',
         action: () => {
@@ -232,7 +231,7 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
         id: 'f-login',
         group: t('功能'),
         title: t('登录'),
-        hint: t('Owner 或访客账号'),
+        hint: t('管理员 或访客账号'),
         icon: 'shield',
         action: () => {
           onClose();

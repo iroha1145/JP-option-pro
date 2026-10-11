@@ -83,7 +83,7 @@ function summarizeFilters(filters: ScanFilters): string {
   if (filters.timeframe !== 'all') parts.push(TIMEFRAME_CN[filters.timeframe]);
   parts.push(PROFILE_CN[filters.profile]);
   if (filters.topN > 0) parts.push(`Top ${filters.topN}`);
-  if (filters.sectors.length > 0) parts.push(t('业种 {n} 项', { n: filters.sectors.length }));
+  if (filters.sectors.length > 0) parts.push(t('行业 {n} 项', { n: filters.sectors.length }));
   if (filters.priceMin !== null || filters.priceMax !== null) parts.push(t('价格区间'));
   if (filters.minTurnover > 0) parts.push(t('成交额≥{v}', { v: fmtYenCompact(filters.minTurnover) }));
   if (filters.minScore !== null) parts.push(t('强度≥{n}', { n: filters.minScore }));
@@ -367,7 +367,7 @@ export default function Screener() {
      どこにいるか」だけを重ねる。出来高由来の指標には触れない —— 場中の
      部分出来高を 20 日平均と比べると、朝は全滅・大引け前は全通過になる。 */
   const overlay = usePolling(() => quotesApi.overlay('screener', 200), 60_000, []);
-  const overlayRows = overlay.data?.rows ?? {};
+  const overlayRows = useMemo(() => overlay.data?.rows ?? {}, [overlay.data]);
   const [onlyLiveUp, setOnlyLiveUp] = useState(false);
 
   /* ---------------- 排序（确定性 / 最新催化 / 影响力） ---------------- */
@@ -473,9 +473,8 @@ export default function Screener() {
     <div>
       {/* B0 页头带 */}
       <PageHeader
-        section="03"
-        eyebrow="SCREENER · STRENGTH SCAN"
-        title={t('选股扫描')}
+        section="screener"
+        title={t('条件选股')}
         description={t('收盘后按日线全市场计算强度分，扫描读取已保存发布，不会触发供应商。')}
         meta={
           <>
@@ -483,13 +482,13 @@ export default function Screener() {
             {response?.built_at && (
               <span className="hidden text-right sm:block">
                 <span className="block text-micro text-ink-400">{t('评分时间')}</span>
-                <span className="font-mono text-caption text-ink-600 tnum">{fmtJstTime(response.built_at)}</span>
+                <span className="tnum text-caption text-ink-600">{fmtJstTime(response.built_at)}</span>
               </span>
             )}
             {history[0] && (
               <span className="hidden text-right sm:block">
                 <span className="block text-micro text-ink-400">{t('上次筛选')}</span>
-                <span className="font-mono text-caption text-ink-600 tnum">
+                <span className="tnum text-caption text-ink-600">
                   {fmtTimeHHMMSS(history[0].at)}
                 </span>
               </span>
@@ -542,11 +541,11 @@ export default function Screener() {
             ) : scanState === 'done' || (scanState === 'error' && response) ? (
               <>
                 <h2 className="font-display text-[18px] leading-[24px] text-ink-900">
-                  {t('命中')} <span className="font-mono tnum">{response?.matched_count ?? rows.length}</span> {t('只')}
+                  {t('命中')} <span className="tnum">{response?.matched_count ?? rows.length}</span> {t('只')}
                 </h2>
-                <span className="font-mono text-caption text-ink-400 tnum">{t('耗时')} {(scanDurationMs / 1000).toFixed(1)}s</span>
+                <span className="tnum text-caption text-ink-400">{t('耗时')} {(scanDurationMs / 1000).toFixed(1)}s</span>
                 {response && (
-                  <span className="font-mono text-micro text-ink-400 tnum">
+                  <span className="tnum text-micro text-ink-400">
                     {t('股票池')} {response.universe_count} {t('/ 条件过滤后')} {response.screened_count}
                   </span>
                 )}
@@ -645,7 +644,7 @@ export default function Screener() {
                       {(applied.tier !== 'all' || applied.minScore !== null) && (
                         <SuggestButton label={t('放宽一档')} onClick={() => patchAndScan({ tier: 'all', minScore: null, presetId: null })} />
                       )}
-                      {applied.sectors.length > 0 && <SuggestButton label={t('清除业种')} onClick={() => patchAndScan({ sectors: [] })} />}
+                      {applied.sectors.length > 0 && <SuggestButton label={t('清除行业')} onClick={() => patchAndScan({ sectors: [] })} />}
                       {(applied.priceMin !== null || applied.priceMax !== null) && (
                         <SuggestButton label={t('清除价格区间')} onClick={() => patchAndScan({ priceMin: null, priceMax: null })} />
                       )}
@@ -736,7 +735,7 @@ export default function Screener() {
                   {totalPages > 1 && (
                     <div className="mt-4 flex items-center justify-center gap-2">
                       <SuggestButton label={t('上一页')} onClick={() => setPage(Math.max(1, safePage - 1))} />
-                      <span className="font-mono text-caption text-ink-500 tnum">
+                      <span className="tnum text-caption text-ink-500">
                         {safePage} / {totalPages}
                       </span>
                       <SuggestButton label={t('下一页')} onClick={() => setPage(Math.min(totalPages, safePage + 1))} />
@@ -756,7 +755,7 @@ export default function Screener() {
             <SkeletonCard />
           ) : (
             <div className="card-surface p-5">
-              <p className="eyebrow">{t('市场形态 · MARKET REGIME')}</p>
+              <p className="eyebrow">{t('市场形态')}</p>
               <EmptyState
                 size="compact"
                 image="/empty-chart.svg"

@@ -48,11 +48,11 @@ function TapeItem({
         flash === 'down' && 'tick-flash-down',
       )}
     >
-      <span className="font-mono text-caption font-semibold text-ink-800">{q.name}</span>
-      <span className="font-mono text-caption text-ink-600 tnum">{fmtPrice(q.close)}</span>
+      <span className="tnum text-caption font-medium text-ink-700">{q.name}</span>
+      <span className="tnum text-caption text-ink-600">{fmtPrice(q.close)}</span>
       <span
         className={cn(
-          'font-mono text-caption tnum',
+          'tnum text-caption tnum',
           tone === 'up' ? 'text-up-700' : tone === 'down' ? 'text-down-700' : 'text-ink-500',
         )}
       >

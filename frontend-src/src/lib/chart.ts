@@ -26,8 +26,51 @@ import type {
   MarkPointComponentOption,
   TooltipComponentOption,
 } from 'echarts/components';
-import { CHART_MONO_FONT } from './chartFonts.ts';
+import { CHART_MONO_FONT, CHART_TEXT_FONT } from './chartFonts.ts';
 import { directionColors, getColorMode } from './colorPreference.ts';
+import { getAppearance, type Appearance } from './themePreference.ts';
+
+/* 2026-10-09 Arc 改版：图表表面色随界面改成纯灰（坐标字、网格、提示框），品牌与涨跌色不变。 */
+const CHART_SURFACE = {
+  light: {
+    ink400: '#6E6E6E',
+    ink300: '#C4C4C4',
+    lineChart: '#F0F0F0',
+    brand600: '#2E46E0',
+    brand500: '#3B59F2',
+    brand400: '#6B82FF',
+    warn600: '#E8930C',
+    ai600: '#0B7285',
+    tooltipBg: '#FFFFFF',
+    tooltipFg: '#525252',
+    insightTooltipFg: '#383838',
+    endpointRing: '#FFFFFF',
+    axisPointer: 'rgba(17,17,17,.24)',
+    stipple: 'rgba(46,70,224,.20)',
+    stippleFill: 'rgba(46,70,224,.10)',
+  },
+  dark: {
+    ink400: '#8F8F8F',
+    ink300: '#4D4D4F',
+    lineChart: '#222224',
+    brand600: '#6B82FF',
+    brand500: '#8B9CFF',
+    brand400: '#A8B4FF',
+    warn600: '#FACC15',
+    ai600: '#4EC4D4',
+    tooltipBg: '#161617',
+    tooltipFg: '#C7C7C7',
+    insightTooltipFg: '#F2F2F2',
+    endpointRing: '#161617',
+    axisPointer: 'rgba(242,242,242,.26)',
+    stipple: 'rgba(107,130,255,.32)',
+    stippleFill: 'rgba(107,130,255,.16)',
+  },
+} as const;
+
+function surface(appearance: Appearance = getAppearance()) {
+  return CHART_SURFACE[appearance];
+}
 
 echarts.use([
   LineChart, BarChart, CandlestickChart, PieChart, CustomChart,
@@ -60,20 +103,24 @@ export type EChartsInstance = ReturnType<typeof echarts.init>;
 
 /* ---------- 调色（与 CSS 变量一致；up/down 随涨跌色彩习惯） ---------- */
 export const CH = {
-  ink400: '#626F8B',
-  ink300: '#B7BFD3',
-  lineChart: '#EDF0F4',
-  brand600: '#2E46E0',
-  brand500: '#3B59F2',
-  brand400: '#6B82FF',
+  get ink400() { return surface().ink400; },
+  get ink300() { return surface().ink300; },
+  get lineChart() { return surface().lineChart; },
+  get brand600() { return surface().brand600; },
+  get brand500() { return surface().brand500; },
+  get brand400() { return surface().brand400; },
   get up600() {
     return directionColors().up600;
   },
   get down600() {
     return directionColors().down600;
   },
-  warn600: '#E8930C',
-  ai600: '#0B7285',
+  get warn600() { return surface().warn600; },
+  get ai600() { return surface().ai600; },
+  get tooltipBg() { return surface().tooltipBg; },
+  get tooltipFg() { return surface().tooltipFg; },
+  get insightTooltipFg() { return surface().insightTooltipFg; },
+  get endpointRing() { return surface().endpointRing; },
 };
 
 /* ---------- 通用配置 ---------- */
@@ -172,7 +219,7 @@ export function insightLineSeries(options: {
     areaStyle: insightAreaStyle(color),
     emphasis: {
       scale: false,
-      itemStyle: { color, borderColor: '#fff', borderWidth: 2, shadowBlur: 10, shadowColor: hexRgba(color, 0.45) },
+      itemStyle: { color, borderColor: CH.endpointRing, borderWidth: 2, shadowBlur: 10, shadowColor: hexRgba(color, 0.45) },
     },
     markPoint:
       lastValue != null && Number.isFinite(lastValue)
@@ -183,7 +230,7 @@ export function insightLineSeries(options: {
             symbolSize: 8,
             itemStyle: {
               color,
-              borderColor: '#FFFFFF',
+              borderColor: CH.endpointRing,
               borderWidth: 2,
               shadowBlur: 8,
               shadowColor: hexRgba(color, 0.5),
@@ -200,11 +247,11 @@ export function glassTooltip(overrides: Record<string, unknown> = {}) {
     trigger: 'axis' as const,
     transitionDuration: 0,
     className: 'cloud-chart-tooltip',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: CH.tooltipBg,
     borderColor: 'var(--line)',
     borderWidth: 1,
     padding: [8, 12],
-    textStyle: { color: '#3D4A68', fontSize: 12, fontFamily: 'Inter, sans-serif' },
+    textStyle: { color: CH.tooltipFg, fontSize: 12, fontFamily: CHART_TEXT_FONT },
     extraCssText:
       'box-shadow:var(--popover-shadow);border-radius:9px;font-variant-numeric:tabular-nums;transition:opacity 140ms ease-out;',
     axisPointer: {
@@ -217,20 +264,21 @@ export function glassTooltip(overrides: Record<string, unknown> = {}) {
 }
 
 /* ---------- 点阵面积图 pattern（§6-2） ---------- */
-let stippleCanvas: HTMLCanvasElement | null = null;
+const stippleCanvases: Partial<Record<Appearance, HTMLCanvasElement>> = {};
 export function stipplePattern(): HTMLCanvasElement | null {
   if (typeof document === 'undefined') return null;
-  if (stippleCanvas) return stippleCanvas;
+  const appearance = getAppearance();
+  if (stippleCanvases[appearance]) return stippleCanvases[appearance]!;
   const c = document.createElement('canvas');
   c.width = 6;
   c.height = 6;
   const ctx = c.getContext('2d');
   if (!ctx) return null;
-  ctx.fillStyle = 'rgba(46,70,224,.20)';
+  ctx.fillStyle = surface().stipple;
   ctx.beginPath();
   ctx.arc(3, 3, 1.1, 0, Math.PI * 2);
   ctx.fill();
-  stippleCanvas = c;
+  stippleCanvases[appearance] = c;
   return c;
 }
 
@@ -239,7 +287,7 @@ export function stippleAreaStyle(): LineSeriesOption['areaStyle'] {
   const pattern = stipplePattern();
   return pattern
     ? { color: { image: pattern, repeat: 'repeat' } as unknown as string, opacity: 1 }
-    : { color: 'rgba(46,70,224,.10)' };
+    : { color: surface().stippleFill };
 }
 
 /* ---------- 斜纹柱 decal（§6-3） ---------- */
@@ -279,6 +327,23 @@ export function heatColor(pct: number): string {
     }
   }
   return 'rgb(241,239,232)';
+}
+
+/** Heat tiles have their own painted surface, independent of the page theme.
+ * Use readable ink against that RGB surface, including colors between stops. */
+export function heatTextColor(background: string): string {
+  const match = background.match(/^rgb\((\d+),(\d+),(\d+)\)$/);
+  if (!match) return CH.tooltipFg;
+  const linear = match.slice(1).map((value) => {
+    const channel = Number(value) / 255;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  const luminance = linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+  const darkLuminance = ((17 / 255 + 0.055) / 1.055) ** 2.4;
+  const darkContrast = (luminance + 0.05) / (darkLuminance + 0.05);
+  const whiteContrast = 1.05 / (luminance + 0.05);
+  if (Math.max(darkContrast, whiteContrast) < 4.5) return '#000000';
+  return whiteContrast > darkContrast ? '#FFFFFF' : '#111111';
 }
 
 /** 强度分色阶（§6-5） */

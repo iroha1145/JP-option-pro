@@ -9,6 +9,7 @@ import { motion } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router';
 import { useNow } from '@/hooks/useNow';
 import { useColorMode } from '@/hooks/useColorMode';
+import { useAppearance } from '@/hooks/useAppearance';
 import SessionLED from '@/components/shared/SessionLED';
 import { tokyoSession } from '@/lib/tokyoSession';
 import { stocksApi, workerApi } from '@/api/modules';
@@ -177,7 +178,6 @@ export default function StockDetail() {
             {backButton}
             {watchlistToggle}
           </div>
-          <span className="eyebrow">STOCK · {code}</span>
         </div>
         <SkeletonCard className="h-24" />
         <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
@@ -200,7 +200,6 @@ export default function StockDetail() {
             {backButton}
             {watchlistToggle}
           </div>
-          <span className="eyebrow">STOCK · {code}</span>
         </div>
         <section className="card-surface">
           <EmptyState
@@ -228,7 +227,6 @@ export default function StockDetail() {
             displayCode={security.display_code}
           />
         </div>
-        <span className="eyebrow">STOCK · {security.display_code}</span>
       </div>
 
       {/* ヘッダー：代码主读 + 名称次读，对齐美站 PriceHeader 节奏；不搬 Logo / 实时伪装。 */}
@@ -299,7 +297,7 @@ export default function StockDetail() {
                 {quoteSourceLabel(live.data).text}
                 {liveQuote.as_of_epoch ? ` · ${fmtTimeJst(liveQuote.as_of_epoch)}` : ''}
               </span>
-              <span className="mt-1 block font-mono text-micro tnum text-ink-400">
+              <span className="mt-1 block tnum text-micro text-ink-400">
                 {t('官方终值')} {fmtPrice(data.quote.close)} {data.quote.trade_date ?? ''}
               </span>
             </div>
@@ -326,7 +324,7 @@ export default function StockDetail() {
               </div>
             </div>
           )}
-          <p className="pb-1.5 text-right font-mono text-micro text-ink-500 tnum">
+          <p className="pb-1.5 text-right tnum text-micro text-ink-500">
             {t('成交额')} {fmtYenCompact(data.quote.turnover_value)}
             {data.quote.volume != null ? ` · ${fmtShares(data.quote.volume)}${t('株')}` : ''}
           </p>
@@ -396,7 +394,6 @@ export default function StockDetail() {
           <KeyStats code={code} quote={data.quote} />
           {/* 雷达 */}
           <section className="card-surface p-5">
-            <p className="eyebrow">BREAKOUT RADAR</p>
             <h3 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('突破雷达')}</h3>
             {data.radar_events.length === 0 ? (
               <PanelEmpty image="/empty-radar.svg" title={t('暂无相关雷达事件')} />
@@ -417,14 +414,12 @@ export default function StockDetail() {
 
           {/* 信用交易 */}
           <section className="card-surface p-5">
-            <p className="eyebrow">MARGIN</p>
             <h3 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('信用交易')}</h3>
             <MarginPanel rows={data.margin_interest} />
           </section>
 
           {/* 技术指标 */}
           <section className="card-surface p-5">
-            <p className="eyebrow">TECHNICALS</p>
             <h3 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('技术指标')}</h3>
             <IndicatorGrid technical={technical} />
           </section>
@@ -434,14 +429,14 @@ export default function StockDetail() {
       {/* 行2: 决算时间线 + 技术结构 */}
       <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
         <section className="card-surface p-5 xl:col-span-7">
-          <p className="eyebrow">EARNINGS TIMELINE</p>
-          <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('决算时间线')}</h2>
+
+          <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('财报时间线')}</h2>
           <div className="max-h-[360px] overflow-y-auto">
             <FinancialTable summaries={data.financials.summaries} />
           </div>
         </section>
         <section className="card-surface p-5 xl:col-span-5">
-          <p className="eyebrow">CHART STRUCTURE</p>
+
           <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('K线结构分析')}</h2>
           <StructurePanel technical={technical} />
         </section>
@@ -449,7 +444,7 @@ export default function StockDetail() {
 
       {/* 机构空卖行为：报告本身在下面的「空卖残高报告」，这里是行为分析 */}
       <section className="mt-6 card-surface p-5">
-        <p className="eyebrow">SHORT BEHAVIOR</p>
+
         <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('机构空卖行为')}</h2>
         <ShortBehaviorPanel code={security.canonical_code} />
       </section>
@@ -457,12 +452,10 @@ export default function StockDetail() {
       {/* 行3: 空卖 + 发表预定 */}
       <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
         <section className="card-surface p-5">
-          <p className="eyebrow">SHORT INTEREST</p>
           <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('空卖残高报告')}</h2>
           <ShortPositionsPanel rows={data.short_positions} summary={data.short_interest} />
         </section>
         <section className="card-surface p-5">
-          <p className="eyebrow">EARNINGS SCHEDULE</p>
           <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('发表预定')}</h2>
           {data.earnings.length === 0 ? (
             <PanelEmpty title={t('暂无数据')} />
@@ -497,13 +490,13 @@ function EarningsScheduleRow({ item, todayKey }: { item: Record<string, unknown>
           isToday ? 'bg-brand-50' : 'bg-paper-2/80',
         )}
       >
-        <span className={cn('block font-mono text-body-s font-semibold tnum', isToday ? 'text-brand-700' : 'text-ink-900')}>
+        <span className={cn('block tnum text-body-s font-semibold tnum', isToday ? 'text-brand-700' : 'text-ink-900')}>
           {anchor ? anchor.day : '—'}
         </span>
         <span className="block text-micro text-ink-400">{anchor?.monthShort ?? ''}</span>
       </span>
       <span className="min-w-0 flex-1 truncate text-body-s text-ink-700">{quarter}</span>
-      <span className="shrink-0 font-mono text-caption tnum text-ink-500">
+      <span className="shrink-0 tnum text-caption text-ink-500">
         {date ? fmtDate(date) : t('未定')}
       </span>
     </li>
@@ -528,11 +521,13 @@ function IntradayPane({
   onRefresh: () => void;
 }) {
   const colorMode = useColorMode();
+  const appearance = useAppearance();
   const { onInit, prepareOption } = useChartZoom(
     `${data?.canonical_code ?? ''}|${data?.interval ?? ''}`, data?.bars.length ?? 0, 80,
   );
   const option = useMemo(() => {
     void colorMode;
+    void appearance;
     const bars = data?.bars ?? [];
     if (bars.length === 0) return null;
     const labels = bars.map((bar) => `${bar.trade_date.slice(5)} ${bar.bar_time}`);
@@ -573,7 +568,7 @@ function IntradayPane({
         },
       ],
     };
-  }, [colorMode, data]);
+  }, [appearance, colorMode, data]);
 
   if (loading && !data) return <SkeletonCard className="h-[360px]" />;
   if (data && data.available && option) {
@@ -646,7 +641,9 @@ function TickPane({
   onFetch: () => void;
   onRefresh: () => void;
 }) {
+  const appearance = useAppearance();
   const option = useMemo(() => {
+    void appearance;
     const points = data?.points ?? [];
     if (points.length === 0) return null;
     const labels = points.map((point) => point.t);
@@ -685,7 +682,7 @@ function TickPane({
         },
       ],
     };
-  }, [data]);
+  }, [appearance, data]);
 
   if (loading && !data) return <SkeletonCard className="h-[360px]" />;
   if (data && data.available && option) {
@@ -709,7 +706,7 @@ function TickPane({
             </button>
           </p>
           <div className="max-h-72 overflow-y-auto overscroll-contain rounded-md border border-line bg-paper-2">
-            <table className="w-full border-collapse font-mono text-micro tnum">
+            <table className="w-full border-collapse tnum text-micro">
               <tbody>
                 {data.tape.map((row, index) => (
                   <tr key={`${row.time}-${index}`} className="border-b border-line/60 last:border-b-0">
@@ -913,7 +910,7 @@ function StructFact({ label, value }: { label: string; value: string }) {
     <div className="rounded-md bg-paper-2 px-2 py-1">
       {/* label は msgid（呼び出し側は中文原文を渡す）—— ここで必ず訳す */}
       <dt className="text-micro text-ink-400">{t(label)}</dt>
-      <dd className="font-mono text-caption tnum text-ink-800">{value}</dd>
+      <dd className="tnum text-caption text-ink-800">{value}</dd>
     </div>
   );
 }
@@ -924,10 +921,10 @@ function FinancialTable({ summaries }: { summaries: FinancialSummaryView[] }) {
   const columns: Column<FinancialSummaryView>[] = [
     {
       key: 'date', title: t('发表预定'), width: '96px',
-      render: (row) => <span className="font-mono text-caption tnum text-ink-700">{fmtDate(row.disclosed_date)}</span>,
+      render: (row) => <span className="tnum text-caption text-ink-700">{fmtDate(row.disclosed_date)}</span>,
     },
     {
-      key: 'period', title: t('决算种别'),
+      key: 'period', title: t('财报种别'),
       render: (row) => (
         <span className="flex items-center gap-1">
           <SoftBadge>
@@ -939,22 +936,22 @@ function FinancialTable({ summaries }: { summaries: FinancialSummaryView[] }) {
     },
     {
       key: 'sales', title: t('销售额'), align: 'right',
-      render: (row) => <span className="font-mono text-caption tnum">{fmtYenCompact(row.sales ?? row.nc_sales)}</span>,
+      render: (row) => <span className="tnum text-caption">{fmtYenCompact(row.sales ?? row.nc_sales)}</span>,
     },
     {
       key: 'op', title: t('营业利益'), align: 'right',
       render: (row) => (
-        <span className="font-mono text-caption tnum">{fmtYenCompact(row.operating_profit ?? row.nc_operating_profit)}</span>
+        <span className="tnum text-caption">{fmtYenCompact(row.operating_profit ?? row.nc_operating_profit)}</span>
       ),
     },
     {
       key: 'np', title: t('纯利益'), align: 'right',
-      render: (row) => <span className="font-mono text-caption tnum">{fmtYenCompact(row.net_profit)}</span>,
+      render: (row) => <span className="tnum text-caption">{fmtYenCompact(row.net_profit)}</span>,
     },
     {
       key: 'forecast', title: `${t('会社预想')}·OP`, align: 'right',
       render: (row) => (
-        <span className="font-mono text-caption tnum text-ink-500">{fmtYenCompact(row.forecast_operating_profit)}</span>
+        <span className="tnum text-caption text-ink-500">{fmtYenCompact(row.forecast_operating_profit)}</span>
       ),
     },
   ];
@@ -1019,11 +1016,11 @@ function ShortPositionsPanel({
         <div className="rounded-md bg-paper-2 px-3 py-2">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <span className="text-micro text-ink-400">{t('报告义务中合计')}</span>
-            <span className="font-mono text-data-m text-ink-900 tnum">
+            <span className="tnum text-data-m text-ink-900">
               {summary.reporting_total != null ? `${(summary.reporting_total * 100).toFixed(2)}%` : '—'}
             </span>
             {summary.reporting_shares != null && (
-              <span className="font-mono text-caption tnum text-ink-500">
+              <span className="tnum text-caption text-ink-500">
                 {fmtShares(summary.reporting_shares)}
                 {t('株')}
               </span>
@@ -1033,7 +1030,7 @@ function ShortPositionsPanel({
             </span>
             {summary.change != null && (
               <span
-                className={`font-mono text-caption tnum ${
+                className={`tnum text-caption tnum ${
                   summary.change > 0 ? 'text-up-600' : summary.change < 0 ? 'text-down-600' : 'text-ink-400'
                 }`}
               >
@@ -1070,7 +1067,7 @@ function ShortPositionsPanel({
                 className="flex min-h-[60px] items-start gap-3 px-1 py-[14px] transition-colors duration-fast hover:bg-paper-2/70"
               >
                 <div className="flex w-11 shrink-0 flex-col items-center self-stretch pt-0.5">
-                  <span className="font-mono text-[11px] leading-[14px] text-ink-400 tnum">
+                  <span className="tnum text-[11px] leading-[14px] text-ink-400">
                     {fmtDateShort(row.calculated_date)}
                   </span>
                   <span className="mt-1.5 hidden w-[2px] flex-1 rounded-full bg-line sm:block" aria-hidden="true" />
@@ -1082,7 +1079,7 @@ function ShortPositionsPanel({
                       {t(KIND_LABEL[row.kind] ?? '')}
                     </span>
                   </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-caption tnum">
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 tnum text-caption">
                     <span className="text-ink-900">
                       {row.ratio != null ? `${(row.ratio * 100).toFixed(2)}%` : '—'}
                     </span>
@@ -1123,7 +1120,7 @@ function ShortPositionsPanel({
 function MiniStat({ label, value, hint }: { label: string; value: string; hint?: ScoreHint }) {
   return (
     <div className="rounded-md bg-paper-2 px-1.5 py-1.5 text-center">
-      <div className="truncate font-mono text-body-s tnum text-ink-900">{value}</div>
+      <div className="truncate tnum text-body-s text-ink-900">{value}</div>
       <div className="flex items-center justify-center gap-0.5 text-micro text-ink-400">
         {/* label は msgid（呼び出し側は中文原文）—— ここで訳さないと三言語とも中文のまま */}
         <PointerTooltip

@@ -8,6 +8,7 @@ import { quotesApi, radarApi, stocksApi, watchlistApi, workerApi } from '@/api/m
 import { usePolling } from '@/hooks/usePolling';
 import { useTickFlash } from '@/hooks/useTickFlash';
 import { useColorMode } from '@/hooks/useColorMode';
+import { useAppearance } from '@/hooks/useAppearance';
 import TickPrice from '@/components/shared/TickPrice';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import PriorityRing from '@/components/shared/PriorityRing';
@@ -94,7 +95,7 @@ export default function Radar() {
   /* 夜間断面に遅延気配を重ねる（再スキャンではない）。答えたい問いは
      「昨夜の候補のうち、今ピボットを超えているのはどれか」。 */
   const overlay = usePolling(() => quotesApi.overlay('radar', 200), 60_000, []);
-  const overlayRows = overlay.data?.enabled ? overlay.data.rows : {};
+  const overlayRows = useMemo(() => overlay.data?.enabled ? overlay.data.rows : {}, [overlay.data]);
   const [onlyAbovePivot, setOnlyAbovePivot] = useState(false);
   const [minScore, setMinScore] = useState(0);
   const [onlyWatch, setOnlyWatch] = useState(false);
@@ -154,15 +155,14 @@ export default function Radar() {
   return (
     <div>
       <PageHeader
-        section="04"
-        eyebrow="BREAKOUT RADAR · POST-CLOSE SCAN"
+        section="screener"
         title={t('突破雷达')}
         description={t('本页为日线数据，收盘后更新')}
         meta={
           <div className="flex items-center gap-3">
             <DataThrough date={query.data?.scan_date} />
             {query.lastUpdatedAt && (
-              <span className="font-mono text-caption text-ink-400 tnum">
+              <span className="tnum text-caption text-ink-400">
                 {t('更新')} {fmtTimeHHMMSS(query.lastUpdatedAt)}
               </span>
             )}
@@ -246,7 +246,7 @@ export default function Radar() {
             >
               <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
               {t('盘中站上枢轴')}
-              <span className="font-mono tnum">{overlay.data?.above_pivot_count ?? 0}</span>
+              <span className="tnum">{overlay.data?.above_pivot_count ?? 0}</span>
             </button>
           </PointerTooltip>
         )}
@@ -254,7 +254,7 @@ export default function Radar() {
           <Segmented
             options={[
               { value: 'all', label: t('全部') },
-              { value: 'watchlist', label: t('只看自选') },
+              { value: 'watchlist', label: t('只看关注') },
             ]}
             value={onlyWatch ? 'watchlist' : 'all'}
             onChange={(value) => setOnlyWatch(value === 'watchlist')}
@@ -263,7 +263,7 @@ export default function Radar() {
           />
           {watchFilterPending && (
             <span className="text-micro text-ink-400">
-              {watchFailed ? t('自选读取失败 · 暂显示全部') : t('自选加载中 · 暂显示全部')}
+              {watchFailed ? t('关注读取失败 · 暂显示全部') : t('关注加载中 · 暂显示全部')}
             </span>
           )}
           <Segmented<ViewMode>
@@ -280,16 +280,15 @@ export default function Radar() {
       <section className="mt-8" aria-label={t('当日信号')}>
         <div className="radar-section-heading mb-4 flex flex-wrap items-end justify-between gap-2 pb-1">
           <div>
-            <p className="eyebrow">TODAY&apos;S SIGNALS</p>
             <h2 className="mt-1 text-h2 text-ink-900">{t('当日信号')}</h2>
           </div>
           <div className="text-right">
-            <p className="font-mono text-caption text-ink-400 tnum">
+            <p className="tnum text-caption text-ink-400">
               {t('{n} 个活跃', { n: events.length })}
-              {onlyWatch && !watchFilterPending ? t(' · 只看自选') : ''}
+              {onlyWatch && !watchFilterPending ? t(' · 只看关注') : ''}
             </p>
             {query.lastUpdatedAt && (
-              <span className="font-mono text-micro text-ink-400 tnum">
+              <span className="tnum text-micro text-ink-400">
                 {t('更新')} {fmtTimeHHMMSS(query.lastUpdatedAt)}
               </span>
             )}
@@ -366,7 +365,7 @@ export default function Radar() {
           {restEvents.length > 0 && (
             <div className="radar-section-heading mb-3 mt-6 flex flex-wrap items-baseline justify-between gap-2 pb-2">
               <p className="text-body-s font-semibold text-ink-800">
-                {t('其余信号')} · <span className="font-mono tnum">{restEvents.length}</span>
+                {t('其余信号')} · <span className="tnum">{restEvents.length}</span>
               </p>
               <p className="text-micro text-ink-400">{t('点击小卡设为首要信号 · 点击代码打开个股页')}</p>
             </div>
@@ -443,7 +442,7 @@ function LeadBigCard({
         <span className="radar-chip radar-chip-neutral">
           {event.sector33_name ?? '—'} · {event.market_name ?? '—'}
         </span>
-        <span className="font-mono text-micro text-ink-400 tnum">{t('发现日')} {fmtDate(event.discovered_date)}</span>
+        <span className="tnum text-micro text-ink-400">{t('发现日')} {fmtDate(event.discovered_date)}</span>
         <span className="radar-chip radar-chip-brand ml-auto">
           <Icon name="radar" size={12} />
           {t('首要信号')}
@@ -492,7 +491,7 @@ function LeadBigCard({
           <div className="radar-value-cell px-3 py-2.5">
             <p className="text-micro text-ink-400">{live ? t('盘中价') : t('当前价')}</p>
             <p className="mt-0.5">
-              <TickPrice flash={flash} className="font-mono text-data-l text-ink-900">
+              <TickPrice flash={flash} className="tnum text-data-l text-ink-900">
                 {fmtPrice(live?.live_price ?? (event.snapshot.close as number | null))}
               </TickPrice>
             </p>
@@ -502,14 +501,14 @@ function LeadBigCard({
               <span className="radar-reference-glyph radar-reference-trigger" aria-hidden />
               {t('突破枢轴')}
             </p>
-            <p className="mt-0.5 font-mono text-data-l text-ink-900 tnum">{fmtPrice(event.pivot_price)}</p>
+            <p className="mt-0.5 tnum text-data-l text-ink-900">{fmtPrice(event.pivot_price)}</p>
           </div>
           <div className="radar-value-cell px-3 py-2.5">
             <p className="flex items-center gap-1 text-micro text-ink-400">
               <span className="radar-reference-glyph radar-reference-invalid" aria-hidden />
               {t('失效位置')}
             </p>
-            <p className="mt-0.5 font-mono text-data-l text-ink-900 tnum">{fmtPrice(invalidation)}</p>
+            <p className="mt-0.5 tnum text-data-l text-ink-900">{fmtPrice(invalidation)}</p>
           </div>
         </div>
         <div className="radar-value-cell radar-priority-cell flex flex-col items-center justify-center gap-1.5 px-3 py-1.5">
@@ -554,7 +553,7 @@ function LeadBigCard({
               <ol className="space-y-1 text-caption text-ink-600">
                 {event.transitions.slice(-5).map((transition, index) => (
                   <li key={index} className="flex items-center gap-2">
-                    <span className="font-mono tnum text-ink-400">{fmtDate(transition.date)}</span>
+                    <span className="tnum text-ink-400">{fmtDate(transition.date)}</span>
                     <span>{t(RADAR_STATE_LABELS[transition.to] ?? transition.to)}</span>
                   </li>
                 ))}
@@ -562,7 +561,7 @@ function LeadBigCard({
             </div>
           )}
           <p className="text-caption text-ink-500">
-            {t('成交额')} <span className="font-mono tnum text-ink-800">{fmtYenCompact(event.snapshot.turnover_today as number | null)}</span>
+            {t('成交额')} <span className="tnum text-ink-800">{fmtYenCompact(event.snapshot.turnover_today as number | null)}</span>
           </p>
           <Link
             to={`/stock/${event.display_code}`}
@@ -579,8 +578,10 @@ function LeadBigCard({
 
 function LeadChart({ bars, event }: { bars: StockBar[]; event: RadarEvent }) {
   const colorMode = useColorMode();
+  const appearance = useAppearance();
   const option = useMemo(() => {
     void colorMode;
+    void appearance;
     const dates = bars.map((bar) => bar.trade_date.slice(5));
     const candles = bars.map((bar) => [
       bar.adj_open ?? bar.open,
@@ -639,7 +640,7 @@ function LeadChart({ bars, event }: { bars: StockBar[]; event: RadarEvent }) {
         },
       ],
     };
-  }, [bars, colorMode, event]);
+  }, [appearance, bars, colorMode, event]);
   return <ReactECharts className="h-full w-full" option={option} ariaLabel={`${event.display_code} lead chart`} />;
 }
 
@@ -674,7 +675,7 @@ function EventCard({ event, onSelect, live, flash }: {
       >
       <div className="flex items-center gap-2">
         <CodeCell displayCode={event.display_code} nameJa={event.name_ja} />
-        <span className="ml-auto font-mono text-data-l tnum text-ink-900">
+        <span className="ml-auto tnum text-data-l text-ink-900">
           {event.alert_priority !== null ? Math.round(event.alert_priority) : '—'}
         </span>
       </div>
@@ -694,7 +695,7 @@ function EventCard({ event, onSelect, live, flash }: {
           <CardFact
             label={t('盘中价')}
             value={
-              <TickPrice flash={flash} className="font-mono text-body-s text-ink-800">
+              <TickPrice flash={flash} className="tnum text-body-s text-ink-800">
                 {fmtPrice(live.live_price)}
                 {live.pivot_distance_pct != null ? ` (${fmtPct(live.pivot_distance_pct)})` : ''}
               </TickPrice>
@@ -704,7 +705,7 @@ function EventCard({ event, onSelect, live, flash }: {
           <CardFact
             label={t('收盘')}
             value={
-              <TickPrice flash={flash} className="font-mono text-body-s text-ink-800">
+              <TickPrice flash={flash} className="tnum text-body-s text-ink-800">
                 {fmtPrice(event.snapshot.close as number | null)}
               </TickPrice>
             }
@@ -729,7 +730,7 @@ function EventCard({ event, onSelect, live, flash }: {
       </details>
       <div className="radar-card-footer mt-auto flex items-center justify-between gap-3 pt-3">
         <StrengthBar score={event.scores?.relative_strength?.score ?? event.alert_priority} width={64} />
-        <span className="font-mono text-micro text-ink-400 tnum">{fmtDate(event.discovered_date)}</span>
+        <span className="tnum text-micro text-ink-400">{fmtDate(event.discovered_date)}</span>
       </div>
       </div>
     </article>
@@ -740,7 +741,7 @@ function CardFact({ label, value }: { label: string; value: ReactNode }) {
   return (
     <span>
       <span className="block text-micro text-ink-400">{label}</span>
-      <span className="font-mono text-body-s tnum text-ink-800">{value}</span>
+      <span className="tnum text-body-s text-ink-800">{value}</span>
     </span>
   );
 }
@@ -768,12 +769,12 @@ function RadarTable({
       { key: 'state', title: t('状态'), render: (row) => <StateChip state={row.state} /> },
       {
         key: 'pivot', title: t('枢轴价'), align: 'right',
-        render: (row) => <span className="font-mono text-body-s tnum">{fmtPrice(row.pivot_price)}</span>,
+        render: (row) => <span className="tnum text-body-s">{fmtPrice(row.pivot_price)}</span>,
       },
       {
         key: 'close', title: t('收盘'), align: 'right',
         render: (row) => (
-          <TickPrice flash={flashes[row.event_id]} className="font-mono text-body-s text-ink-900">
+          <TickPrice flash={flashes[row.event_id]} className="tnum text-body-s text-ink-900">
             {fmtPrice(overlay[row.event_id]?.live_price ?? (row.snapshot.close as number | null))}
           </TickPrice>
         ),
@@ -782,7 +783,7 @@ function RadarTable({
         key: 'turnover', title: t('成交额'), align: 'right', sortable: true,
         sortValue: (row) => (row.snapshot.turnover_today as number | null) ?? -1,
         render: (row) => (
-          <span className="font-mono text-body-s tnum text-ink-600">
+          <span className="tnum text-body-s text-ink-600">
             {fmtYenCompact(row.snapshot.turnover_today as number | null)}
           </span>
         ),
@@ -796,7 +797,7 @@ function RadarTable({
         key: 'priority', title: t('优先级'), align: 'right', sortable: true,
         sortValue: (row) => row.alert_priority ?? -1,
         render: (row) => (
-          <span className="font-mono text-data-m tnum text-ink-900">
+          <span className="tnum text-data-m text-ink-900">
             {row.alert_priority !== null ? Math.round(row.alert_priority) : '—'}
           </span>
         ),

@@ -14,7 +14,7 @@ export default function CodeMark({
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-md border border-line bg-card-warm font-mono font-semibold text-brand-700',
+        'inline-flex shrink-0 items-center justify-center rounded-md border border-line bg-card-warm tnum font-semibold text-brand-700',
         className,
       )}
       style={{ width: size, height: size, fontSize: Math.max(9, Math.round(size * 0.38)) }}

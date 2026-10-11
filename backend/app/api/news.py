@@ -1,15 +1,10 @@
-"""ニュース API — 米国版カタリストデスクの情報設計に対応。
-
-/feed        情報流（カテゴリ/実体/重要度フィルタ + AI 分析状態つき）
-/hotspots    銘柄別ホットスポット
-/securities  銘柄別インパクト集計（AI 方向サマリは分析済みのみ）
-/status      データ源健全性 + AI パイプライン状態
-/econ-calendar 日本の経済指標カレンダー（官公庁公表スケジュール由来）
-"""
+"""原文ニュース・銘柄集計・フィード状態・経済カレンダー API。"""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from datetime import date
+
+from fastapi import APIRouter, HTTPException, Query
 
 from app.domain.econ_calendar import COVERAGE_NOTE_JA, econ_events_between
 from app.domain.timeutil import add_days, iso_date, today_jst
@@ -74,6 +69,13 @@ def econ_calendar(
     today = iso_date(today_jst())
     start_date = start or add_days(today, -7)
     end_date = end or add_days(today, 120)
+    try:
+        first = date.fromisoformat(start_date)
+        last = date.fromisoformat(end_date)
+        if last < first:
+            raise ValueError("reversed_range")
+    except ValueError:
+        raise HTTPException(status_code=422, detail={"code": "invalid_calendar_range"}) from None
     return {
         "coverage_note_ja": COVERAGE_NOTE_JA,
         "start_date": start_date,

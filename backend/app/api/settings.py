@@ -16,7 +16,6 @@ def get_settings_view() -> dict:
     personal = get_personal_config()
     return {
         "jquants_configured": settings.jquants_configured(),
-        "openai_configured": settings.openai_configured(),
         "access_mode": personal.access.mode,
         "radar_enabled": personal.features.radar_enabled,
         "news_mode": personal.features.news_mode,

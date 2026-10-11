@@ -31,7 +31,7 @@ export default function WatchlistToggle({
     return (
       <Link className={style} to="/login" state={{ from: location.pathname }}>
         <Icon name="plus" size={15} />
-        {t('登录后加入自选')}
+        {t('登录后加入关注')}
       </Link>
     );
   }
@@ -44,10 +44,10 @@ export default function WatchlistToggle({
     try {
       if (selected) {
         await watchlistApi.remove(canonicalCode);
-        toast.success(t('已移出自选'), displayCode);
+        toast.success(t('已移出关注'), displayCode);
       } else {
         const result = await watchlistApi.add(canonicalCode);
-        toast.success(t('加入自选'), result.created ? t('已加入') : t('已在自选中'));
+        toast.success(t('加入关注'), result.created ? t('已加入') : t('已在关注中'));
       }
       await query.refresh({ force: true });
     } catch (error) {
@@ -61,17 +61,17 @@ export default function WatchlistToggle({
       className={style}
       aria-pressed={selected}
       disabled={query.loading && !query.data}
-      title={selected ? t('移出自选') : undefined}
+      title={selected ? t('移出关注') : undefined}
       onClick={() => void toggle()}
     >
       <Icon name={selected ? 'check' : 'plus'} size={15} />
       {query.loading && !query.data
-        ? t('正在读取自选…')
+        ? t('正在读取关注…')
         : query.error
-          ? t('重试读取自选')
+          ? t('重试读取关注')
           : selected
-            ? t('已加入自选')
-            : t('加入自选')}
+            ? t('已加入关注')
+            : t('加入关注')}
     </button>
   );
 }

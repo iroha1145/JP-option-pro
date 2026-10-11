@@ -11,7 +11,7 @@ export function EarningsChipContent({ item }: { item: EarningsUpcomingItem }) {
   return (
     <>
       <span className="block text-caption font-semibold text-ink-800">{item.name_ja ?? item.display_code}</span>
-      <span className="mt-1 block font-mono text-micro text-ink-500">{item.display_code}</span>
+      <span className="mt-1 block tnum text-micro text-ink-500">{item.display_code}</span>
       <span className="mt-1 block text-micro text-ink-500">
         {[item.quarter_label, meta.label].filter(Boolean).join(' · ')}
       </span>

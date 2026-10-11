@@ -55,20 +55,19 @@ export default function KeyStats({
 
   return (
     <section className="card-surface p-5">
-      <p className="eyebrow">KEY STATS</p>
       <h3 className="mt-1.5 text-h3 text-ink-900">{t('关键数据')}</h3>
       <dl className="mt-3 divide-y divide-line">
         {rows.map(([label, value]) => (
           <div key={label} className="flex items-center justify-between py-2">
             <dt className="text-body-s text-ink-400">{label}</dt>
-            <dd className="font-mono text-body-s text-ink-800 tnum">{value}</dd>
+            <dd className="tnum text-body-s text-ink-800">{value}</dd>
           </div>
         ))}
       </dl>
       <div className="mt-3 border-t border-line pt-3">
         <div className="flex items-center justify-between text-micro text-ink-400">
           <span>{yearLike ? t('52 周区间') : t('期间区间')}</span>
-          <span className="font-mono tnum">
+          <span className="tnum">
             {hasRange ? `${fmtPrice(extremes.low)} — ${fmtPrice(extremes.high)}` : '—'}
           </span>
         </div>

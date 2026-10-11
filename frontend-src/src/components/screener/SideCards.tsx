@@ -45,7 +45,7 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
         {regime.score !== null ? (
           <span className="metric-value text-data-m text-ink-900 tnum">{regime.score}</span>
         ) : (
-          <span className="font-mono text-micro text-ink-300 tnum">{t('6 维')}</span>
+          <span className="tnum text-micro text-ink-300">{t('6 维')}</span>
         )}
       </div>
       {(regime.label || regime.spread_label) && (
@@ -78,10 +78,10 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
                   <>
                     <span className="flex items-baseline justify-between">
                       <span className="text-caption font-semibold text-ink-800">{dim.label}</span>
-                      <span className="font-mono text-micro text-ink-400">{dim.en}</span>
+                      <span className="tnum text-micro text-ink-400">{dim.en}</span>
                     </span>
                     {hint && <span className="mt-1.5 block text-micro leading-[16px] text-ink-500">{hint.body}</span>}
-                    <span className="mt-1.5 block font-mono text-caption text-brand-600 tnum">
+                    <span className="mt-1.5 block tnum text-caption text-brand-600">
                       {value !== null ? `${Math.round(value * 10) / 10} / 100` : t('暂无数据')}
                     </span>
                   </>
@@ -187,7 +187,7 @@ export function TierHistogram({
       </div>
       <div className="mt-1.5 flex gap-2.5">
         {TIERS.map((tier) => (
-          <span key={tier} className={cn('flex-1 text-center font-mono text-[10px] tnum', activeTier === tier ? 'text-brand-600' : 'text-ink-400')}>
+          <span key={tier} className={cn('flex-1 text-center tnum text-[10px] tnum', activeTier === tier ? 'text-brand-600' : 'text-ink-400')}>
             {tier}
           </span>
         ))}
@@ -282,7 +282,7 @@ export function MethodCard({
                           />
                         )}
                       </span>
-                      <span className="text-right font-mono text-caption text-ink-800 tnum">
+                      <span className="text-right tnum text-caption text-ink-800">
                         {weight !== null ? `${Math.round(weight * 100)}%` : '—'}
                       </span>
                     </div>

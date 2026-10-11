@@ -65,7 +65,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
                     />
                   )}
                 </span>
-                <span className="text-right font-mono text-caption text-ink-800 tnum">
+                <span className="text-right tnum text-caption text-ink-800">
                   {value !== null ? Math.round(value) : '—'}
                   {weight !== null && <span className="ml-1 text-micro text-ink-300">×{Math.round(weight * 100)}%</span>}
                 </span>
@@ -181,7 +181,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
               className="flex items-center gap-1.5 rounded-md border border-line bg-card px-3 py-1.5 text-caption text-ink-600 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
             >
               <Icon name={added ? 'check' : 'plus'} size={13} />
-              {added ? t('已加入自选') : t('加入自选')}
+              {added ? t('已加入关注') : t('加入关注')}
             </button>
           )}
         </div>
@@ -191,13 +191,13 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
               {t('全市场分位')}
               <InfoHint hint={STRENGTH_HINTS.percentile} size={11} className="ml-0.5" />
             </span>
-            <span className="font-mono text-ink-800 tnum">
+            <span className="tnum text-ink-800">
               {row.global_rank_percentile !== null ? `${row.global_rank_percentile.toFixed(1)}%` : '—'}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-ink-400">{t('同业种分位')}</span>
-            <span className="font-mono text-ink-800 tnum">
+            <span className="text-ink-400">{t('同行业分位')}</span>
+            <span className="tnum text-ink-800">
               {row.sector_rank_percentile !== null ? `${row.sector_rank_percentile.toFixed(1)}%` : '—'}
             </span>
           </div>
@@ -207,7 +207,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
                 <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
                 {t('盘中价')}
               </span>
-              <span className="font-mono text-ink-800 tnum">
+              <span className="tnum text-ink-800">
                 {live.live_price.toLocaleString('ja-JP')}
                 {live.live_change_pct != null && (
                   <span className={live.live_change_pct >= 0 ? 'ml-1 text-up-600' : 'ml-1 text-down-600'}>
@@ -222,17 +222,17 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
               それが順位に効いているのかが画面から読めなかった。 */}
           <div className="flex items-center justify-between">
             <span className="text-ink-400">{t('原始分')}</span>
-            <span className="font-mono text-ink-800 tnum">
+            <span className="tnum text-ink-800">
               {row.raw_ranking_score != null ? row.raw_ranking_score.toFixed(1) : '—'}
             </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-ink-400">{t('风险减分')}</span>
-            <span className="font-mono text-warn-700 tnum">{row.risk_penalty !== null ? `−${row.risk_penalty}` : '—'}</span>
+            <span className="tnum text-warn-700">{row.risk_penalty !== null ? `−${row.risk_penalty}` : '—'}</span>
           </div>
           <div className="flex items-center justify-between border-t border-line pt-2">
             <span className="text-ink-500">{t('最终优先级')}</span>
-            <span className="font-mono font-semibold text-ink-900 tnum">
+            <span className="tnum font-semibold text-ink-900">
               {(row.final_ranking_score ?? row.ranking_score) != null
                 ? (row.final_ranking_score ?? row.ranking_score)!.toFixed(1)
                 : '—'}
@@ -241,7 +241,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
         </div>
         <div className="mt-3 flex items-center justify-between border-t border-line pt-3">
           <span className="text-micro text-ink-400">{t('20日均成交额')}</span>
-          <span className="font-mono text-data-m text-ink-800 tnum">{fmtYenCompact(row.avg_turnover_20d)}</span>
+          <span className="tnum text-data-m text-ink-800">{fmtYenCompact(row.avg_turnover_20d)}</span>
         </div>
       </div>
     </div>

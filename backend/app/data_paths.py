@@ -6,8 +6,8 @@ Write-ownership contract (enforced by connection mode, not convention):
                      daily bars, indices, financial summaries, earnings
                      calendar, margin/short data, radar events, sync state.
 - ``news_db``      — worker-only writer: news items, entity links,
-                     translations (ja-JP) and impact analyses (zh-CN).
-- ``ai_jobs_db``   — dual writer: API creates jobs, worker processes them.
+                     historical translated fields retained for archival.
+- ``ai_jobs_db``   — retired history, backed up only; never processed.
 - ``worker_db``    — dual writer: task status + owner action queue.
 - ``app_db``       — API-only writer: watchlist, owner marks, runtime settings.
 - ``snapshots``    — worker publishes atomic JSON documents, API reads them

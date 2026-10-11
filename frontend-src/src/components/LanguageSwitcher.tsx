@@ -59,7 +59,7 @@ export default function LanguageSwitcher({ className }: { className?: string }) 
     );
     if (!items.length) return;
     const idx = items.indexOf(document.activeElement as HTMLButtonElement);
-    let target = -1;
+    let target: number;
     if (e.key === 'ArrowDown') target = Math.min(idx + 1, items.length - 1);
     else if (e.key === 'ArrowUp') target = Math.max(idx - 1, 0);
     else if (e.key === 'Home') target = 0;
@@ -91,7 +91,7 @@ export default function LanguageSwitcher({ className }: { className?: string }) 
         )}
       >
         <Icon name="languages" size={14} />
-        <span className="font-mono text-[11px] tnum">{currentMeta.short}</span>
+        <span className="tnum text-[11px]">{currentMeta.short}</span>
       </button>
       {mounted && (
         <div
@@ -121,7 +121,7 @@ export default function LanguageSwitcher({ className }: { className?: string }) 
                       active ? 'text-brand-600' : 'text-ink-700 hover:bg-paper-2',
                     )}
                   >
-                    <span className="w-4 shrink-0 font-mono text-[10px] text-ink-400">{l.short}</span>
+                    <span className="w-4 shrink-0 tnum text-[10px] text-ink-400">{l.short}</span>
                     <span className="flex-1">{l.native}</span>
                     {active && <Icon name="check" size={13} className="shrink-0" />}
                   </button>

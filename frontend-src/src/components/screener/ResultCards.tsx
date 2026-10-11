@@ -75,7 +75,7 @@ export default function ResultCards({
           >
             <button type="button" onClick={() => onToggle(row.canonical_code)} aria-expanded={isOpen} className="flex w-full flex-col p-4 text-left">
               <span className="flex items-center gap-2.5">
-                <span className="rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-body-s font-semibold text-brand-700">
+                <span className="rounded-md bg-brand-50 px-1.5 py-0.5 tnum text-body-s font-semibold text-brand-700">
                   {row.display_code}
                 </span>
                 <span className="min-w-0 flex-1">

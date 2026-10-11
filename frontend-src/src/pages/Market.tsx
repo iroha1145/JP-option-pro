@@ -184,7 +184,7 @@ export default function Market() {
       width: '60px',
       sortable: true,
       sortValue: (row) => row.member_count,
-      render: (row) => <span className="font-mono text-body-s tnum text-ink-500">{row.member_count}</span>,
+      render: (row) => <span className="tnum text-body-s text-ink-500">{row.member_count}</span>,
     },
     {
       key: 'r1',
@@ -223,15 +223,14 @@ export default function Market() {
   return (
     <div className="space-y-6">
       <PageHeader
-        section="05"
-        eyebrow="JAPAN MARKET · TOPIX & SECTORS"
+        section="market"
         title={t('日本市场')}
         description={t('本页为日线数据，收盘后更新')}
         meta={
           <div className="flex items-center gap-3">
             <SessionLED session={session} />
             {market.lastUpdatedAt && (
-              <span className="font-mono text-caption text-ink-400 tnum">
+              <span className="tnum text-caption text-ink-400">
                 {t('更新')} {fmtTimeHHMMSS(market.lastUpdatedAt)}
               </span>
             )}
@@ -354,7 +353,7 @@ export default function Market() {
           <section className="card-surface p-4 md:p-6">
             <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
-                <p className="eyebrow">{t('SECTOR MATRIX · 33 業種')}</p>
+
                 <h2 className="mt-0.5 inline-flex items-center text-h3 text-ink-900">
                   {t('板块透视')}
                   <InfoHint hint={MARKET_HINTS.sectorMedian} side="bottom" size={12} className="ml-1" />
@@ -367,7 +366,7 @@ export default function Market() {
                         u: liveSectors.data?.universe ?? 0,
                         date: market.data?.data_through ?? '—',
                       })
-                    : t('业种断面 · J-Quants 官方日线 {date} 收盘（盘中不更新）', {
+                    : t('行业断面 · J-Quants 官方日线 {date} 收盘（盘中不更新）', {
                         date: market.data?.data_through ?? '—',
                       })}
                 </p>
@@ -457,7 +456,7 @@ export default function Market() {
           />
         </>
       )}
-      <SourceNote className="mt-8" text={t('指数与 33 业种为官方日线，收盘后更新')} />
+      <SourceNote className="mt-8" text={t('指数与 33 行业为官方日线，收盘后更新')} />
     </div>
   );
 }
@@ -505,7 +504,7 @@ function IndexTrendPanel({
     <section className="card-surface flex flex-col overflow-hidden p-0 lg:col-span-2">
       <header className="flex items-center justify-between gap-3 px-4 pt-3">
         <div className="min-w-0">
-          <p className="eyebrow">INDEX TREND · DAILY</p>
+
           <h2 className="mt-0.5 text-h3 text-ink-900">{t('趋势快照')}</h2>
         </div>
         <span className="rounded-full bg-paper-2 px-2.5 py-0.5 text-micro text-ink-500">{t('快照')}</span>

@@ -1,8 +1,7 @@
 """Owner-editable configuration from ``config/personal.toml``.
 
 Strict models: unknown keys are rejected so a typo fails at startup instead
-of silently doing nothing. Values that changing would break paid-request
-dedup or the deployment boundary are pinned with ``Literal``.
+of silently doing nothing. Deployment boundary values are pinned with ``Literal``.
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 from app.runtime_environment import REPOSITORY_ROOT
 
@@ -47,21 +46,16 @@ class AccessConfig(StrictConfigModel):
 
 class FeatureConfig(StrictConfigModel):
     radar_enabled: bool = True
-    news_mode: Literal["off", "read", "scheduled"] = "off"
+    news_mode: Literal["off", "read"] = "off"
     # 遅延ザラ場気配（Yahoo・非公式）。表示専用でスコアには一切入らない。
     intraday_quotes: bool = True
 
-
-class AIConfig(StrictConfigModel):
-    # Pinned: the AI job dedup hash folds model+reasoning in; a config-level
-    # change would silently orphan every cached result.
-    model: Literal["gpt-5.6-terra"] = "gpt-5.6-terra"
-    reasoning: Literal["max"] = "max"
-    execution_mode: Literal["background"] = "background"
-    max_concurrency: Literal[1] = 1
-    daily_token_limit: int = Field(default=8_000_000, ge=100_000, le=50_000_000)
-    cooldown_seconds: int = Field(default=20, ge=0, le=3600)
-    max_queued: int = Field(default=200, ge=10, le=2000)
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_retired_schedule(cls, value):
+        if isinstance(value, dict) and value.get("news_mode") == "scheduled":
+            return {**value, "news_mode": "read"}
+        return value
 
 
 class SyncConfig(StrictConfigModel):
@@ -104,7 +98,14 @@ class RadarConfig(StrictConfigModel):
 class NewsConfig(StrictConfigModel):
     sync_seconds: int = Field(default=900, ge=120, le=86400)
     window_hours: int = Field(default=72, ge=24, le=336)
-    max_ai_items_per_run: int = Field(default=12, ge=1, le=50)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _ignore_retired_limit(cls, value):
+        if isinstance(value, dict):
+            return {key: item for key, item in value.items() if key != "max_ai_items_per_run"}
+        return value
+
     # RSS/Atom フィード（日本株関連のみを実体マッチで残す）
     feed_urls: tuple[str, ...] = ()
 
@@ -117,11 +118,18 @@ class StorageConfig(StrictConfigModel):
 class PersonalConfig(StrictConfigModel):
     access: AccessConfig = AccessConfig()
     features: FeatureConfig = FeatureConfig()
-    ai: AIConfig = AIConfig()
     sync: SyncConfig = SyncConfig()
     radar: RadarConfig = RadarConfig()
     news: NewsConfig = NewsConfig()
     storage: StorageConfig = StorageConfig()
+
+    @model_validator(mode="before")
+    @classmethod
+    def _ignore_retired_model_config(cls, value):
+        # Existing owner files remain usable; old paid-request settings are inert.
+        if isinstance(value, dict):
+            return {key: item for key, item in value.items() if key != "ai"}
+        return value
 
 
 def load_personal_config(path: Path | None = None) -> PersonalConfig:
@@ -143,7 +151,6 @@ def reset_personal_config_for_tests() -> None:
 
 
 __all__ = [
-    "AIConfig",
     "AccessConfig",
     "FeatureConfig",
     "NewsConfig",

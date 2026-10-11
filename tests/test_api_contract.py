@@ -337,3 +337,17 @@ def test_intraday_quotes_envelope_keeps_legacy_and_new_fields(client, monkeypatc
 
 async def _empty_quotes(codes):
     return {}, {}
+
+
+def test_retired_model_features_absent_from_settings_and_news(client):
+    assert "openai_configured" not in client.get("/api/settings").json()
+    assert "ai" not in client.get("/api/news/status").json()
+    routes = {route.path for route in client.app._inner.routes if hasattr(route, "path")}
+    assert not any("/ai" in path or "generate" in path for path in routes)
+
+
+@pytest.mark.parametrize("query", ["start=2026-02-31", "start=2026-10-12&end=2026-10-11"])
+def test_econ_calendar_invalid_range_is_client_error(client, query):
+    response = client.get(f"/api/news/econ-calendar?{query}")
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "invalid_calendar_range"

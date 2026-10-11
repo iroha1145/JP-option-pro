@@ -84,7 +84,7 @@ export default function ScanHistoryPopover({ history }: { history: ScanHistoryEn
                     key={index}
                     className="flex min-h-[44px] items-center gap-3 px-2 py-2.5 transition-colors duration-fast hover:bg-paper-2/70"
                   >
-                    <span className="font-mono text-caption text-ink-800 tnum">
+                    <span className="tnum text-caption text-ink-800">
                       {fmtJstTime(new Date(entry.at).toISOString())}
                     </span>
                     <PointerTooltip
@@ -96,7 +96,7 @@ export default function ScanHistoryPopover({ history }: { history: ScanHistoryEn
                     >
                       <span className="min-w-0 flex-1 truncate text-micro text-ink-500">{entry.summary}</span>
                     </PointerTooltip>
-                    <SoftBadge tone={entry.kind === 'refresh' ? 'warn' : 'brand'} className="shrink-0 font-mono tnum">
+                    <SoftBadge tone={entry.kind === 'refresh' ? 'warn' : 'brand'} className="shrink-0 tnum">
                       {entry.kind === 'refresh' ? t('更新读回') : t('条件筛选')} · {entry.count} {t('只')}
                     </SoftBadge>
                   </li>

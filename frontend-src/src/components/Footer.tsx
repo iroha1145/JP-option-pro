@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import SourceNote from '@/components/shared/SourceNote';
 import { t } from '@/i18n/core';
 
@@ -9,9 +10,11 @@ export default function Footer() {
           className="w-full min-[360px]:w-auto min-[360px]:min-w-0 min-[360px]:flex-1"
           text={t('本页为日线数据，收盘后更新 · 仅供研究参考，不构成投资建议')}
         />
-        <p className="max-w-full break-words font-mono text-micro text-ink-300">
-          OPTIX JAPAN · PAPER TERMINAL
-        </p>
+        <nav aria-label={t('研究工具')} className="flex flex-wrap items-center gap-x-5 gap-y-2 text-caption text-ink-500">
+          <Link to="/data-status" className="py-2 hover:text-brand-600">{t('数据状态')}</Link>
+          <Link to="/research" className="py-2 hover:text-brand-600">{t('历史验证')}</Link>
+          <span>Optix Japan</span>
+        </nav>
       </div>
     </footer>
   );

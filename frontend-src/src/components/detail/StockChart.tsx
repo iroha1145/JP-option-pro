@@ -26,6 +26,7 @@ import {
 } from '@/lib/chart';
 import { DUR_FAST, DUR_UI, EASE_PAPER } from '@/lib/motion';
 import { useColorMode } from '@/hooks/useColorMode';
+import { useAppearance } from '@/hooks/useAppearance';
 import { useAccess } from '@/hooks/useAccess';
 import { t } from '@/i18n/core';
 import { fmtPrice, fmtShares, fmtYenCompact } from '@/lib/format';
@@ -61,6 +62,7 @@ export type ChartInterval = '1d' | '60m' | '5m' | '1m' | 'tick';
 export type ChartRange = '3m' | '6m' | '1y' | '3y' | '10y';
 export type PriceMode = 'adjusted' | 'raw';
 type ChartStyle = 'candle' | 'area';
+const EMPTY_BARS: StockBar[] = [];
 
 type AnalysisBar = {
   t: string;
@@ -356,6 +358,7 @@ export default function StockChart({
   const [narrowIndicators, setNarrowIndicators] = useState(false);
   const plotRef = useRef<HTMLDivElement>(null);
   const colorMode = useColorMode();
+  const appearance = useAppearance();
   const { username, isOwner, isCustomer } = useAccess();
   const identityKey = isCustomer && username ? `account:${username}` : isOwner ? 'owner' : 'anonymous';
   const [layersIdentity, setLayersIdentity] = useState(identityKey);
@@ -369,7 +372,7 @@ export default function StockChart({
     saveLayerSettings(layersIdentity, next);
   };
   const daily = interval === '1d';
-  const rows = bars ?? [];
+  const rows = bars ?? EMPTY_BARS;
   const analysisBars = useMemo(() => toAnalysisBars(rows, priceMode), [rows, priceMode]);
   const analysisBundle = useMemo(() => mapChartAnalysis(analysis ?? null), [analysis]);
   const gatedBars = useMemo(
@@ -417,6 +420,7 @@ export default function StockChart({
     [visibleOverlays, layerSettings],
   );
   const extraMarks = useMemo(() => {
+    void appearance;
     if (!analysisOk || !analysisBars.length) return { lines: [], points: [], areas: [], polygons: [] };
     const prices = analysisBars.flatMap((bar) => [bar.h, bar.l]);
     return overlaysToMarks(visibleOverlays, {
@@ -427,7 +431,7 @@ export default function StockChart({
       yMin: Math.min(...prices),
       yMax: Math.max(...prices),
     }, autoPatternName, new Set(visibleLabels.map((item) => item.id)));
-  }, [analysisOk, analysisBars, visibleOverlays, visibleLabels]);
+  }, [analysisOk, analysisBars, visibleOverlays, visibleLabels, appearance]);
   const analysisOption = useMemo(() => {
     const showMa20 = layerSettings.enabled.includes('ma20');
     const extraMa = (analysisOk
@@ -465,6 +469,7 @@ export default function StockChart({
 
   const option = useMemo((): ChartOption | null => {
     void colorMode;
+    void appearance;
     if (!daily || rows.length === 0) return null;
     const closes = rows.map((bar) => pickPrice(bar, priceMode, 'adj_close', 'close'));
     const first = closes.find((value) => value != null);
@@ -596,10 +601,10 @@ export default function StockChart({
           const chg = bar.c - bar.o;
           const color = chg >= 0 ? CH.up600 : CH.down600;
           const row = (key: string, value: string) =>
-            `<div style="display:flex;justify-content:space-between;gap:16px"><span style="color:#6F7B9E">${escapeTooltipText(key)}</span><span>${value}</span></div>`;
+            `<div style="display:flex;justify-content:space-between;gap:16px"><span style="color:${CH.ink400}">${escapeTooltipText(key)}</span><span>${value}</span></div>`;
           return (
             `<div style="font-family:${CHART_MONO_FONT};font-size:12px;line-height:19px;min-width:150px">` +
-            `<div style="color:#6F7B9E;margin-bottom:2px">${bar.t}</div>` +
+            `<div style="color:${CH.ink400};margin-bottom:2px">${bar.t}</div>` +
             row(t('开'), fmtPrice(bar.o)) +
             row(t('高'), fmtPrice(bar.h)) +
             row(t('低'), fmtPrice(bar.l)) +
@@ -694,7 +699,7 @@ export default function StockChart({
         ...(railSeries ? [railSeries] : []),
       ],
     } as ChartOption;
-  }, [analysisBars, analysisOk, analysisOption, colorMode, daily, extraMarks, overlays, priceMode, rows, style, smartDrawingEnabled]);
+  }, [analysisBars, analysisOk, analysisOption, colorMode, appearance, daily, extraMarks, overlays, priceMode, rows, style, smartDrawingEnabled]);
 
   const chartHeight = analysisOk ? analysisOption.layout.height : 420;
 
@@ -724,7 +729,7 @@ export default function StockChart({
               }))}
               value={range}
               onChange={onRange}
-              className="[&_button]:font-mono [&_button]:text-micro"
+              className="[&_button]:tnum [&_button]:text-micro"
             />
           )}
         </span>
@@ -761,7 +766,7 @@ export default function StockChart({
             onClick={() => setSmartDrawingEnabled((value) => !value)}
             className={cn(toggleButtonCls(smartDrawingEnabled), 'disabled:cursor-not-allowed disabled:opacity-50')}
           >
-            {t('智能画线')}
+            {t('自动画线')}
           </button>
           <button
             type="button"
