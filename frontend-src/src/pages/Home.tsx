@@ -6,6 +6,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { marketApi, radarApi, earningsApi, watchlistApi } from '@/api/modules';
 import type { EarningsRecentItem, IndexSummary, RadarEvent, WatchlistItem } from '@/api/types';
 import { ApiError } from '@/api/client';
+import { invalidateQueryPaths } from '@/api/queryRegistry';
 import { useAccess } from '@/hooks/useAccess';
 import { usePolling } from '@/hooks/usePolling';
 import { useNow } from '@/hooks/useNow';
@@ -110,14 +111,26 @@ function SignalListSkeleton({ rows }: { rows: number }) {
 }
 
 export default function Home() {
-  const { canManageWatchlist } = useAccess();
+  const { canManageWatchlist, principalKey } = useAccess();
   const market = usePolling(() => marketApi.overview(), 120_000);
   const radar = usePolling(() => radarApi.current(), 120_000);
   const earnings = usePolling(() => earningsApi.recent(7), 300_000);
   const watchlist = usePolling(
     () => canManageWatchlist ? watchlistApi.list() : Promise.resolve<Awaited<ReturnType<typeof watchlistApi.list>>>({ items: [] }),
-    120_000, [canManageWatchlist],
+    120_000, [canManageWatchlist], { identity: principalKey },
   );
+  const refreshMarket = () => {
+    invalidateQueryPaths(['/market/overview'], { reload: true });
+    market.refresh({ force: true });
+  };
+  const refreshRadar = () => {
+    invalidateQueryPaths(['/radar/current'], { reload: true });
+    radar.refresh({ force: true });
+  };
+  const refreshEarnings = () => {
+    invalidateQueryPaths(['/earnings/recent'], { reload: true });
+    earnings.refresh({ force: true });
+  };
   const now = useNow(30_000);
   const session = tokyoSession(now);
   const todayKey = jstToday();
@@ -180,13 +193,13 @@ export default function Home() {
                 image="/empty-chart.svg"
                 title={market.error.code === 503 ? t('数据暂不可用') : t('加载失败')}
                 description={market.error.message}
-                action={<RetryButton onClick={() => market.refresh()} refreshing={market.refreshing} />}
+                action={<RetryButton onClick={refreshMarket} refreshing={market.refreshing} />}
               />
             </div>
           ) : (
             <>
               {market.error && (
-                <StaleStrip onRetry={() => market.refresh()} refreshing={market.refreshing} className="mb-3" />
+                <StaleStrip onRetry={refreshMarket} refreshing={market.refreshing} className="mb-3" />
               )}
               {indices.length === 0 && <div className="card-surface"><EmptyState image="/empty-chart.svg" title={t('暂无数据')} /></div>}
               <div className="index-summary-grid grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
@@ -210,7 +223,7 @@ export default function Home() {
             loading={market.loading && !market.data}
             error={market.error}
             refreshing={market.refreshing}
-            onRetry={() => market.refresh()}
+            onRetry={refreshMarket}
             isEmpty={!market.data}
             emptyTitle={t('暂无数据')}
             emptyImage="/empty-chart.svg"
@@ -253,7 +266,7 @@ export default function Home() {
             loading={radar.loading && !radar.data}
             error={radar.error}
             refreshing={radar.refreshing}
-            onRetry={() => radar.refresh()}
+            onRetry={refreshRadar}
             isEmpty={events.length === 0}
             emptyTitle={radar.data?.scan_date ? t('暂无突破信号') : t('等待扫描结果')}
             emptyDescription={radar.data?.note ? t(radar.data.note) : t('日线扫描完成后更新信号。')}
@@ -276,7 +289,7 @@ export default function Home() {
             loading={earnings.loading && !earnings.data}
             error={earnings.error}
             refreshing={earnings.refreshing}
-            onRetry={() => earnings.refresh()}
+            onRetry={refreshEarnings}
             isEmpty={(earnings.data?.items.length ?? 0) === 0}
             emptyTitle={t('暂无数据')}
             emptyImage="/empty-chart.svg"

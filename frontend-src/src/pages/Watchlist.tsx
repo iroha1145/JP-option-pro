@@ -105,14 +105,14 @@ function sortWatchlist(items: WatchlistItem[], sort: SortState | null): Watchlis
 
 export default function Watchlist() {
   const navigate = useNavigate();
-  const { canManageWatchlist, accountUsername, isOwner } = useAccess();
+  const { canManageWatchlist, accountUsername, principalKey } = useAccess();
   const toast = useToast();
   const now = useNow(30_000);
   const session = tokyoSession(now);
   const [searchParams, setSearchParams] = useSearchParams();
   const query = usePolling(
     () => canManageWatchlist ? watchlistApi.list() : Promise.resolve<Awaited<ReturnType<typeof watchlistApi.list>>>({ items: [] }),
-    120_000, [canManageWatchlist],
+    120_000, [canManageWatchlist], { identity: principalKey },
   );
   const refreshWatchlist = query.refresh;
   const [view, setView] = useState<'cards' | 'table'>('cards');
@@ -189,6 +189,8 @@ export default function Watchlist() {
     try {
       await watchlistApi.update(row.canonical_code, { marked_important: !row.marked_important });
       query.refresh({ force: true });
+    } catch (error) {
+      toast.error(t('请求失败'), error instanceof ApiError ? error.message : String(error));
     } finally {
       setBusy(null);
     }
@@ -424,6 +426,7 @@ export default function Watchlist() {
           />
           {canManageWatchlist && (
             <AddStockForm
+              key={principalKey}
               onAdded={() => query.refresh({ force: true })}
               onError={(message) => toast.error(t('添加失败'), message)}
             />
@@ -447,7 +450,7 @@ export default function Watchlist() {
           <p className="text-right text-caption text-ink-400">
             <span className="tnum">{items.length}</span> {t('只标的')}
             {maxItems !== null && <span className="ml-1 text-ink-300">{t('/ 上限')} {maxItems}</span>}
-            {isOwner && <span className="ml-1 text-ink-300">· {t('所有者清单')}</span>}
+            {query.data?.principal === 'owner' && <span className="ml-1 text-ink-300">· {t('所有者清单')}</span>}
           </p>
         </div>
       </div>
@@ -557,29 +560,32 @@ function AddStockForm({ onAdded, onError }: { onAdded: () => void; onError: (mes
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
-  const seqRef = useRef(0);
 
   useEffect(() => {
     const keyword = input.trim();
+    setSuggestions([]);
+    setOpen(false);
     if (keyword.length < 2) {
-      setSuggestions([]);
       return;
     }
-    const seq = ++seqRef.current;
+    let active = true;
     const timer = window.setTimeout(() => {
       stocksApi
         .search(keyword)
         .then((data) => {
-          if (seqRef.current === seq) {
+          if (active) {
             setSuggestions(data.results.slice(0, 6));
             setOpen(true);
           }
         })
         .catch(() => {
-          if (seqRef.current === seq) setSuggestions([]);
+          if (active) setSuggestions([]);
         });
     }, 220);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      active = false;
+    };
   }, [input]);
 
   useEffect(() => {

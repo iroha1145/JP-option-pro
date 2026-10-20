@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { dataStatusApi, workerApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
+import { invalidateQueryPaths } from '@/api/queryRegistry';
 import { remoteState } from '@/hooks/remoteState';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
@@ -37,6 +38,10 @@ export default function DataStatus() {
   const { isOwner, canRefreshPublicData } = useAccess();
   const toast = useToast();
   const state = remoteState(query);
+  const refreshStatus = () => {
+    invalidateQueryPaths(['/data-status'], { reload: true });
+    query.refresh({ force: true });
+  };
   const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   const columns: Column<DatasetStatus>[] = [
@@ -118,7 +123,7 @@ export default function DataStatus() {
               </span>
             )}
             <ForceRefreshButton
-              onClick={() => query.refresh({ force: true })}
+              onClick={refreshStatus}
               spinning={query.refreshing}
               label={t('刷新状态')}
               title={t('刷新状态')}
@@ -134,7 +139,7 @@ export default function DataStatus() {
             image="/empty-chart.svg"
             title={t('加载失败')}
             description={String(query.error?.message ?? '')}
-            action={<EmptyRetryButton onClick={() => query.refresh({ force: true })} refreshing={query.refreshing} />}
+            action={<EmptyRetryButton onClick={refreshStatus} refreshing={query.refreshing} />}
           />
         </section>
       ) : (
@@ -156,7 +161,7 @@ export default function DataStatus() {
           {query.data ? (
         <>
           {state === 'stale' && (
-            <StaleStrip onRetry={() => query.refresh()} refreshing={query.refreshing} />
+            <StaleStrip onRetry={refreshStatus} refreshing={query.refreshing} />
           )}
           <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <StatCard
@@ -203,7 +208,7 @@ export default function DataStatus() {
                     try {
                       const result = await workerApi.trigger(action.type);
                       toast.success(t(action.label), `${t('已提交')} #${result.action_id ?? '?'}`);
-                      query.refresh({ force: true });
+                      refreshStatus();
                     } catch (error) {
                       toast.error(t(action.label), String((error as Error).message ?? error));
                     } finally {

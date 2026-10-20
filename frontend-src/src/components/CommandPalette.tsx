@@ -396,9 +396,9 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
                   setActive(0);
                   inputRef.current?.focus();
                 }}
-                className="anim-fade-in flex size-6 shrink-0 items-center justify-center rounded-md text-ink-400 transition-colors duration-fast hover:bg-line/70 hover:text-ink-800"
+                className="icon-motion-trigger anim-fade-in flex size-6 shrink-0 items-center justify-center rounded-md text-ink-400 transition-colors duration-fast hover:bg-line/70 hover:text-ink-800"
               >
-                <Icon name="x" size={12} />
+                <Icon motion name="x" size={12} />
               </button>
             ) : (
               <Kbd>ESC</Kbd>
@@ -459,9 +459,9 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
                     onClick={e.action}
                     onMouseEnter={() => setActive(e.idx)}
                     onFocus={() => setActive(e.idx)}
-                    className="relative z-10 flex w-full items-center gap-2.5 rounded-md px-4 py-2 text-left transition-colors duration-fast"
+                    className="icon-motion-trigger relative z-10 flex w-full items-center gap-2.5 rounded-md px-4 py-2 text-left transition-colors duration-fast"
                   >
-                    {e.ticker ? <CodeMark code={e.ticker} size={24} /> : <Icon name={e.icon} size={15} className={cn('shrink-0', e.idx === clampedActive ? 'text-brand-600' : 'text-ink-400')} />}
+                    {e.ticker ? <CodeMark code={e.ticker} size={24} /> : <Icon motion motionActive={e.idx === clampedActive} name={e.icon} size={15} className={cn('shrink-0', e.idx === clampedActive ? 'text-brand-600' : 'text-ink-400')} />}
                     {e.no && <span className="font-mono text-micro text-ink-400 tnum">{e.no}</span>}
                     <span
                       className={cn(

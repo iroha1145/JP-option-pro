@@ -29,13 +29,13 @@ export default function ForceRefreshButton({
       title={title}
       data-testid={testId}
       className={cn(
-        'flex h-9 items-center gap-2 rounded-md border px-3 text-caption shadow-btn transition-colors duration-fast',
+        'icon-motion-trigger flex h-9 items-center gap-2 rounded-md border px-3 text-caption shadow-btn transition-colors duration-fast',
         blocked
           ? 'cursor-not-allowed border-line bg-card-warm text-ink-300'
           : 'border-line bg-card text-ink-600 hover:border-brand-400 hover:text-brand-600',
       )}
     >
-      <Icon name="refresh" size={15} className={spinning ? 'animate-spin-once' : ''} />
+      <Icon motion name="refresh" size={15} className={spinning ? 'animate-spin-once' : ''} />
       {spinning ? (busyLabel ?? t('刷新中')) : (label ?? t('强制刷新'))}
     </button>
   );

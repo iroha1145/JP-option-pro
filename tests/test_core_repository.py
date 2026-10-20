@@ -1,5 +1,9 @@
 """jp-core.db の冪等性・カレンダー・チェックポイント検証。"""
 
+import sqlite3
+
+import pytest
+
 from app.repositories.core import CoreRepository
 
 
@@ -7,6 +11,34 @@ def _repo(tmp_path) -> CoreRepository:
     repo = CoreRepository(tmp_path / "jp-core.db")
     repo.initialize()
     return repo
+
+
+def test_read_only_repository_handles_uri_characters_in_path(tmp_path):
+    db_path = tmp_path / "日本 data?#%" / "jp-core.db"
+    writer = CoreRepository(db_path)
+    writer.initialize()
+    writer.replace_security_master(
+        [{"canonical_code": "72030", "name_ja": "トヨタ自動車"}],
+        as_of_date="2026-07-31",
+    )
+
+    reader = CoreRepository(db_path, read_only=True)
+    assert reader.get_security("72030")["name_ja"] == "トヨタ自動車"
+    assert list(tmp_path.iterdir()) == [db_path.parent]
+    with reader.read() as connection:
+        with pytest.raises(sqlite3.OperationalError, match="readonly"):
+            connection.execute("DELETE FROM securities")
+
+
+def test_strength_metadata_distinguishes_empty_from_broken_schema(tmp_path):
+    repo = _repo(tmp_path)
+    assert repo.strength_meta() is None
+
+    with repo.write() as connection:
+        connection.execute("DROP TABLE strength_meta")
+
+    with pytest.raises(sqlite3.OperationalError, match="no such table: strength_meta"):
+        repo.strength_meta()
 
 
 def test_daily_bar_upsert_is_idempotent(tmp_path):

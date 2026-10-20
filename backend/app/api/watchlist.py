@@ -25,14 +25,16 @@ from app.domain.symbols import display_code, normalize_input_code
 router = APIRouter(prefix="/api/watchlist", tags=["watchlist"])
 
 
-def _principal(request: Request) -> tuple[str, str | None]:
-    """(kind, user_id): kind は 'account' か 'owner'。匿名は 401。"""
+def _principal(request: Request, *, allow_anonymous: bool = False) -> tuple[str, str | None]:
+    """匿名閲覧を許可した呼び出しでは自選を持たない主体を返す。"""
 
     account = current_account(request)
     if account is not None:
         return "account", account.user_id
     if request_is_owner_session(request):
         return "owner", None
+    if allow_anonymous:
+        return "anonymous", None
     raise HTTPException(
         status_code=401,
         detail={"code": "account_login_required", "message": "请先登录"},
@@ -40,6 +42,8 @@ def _principal(request: Request) -> tuple[str, str | None]:
 
 
 def _entries(kind: str, user_id: str | None) -> list[dict]:
+    if kind == "anonymous":
+        return []
     store = app_store()
     if kind == "account" and user_id:
         return store.account_watchlist(user_id)

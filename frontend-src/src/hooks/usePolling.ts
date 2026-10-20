@@ -17,12 +17,6 @@ export interface PollingState<T> {
 }
 
 export interface PollingOptions<T> {
-  /**
-   * 冷启动恢复:首个网络响应到达前,用上一份持久化的真实数据先行填充。
-   * loading 保持 true(界面据此显示"确认中"而非把旧数据冒充刚更新);
-   * fetcher 一旦兑现,以网络结果为准。resolve null 表示没有可恢复的数据。
-   */
-  restore?: () => Promise<T | null>;
   /** When this identity changes, drop previous data so another security cannot reuse it. */
   identity?: string;
   /** Reject a response that does not belong to the current identity. */
@@ -47,8 +41,6 @@ export function usePolling<T>(
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
-  const restoreRef = useRef(options?.restore);
-  restoreRef.current = options?.restore;
   const belongsToRef = useRef(options?.belongsTo);
   belongsToRef.current = options?.belongsTo;
   const identity = options?.identity;
@@ -56,8 +48,6 @@ export function usePolling<T>(
   const generationRef = useRef(0);
   const activeGenerationsRef = useRef(new Set<number>());
   const inFlightGenerationsRef = useRef(new Set<number>());
-  const settledGenerationsRef = useRef(new Set<number>());
-  const restoreAttemptedRef = useRef(false);
 
   const tick = useCallback(async (first = false, generation = generationRef.current) => {
     if (inFlightGenerationsRef.current.has(generation)) return;
@@ -69,13 +59,11 @@ export function usePolling<T>(
       if (!activeGenerationsRef.current.has(generation) || generation !== generationRef.current) return;
       const belongsTo = belongsToRef.current;
       if (belongsTo && result != null && !belongsTo(result)) return;
-      settledGenerationsRef.current.add(generation);
       setData(result);
       setError(null);
       setLastUpdatedAt(Date.now());
     } catch (e) {
       if (!activeGenerationsRef.current.has(generation) || generation !== generationRef.current) return;
-      settledGenerationsRef.current.add(generation);
       setError(e instanceof ApiError ? e : new ApiError(500, e instanceof Error ? e.message : t('未知错误')));
     } finally {
       inFlightGenerationsRef.current.delete(generation);
@@ -113,17 +101,6 @@ export function usePolling<T>(
     const activeGenerations = activeGenerationsRef.current;
     activeGenerations.add(generation);
     let timer: ReturnType<typeof setInterval> | null = null;
-    const restore = restoreRef.current;
-    if (restore && !restoreAttemptedRef.current) {
-      // 只在首个世代恢复一次;网络结果先到时恢复值直接丢弃。
-      restoreAttemptedRef.current = true;
-      void restore().then((restored) => {
-        if (restored === null || restored === undefined) return;
-        if (generation !== generationRef.current) return;
-        if (settledGenerationsRef.current.has(generation)) return;
-        setData((current) => (current === null ? restored : current));
-      }).catch(() => undefined);
-    }
     void tick(true, generation);
     if (intervalMs && intervalMs > 0) {
       // Bind to the live generation (tick's default), not the captured one: a

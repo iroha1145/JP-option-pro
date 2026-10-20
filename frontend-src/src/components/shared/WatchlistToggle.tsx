@@ -28,12 +28,12 @@ export default function WatchlistToggle({
       (item) => item.canonical_code === canonicalCode || item.display_code === displayCode,
     ) ?? false;
   const style =
-    'inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-line-strong bg-card px-3 text-caption font-medium text-ink-600 shadow-btn hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-50';
+    'icon-motion-trigger inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-line-strong bg-card px-3 text-caption font-medium text-ink-600 shadow-btn hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-50';
 
   if (!canManageWatchlist || anonymous) {
     return (
       <Link className={style} to="/login" state={{ from: location.pathname }}>
-        <Icon name="plus" size={15} />
+        <Icon motion name="plus" size={15} />
         {t('登录后加入关注')}
       </Link>
     );
@@ -67,7 +67,7 @@ export default function WatchlistToggle({
       title={selected ? t('移出关注') : undefined}
       onClick={() => void toggle()}
     >
-      <Icon name={selected ? 'check' : 'plus'} size={15} />
+      <Icon motion name={selected ? 'check' : 'plus'} size={15} />
       {query.loading && !query.data
         ? t('正在读取关注…')
         : query.error

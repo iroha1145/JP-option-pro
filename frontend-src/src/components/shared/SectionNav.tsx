@@ -1,5 +1,5 @@
 /**
- * 二级页面切换：选股（条件选股、突破雷达）与市场（美股概况、行业表现、CTA 趋势资金）。
+ * 二级页面切换：选股（条件选股、突破雷达）与市场（日股概况、行业表现、做空监控）。
  * 语义是页面导航——nav + 链接 + aria-current，不是 tablist。
  * 2026-10-09 Arc 改版：从标题上方的分段控件改成标题下方的下划线标签（Arc page header 的标签样式），
  * 当前页近黑字加 2px 下划线，其余中灰；窄屏放不下时横向滚动并把当前页滚进视野。
@@ -18,7 +18,7 @@ const SECTION_LABEL: Record<NavSection, string> = {
 export default function SectionNav({ section, className }: { section: NavSection; className?: string }) {
   const { pathname } = useLocation();
   const viewportRef = useRef<HTMLDivElement>(null);
-  /* 窄屏（尤其英日文）三项放不下时可横向滚动：把当前页滚进视野，别让「CTA trend」停在右边看不见 */
+  /* 窄屏（尤其英日文）三项放不下时可横向滚动：把当前页滚进视野，让当前页始终能看见 */
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
     const current = viewport?.querySelector<HTMLElement>('[aria-current="page"]');

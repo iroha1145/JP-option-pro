@@ -3,6 +3,8 @@ import { BrowserRouter } from 'react-router';
 import './styles/transitions-root.css';
 import './index.css';
 import './styles/transitions-catalog.css';
+import './styles/icon-motion.css';
+import './styles/theme-reveal.css';
 import { applyColorMode } from './lib/colorPreference.ts';
 import App from './App.tsx';
 import { applyAppearance } from './lib/themePreference.ts';

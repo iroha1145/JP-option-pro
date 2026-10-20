@@ -305,7 +305,7 @@ export function hatchDecal(color = CH.brand600) {
 
 /* ---------- 涨跌热力色阶（§1.7 连续映射） ----------
    色阶两端是「涨/跌」不是固定绿/红。基表按西方习惯（绿涨红跌）；
-   亚洲习惯下翻转符号，与 ColorModeSwitcher / CH.up600 共用同一快照。 */
+   亚洲习惯下翻转符号，与显示设置 / CH.up600 共用同一快照。 */
 const HEAT_STOPS: { pct: number; rgb: [number, number, number] }[] = [
   { pct: -3, rgb: [214, 53, 59] },
   { pct: -1.5, rgb: [240, 131, 127] },

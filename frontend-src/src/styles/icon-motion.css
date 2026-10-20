@@ -1,0 +1,665 @@
+/* Opt-in local gestures inspired by lucide-animated.com + Feel spring curves:
+   never transform the root SVG or interfere with loading/rotation classes. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-icon-motion] > [data-icon-part] {
+    transform-box: view-box;
+    transform-origin: 12px 12px;
+    animation-duration: var(--icon-gesture-dur, 900ms);
+    animation-timing-function: var(--ease-feel-icon, var(--ease-in-out, ease-in-out));
+    animation-iteration-count: 1;
+    animation-fill-mode: none;
+    animation-play-state: paused;
+  }
+
+  /* Native interaction listeners replay these paused animations. Release and
+     blur do not remove the animation, so a short touch still completes. */
+  [data-icon-motion]:not([aria-disabled="true"]):not(:where(:disabled, [disabled], [aria-disabled="true"]) *) > [data-icon-part] {
+    animation-name: var(--icon-part-motion, none);
+  }
+
+  /* ── Core 14 Navigation & Chrome Icons ─────────────────────────── */
+  [data-icon-motion="search"] > [data-icon-part] {
+    --icon-part-motion: icon-search;
+  }
+  [data-icon-motion="sliders"] > [data-icon-part="0"],
+  [data-icon-motion="sliders"] > [data-icon-part="2"],
+  [data-icon-motion="menu"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-slide-right;
+  }
+  [data-icon-motion="sliders"] > [data-icon-part="1"],
+  [data-icon-motion="menu"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-slide-left;
+  }
+  [data-icon-motion="star-line"] > [data-icon-part] {
+    --icon-part-motion: icon-star;
+    animation-duration: var(--icon-gesture-emphasis-dur, 1000ms);
+  }
+  [data-icon-motion="radar"] > [data-icon-part="0"],
+  [data-icon-motion="radar"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-radar-dish;
+    transform-origin: 12.2px 10.6px;
+  }
+  [data-icon-motion="radar"] > [data-icon-part="2"] {
+    --icon-part-motion: icon-signal;
+    transform-origin: 17.5px 5.3px;
+  }
+  /* Fixed candle height and position: no fabricated market movement. */
+  [data-icon-motion="candle"] > [data-icon-part="1"],
+  [data-icon-motion="candle"] > [data-icon-part="3"] {
+    --icon-part-motion: icon-ink;
+  }
+  [data-icon-motion="candle"] > [data-icon-part="3"] {
+    animation-delay: var(--icon-gesture-stagger, 100ms);
+  }
+  [data-icon-motion="layers"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-layer-up;
+  }
+  [data-icon-motion="layers"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-layer-mid;
+  }
+  [data-icon-motion="layers"] > [data-icon-part="2"] {
+    --icon-part-motion: icon-layer-down;
+  }
+  [data-icon-motion="calendar-spark"] > [data-icon-part="2"] {
+    --icon-part-motion: icon-spark;
+    transform-origin: 12px 15px;
+  }
+  [data-icon-motion="bolt"] > [data-icon-part] {
+    --icon-part-motion: icon-bolt;
+    animation-duration: var(--icon-gesture-quick-dur, 800ms);
+  }
+  [data-icon-motion="wallet-gauge"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-needle;
+    transform-origin: 12px 15.6px;
+  }
+  [data-icon-motion="filter-funnel"] > [data-icon-part] {
+    --icon-part-motion: icon-filter;
+  }
+  [data-icon-motion="refresh"] > [data-icon-part] {
+    --icon-part-motion: icon-refresh, icon-refresh-fit;
+    animation-duration: var(--icon-gesture-emphasis-dur, 1000ms);
+    /* One continuous turn. Separate scale keeps the arrow tip inside its box
+       without adding intermediate stops to the rotation. */
+    animation-timing-function: cubic-bezier(.4, 0, .2, 1), linear;
+  }
+  [data-icon-motion="sun-bmo"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-sun;
+    transform-origin: 12px 14.4px;
+  }
+  [data-icon-motion="sun-bmo"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-ink;
+  }
+  [data-icon-motion="moon-amc"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-moon;
+  }
+  [data-icon-motion="moon-amc"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-spark;
+    transform-origin: 17.6px 5.4px;
+  }
+  [data-icon-motion="menu"] > [data-icon-part="2"] {
+    --icon-part-motion: icon-menu-line;
+    transform-origin: 4px 16.8px;
+  }
+
+  /* ── Expanded Lucide-Animated Vocabulary (38 Additional Icons) ─── */
+  [data-icon-motion="bell"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-bell-dome;
+    transform-origin: 12px 4.5px;
+  }
+  [data-icon-motion="bell"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-bell-clapper;
+    transform-origin: 12px 19.4px;
+  }
+  [data-icon-motion="shield"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-shield-body;
+  }
+  [data-icon-motion="shield"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-check-pop;
+    transform-origin: 12px 12px;
+  }
+  [data-icon-motion="target"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-target-outer;
+  }
+  [data-icon-motion="target"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-target-inner;
+  }
+  [data-icon-motion="target"] > [data-icon-part="2"] {
+    --icon-part-motion: icon-signal;
+  }
+  [data-icon-motion="flag"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-flag-wave;
+    transform-origin: 5.4px 9px;
+  }
+  [data-icon-motion="x"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-x-a;
+  }
+  [data-icon-motion="x"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-x-b;
+    animation-delay: 65ms;
+  }
+  [data-icon-motion="plus"] > [data-icon-part] {
+    --icon-part-motion: icon-plus-spin;
+  }
+  [data-icon-motion="check"] > [data-icon-part] {
+    --icon-part-motion: icon-check-pop;
+  }
+  [data-icon-motion="arrow-up-right"] > [data-icon-part] {
+    --icon-part-motion: icon-arrow-up-right;
+  }
+  [data-icon-motion="arrow-down-right"] > [data-icon-part] {
+    --icon-part-motion: icon-arrow-down-right;
+  }
+  [data-icon-motion="external"] > [data-icon-part="0"],
+  [data-icon-motion="external"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-external-launch;
+  }
+  [data-icon-motion="chevron-down"] > [data-icon-part] {
+    --icon-part-motion: icon-chevron-down;
+  }
+  [data-icon-motion="chevron-right"] > [data-icon-part] {
+    --icon-part-motion: icon-chevron-right;
+  }
+  [data-icon-motion="dots-grid"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-dots-wave;
+  }
+  [data-icon-motion="dots-grid"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-dots-wave;
+    animation-delay: 55ms;
+  }
+  [data-icon-motion="dots-grid"] > [data-icon-part="2"] {
+    --icon-part-motion: icon-dots-wave;
+    animation-delay: 110ms;
+  }
+  [data-icon-motion="flame-line"] > [data-icon-part] {
+    --icon-part-motion: icon-flame;
+    transform-origin: 12px 20px;
+  }
+  [data-icon-motion="spark-ai"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-spark-ai-left;
+  }
+  [data-icon-motion="spark-ai"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-spark-ai-right;
+  }
+  [data-icon-motion="spark-ai"] > [data-icon-part="2"] {
+    --icon-part-motion: icon-signal;
+  }
+  [data-icon-motion="clock-ny"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-clock-hands;
+    transform-origin: 12px 12.2px;
+  }
+  [data-icon-motion="clock-ny"] > [data-icon-part="2"] {
+    --icon-part-motion: icon-signal;
+    transform-origin: 18.6px 5.4px;
+  }
+  [data-icon-motion="command"] > [data-icon-part] {
+    --icon-part-motion: icon-command;
+  }
+  [data-icon-motion="display"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-display-screen;
+    transform-origin: 12px 10.6px;
+  }
+  [data-icon-motion="doc-quote"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-doc-quote;
+    transform-origin: 12px 11.5px;
+  }
+  [data-icon-motion="logout"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-logout-arrow;
+  }
+  [data-icon-motion="arrow-up"] > [data-icon-part] {
+    --icon-part-motion: icon-arrow-up;
+  }
+  [data-icon-motion="arrow-down"] > [data-icon-part] {
+    --icon-part-motion: icon-arrow-down;
+  }
+  [data-icon-motion="minus"] > [data-icon-part] {
+    --icon-part-motion: icon-minus;
+  }
+  [data-icon-motion="user"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-user-head;
+    transform-origin: 12px 8.4px;
+  }
+  [data-icon-motion="user"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-user-body;
+    transform-origin: 12px 17px;
+  }
+  [data-icon-motion="languages"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-globe-meridian;
+  }
+  [data-icon-motion="languages"] > [data-icon-part="2"] {
+    --icon-part-motion: icon-globe-equator;
+  }
+  [data-icon-motion="trend-line"] > [data-icon-part] {
+    --icon-part-motion: icon-trend-up;
+  }
+  [data-icon-motion="ray-right"] > [data-icon-part="0"],
+  [data-icon-motion="ray-right"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-ray-launch;
+  }
+  [data-icon-motion="ray-right"] > [data-icon-part="2"] {
+    --icon-part-motion: icon-signal;
+    transform-origin: 12.2px 9.4px;
+  }
+  [data-icon-motion="channel"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-channel-top;
+  }
+  [data-icon-motion="channel"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-channel-bottom;
+  }
+  [data-icon-motion="rect"] > [data-icon-part] {
+    --icon-part-motion: icon-rect-pop;
+  }
+  [data-icon-motion="fib"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-fib-line;
+  }
+  [data-icon-motion="fib"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-fib-line;
+    animation-delay: 45ms;
+  }
+  [data-icon-motion="fib"] > [data-icon-part="2"] {
+    --icon-part-motion: icon-fib-line;
+    animation-delay: 90ms;
+  }
+  [data-icon-motion="fib"] > [data-icon-part="3"] {
+    --icon-part-motion: icon-fib-line;
+    animation-delay: 135ms;
+  }
+  [data-icon-motion="text-note"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-text-lines;
+  }
+  [data-icon-motion="lock"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-lock-body;
+    transform-origin: 12px 14.6px;
+  }
+  [data-icon-motion="lock"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-lock-shackle;
+    transform-origin: 12px 10.4px;
+  }
+  [data-icon-motion="unlock"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-lock-body;
+    transform-origin: 12px 14.6px;
+  }
+  [data-icon-motion="unlock"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-unlock-shackle;
+    transform-origin: 8.4px 10.4px;
+  }
+  [data-icon-motion="eye"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-eye-blink;
+  }
+  [data-icon-motion="eye"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-eye-pupil;
+  }
+  [data-icon-motion="eye-off"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-eye-slash;
+  }
+  [data-icon-motion="eye-off"] > [data-icon-part="1"],
+  [data-icon-motion="eye-off"] > [data-icon-part="2"] {
+    --icon-part-motion: icon-eye-blink;
+  }
+  [data-icon-motion="undo"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-undo-arrow;
+    transform-origin: 6.4px 11px;
+  }
+  [data-icon-motion="undo"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-undo-arc;
+  }
+  [data-icon-motion="redo"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-redo-arrow;
+    transform-origin: 17.6px 11px;
+  }
+  [data-icon-motion="redo"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-redo-arc;
+  }
+  [data-icon-motion="expand"] > [data-icon-part="0"],
+  [data-icon-motion="compress"] > [data-icon-part="3"] {
+    --icon-part-motion: icon-corner-nw;
+  }
+  [data-icon-motion="expand"] > [data-icon-part="1"],
+  [data-icon-motion="compress"] > [data-icon-part="2"] {
+    --icon-part-motion: icon-corner-ne;
+  }
+  [data-icon-motion="expand"] > [data-icon-part="2"],
+  [data-icon-motion="compress"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-corner-sw;
+  }
+  [data-icon-motion="expand"] > [data-icon-part="3"],
+  [data-icon-motion="compress"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-corner-se;
+  }
+  [data-icon-motion="crosshair"] > [data-icon-part="0"] {
+    --icon-part-motion: icon-target-outer;
+  }
+  [data-icon-motion="crosshair"] > [data-icon-part="1"] {
+    --icon-part-motion: icon-crosshair-ticks;
+  }
+
+  /* ── Keyframes ─────────────────────────────────────────────────── */
+  @keyframes icon-search {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    35% { transform: translate(-1.2px, -1.2px) rotate(-12deg); }
+    65% { transform: translate(.6px, -.6px) rotate(8deg); }
+  }
+  @keyframes icon-slide-right {
+    0%, 100% { transform: translateX(0); }
+    45% { transform: translateX(2.4px); }
+    75% { transform: translateX(-.5px); }
+  }
+  @keyframes icon-slide-left {
+    0%, 100% { transform: translateX(0); }
+    45% { transform: translateX(-2.4px); }
+    75% { transform: translateX(.5px); }
+  }
+  @keyframes icon-star {
+    0%, 100% { transform: rotate(0deg) scale(1); }
+    35% { transform: rotate(-20deg) scale(.9); }
+    65% { transform: rotate(12deg) scale(1.1); }
+  }
+  @keyframes icon-radar-dish {
+    0%, 100% { transform: rotate(0deg); }
+    40% { transform: rotate(-8deg); }
+    75% { transform: rotate(4deg); }
+  }
+  @keyframes icon-signal {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    45% { transform: scale(1.85); opacity: .4; }
+  }
+  @keyframes icon-ink {
+    0%, 100% { opacity: 1; }
+    40% { opacity: .18; }
+  }
+  @keyframes icon-layer-up {
+    0%, 100% { transform: translateY(0); }
+    45% { transform: translateY(-2.2px); }
+  }
+  @keyframes icon-layer-mid {
+    0%, 100% { transform: translateY(0); }
+    45% { transform: translateY(-.9px); }
+  }
+  @keyframes icon-layer-down {
+    0%, 100% { transform: translateY(0); }
+    45% { transform: translateY(2.2px); }
+  }
+  @keyframes icon-spark {
+    0%, 100% { transform: scale(1) rotate(0deg); }
+    45% { transform: scale(1.5) rotate(35deg); }
+  }
+  @keyframes icon-bolt {
+    0%, 100% { transform: translate(0, 0); }
+    35% { transform: translate(1.6px, -1.8px); }
+    65% { transform: translate(-.6px, .8px); }
+  }
+  @keyframes icon-needle {
+    0%, 100% { transform: rotate(0deg); }
+    35% { transform: rotate(-32deg); }
+    65% { transform: rotate(15deg); }
+  }
+  @keyframes icon-filter {
+    0%, 100% { transform: scaleY(1); }
+    45% { transform: scaleY(.82); }
+    75% { transform: scaleY(1.04); }
+  }
+  @keyframes icon-refresh {
+    from { rotate: 0deg; }
+    to { rotate: 360deg; }
+  }
+  @keyframes icon-refresh-fit {
+    0%, 100% { scale: 1; }
+    10%, 90% { scale: .94; }
+  }
+  @keyframes icon-sun {
+    0%, 100% { transform: translateY(0) scale(1); }
+    45% { transform: translateY(-1.8px) scale(1.12); }
+  }
+  @keyframes icon-moon {
+    0%, 100% { transform: rotate(0deg); }
+    40% { transform: rotate(-16deg); }
+    75% { transform: rotate(6deg); }
+  }
+  @keyframes icon-menu-line {
+    0%, 100% { transform: scaleX(1); }
+    45% { transform: scaleX(1.5); }
+  }
+  @keyframes icon-bell-dome {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-10deg); }
+    50% { transform: rotate(10deg); }
+    75% { transform: rotate(-5deg); }
+  }
+  @keyframes icon-bell-clapper {
+    0%, 100% { transform: translateX(0); }
+    30% { transform: translateX(-1.3px); }
+    60% { transform: translateX(1.3px); }
+  }
+  @keyframes icon-shield-body {
+    0%, 100% { transform: scale(1); }
+    40% { transform: scale(.95); }
+    75% { transform: scale(1.03); }
+  }
+  @keyframes icon-check-pop {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    30% { transform: scale(.78); opacity: .55; }
+    65% { transform: scale(1.12); opacity: 1; }
+  }
+  @keyframes icon-target-outer {
+    0%, 100% { transform: scale(1); }
+    45% { transform: scale(.91); }
+    75% { transform: scale(1.04); }
+  }
+  @keyframes icon-target-inner {
+    0%, 100% { transform: scale(1); }
+    45% { transform: scale(1.14); }
+  }
+  @keyframes icon-flag-wave {
+    0%, 100% { transform: rotate(0deg) skewY(0deg); }
+    35% { transform: rotate(-4deg) skewY(-4deg); }
+    70% { transform: rotate(3deg) skewY(3deg); }
+  }
+  @keyframes icon-x-a {
+    0%, 100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    35% { transform: scale(.8) rotate(-8deg); opacity: .5; }
+    70% { transform: scale(1.06) rotate(3deg); opacity: 1; }
+  }
+  @keyframes icon-x-b {
+    0%, 100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    35% { transform: scale(.8) rotate(8deg); opacity: .5; }
+    70% { transform: scale(1.06) rotate(-3deg); opacity: 1; }
+  }
+  @keyframes icon-plus-spin {
+    0%, 100% { transform: rotate(0deg) scale(1); }
+    45% { transform: rotate(90deg) scale(1.08); }
+    75% { transform: rotate(84deg) scale(.98); }
+  }
+  @keyframes icon-arrow-up-right {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    30% { transform: translate(-1.3px, 1.3px) scale(.92); }
+    65% { transform: translate(1.8px, -1.8px) scale(1.04); }
+  }
+  @keyframes icon-arrow-down-right {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    30% { transform: translate(-1.3px, -1.3px) scale(.92); }
+    65% { transform: translate(1.8px, 1.8px) scale(1.04); }
+  }
+  @keyframes icon-external-launch {
+    0%, 100% { transform: translate(0, 0); }
+    40% { transform: translate(1.5px, -1.5px); }
+    75% { transform: translate(-.4px, .4px); }
+  }
+  @keyframes icon-chevron-down {
+    0%, 100% { transform: translateY(0); }
+    45% { transform: translateY(2.2px); }
+    75% { transform: translateY(-.5px); }
+  }
+  @keyframes icon-chevron-right {
+    0%, 100% { transform: translateX(0); }
+    45% { transform: translateX(2.2px); }
+    75% { transform: translateX(-.5px); }
+  }
+  @keyframes icon-dots-wave {
+    0%, 100% { transform: translateY(0); }
+    45% { transform: translateY(-1.8px); }
+  }
+  @keyframes icon-flame {
+    0%, 100% { transform: scale(1, 1) rotate(0deg); }
+    35% { transform: scale(1.05, .9) rotate(-4deg); }
+    70% { transform: scale(.96, 1.06) rotate(3deg); }
+  }
+  @keyframes icon-spark-ai-left {
+    0%, 100% { transform: translateX(0) scaleY(1); }
+    45% { transform: translateX(1.3px) scaleY(.92); }
+  }
+  @keyframes icon-spark-ai-right {
+    0%, 100% { transform: translateX(0) scaleY(1); }
+    45% { transform: translateX(-1.3px) scaleY(.92); }
+  }
+  @keyframes icon-clock-hands {
+    0%, 100% { transform: rotate(0deg); }
+    45% { transform: rotate(32deg); }
+    75% { transform: rotate(-6deg); }
+  }
+  @keyframes icon-command {
+    0%, 100% { transform: rotate(0deg) scale(1); }
+    40% { transform: rotate(-12deg) scale(.92); }
+    75% { transform: rotate(5deg) scale(1.05); }
+  }
+  @keyframes icon-display-screen {
+    0%, 100% { transform: translateY(0) scale(1); }
+    45% { transform: translateY(-1.2px) scale(1.03); }
+  }
+  @keyframes icon-doc-quote {
+    0%, 100% { transform: translateY(0) scale(1); }
+    45% { transform: translateY(-1.4px) scale(1.08); }
+  }
+  @keyframes icon-logout-arrow {
+    0%, 100% { transform: translateX(0); }
+    30% { transform: translateX(-1.6px); }
+    65% { transform: translateX(1.8px); }
+  }
+  @keyframes icon-arrow-up {
+    0%, 100% { transform: translateY(0); }
+    45% { transform: translateY(-2.1px); }
+    75% { transform: translateY(.5px); }
+  }
+  @keyframes icon-arrow-down {
+    0%, 100% { transform: translateY(0); }
+    45% { transform: translateY(2.1px); }
+    75% { transform: translateY(-.5px); }
+  }
+  @keyframes icon-minus {
+    0%, 100% { transform: scaleX(1); }
+    40% { transform: scaleX(.76); }
+    75% { transform: scaleX(1.08); }
+  }
+  @keyframes icon-user-head {
+    0%, 100% { transform: translateY(0) scale(1); }
+    45% { transform: translateY(-1.5px) scale(1.06); }
+  }
+  @keyframes icon-user-body {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-.8px); }
+  }
+  @keyframes icon-globe-meridian {
+    0%, 100% { transform: scaleX(1); }
+    45% { transform: scaleX(.68); }
+    75% { transform: scaleX(1.06); }
+  }
+  @keyframes icon-globe-equator {
+    0%, 100% { transform: translateY(0); }
+    45% { transform: translateY(-1px); }
+    75% { transform: translateY(.5px); }
+  }
+  @keyframes icon-trend-up {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    35% { transform: translate(-1px, 1px) scale(.94); }
+    70% { transform: translate(1.2px, -1.2px) scale(1.04); }
+  }
+  @keyframes icon-ray-launch {
+    0%, 100% { transform: translate(0, 0); }
+    45% { transform: translate(1.3px, -.8px); }
+  }
+  @keyframes icon-channel-top {
+    0%, 100% { transform: translateY(0); }
+    45% { transform: translateY(-1.2px); }
+  }
+  @keyframes icon-channel-bottom {
+    0%, 100% { transform: translateY(0); }
+    45% { transform: translateY(1.2px); }
+  }
+  @keyframes icon-rect-pop {
+    0%, 100% { transform: scale(1); }
+    40% { transform: scale(.9); }
+    75% { transform: scale(1.05); }
+  }
+  @keyframes icon-fib-line {
+    0%, 100% { transform: scaleX(1); }
+    45% { transform: scaleX(.84); }
+    75% { transform: scaleX(1.04); }
+  }
+  @keyframes icon-text-lines {
+    0%, 100% { transform: translateX(0); }
+    45% { transform: translateX(1.2px); }
+  }
+  @keyframes icon-lock-body {
+    0%, 100% { transform: rotate(0deg); }
+    35% { transform: rotate(-5deg); }
+    70% { transform: rotate(4deg); }
+  }
+  @keyframes icon-lock-shackle {
+    0%, 100% { transform: translateY(0); }
+    40% { transform: translateY(-1.5px); }
+    75% { transform: translateY(.4px); }
+  }
+  @keyframes icon-unlock-shackle {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    45% { transform: translateY(-1.6px) rotate(10deg); }
+  }
+  @keyframes icon-eye-blink {
+    0%, 100% { transform: scaleY(1); }
+    40% { transform: scaleY(.22); }
+    75% { transform: scaleY(1.04); }
+  }
+  @keyframes icon-eye-pupil {
+    0%, 100% { transform: scale(1); }
+    40% { transform: scale(.7); }
+    75% { transform: scale(1.12); }
+  }
+  @keyframes icon-eye-slash {
+    0%, 100% { transform: scale(1); }
+    40% { transform: scale(.86); }
+    75% { transform: scale(1.05); }
+  }
+  @keyframes icon-undo-arrow {
+    0%, 100% { transform: translateX(0) rotate(0deg); }
+    45% { transform: translateX(-1.6px) rotate(-14deg); }
+  }
+  @keyframes icon-undo-arc {
+    0%, 100% { transform: translateX(0); }
+    45% { transform: translateX(-1px); }
+  }
+  @keyframes icon-redo-arrow {
+    0%, 100% { transform: translateX(0) rotate(0deg); }
+    45% { transform: translateX(1.6px) rotate(14deg); }
+  }
+  @keyframes icon-redo-arc {
+    0%, 100% { transform: translateX(0); }
+    45% { transform: translateX(1px); }
+  }
+  @keyframes icon-corner-nw {
+    0%, 100% { transform: translate(0, 0); }
+    45% { transform: translate(-1.4px, -1.4px); }
+  }
+  @keyframes icon-corner-ne {
+    0%, 100% { transform: translate(0, 0); }
+    45% { transform: translate(1.4px, -1.4px); }
+  }
+  @keyframes icon-corner-sw {
+    0%, 100% { transform: translate(0, 0); }
+    45% { transform: translate(-1.4px, 1.4px); }
+  }
+  @keyframes icon-corner-se {
+    0%, 100% { transform: translate(0, 0); }
+    45% { transform: translate(1.4px, 1.4px); }
+  }
+  @keyframes icon-crosshair-ticks {
+    0%, 100% { transform: rotate(0deg) scale(1); }
+    45% { transform: rotate(45deg) scale(.92); }
+  }
+}

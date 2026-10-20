@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { marketApi, stocksApi } from '@/api/modules';
+import { invalidateQueryPaths } from '@/api/queryRegistry';
 import { usePolling } from '@/hooks/usePolling';
 import { remoteState } from '@/hooks/remoteState';
 import PageHeader from '@/components/shared/PageHeader';
@@ -143,13 +144,17 @@ export default function Market() {
   const refreshLiveSectors = liveSectors.refresh;
   const refreshMembers = members.refresh;
   const refreshLive = live.refresh;
-  const onRefreshMarket = useCallback(() => {
+  const refreshOverview = useCallback(() => {
+    invalidateQueryPaths(['/market/overview'], { reload: true });
     refreshMarket({ force: true });
+  }, [refreshMarket]);
+  const onRefreshMarket = useCallback(() => {
+    refreshOverview();
     refreshSeries({ force: true });
     refreshLiveSectors({ force: true });
     refreshMembers({ force: true });
     refreshLive({ force: true });
-  }, [refreshLive, refreshLiveSectors, refreshMarket, refreshMembers, refreshSeries]);
+  }, [refreshLive, refreshLiveSectors, refreshOverview, refreshMembers, refreshSeries]);
   const refreshingMarket =
     market.refreshing || series.refreshing || liveSectors.refreshing || members.refreshing || live.refreshing;
 
@@ -197,13 +202,13 @@ export default function Market() {
             image="/empty-chart.svg"
             title={t('加载失败')}
             description={String(market.error?.message ?? '')}
-            action={<EmptyRetryButton onClick={() => market.refresh({ force: true })} refreshing={market.refreshing} />}
+            action={<EmptyRetryButton onClick={refreshOverview} refreshing={market.refreshing} />}
           />
         </div>
       ) : (
         <>
           {state === 'stale' && (
-            <StaleStrip onRetry={() => market.refresh()} refreshing={market.refreshing} />
+            <StaleStrip onRetry={refreshOverview} refreshing={market.refreshing} />
           )}
           {n225 && (
             <section className="card-surface flex flex-wrap items-end justify-between gap-3 p-4">

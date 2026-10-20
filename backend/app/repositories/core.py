@@ -1628,10 +1628,7 @@ class CoreRepository(SQLiteRepository):
         return item
 
     def _strength_meta_from_connection(self, connection: Any) -> dict[str, Any] | None:
-        try:
-            row = connection.execute("SELECT * FROM strength_meta WHERE id=1").fetchone()
-        except Exception:  # noqa: BLE001 — missing table on half-migrated test fixtures
-            return None
+        row = connection.execute("SELECT * FROM strength_meta WHERE id=1").fetchone()
         if row is None:
             return None
         item = dict(row)
