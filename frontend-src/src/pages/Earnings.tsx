@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Link } from 'react-router';
 import { earningsApi } from '@/api/modules';
+import { invalidateQueryPaths } from '@/api/queryRegistry';
 import { usePolling } from '@/hooks/usePolling';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
@@ -86,6 +87,7 @@ export default function Earnings() {
 
   const onForceRefresh = useCallback(() => {
     if (q.refreshing) return;
+    invalidateQueryPaths(['/earnings/recent'], { reload: true });
     q.refresh({ force: true });
     recentQ.refresh({ force: true });
     setPendingFlash(true);

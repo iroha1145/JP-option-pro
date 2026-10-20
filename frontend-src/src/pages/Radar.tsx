@@ -61,7 +61,7 @@ const GROUP_STATES: Record<StateGroup, string | undefined> = {
 };
 
 export default function Radar() {
-  const { canRefreshPublicData, canManageWatchlist } = useAccess();
+  const { canRefreshPublicData, canManageWatchlist, principalKey } = useAccess();
   const toast = useToast();
   const [group, setGroup] = useState<StateGroup>('active');
   const [view, setView] = useState<ViewMode>('cards');
@@ -89,6 +89,7 @@ export default function Radar() {
     () => radarApi.current(GROUP_STATES[group] ? { states: GROUP_STATES[group], limit: 200 } : { limit: 200 }),
     120_000,
     [group],
+    { identity: group },
   );
   const state = remoteState(query, (d) => d.events.length === 0);
 
@@ -101,7 +102,7 @@ export default function Radar() {
   const [onlyWatch, setOnlyWatch] = useState(false);
   const watchQ = usePolling(
     () => canManageWatchlist ? watchlistApi.list() : Promise.resolve<Awaited<ReturnType<typeof watchlistApi.list>>>({ items: [] }),
-    120_000, [canManageWatchlist],
+    120_000, [canManageWatchlist], { identity: principalKey },
   );
   const watchCodes = useMemo(
     () => new Set((watchQ.data?.items ?? []).map((item) => item.canonical_code)),

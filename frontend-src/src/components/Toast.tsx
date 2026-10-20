@@ -21,8 +21,8 @@ interface ToastItem {
 }
 
 const BAR: Record<ToastKind, string> = {
-  success: 'bg-[#0B7A55]',
-  error: 'bg-[#C4302B]',
+  success: 'bg-ok-700',
+  error: 'bg-danger-700',
   info: 'bg-brand-600',
 };
 
@@ -87,10 +87,10 @@ function ToastCard({ t, onDismiss, onRemove }: { t: ToastItem; onDismiss: (id: n
             </div>
             <button
               onClick={() => onDismiss(t.id)}
-              className="flex size-8 shrink-0 items-center justify-center rounded-sm text-ink-400 transition-[transform,color,background-color] duration-fast hover:bg-paper-2 hover:text-ink-600 active:scale-95"
+              className="icon-motion-trigger flex size-8 shrink-0 items-center justify-center rounded-sm text-ink-400 transition-[transform,color,background-color] duration-fast hover:bg-paper-2 hover:text-ink-600 active:scale-95"
               aria-label={__t('关闭通知')}
             >
-              <Icon name="x" size={13} />
+              <Icon motion name="x" size={13} />
             </button>
           </div>
         </div>

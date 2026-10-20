@@ -3,7 +3,7 @@
  * viewBox 24 · stroke 1.6 · round 端点/接合 · currentColor
  * 允许 ≤0.3px 手绘抖动；主体落在 20×20 安全区。
  */
-import type { ReactElement, SVGProps } from 'react';
+import { Children, Fragment, useCallback, useEffect, useRef, type ReactElement, type ReactNode, type SVGProps } from 'react';
 
 export type IconName =
   | 'radar' | 'crosshair' | 'candle' | 'layers' | 'calendar-spark' | 'bolt' | 'star-line'
@@ -11,18 +11,20 @@ export type IconName =
   | 'arrow-up-right' | 'arrow-down-right' | 'external' | 'chevron-down' | 'chevron-right'
   | 'dots-grid' | 'flame-line' | 'spark-ai' | 'shield' | 'target' | 'flag' | 'x' | 'plus'
   | 'refresh' | 'wallet-gauge' | 'doc-quote' | 'logout' | 'arrow-up' | 'arrow-down' | 'minus'
-  | 'display' | 'sliders' | 'check' | 'menu' | 'list' | 'cards' | 'languages'
+  | 'check' | 'menu' | 'languages' | 'display' | 'user' | 'list' | 'cards'
   | 'trend-line' | 'ray-right' | 'channel' | 'rect' | 'fib' | 'text-note'
-  | 'lock' | 'unlock' | 'eye' | 'eye-off' | 'undo' | 'redo' | 'expand' | 'compress';
+  | 'lock' | 'unlock' | 'eye' | 'eye-off' | 'undo' | 'redo' | 'expand' | 'compress' | 'sliders';
 
 interface IconProps extends SVGProps<SVGSVGElement> {
   name: IconName;
   size?: number;
+  /** Opt in to a single local response from an enclosing icon-motion-trigger. */
+  motion?: boolean;
+  /** A brief response for selection managed outside DOM focus, such as a command list. */
+  motionActive?: boolean;
 }
 
 const PATHS: Record<IconName, ReactElement> = {
-  display: <><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></>,
-  sliders: <><path d="M4 7h7M15 7h5M4 17h3M11 17h9" /><circle cx="13" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></>,
   /* 雷达：碟形天线 —— 斜切碟面朝右上 + 馈源杆与信号球 + 左下三角支架 */
   radar: (
     <>
@@ -97,6 +99,12 @@ const PATHS: Record<IconName, ReactElement> = {
     <>
       <path d="M19.4 13.9A7.6 7.6 0 1 1 10.1 4.6a6.2 6.2 0 0 0 9.3 9.3Z" />
       <path d="M17.6 3.6l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5.5-1.3Z" />
+    </>
+  ),
+  display: (
+    <>
+      <rect x="3.4" y="5" width="17.2" height="11.2" rx="1.8" />
+      <path d="M8.2 19.4h7.6M12 16.2v3.2" />
     </>
   ),
   'arrow-up-right': <path d="M6.8 17.2 17.2 6.8M8.1 6.6h9.3v9.3" />,
@@ -195,6 +203,12 @@ const PATHS: Record<IconName, ReactElement> = {
       <rect x="12.4" y="12.6" width="8.2" height="8.2" rx="1.6" />
     </>
   ),
+  user: (
+    <>
+      <circle cx="12" cy="8.4" r="3.6" />
+      <path d="M5.2 19.4c1.2-3.2 3.8-4.9 6.8-4.9s5.6 1.7 6.8 4.9" />
+    </>
+  ),
   /* 地球经纬线：外圈 + 中央经线「透镜」+ 赤道横线，语言切换用 */
   languages: (
     <>
@@ -265,9 +279,203 @@ const PATHS: Record<IconName, ReactElement> = {
       <path d="M9.6 4.8v4H5.6M14.4 4.8v4h4M9.6 19.2v-4H5.6M14.4 19.2v-4h4" />
     </>
   ),
+  /* 设置：三条滑轨各带一个旋钮（页头合并后的显示设置入口） */
+  sliders: (
+    <>
+      <path d="M4.4 7h8.3M16.7 7h2.9M4.4 12h2.9M11.3 12h8.3M4.4 17h6.3M14.7 17h4.9" />
+      <circle cx="14.7" cy="7" r="2" />
+      <circle cx="9.3" cy="12" r="2" />
+      <circle cx="12.7" cy="17" r="2" />
+    </>
+  ),
 };
 
-export function Icon({ name, size = 18, ...rest }: IconProps) {
+export const MOTION_NAMES = new Set<IconName>([
+  'radar', 'crosshair', 'candle', 'layers', 'calendar-spark', 'bolt', 'star-line',
+  'filter-funnel', 'search', 'command', 'clock-ny', 'bell', 'sun-bmo', 'moon-amc',
+  'arrow-up-right', 'arrow-down-right', 'external', 'chevron-down', 'chevron-right',
+  'dots-grid', 'flame-line', 'spark-ai', 'shield', 'target', 'flag', 'x', 'plus',
+  'refresh', 'wallet-gauge', 'doc-quote', 'logout', 'arrow-up', 'arrow-down', 'minus',
+  'check', 'menu', 'languages', 'display', 'user',
+  'trend-line', 'ray-right', 'channel', 'rect', 'fib', 'text-note',
+  'lock', 'unlock', 'eye', 'eye-off', 'undo', 'redo', 'expand', 'compress', 'sliders',
+]);
+
+function motionPaths(name: IconName) {
+  // Keep each slider's interrupted rail and knob together: moving only the knob
+  // would reveal a gap in the hand-drawn rail. All coordinates stay unchanged.
+  if (name === 'sliders') {
+    return <>
+      <g data-icon-part="0"><path d="M4.4 7h8.3M16.7 7h2.9" /><circle cx="14.7" cy="7" r="2" /></g>
+      <g data-icon-part="1"><path d="M4.4 12h2.9M11.3 12h8.3" /><circle cx="9.3" cy="12" r="2" /></g>
+      <g data-icon-part="2"><path d="M4.4 17h6.3M14.7 17h4.9" /><circle cx="12.7" cy="17" r="2" /></g>
+    </>;
+  }
+  if (name === 'menu') {
+    return <>
+      <g data-icon-part="0"><path d="M4 7.2h16" /></g>
+      <g data-icon-part="1"><path d="M4 12h16" /></g>
+      <g data-icon-part="2"><path d="M4 16.8h10" /></g>
+    </>;
+  }
+  if (name === 'x') {
+    return <>
+      <g data-icon-part="0"><path d="m6.2 6.2 11.6 11.6" /></g>
+      <g data-icon-part="1"><path d="M17.8 6.2 6.2 17.8" /></g>
+    </>;
+  }
+  if (name === 'plus') {
+    return <>
+      <g data-icon-part="0"><path d="M12 5v14" /></g>
+      <g data-icon-part="1"><path d="M5 12h14" /></g>
+    </>;
+  }
+  if (name === 'dots-grid') {
+    return <>
+      <g data-icon-part="0">
+        <circle cx="7.2" cy="7.2" r="1.05" fill="currentColor" stroke="none" />
+        <circle cx="12" cy="7.2" r="1.05" fill="currentColor" stroke="none" />
+        <circle cx="16.8" cy="7.2" r="1.05" fill="currentColor" stroke="none" />
+      </g>
+      <g data-icon-part="1">
+        <circle cx="7.2" cy="12" r="1.05" fill="currentColor" stroke="none" />
+        <circle cx="12" cy="12" r="1.05" fill="currentColor" stroke="none" />
+        <circle cx="16.8" cy="12" r="1.05" fill="currentColor" stroke="none" />
+      </g>
+      <g data-icon-part="2">
+        <circle cx="7.2" cy="16.8" r="1.05" fill="currentColor" stroke="none" />
+        <circle cx="12" cy="16.8" r="1.05" fill="currentColor" stroke="none" />
+        <circle cx="16.8" cy="16.8" r="1.05" fill="currentColor" stroke="none" />
+      </g>
+    </>;
+  }
+  if (name === 'fib') {
+    return <>
+      <g data-icon-part="0"><path d="M4.4 6.2h15.2" /></g>
+      <g data-icon-part="1"><path d="M4.4 10h15.2" /></g>
+      <g data-icon-part="2"><path d="M4.4 13.2h15.2" /></g>
+      <g data-icon-part="3"><path d="M4.4 17.6h15.2" /></g>
+    </>;
+  }
+  if (name === 'eye-off') {
+    return <>
+      <g data-icon-part="0"><path d="M4 5.2 19.6 18.8" /></g>
+      <g data-icon-part="1"><path d="M9.2 9.4A4.6 4.6 0 0 0 8 12c0 2.2 1.8 3.8 4 3.8 1 0 1.9-.3 2.6-.9" /></g>
+      <g data-icon-part="2"><path d="M3.6 12S7.2 6.6 12 6.6c1.4 0 2.7.4 3.8 1" /></g>
+    </>;
+  }
+  if (name === 'undo') {
+    return <>
+      <g data-icon-part="0"><path d="M8.2 7.4 4.6 11l3.6 3.6" /></g>
+      <g data-icon-part="1"><path d="M5.2 11h9.4a4.4 4.4 0 1 1 0 8.8H12" /></g>
+    </>;
+  }
+  if (name === 'redo') {
+    return <>
+      <g data-icon-part="0"><path d="M15.8 7.4 19.4 11l-3.6 3.6" /></g>
+      <g data-icon-part="1"><path d="M18.8 11H9.4a4.4 4.4 0 1 0 0 8.8H12" /></g>
+    </>;
+  }
+  if (name === 'expand') {
+    return <>
+      <g data-icon-part="0"><path d="M8.2 4.4H4.4v3.8" /></g>
+      <g data-icon-part="1"><path d="M15.8 4.4h3.8v3.8" /></g>
+      <g data-icon-part="2"><path d="M8.2 19.6H4.4v-3.8" /></g>
+      <g data-icon-part="3"><path d="M15.8 19.6h3.8v-3.8" /></g>
+    </>;
+  }
+  if (name === 'compress') {
+    return <>
+      <g data-icon-part="0"><path d="M9.6 4.8v4H5.6" /></g>
+      <g data-icon-part="1"><path d="M14.4 4.8v4h4" /></g>
+      <g data-icon-part="2"><path d="M9.6 19.2v-4H5.6" /></g>
+      <g data-icon-part="3"><path d="M14.4 19.2v-4h4" /></g>
+    </>;
+  }
+  const drawing = PATHS[name];
+  const parts = drawing.type === Fragment
+    ? (drawing as ReactElement<{ children: ReactNode }>).props.children
+    : drawing;
+  return Children.toArray(parts).map((part, index) => (
+    <g key={index} data-icon-part={index}>{part}</g>
+  ));
+}
+
+export function Icon({ name, size = 18, motion = false, motionActive = false, ref, ...rest }: IconProps) {
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const playRef = useRef<(() => void) | null>(null);
+  const attachRef = useCallback((node: SVGSVGElement | null) => {
+    svgRef.current = node;
+    const cleanup = typeof ref === 'function' ? ref(node) : undefined;
+    if (ref && typeof ref !== 'function') ref.current = node;
+    return () => {
+      svgRef.current = null;
+      if (typeof cleanup === 'function') cleanup();
+      else if (typeof ref === 'function') ref(null);
+      else if (ref) ref.current = null;
+    };
+  }, [ref]);
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!motion || !MOTION_NAMES.has(name) || !svg) return;
+    // Retain finished CSSAnimation objects as browsers may omit them from
+    // getAnimations() once their no-fill effect has ended. No timers or state.
+    let previousAnimations: CSSAnimation[] = [];
+    const play = () => {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        || svg.closest(':disabled, [disabled], [aria-disabled="true"]')) return;
+      const current = svg.getAnimations({ subtree: true }).filter((animation): animation is CSSAnimation => (
+        animation instanceof CSSAnimation
+        && animation.effect instanceof KeyframeEffect
+        && animation.effect.target instanceof SVGGElement
+        && animation.effect.target.parentNode === svg
+        && animation.effect.target.hasAttribute('data-icon-part')
+      ));
+      // A staggered part can finish before its neighbour. Keep its completed
+      // object for the next gesture instead of replacing the cache with only
+      // the still-running subset returned by getAnimations().
+      previousAnimations = [...new Set([...previousAnimations, ...current])]
+        .filter(animation => animation.playState !== 'idle');
+      // Pointer entry, focus and press can arrive during the same gesture.
+      // Let it complete instead of snapping every part back to its first frame.
+      if (previousAnimations.some(animation => animation.playState === 'running')) return;
+      for (const animation of previousAnimations) {
+        // CSS cancels these objects when disabled or reduced motion is enabled.
+        if (animation.playState === 'idle') continue;
+        animation.currentTime = 0;
+        animation.play();
+      }
+    };
+    playRef.current = play;
+    const trigger = svg.closest('.icon-motion-trigger');
+    const pointerEnter = (event: Event) => {
+      if ((event as PointerEvent).pointerType === 'mouse'
+        && window.matchMedia('(hover: hover) and (pointer: fine)').matches) play();
+    };
+    const pointerDown = () => play();
+    const focus = () => { if (trigger?.matches(':focus-visible')) play(); };
+    const keyDown = (event: Event) => {
+      const key = event as KeyboardEvent;
+      if (!key.repeat && (key.key === 'Enter' || key.key === ' ')) play();
+    };
+    trigger?.addEventListener('pointerenter', pointerEnter);
+    trigger?.addEventListener('pointerdown', pointerDown);
+    trigger?.addEventListener('focus', focus);
+    trigger?.addEventListener('keydown', keyDown);
+    return () => {
+      trigger?.removeEventListener('pointerenter', pointerEnter);
+      trigger?.removeEventListener('pointerdown', pointerDown);
+      trigger?.removeEventListener('focus', focus);
+      trigger?.removeEventListener('keydown', keyDown);
+      playRef.current = null;
+    };
+  }, [motion, name]);
+
+  useEffect(() => {
+    if (motion && motionActive) playRef.current?.();
+  }, [motion, motionActive, name]);
+
   return (
     <svg
       width={size}
@@ -280,8 +488,11 @@ export function Icon({ name, size = 18, ...rest }: IconProps) {
       strokeLinejoin="round"
       aria-hidden="true"
       {...rest}
+      ref={motion ? attachRef : ref}
+      data-icon-motion={motion ? name : undefined}
+      data-motion-active={motion && motionActive ? 'true' : undefined}
     >
-      {PATHS[name]}
+      {motion && MOTION_NAMES.has(name) ? motionPaths(name) : PATHS[name]}
     </svg>
   );
 }

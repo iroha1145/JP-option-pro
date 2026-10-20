@@ -507,7 +507,7 @@
 
 /* Login/password error border uses Paper Terminal down-600. Catalog only owns the tween. */
 .t-input.is-error {
-  border-color: var(--down-600);
+  border-color: var(--danger-600);
 }
 
 /* catalog 12 的 .t-input 只 transition border-color，会顶掉组件原有的
@@ -604,4 +604,46 @@
 
 @media (prefers-reduced-motion: reduce) {
   .t-digit-group .t-digit { animation: none !important; }
+}
+
+/* Feel Fluid Functionalism adaptations: tactile toggle thumb stretch & drag,
+   plus physical drag-handle affordance for mobile bottom sheets. */
+.t-toggle-thumb {
+  scale: var(--thumb-scale-x, 1) var(--thumb-scale-y, 1);
+  transition: scale var(--duration-quick, 150ms) var(--ease-feel-press, ease-out);
+}
+.t-toggle[data-feel-drag="true"] .t-toggle-thumb {
+  animation: none !important;
+  translate: var(--thumb-drag-x, 0px) 0 !important;
+}
+[data-handle] {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+[data-handle]:active {
+  cursor: grabbing;
+}
+@media (prefers-reduced-motion: reduce) {
+  .t-toggle-thumb { transition: none !important; scale: 1 1 !important; }
+}
+
+/* Horizontal switch dragging leaves vertical page scrolling available. */
+.t-toggle { touch-action: pan-y; }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-feel-sheet] { transition: none !important; }
+}
+
+/* One transform owner lets a grab interrupt the more sheet's entrance. */
+.t-more-sheet {
+  transform: translateY(100%);
+  transition: transform var(--sheet-close-duration) var(--sheet-easing);
+}
+.t-more-sheet[data-open="true"] {
+  transform: translateY(0);
+  transition-duration: var(--sheet-open-duration);
+}
+@media (prefers-reduced-motion: reduce) {
+  .t-more-sheet { transition: none !important; }
 }

@@ -19,31 +19,6 @@ export function parseDurationMs(value: string, fallback: number): number {
   return n;
 }
 
-/** Read a custom property assignment from a stylesheet source string. */
-export function readCssVar(cssText: string, name: string): string | null {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(`${escaped}\\s*:\\s*([^;\\n]+);`);
-  const match = cssText.match(re);
-  return match ? match[1].trim() : null;
-}
-
-export function overlayTiming(
-  cssText: string,
-  openVar: string,
-  closeVar: string,
-  openFallback: number,
-  closeFallback: number,
-): { open: number; close: number } {
-  return {
-    open: parseDurationMs(readCssVar(cssText, openVar) ?? '', openFallback),
-    close: parseDurationMs(readCssVar(cssText, closeVar) ?? '', closeFallback),
-  };
-}
-
-export function overlayCloseTimeoutMs(cssText: string, closeVar: string, fallback: number): number {
-  return parseDurationMs(readCssVar(cssText, closeVar) ?? '', fallback);
-}
-
 export function overlayClassName(phase: OverlayPhase): string {
   if (phase === 'open') return 'is-open';
   if (phase === 'closing') return 'is-closing';
@@ -52,10 +27,6 @@ export function overlayClassName(phase: OverlayPhase): string {
 
 export function overlayDataOpen(phase: OverlayPhase): 'true' | 'false' {
   return phase === 'open' ? 'true' : 'false';
-}
-
-export function overlayMounted(phase: OverlayPhase): boolean {
-  return phase !== 'closed';
 }
 
 /** Keep the node mounted while `open` or the close clock is still playing. */
@@ -133,13 +104,6 @@ export function placeGlide(
   }
   el.style.transform = transform;
   el.style.setProperty(sizeProp, `${rect.size}px`);
-}
-
-/** Remove → reflow → add `.is-shaking` so the keyframe always restarts. */
-export function replayShake(el: HTMLElement): void {
-  el.classList.remove('is-shaking');
-  void el.offsetWidth;
-  el.classList.add('is-shaking');
 }
 
 /**
@@ -220,10 +184,4 @@ export function useCatalogShake(holdMs = 1200) {
     play,
     clear,
   };
-}
-
-export function shakeDurationMs(cssText: string): number {
-  const a = parseDurationMs(readCssVar(cssText, '--shake-dur-a') ?? '', 80);
-  const b = parseDurationMs(readCssVar(cssText, '--shake-dur-b') ?? '', 60);
-  return a * 2 + b * 2;
 }

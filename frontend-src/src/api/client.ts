@@ -1,21 +1,5 @@
-/**
- * API 适配层（design.md §11）
- * - mode: 'mock' | 'live'，由 VITE_API_MODE 一键切换（默认 mock）
- * - live: 同源 /api + credentials:'include'（HttpOnly Cookie 会话）
- * - mock: 本地 fixtures，接口形状 1:1 对齐契约，随机延迟 250–700ms
- * 错误形状统一 { code, message }；503 → UI 显示「快照不可用」空态。
- */
-
 import { t } from '../i18n/core.ts';
-export type ApiMode = 'mock' | 'live';
-
-// Optix Japan は既定で live（バックエンドの読み取りは常にローカル DB）。
-// フィクスチャ開発時のみ VITE_API_MODE=mock を明示する。
-export const API_MODE: ApiMode =
-  (import.meta.env?.VITE_API_MODE as ApiMode | undefined) === 'mock' ? 'mock' : 'live';
-
-export const isMock = API_MODE === 'mock';
-
+import { apiHeaders, fetchBuffered, parseRetryAfter, ResponseLimitError, TransportTimeoutError } from './transport.ts';
 export interface ApiErrorShape {
   code: number;
   message: string;
@@ -77,32 +61,6 @@ export function notifyPrincipalInvalid(): void {
  */
 export const REQUEST_TIMEOUT_MS = 20_000;
 
-/** 组合调用方 signal 与超时；返回的 dispose 必须在请求结束后调用。 */
-function withTimeout(
-  external: AbortSignal | null | undefined,
-  timeoutMs: number,
-): { signal: AbortSignal; dispose: () => void; timedOut: () => boolean } {
-  const controller = new AbortController();
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, timeoutMs);
-  const onExternalAbort = () => controller.abort();
-  if (external) {
-    if (external.aborted) controller.abort();
-    else external.addEventListener('abort', onExternalAbort);
-  }
-  return {
-    signal: controller.signal,
-    dispose: () => {
-      clearTimeout(timer);
-      if (external) external.removeEventListener('abort', onExternalAbort);
-    },
-    timedOut: () => timedOut,
-  };
-}
-
 function pick(obj: unknown, ...keys: string[]): unknown {
   if (obj && typeof obj === 'object') {
     for (const k of keys) {
@@ -144,33 +102,30 @@ export interface RequestOptions extends RequestInit {
 export async function requestRaw(path: string, init?: RequestOptions): Promise<Response> {
   const method = (init?.method ?? 'GET').toUpperCase();
   const isWrite = method !== 'GET' && method !== 'HEAD';
-  const { timeoutMs, acceptNotModified, signal: callerSignal, ...rest } = init ?? {};
+  const { timeoutMs, acceptNotModified, ...rest } = init ?? {};
   const budget = timeoutMs ?? REQUEST_TIMEOUT_MS;
-  const timeout = budget > 0 ? withTimeout(callerSignal, budget) : null;
   let res: Response;
   try {
-    res = await fetch(`${BASE}${path}`, {
+    res = await fetchBuffered(`${BASE}${path}`, {
       credentials: 'include',
       redirect: 'error',
       ...rest,
-      ...(timeout ? { signal: timeout.signal } : callerSignal ? { signal: callerSignal } : {}),
-      headers: {
-        'Content-Type': 'application/json',
-        // 后端 require_same_origin_json：写操作必须带自定义头
-        ...(isWrite ? { 'X-Optix-Action': '1' } : {}),
-        ...(init?.headers ?? {}),
-      },
-    });
+      headers: apiHeaders(rest.headers, isWrite),
+    }, budget);
   } catch (error) {
-    if (timeout?.timedOut()) {
+    if (error instanceof TransportTimeoutError) {
       throw new ApiError(408, t('请求超时，请重试'), {
         bizCode: 'request_timeout',
         retryable: true,
       });
     }
+    if (error instanceof ResponseLimitError) {
+      throw new ApiError(502, t('响应数据过大，请缩小查询范围'), {
+        bizCode: 'response_too_large',
+        retryable: false,
+      });
+    }
     throw error;
-  } finally {
-    timeout?.dispose();
   }
   if (res.status === 304 && acceptNotModified) {
     return res;
@@ -179,7 +134,7 @@ export async function requestRaw(path: string, init?: RequestOptions): Promise<R
     let message = res.statusText || t('请求失败');
     let bizCode: string | undefined;
     let retryable: boolean | undefined;
-    let retryAfter: number | undefined;
+    let retryAfter = parseRetryAfter(res.headers.get('Retry-After'));
     let payload: unknown;
     try {
       const body = (await res.json()) as Record<string, unknown>;
@@ -193,9 +148,8 @@ export async function requestRaw(path: string, init?: RequestOptions): Promise<R
       if (typeof msg === 'string' && msg) message = msg;
       const r = pick(errObj, 'retryable');
       if (typeof r === 'boolean') retryable = r;
-      const ra = pick(errObj, 'retry_after_seconds') ?? pick(errObj, 'retry_after') ?? res.headers.get('Retry-After');
-      const raNum = typeof ra === 'string' ? Number(ra) : (ra as number | undefined);
-      if (typeof raNum === 'number' && Number.isFinite(raNum)) retryAfter = raNum;
+      const ra = pick(errObj, 'retry_after_seconds') ?? pick(errObj, 'retry_after');
+      retryAfter = parseRetryAfter(ra) ?? retryAfter;
     } catch {
       /* ignore */
     }
@@ -211,37 +165,6 @@ export async function request<T>(path: string, init?: RequestOptions): Promise<T
   const res = await requestRaw(path, init);
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
-}
-
-/**
- * 创建类 POST（契约 §0.4）：202 + `Location: /api/.../{id}` + `Retry-After: 2`
- * body 可能不含任务 id，需从 Location 头提取；body 也可能为空。
- */
-export async function postCreate<T = unknown>(
-  path: string,
-  body?: unknown,
-): Promise<{ data: T | undefined; location: string | null; retryAfter: number | null }> {
-  const res = await requestRaw(path, {
-    method: 'POST',
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const location = res.headers.get('Location');
-  const ra = res.headers.get('Retry-After');
-  const retryAfter = ra !== null && Number.isFinite(Number(ra)) ? Number(ra) : null;
-  let data: T | undefined;
-  try {
-    data = (await res.json()) as T;
-  } catch {
-    data = undefined; // 202 允许空 body
-  }
-  return { data, location, retryAfter };
-}
-
-/** 从 Location 头提取末段 id（/api/ai/jobs/{id} → {id}） */
-export function idFromLocation(location: string | null): string | null {
-  if (!location) return null;
-  const seg = location.split('?')[0].split('/').filter(Boolean);
-  return seg.length ? decodeURIComponent(seg[seg.length - 1]) : null;
 }
 
 /* 便捷封装一律透传 options：调用方需要能传 signal 与 timeoutMs，否则超时与
@@ -273,19 +196,4 @@ export function patch<T>(path: string, body?: unknown, options?: RequestOptions)
 /** 无请求体的删除；同源守卫只看 Origin 与 X-Optix-Action 头。 */
 export function del<T>(path: string, options?: RequestOptions) {
   return request<T>(path, { ...options, method: 'DELETE' });
-}
-
-/** mock 模式：250–700ms 随机延迟 */
-export function mockDelay(): Promise<void> {
-  const ms = 250 + Math.random() * 450;
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** 模块内便捷封装：mock 走 fixture，live 走 HTTP */
-export async function mockOr<T>(fixture: () => T | Promise<T>, live: () => Promise<T>): Promise<T> {
-  if (isMock) {
-    await mockDelay();
-    return fixture();
-  }
-  return live();
 }

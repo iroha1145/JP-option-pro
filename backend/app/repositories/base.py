@@ -200,7 +200,7 @@ class SQLiteRepository:
         return connection
 
     def _connect_ro(self) -> sqlite3.Connection:
-        uri = f"file:{self._db_path}?mode=ro"
+        uri = f"{self._db_path.resolve().as_uri()}?mode=ro"
         connection = sqlite3.connect(uri, uri=True, isolation_level=None, timeout=10.0)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA busy_timeout=5000")

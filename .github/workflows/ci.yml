@@ -76,6 +76,17 @@ jobs:
       - name: Color-mode preference gate
         run: node --experimental-strip-types --test frontend-src/tests/color-preference.mjs
 
+      - name: Interaction and request regression gates
+        run: |
+          node --experimental-strip-types --test \
+            frontend-src/tests/access-identity.mjs \
+            frontend-src/tests/motion-refresh.mjs \
+            frontend-src/tests/theme-reveal.mjs \
+            frontend-src/tests/request-regressions.mjs \
+            frontend-src/tests/query-registry-regressions.mjs \
+            frontend-src/tests/watchlist-search-lifecycle.mjs \
+            frontend-src/tests/page-refresh-cache.mjs
+
       - name: Screener freshness gate
         run: node --experimental-strip-types --test frontend-src/tests/screener-freshness.mjs
 

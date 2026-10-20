@@ -146,6 +146,47 @@ def test_earnings_calendar_declares_coverage_note(client):
     assert any(item["announcement_date"] is None for item in body["items"])  # 未定は null で返す
 
 
+def test_earnings_watchlist_follows_current_account(client, monkeypatch, tmp_path):
+    from datetime import date
+
+    from app.api import earnings, watchlist
+    from app.api.deps import app_store
+    from app.services.accounts import AccountStore, set_account_store
+
+    monkeypatch.setattr(earnings, "today_jst", lambda: date(2026, 7, 31))
+    accounts = AccountStore(tmp_path / "earnings-accounts.db")
+    customer = accounts.register("earnings-reader", "test-password")
+    set_account_store(accounts)
+    store = app_store()
+    store.add_to_watchlist("72030")
+    store.account_add_to_watchlist(customer.account.user_id, "67580")
+    urls = [
+        "/api/earnings/calendar?start=2026-07-31&end=2026-08-31",
+        "/api/earnings/upcoming",
+        "/api/earnings/recent?days=45",
+    ]
+
+    def check_marks(expected):
+        for url in urls:
+            response = client.get(url)
+            assert response.status_code == 200
+            body = response.json()
+            items = body["items"] + body.get("tbd_items", [])
+            assert {"72030", "67580"} <= {item["canonical_code"] for item in items}
+            assert {item["canonical_code"] for item in items if item["in_watchlist"]} == expected
+
+    try:
+        check_marks({"72030"})
+        # A customer cookie takes precedence even on the owner's loopback session.
+        client.cookies.set("optix_user_session", customer.token)
+        check_marks({"67580"})
+        client.cookies.clear()
+        monkeypatch.setattr(watchlist, "request_is_owner_session", lambda _request: False)
+        check_marks(set())
+    finally:
+        set_account_store(None)
+
+
 def test_strength_scan_endpoints(client):
     profiles = client.get("/api/strength/profiles").json()
     assert [p["id"] for p in profiles["profiles"]] == ["conservative", "balanced", "aggressive"]

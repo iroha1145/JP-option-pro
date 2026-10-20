@@ -15,8 +15,9 @@ import {
 } from 'react';
 import { accessApi, accountApi } from '@/api/modules';
 import { PRINCIPAL_INVALID_EVENT } from '@/api/client';
-import { dropQueryRegistry, setQueryPrincipal } from '@/api/queryRegistry';
+import { dropQueryRegistry } from '@/api/queryRegistry';
 import type { AccessStatus } from '@/api/types';
+import { accessIdentity } from './accessIdentity.ts';
 
 interface AccessContextValue {
   status: AccessStatus | null;
@@ -24,6 +25,7 @@ interface AccessContextValue {
   mode: 'private_network' | 'password' | null;
   /** 访客账号（与美股版共库；不含任何 owner 权限）。 */
   accountUsername: string | null;
+  principalKey: string;
   /** 任一主体已登录（Owner 或访客账号）。 */
   isSignedIn: boolean;
   /** 显示用用户名：Owner 为 admin，访客为账号名。 */
@@ -51,15 +53,10 @@ export function AccessProvider({ children }: { children: ReactNode }) {
 
   const applyStatus = useCallback((next: AccessStatus | null) => {
     if (next) {
-      const principal = next.is_owner
-        ? 'owner'
-        : next.account?.logged_in
-          ? `account:${next.account.username ?? ''}`
-          : 'visitor';
+      const principal = accessIdentity(next);
       if (lastPrincipalRef.current !== principal) {
         lastPrincipalRef.current = principal;
-        setQueryPrincipal(principal);
-        void dropQueryRegistry();
+        dropQueryRegistry();
       }
     }
     setStatus(next);
@@ -69,8 +66,7 @@ export function AccessProvider({ children }: { children: ReactNode }) {
     ++generationRef.current;
     refreshInFlightRef.current = null;
     lastPrincipalRef.current = 'unknown';
-    setQueryPrincipal('unknown');
-    void dropQueryRegistry();
+    dropQueryRegistry();
     setStatus(null);
     setIdentityUnavailable(false);
   }, []);
@@ -145,7 +141,8 @@ export function AccessProvider({ children }: { children: ReactNode }) {
 
   const isOwner = Boolean(status?.is_owner);
   const accountUsername = status?.account?.logged_in ? (status.account.username ?? null) : null;
-  const isCustomer = Boolean(!isOwner && accountUsername);
+  const principalKey = accessIdentity(status);
+  const isCustomer = Boolean(accountUsername);
   const isSignedIn = isOwner || isCustomer;
 
   const value = useMemo<AccessContextValue>(
@@ -154,8 +151,9 @@ export function AccessProvider({ children }: { children: ReactNode }) {
       isOwner,
       mode: status?.mode ?? null,
       accountUsername,
+      principalKey,
       isSignedIn,
-      username: isOwner ? 'admin' : accountUsername,
+      username: accountUsername ?? (isOwner ? 'admin' : null),
       isCustomer,
       loading: status === null && !identityUnavailable,
       canManageWatchlist: isSignedIn,
@@ -166,7 +164,7 @@ export function AccessProvider({ children }: { children: ReactNode }) {
       register,
       logout,
     }),
-    [status, isOwner, accountUsername, isSignedIn, isCustomer, identityUnavailable, refresh, login, register, logout],
+    [status, isOwner, accountUsername, principalKey, isSignedIn, isCustomer, identityUnavailable, refresh, login, register, logout],
   );
 
   return <AccessContext.Provider value={value}>{children}</AccessContext.Provider>;

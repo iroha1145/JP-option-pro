@@ -35,6 +35,8 @@ export default function Navbar({ onOpenPalette }: { onOpenPalette: () => void })
 
   const navRef = useRef<HTMLElement>(null);
   const glideRef = useRef<HTMLSpanElement>(null);
+  const hoverRef = useRef<HTMLSpanElement>(null);
+  const hoverShownRef = useRef(false);
   const glideReadyRef = useRef(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const activePath = NAV_GROUPS.find((item) => isNavGroupActive(location.pathname, item))?.path ?? '';
@@ -70,6 +72,22 @@ export default function Navbar({ onOpenPalette }: { onOpenPalette: () => void })
     glideReadyRef.current = true;
   }, [activePath]);
 
+  const showNavHover = (target: HTMLElement) => {
+    const nav = navRef.current;
+    const pill = hoverRef.current;
+    if (!nav || !pill) return;
+    const navBox = nav.getBoundingClientRect();
+    const box = target.getBoundingClientRect();
+    placeGlide(pill, { offset: box.left - navBox.left, size: box.width }, { axis: 'x', animate: hoverShownRef.current });
+    pill.style.opacity = '1';
+    hoverShownRef.current = true;
+  };
+  const hideNavHover = () => {
+    const pill = hoverRef.current;
+    if (pill) pill.style.opacity = '0';
+    hoverShownRef.current = false;
+  };
+
   const handleLogout = async () => {
     if (loggingOut) return;
     setLoggingOut(true);
@@ -88,7 +106,7 @@ export default function Navbar({ onOpenPalette }: { onOpenPalette: () => void })
   };
 
   return (
-    <header className="glass sticky top-0 z-50 border-b border-line">
+    <header className="glass mobile-nav-glass sticky top-0 z-50 border-b border-line">
       <div className="mx-auto flex h-12 max-w-shell items-center gap-3 px-4 md:h-16 md:gap-5 md:px-8">
         <Link to="/" className="flex shrink-0 items-center gap-2.5" aria-label={t('Optix Japan 首页')}>
           <img src="/logo.svg" alt="" className="size-7 dark:brightness-150 md:size-8" />
@@ -101,7 +119,9 @@ export default function Navbar({ onOpenPalette }: { onOpenPalette: () => void })
           ref={navRef}
           className="relative mx-auto hidden h-full items-center gap-1 xl:flex"
           aria-label={t('主导航')}
+          onPointerLeave={hideNavHover}
         >
+          <span ref={hoverRef} aria-hidden="true" className="nav-hover" />
           <span ref={glideRef} data-nav-glide="" aria-hidden="true" className="nav-glide" />
           {NAV_GROUPS.map((item) => {
             const active = isNavGroupActive(location.pathname, item);
@@ -111,8 +131,11 @@ export default function Navbar({ onOpenPalette }: { onOpenPalette: () => void })
                 to={item.path}
                 aria-current={navAriaCurrent(location.pathname, item)}
                 data-active={active}
+                onPointerEnter={(event) => {
+                  if (event.pointerType === 'mouse') showNavHover(event.currentTarget);
+                }}
                 className={cn(
-                  'flex h-full items-center gap-1.5 whitespace-nowrap px-2 text-body-s transition-colors duration-fast min-[1680px]:px-3.5',
+                  'relative flex h-full items-center gap-1.5 whitespace-nowrap px-2 text-body-s transition-colors duration-fast min-[1680px]:px-3.5',
                   active ? 'font-medium text-brand-600' : 'text-ink-500 hover:text-ink-800',
                 )}
               >
@@ -127,21 +150,21 @@ export default function Navbar({ onOpenPalette }: { onOpenPalette: () => void })
         <div className="ml-auto flex items-center gap-1.5 md:gap-3 xl:ml-0">
           <button
             onClick={onOpenPalette}
-            className="hidden h-8 w-44 items-center gap-2 rounded-pill border border-line bg-card-warm px-3 text-caption text-ink-400 transition-[border-color,box-shadow,color] duration-fast hover:border-line-strong hover:text-ink-500 focus-visible:border-brand-500 focus-visible:shadow-focus-ring md:flex xl:hidden min-[1680px]:flex min-[1680px]:w-[220px]"
+            className="icon-motion-trigger hidden h-8 w-44 items-center gap-2 rounded-pill border border-line bg-card-warm px-3 text-caption text-ink-400 transition-[border-color,box-shadow,color] duration-fast hover:border-line-strong hover:text-ink-500 focus-visible:border-brand-500 focus-visible:shadow-focus-ring md:flex xl:hidden min-[1680px]:flex min-[1680px]:w-[220px]"
             aria-label={t('打开命令面板')}
           >
-            <Icon name="search" size={14} />
+            <Icon motion name="search" size={14} />
             <span className="flex-1 truncate text-left">{t('搜索代码或功能…')}</span>
             <kbd className="flex items-center gap-0.5 tnum text-[10px] text-ink-400">
-              <Icon name="command" size={11} />K
+              <Icon motion name="command" size={11} />K
             </kbd>
           </button>
           <button
             onClick={onOpenPalette}
-            className="flex size-11 items-center justify-center rounded-pill border border-line bg-card-warm text-ink-500 shadow-btn md:hidden xl:flex min-[1680px]:hidden"
+            className="icon-motion-trigger flex size-11 items-center justify-center rounded-pill border border-line bg-card-warm text-ink-500 shadow-btn md:hidden xl:flex min-[1680px]:hidden"
             aria-label={t('搜索')}
           >
-            <Icon name="search" size={16} />
+            <Icon motion name="search" size={16} />
           </button>
 
           <span className="hidden items-center gap-2 md:flex" aria-label={t('市场时段：{label}', { label: t(tokyoSessionLabel(session)) })}>
@@ -155,9 +178,9 @@ export default function Navbar({ onOpenPalette }: { onOpenPalette: () => void })
             <button
               onClick={handleLogout}
               disabled={loggingOut}
-              className="flex h-10 max-w-[140px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-pill border border-line bg-card px-3 text-caption text-ink-500 shadow-btn transition-colors hover:text-ink-800 disabled:cursor-wait disabled:opacity-60 md:max-w-none"
+              className="icon-motion-trigger flex h-10 max-w-[140px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-pill border border-line bg-card px-3 text-caption text-ink-500 shadow-btn transition-colors hover:text-ink-800 disabled:cursor-wait disabled:opacity-60 md:max-w-none"
             >
-              <Icon name="logout" size={14} className="shrink-0" />
+              <Icon motion name="logout" size={14} className="shrink-0" />
               <span className="truncate">{username ? t('退出 {name}', { name: username }) : t('退出')}</span>
             </button>
           ) : (

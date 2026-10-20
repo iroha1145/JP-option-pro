@@ -296,12 +296,12 @@ export default function LayerMenu({
                 type="button"
                 onClick={onClose}
                 className={cn(
-                  'inline-flex size-8 items-center justify-center rounded-md text-ink-400 transition-[transform,color,background-color] duration-fast hover:bg-paper-2 hover:text-ink-600 active:scale-95',
+                  'icon-motion-trigger inline-flex size-8 items-center justify-center rounded-md text-ink-400 transition-[transform,color,background-color] duration-fast hover:bg-paper-2 hover:text-ink-600 active:scale-95',
                   FOCUS_RING,
                 )}
                 aria-label={t('关闭')}
               >
-                <Icon name="x" size={16} />
+                <Icon motion name="x" size={16} />
               </button>
             </div>
           </div>

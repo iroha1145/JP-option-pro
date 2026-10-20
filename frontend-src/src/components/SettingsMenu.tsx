@@ -9,7 +9,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { overlayClassName, overlayVisible, readRootDurationMs, useOverlayPhase } from '@/lib/transitions';
-import { setThemePreference, type ThemePreference } from '@/lib/themePreference.ts';
+import { type ThemePreference } from '@/lib/themePreference.ts';
+import { flushSync } from 'react-dom';
+import { revealThemePreference } from '@/lib/themeReveal.ts';
 import { useThemePreference } from '@/hooks/useAppearance.ts';
 import { setColorMode, type ColorMode } from '@/lib/colorPreference.ts';
 import { useColorMode } from '@/hooks/useColorMode.ts';
@@ -29,10 +31,11 @@ const COLOR_OPTIONS: { value: ColorMode; label: string }[] = [
 
 /* touch-target：手机上原来在「更多」抽屉里的是 44px 高的分段控件，挪进菜单后不能变矮 */
 const ITEM_CLASS =
-  'touch-target flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-body-s transition-colors duration-fast focus-visible:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600';
+  'icon-motion-trigger touch-target flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-body-s transition-colors duration-fast focus-visible:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600';
 
 export default function SettingsMenu({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
+  const [themeMenuClosed, setThemeMenuClosed] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -100,10 +103,14 @@ export default function SettingsMenu({ className }: { className?: string }) {
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setThemeMenuClosed(false);
+          setOpen((v) => !v);
+        }}
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
             e.preventDefault();
+            setThemeMenuClosed(false);
             setOpen(true);
           }
         }}
@@ -112,13 +119,13 @@ export default function SettingsMenu({ className }: { className?: string }) {
         aria-label={t('显示设置')}
         title={t('显示设置')}
         /* 外层是透明触控区（手机 44px），看得见的 32px 按钮在 .header-chip；展开态由 aria-expanded 着色 */
-        className="touch-target header-action"
+        className="icon-motion-trigger touch-target header-action"
       >
         <span className="header-chip">
-          <Icon name="sliders" size={15} />
+          <Icon motion name="sliders" size={15} />
         </span>
       </button>
-      {mounted && (
+      {mounted && !themeMenuClosed && (
         <div
           ref={menuRef}
           role="menu"
@@ -149,7 +156,7 @@ export default function SettingsMenu({ className }: { className?: string }) {
                 >
                   <span className="w-5 shrink-0 tnum text-micro text-ink-400">{l.short}</span>
                   <span className="flex-1">{l.native}</span>
-                  {active && <Icon name="check" size={13} className="shrink-0" />}
+                  {active && <Icon motion name="check" size={13} className="shrink-0" />}
                 </button>
               );
             })}
@@ -165,12 +172,19 @@ export default function SettingsMenu({ className }: { className?: string }) {
                   role="menuitemradio"
                   aria-checked={active}
                   tabIndex={-1}
-                  onClick={() => choose(() => setThemePreference(option.value))}
+                  onClick={() => {
+                    flushSync(() => {
+                      setThemeMenuClosed(true);
+                      setOpen(false);
+                    });
+                    triggerRef.current?.focus();
+                    revealThemePreference(option.value, triggerRef.current);
+                  }}
                   className={cn(ITEM_CLASS, active ? 'text-brand-600' : 'text-ink-700 hover:bg-paper-2')}
                 >
-                  <Icon name={option.icon} size={14} className="w-5 shrink-0 text-ink-400" />
+                  <Icon motion name={option.icon} size={14} className="w-5 shrink-0 text-ink-400" />
                   <span className="flex-1">{option.label}</span>
-                  {active && <Icon name="check" size={13} className="shrink-0" />}
+                  {active && <Icon motion name="check" size={13} className="shrink-0" />}
                 </button>
               );
             })}
@@ -195,7 +209,7 @@ export default function SettingsMenu({ className }: { className?: string }) {
                     <span className={cn('size-1.5 rounded-full', option.value === 'western' ? 'bg-danger-600' : 'bg-ok-600')} />
                   </span>
                   <span className="flex-1">{option.label}</span>
-                  {active && <Icon name="check" size={13} className="shrink-0" />}
+                  {active && <Icon motion name="check" size={13} className="shrink-0" />}
                 </button>
               );
             })}

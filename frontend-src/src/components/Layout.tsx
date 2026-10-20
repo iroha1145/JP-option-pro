@@ -1,7 +1,7 @@
 /**
  * Layout：sticky Header + IndexTape + 内容槽 + Footer + Dock + ⌘K。
  */
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Outlet, useLocation, useNavigate, useNavigationType } from 'react-router';
 import Navbar from '@/components/Navbar';
 import IndexTape from '@/components/IndexTape';
@@ -17,12 +17,13 @@ import { useAccess } from '@/hooks/useAccess';
 
 export default function Layout() {
   const location = useLocation();
-  const { loading, isOwner, username } = useAccess();
-  const pageKey = `${location.pathname}:${isOwner ? 'owner' : username ? `account:${username}` : 'visitor'}`;
+  const { loading, isOwner, principalKey } = useAccess();
+  const pageKey = `${location.pathname}:${principalKey}:${isOwner}`;
   const navigate = useNavigate();
   const navigationType = useNavigationType();
   const previousPathname = useRef(location.pathname);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [dockHeight, setDockHeight] = useState(64);
 
   const openPalette = useCallback(() => setPaletteOpen(true), []);
   const openTicker = useCallback((code: string) => {
@@ -57,12 +58,12 @@ export default function Layout() {
       {/* overflow-x-clip：绝对定位的解释浮层即使处于 opacity-0 也占布局盒，
           窄屏时会把文档撑出横向滚动条。clip 只裁剪绘制，不建立滚动容器；
           InfoHint / PointerTooltip 的可见浮层是 position:fixed，不会被这里裁到。 */}
-      <div className="flex min-h-[100dvh] flex-col overflow-x-clip">
+      <div className="flex min-h-[100dvh] flex-col overflow-x-clip [&>footer]:pb-[calc(var(--mobile-dock-height)+2rem+env(safe-area-inset-bottom))] xl:[&>footer]:pb-10" style={{ '--mobile-dock-height': `${dockHeight}px` } as CSSProperties}>
         <a className="skip-link" href="#main-content">{t('跳到主要内容')}</a>
         <Navbar onOpenPalette={openPalette} />
         <IndexTape />
-        <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-shell min-h-[calc(100dvh-8rem)] flex-1 scroll-mt-24 px-4 pt-6 md:px-8 md:pt-8">
-          <div key={pageKey} className="page-enter">
+        <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-shell min-h-[100dvh] flex-1 scroll-mt-24 px-4 pt-6 md:px-8 md:pt-8">
+          <div key={pageKey}>
             <RouteErrorBoundary>
               <Suspense fallback={<PageFallback />}>
                 {loading ? <PageFallback /> : <Outlet />}
@@ -71,7 +72,7 @@ export default function Layout() {
           </div>
         </main>
         <Footer />
-        <MobileDock />
+        <MobileDock onHeightChange={setDockHeight} />
       </div>
 
       <CommandPalette

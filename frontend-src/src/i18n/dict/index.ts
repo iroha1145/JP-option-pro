@@ -697,6 +697,7 @@ export const DICT: Record<string, [string, string, string?]> = {
   决算: ['Earnings', '決算'],
   数据: ['Data', 'データ'],
   '请求超时，请重试': ['Request timed out — please retry', 'リクエストがタイムアウトしました。再試行してください'],
+  '响应数据过大，请缩小查询范围': ['Response is too large. Please narrow your query.', '応答データが大きすぎます。検索範囲を絞ってください。'],
   请求失败: ['Request failed', 'リクエストに失敗しました'],
   未知错误: ['Unknown error', '不明なエラー'],
   只: ['names', '銘柄'],
