@@ -43,7 +43,7 @@ function ScanHistoryHeader() {
   const populated = new URLSearchParams(location.search).has('populated');
   const history = populated ? Array.from({ length: 5 }, (_, i) => ({
     at: Date.UTC(2026, 9, 23, 6, i), count: 20 + i, durationMs: 80,
-    summary: t('条件选股'), kind: i === 0 ? 'refresh' as const : 'filter' as const,
+    summary: `${t('均衡')} · Top 20 · ${t('成交额 {v}', { v: '≥1.0億' })}`, kind: i === 0 ? 'refresh' as const : 'filter' as const,
   })) : [];
   return <main className="mx-auto w-full max-w-shell min-h-[100dvh] flex-1 scroll-mt-24 px-4 pt-6 md:px-8 md:pt-8">
     <PageHeader section="screener" title={t('条件选股')}

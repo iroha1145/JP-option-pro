@@ -153,11 +153,42 @@ for (const locale of ['zh', 'en', 'ja']) {
       expect(Math.abs(box.y - parent.y - parent.height - 8)).toBeLessThan(1);
       if (populated) {
         await expect(panel.locator('li')).toHaveCount(5);
-        for (const row of await panel.locator('li').all()) expect((await row.boundingBox()).height).toBeGreaterThanOrEqual(44);
+        for (const row of await panel.locator('li').all()) {
+          expect((await row.boundingBox()).height).toBeGreaterThanOrEqual(44);
+          const layout = await row.evaluate(el => {
+            const rect = el.getBoundingClientRect();
+            return {
+              client: el.clientWidth, scroll: el.scrollWidth,
+              blocks: Array.from(el.children, child => {
+                const box = child.getBoundingClientRect();
+                return { left: box.left - rect.left, right: box.right - rect.left, width: box.width,
+                  client: child.clientWidth, scroll: child.scrollWidth };
+              }),
+            };
+          });
+          expect(layout.scroll).toBeLessThanOrEqual(layout.client);
+          for (const block of layout.blocks) {
+            expect(block.width).toBeGreaterThan(0);
+            expect(block.left).toBeGreaterThanOrEqual(0);
+            expect(block.right).toBeLessThanOrEqual(layout.client);
+            expect(block.scroll).toBeLessThanOrEqual(block.client);
+          }
+        }
+        const summary = panel.locator('[data-pointer-tooltip-trigger]').first();
+        const completeText = await summary.textContent();
+        expect(await summary.locator('span').evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+        await summary.hover();
+        const tooltip = page.getByRole('tooltip');
+        await expect(tooltip).toHaveText(completeText);
+        await expect(tooltip).toBeVisible();
+        await expect.poll(() => tooltip.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+        await page.mouse.move(width - 1, 20);
+        await expect(tooltip).toHaveCount(0);
       } else {
         await expect(panel.locator('li')).toHaveCount(0);
         await expect(panel).toContainText({zh:'尚无扫描记录',en:'No scans yet',ja:'まだスキャンはありません'}[locale]);
       }
+      expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
       expect(await panel.evaluate(el => el.contains(document.activeElement))).toBe(true);
       await page.keyboard.press('Escape');
       await expect(panel).toHaveCount(0);
@@ -176,6 +207,7 @@ test('open scan history reclamps when the meta row changes across phone and desk
   for (const width of [320, 390, 640, 768, 1440, 320]) {
     await page.setViewportSize({ width, height: 844 });
     await expect.poll(async () => { const box = await panel.boundingBox(); return box.x >= 16 && box.x + box.width <= width - 16; }).toBe(true);
+    await expect.poll(() => panel.evaluate(el => el.scrollWidth <= el.clientWidth && Array.from(el.querySelectorAll('li')).every(row => row.scrollWidth <= row.clientWidth))).toBe(true);
   }
   await page.keyboard.press('Escape');
   await expect(panel).toHaveCount(0);

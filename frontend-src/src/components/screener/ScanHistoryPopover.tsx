@@ -126,10 +126,11 @@ export default function ScanHistoryPopover({ history }: { history: ScanHistoryEn
                       passthrough
                       label={entry.summary}
                       width={240}
+                      className="min-w-0 flex-1"
                       contentClassName="p-2.5"
                       content={<span className="block text-micro leading-[16px] text-ink-600">{entry.summary}</span>}
                     >
-                      <span className="min-w-0 flex-1 truncate text-micro text-ink-500">{entry.summary}</span>
+                      <span className="block truncate text-micro text-ink-500">{entry.summary}</span>
                     </PointerTooltip>
                     <SoftBadge tone={entry.kind === 'refresh' ? 'warn' : 'brand'} className="shrink-0 tnum">
                       {entry.kind === 'refresh' ? t('更新读回') : t('条件筛选')} · {entry.count} {t('只')}
