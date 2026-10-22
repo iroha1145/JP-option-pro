@@ -129,3 +129,55 @@ for (const theme of ['light', 'dark']) test(`settings and notification retain ta
   await close.press('Enter');
   await expect(notice).toHaveCount(0);
 });
+
+
+for (const locale of ['zh', 'en', 'ja']) {
+  const widths = locale === 'en' ? [320, 390, 639, 640, 767, 768, 1440] : [320, 390];
+  for (const width of widths) for (const populated of [false, true]) {
+    test(`scan history stays in viewport: ${locale} ${width}px ${populated ? 'records' : 'empty'}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.addInitScript(locale => localStorage.setItem('optixjp:locale', locale), locale);
+      await page.route(url => url.pathname.startsWith('/api/'), route => route.fulfill({ json: { mode: 'password', is_owner: false, password_configured: true, account: { logged_in: false, username: null } } }));
+      await page.goto('/visual-tests/support/mobile-controls.html?scan-history' + (populated ? '&populated' : ''));
+      const trigger = page.locator('button[aria-haspopup=dialog]');
+      if (width < 768) expect((await trigger.boundingBox()).height).toBeGreaterThanOrEqual(44);
+      await trigger.press('Enter');
+      const panel = page.getByRole('dialog');
+      await expect.poll(() => panel.evaluate(el => Number(getComputedStyle(el).opacity))).toBe(1);
+      await expect.poll(() => panel.evaluate(el => new DOMMatrix(getComputedStyle(el).transform).m11)).toBe(1);
+      const box = await panel.boundingBox();
+      expect(box.x).toBeGreaterThanOrEqual(16);
+      expect(box.x + box.width).toBeLessThanOrEqual(width - 16);
+      const parent = await trigger.boundingBox();
+      if (parent.x + parent.width - box.width >= 16) expect(Math.abs(box.x + box.width - parent.x - parent.width)).toBeLessThan(1);
+      expect(Math.abs(box.y - parent.y - parent.height - 8)).toBeLessThan(1);
+      if (populated) {
+        await expect(panel.locator('li')).toHaveCount(5);
+        for (const row of await panel.locator('li').all()) expect((await row.boundingBox()).height).toBeGreaterThanOrEqual(44);
+      } else {
+        await expect(panel.locator('li')).toHaveCount(0);
+        await expect(panel).toContainText({zh:'尚无扫描记录',en:'No scans yet',ja:'まだスキャンはありません'}[locale]);
+      }
+      expect(await panel.evaluate(el => el.contains(document.activeElement))).toBe(true);
+      await page.keyboard.press('Escape');
+      await expect(panel).toHaveCount(0);
+      await expect(trigger).toBeFocused();
+      await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      console.log('scan-history geometry', JSON.stringify({locale,width,populated,left:box.x,right:box.x+box.width,triggerHeight:parent.height}));
+    });
+  }
+}
+
+test('open scan history reclamps when the meta row changes across phone and desktop widths', async ({ page }) => {
+  await open(page, 'en');
+  await page.goto('/visual-tests/support/mobile-controls.html?scan-history&populated');
+  await page.locator('button[aria-haspopup=dialog]').click();
+  const panel = page.getByRole('dialog');
+  for (const width of [320, 390, 640, 768, 1440, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect.poll(async () => { const box = await panel.boundingBox(); return box.x >= 16 && box.x + box.width <= width - 16; }).toBe(true);
+  }
+  await page.keyboard.press('Escape');
+  await expect(panel).toHaveCount(0);
+  await expect(page.locator('button[aria-haspopup=dialog]')).toBeFocused();
+});

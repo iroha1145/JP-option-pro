@@ -1,5 +1,5 @@
 /** 页头「扫描历史」popover：最近 5 次（本会话内存，不落库）。 */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { fmtJstTime } from '@/lib/format';
@@ -19,6 +19,41 @@ export default function ScanHistoryPopover({ history }: { history: ScanHistoryEn
   const ref = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   useFocusTrap(popoverRef, open);
+
+  useLayoutEffect(() => {
+    const anchor = ref.current;
+    const panel = popoverRef.current;
+    if (!open || !anchor || !panel) return;
+    const place = () => {
+      // The meta row wraps independently of the viewport breakpoint. Retain
+      // right alignment when it fits; shift only enough to keep both edges in view.
+      const viewport = window.visualViewport;
+      const leftEdge = (viewport?.offsetLeft ?? 0) + 16;
+      const rightEdge = (viewport?.offsetLeft ?? 0) + (viewport?.width ?? document.documentElement.clientWidth) - 16;
+      panel.style.maxWidth = `${Math.max(0, rightEdge - leftEdge)}px`;
+      const width = panel.offsetWidth;
+      const anchorRight = anchor.getBoundingClientRect().right;
+      const left = Math.max(leftEdge, Math.min(anchorRight - width, rightEdge - width));
+      panel.style.right = `${anchorRight - left - width}px`;
+      panel.style.transformOrigin = `${Math.max(0, Math.min(width, anchorRight - left))}px top`;
+    };
+    place();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(place);
+    observer?.observe(anchor);
+    observer?.observe(panel);
+    if (anchor.parentElement) observer?.observe(anchor.parentElement);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    window.visualViewport?.addEventListener('resize', place);
+    window.visualViewport?.addEventListener('scroll', place);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+      window.visualViewport?.removeEventListener('resize', place);
+      window.visualViewport?.removeEventListener('scroll', place);
+    };
+  }, [open, history]);
 
   useEffect(() => {
     if (!open) return;

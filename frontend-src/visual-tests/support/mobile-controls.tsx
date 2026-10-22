@@ -10,6 +10,10 @@ import { STRUCTURE_HINTS, TECHNICAL_HINTS } from '../../src/lib/indicatorHints';
 import SettingsMenu from '../../src/components/SettingsMenu';
 import { ToastProvider } from '../../src/components/Toast';
 import { useToast } from '../../src/hooks/useToast';
+import PageHeader from '../../src/components/shared/PageHeader';
+import { DataThrough } from '../../src/components/domain';
+import ForceRefreshButton from '../../src/components/shared/ForceRefreshButton';
+import { t } from '../../src/i18n/core';
 import '../../src/styles/transitions-root.css';
 import '../../src/index.css';
 import '../../src/styles/transitions-catalog.css';
@@ -33,4 +37,27 @@ function App() {
     <CommandPalette open={palette} onClose={() => setPalette(false)} onOpenTicker={() => setPalette(false)} />
   </main>;
 }
-createRoot(document.getElementById('root')!).render(<BrowserRouter><AccessProvider><ToastProvider><App /></ToastProvider></AccessProvider></BrowserRouter>);
+// Use the production page header and its real meta controls; keep its wrapping
+// and the outer Layout content width identical to Screener.tsx/Layout.tsx.
+function ScanHistoryHeader() {
+  const populated = new URLSearchParams(location.search).has('populated');
+  const history = populated ? Array.from({ length: 5 }, (_, i) => ({
+    at: Date.UTC(2026, 9, 23, 6, i), count: 20 + i, durationMs: 80,
+    summary: t('条件选股'), kind: i === 0 ? 'refresh' as const : 'filter' as const,
+  })) : [];
+  return <main className="mx-auto w-full max-w-shell min-h-[100dvh] flex-1 scroll-mt-24 px-4 pt-6 md:px-8 md:pt-8">
+    <PageHeader section="screener" title={t('条件选股')}
+      description={t('收盘后按日线全市场计算强度分，扫描读取已保存发布，不会触发供应商。')}
+      meta={<>
+        <DataThrough date={populated ? '2026-10-23' : null} />
+        {populated && <span className="hidden text-right sm:block"><span className="block text-micro text-ink-400">{t('评分时间')}</span><span className="tnum text-caption text-ink-600">15:00:00</span></span>}
+        {populated && <span className="hidden text-right sm:block"><span className="block text-micro text-ink-400">{t('上次筛选')}</span><span className="tnum text-caption text-ink-600">15:04:00</span></span>}
+        <ScanHistoryPopover history={history} />
+        <ForceRefreshButton onClick={() => {}} label={t('重新读取')} title={t('按当前条件重新读取已保存发布，不会重算日线')} testId="screener-reread" />
+      </>}
+    />
+    <button id="history-outside" className="mt-8">Outside</button>
+  </main>;
+}
+const preview = new URLSearchParams(location.search).has('scan-history') ? <ScanHistoryHeader /> : <App />;
+createRoot(document.getElementById('root')!).render(<BrowserRouter><AccessProvider><ToastProvider>{preview}</ToastProvider></AccessProvider></BrowserRouter>);
