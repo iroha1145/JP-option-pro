@@ -80,7 +80,7 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
                       <span className="text-caption font-semibold text-ink-800">{dim.label}</span>
                       <span className="tnum text-micro text-ink-400">{dim.en}</span>
                     </span>
-                    {hint && <span className="mt-1.5 block text-micro leading-[16px] text-ink-500">{hint.body}</span>}
+                    {hint && <span className="mt-1.5 block text-micro text-ink-500">{hint.body}</span>}
                     <span className="mt-1.5 block tnum text-caption text-brand-600">
                       {value !== null ? `${Math.round(value * 10) / 10} / 100` : t('暂无数据')}
                     </span>
@@ -294,7 +294,7 @@ export function MethodCard({
                   ? t(profile.description)
                   : t('内在强度为六族加权合成（0–100，缺失重新配权）。')}
               </p>
-              <p className="mt-1.5 text-micro leading-[16px] text-ink-400">
+              <p className="mt-1.5 text-micro text-ink-400">
                 {t('最终排序分 = 内在 78% + 市场形态 8% + 偏好适配 14%（置信度加权）。')}
               </p>
             </>

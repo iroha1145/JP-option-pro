@@ -348,7 +348,7 @@ export default function FilterWorkbench({
       </motion.div>
 
       <details className="group/filters mt-5 border-t border-line/70 pt-3" data-testid="screener-advanced-filters">
-        <summary className="disclosure-trigger flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-2 rounded-lg py-1 text-caption text-ink-500 outline-none transition-colors hover:text-ink-800 focus-visible:ring-2 focus-visible:ring-brand-400/40 [&::-webkit-details-marker]:hidden">
+        <summary className="disclosure-trigger flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-2 rounded-lg py-1 text-caption text-ink-500 transition-colors hover:text-ink-800 [&::-webkit-details-marker]:hidden">
           <span className="inline-flex shrink-0 items-center gap-2 font-medium text-ink-700">
             <Icon name="filter-funnel" size={14} className="text-ink-400" />
             {t('更多筛选')}

@@ -87,6 +87,13 @@ jobs:
             frontend-src/tests/watchlist-search-lifecycle.mjs \
             frontend-src/tests/page-refresh-cache.mjs
 
+      - name: UI viewport and gesture regression
+        working-directory: frontend-src
+        run: |
+          node --experimental-strip-types --test tests/jp-mobile-controls.mjs tests/heavy-toggle-motion.mjs tests/jp-feel-alignment.mjs
+          npx playwright install --with-deps chromium
+          npm run test:browser
+
       - name: Screener freshness gate
         run: node --experimental-strip-types --test frontend-src/tests/screener-freshness.mjs
 

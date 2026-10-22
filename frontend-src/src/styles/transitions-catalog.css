@@ -549,27 +549,13 @@
 }
 
 /* —— 27-toggle.md —— */
-.t-toggle { transition: background var(--toggle-track) var(--toggle-ease); }
-.t-toggle-thumb { translate: 0 0; will-change: translate; }
-.t-toggle[data-on="true"] .t-toggle-thumb { translate: var(--toggle-travel) 0; }
-.t-toggle.is-init[data-on="true"] .t-toggle-thumb { animation: t-toggle-on var(--toggle-dur) var(--toggle-ease) both; }
-.t-toggle.is-init[data-on="false"] .t-toggle-thumb { animation: t-toggle-off var(--toggle-dur) var(--toggle-ease) both; }
-@keyframes t-toggle-on {
-  0% { translate: 0 0; }
-  55% { translate: calc(var(--toggle-travel) + var(--toggle-ov1)) 0; }
-  80% { translate: calc(var(--toggle-travel) - var(--toggle-ov2)) 0; }
-  100% { translate: var(--toggle-travel) 0; }
+.t-toggle {
+  --toggle-fill: 0;
+  background-color: color-mix(in srgb, var(--brand-600) calc(var(--toggle-fill) * 100%), var(--ink-300));
 }
-@keyframes t-toggle-off {
-  0% { translate: var(--toggle-travel) 0; }
-  55% { translate: calc(0px - var(--toggle-ov1)) 0; }
-  80% { translate: var(--toggle-ov2) 0; }
-  100% { translate: 0 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .t-toggle-thumb { animation: none !important; }
-}
+.t-toggle[data-on="true"] { --toggle-fill: 1; }
+.t-toggle-thumb { translate: var(--thumb-physical-x, 0px) 0; will-change: translate; }
+.t-toggle[data-on="true"] .t-toggle-thumb { translate: var(--thumb-physical-x, var(--toggle-travel)) 0; }
 
 /* —— 02-number-pop-in.md —— */
 @keyframes t-digit-pop-in {
@@ -610,11 +596,11 @@
    plus physical drag-handle affordance for mobile bottom sheets. */
 .t-toggle-thumb {
   scale: var(--thumb-scale-x, 1) var(--thumb-scale-y, 1);
-  transition: scale var(--duration-quick, 150ms) var(--ease-feel-press, ease-out);
+  transition: none;
 }
 .t-toggle[data-feel-drag="true"] .t-toggle-thumb {
   animation: none !important;
-  translate: var(--thumb-drag-x, 0px) 0 !important;
+  translate: var(--thumb-physical-x, 0px) 0 !important;
 }
 [data-handle] {
   cursor: grab;
@@ -643,6 +629,11 @@
 .t-more-sheet[data-open="true"] {
   transform: translateY(0);
   transition-duration: var(--sheet-open-duration);
+}
+/* A magnetic gesture already finished the exit before overlay teardown. */
+[data-feel-sheet][data-feel-dismissed="true"] {
+  transform: translateY(100%) !important;
+  transition: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
   .t-more-sheet { transition: none !important; }

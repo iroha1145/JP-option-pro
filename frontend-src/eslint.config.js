@@ -11,7 +11,7 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['tests/**/*.mjs', 'src/**/*.test.mjs'],
+    files: ['tests/**/*.mjs', 'src/**/*.test.mjs', 'visual-tests/**/*.mjs', 'playwright.config.mjs'],
     languageOptions: {
       // These suites run in Node, including its built-in Web APIs.
       globals: {
@@ -23,7 +23,18 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/**/*.{ts,tsx}'],
+    files: ['visual-tests/**/*.mjs'],
+    languageOptions: { globals: {
+        window: 'readonly', document: 'readonly', Node: 'readonly', HTMLElement: 'readonly',
+        DOMMatrix: 'readonly', CSSTransition: 'readonly', CSSAnimation: 'readonly',
+        PointerEvent: 'readonly', Event: 'readonly', MutationObserver: 'readonly',
+        requestAnimationFrame: 'readonly', localStorage: 'readonly',
+        matchMedia: 'readonly', getComputedStyle: 'readonly', scrollY: 'readonly',
+    } },
+  },
+  {
+    files: ['src/**/*.{ts,tsx}', 'visual-tests/**/*.{ts,tsx}'],
+    languageOptions: { globals: { window: 'readonly', document: 'readonly' } },
     plugins: { 'react-hooks': reactHooks },
     rules: {
       // Classic hook rules only. The plugin's newest "recommended" set bundles

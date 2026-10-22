@@ -396,7 +396,7 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
                   setActive(0);
                   inputRef.current?.focus();
                 }}
-                className="icon-motion-trigger anim-fade-in flex size-6 shrink-0 items-center justify-center rounded-md text-ink-400 transition-colors duration-fast hover:bg-line/70 hover:text-ink-800"
+                className="mobile-icon-target icon-motion-trigger anim-fade-in flex size-6 shrink-0 items-center justify-center rounded-md text-ink-400 transition-colors duration-fast hover:bg-line/70 hover:text-ink-800"
               >
                 <Icon motion name="x" size={12} />
               </button>
@@ -410,16 +410,14 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
               ref={glideRef}
               aria-hidden="true"
               data-glide-list=""
-              className="pointer-events-none absolute inset-x-1.5 top-0 z-0 rounded-md bg-brand-50"
+              className="pointer-events-none absolute inset-x-1.5 top-0 z-0 rounded-[var(--r-palette-item)] bg-paper-2"
               style={{
                 height: 0,
                 opacity: 0,
                 transition:
                   'transform var(--tabs-dur) var(--tabs-ease), height var(--tabs-dur) var(--tabs-ease), opacity var(--duration-quick)',
               }}
-            >
-              <span className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-brand-600" />
-            </span>
+            />
             {searching && flat.length === 0 && (
               <div className="flex flex-col items-center py-10 text-center" role="status">
                 <DotsLoader />
@@ -459,7 +457,7 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
                     onClick={e.action}
                     onMouseEnter={() => setActive(e.idx)}
                     onFocus={() => setActive(e.idx)}
-                    className="icon-motion-trigger relative z-10 flex w-full items-center gap-2.5 rounded-md px-4 py-2 text-left transition-colors duration-fast"
+                    className="mobile-control-target icon-motion-trigger relative z-10 flex w-full items-center gap-2.5 rounded-[var(--r-palette-item)] px-4 py-2 text-left transition-colors duration-fast"
                   >
                     {e.ticker ? <CodeMark code={e.ticker} size={24} /> : <Icon motion motionActive={e.idx === clampedActive} name={e.icon} size={15} className={cn('shrink-0', e.idx === clampedActive ? 'text-brand-600' : 'text-ink-400')} />}
                     {e.no && <span className="font-mono text-micro text-ink-400 tnum">{e.no}</span>}

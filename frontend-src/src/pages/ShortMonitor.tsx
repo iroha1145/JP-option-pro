@@ -574,7 +574,7 @@ function Explanation({ detail }: { detail: ShortMonitorDetail }) {
           : detail.explanation.lines.map((line, index) => <li key={index}>{line}</li>)}
       </ul>
       {detail.explanation.caveat && (
-        <p className="mt-1.5 border-l-2 border-warn-200 pl-2 text-micro text-ink-500">
+        <p className="mt-1.5 max-w-[75ch] rounded-[var(--r-control)] border border-line bg-paper-2/60 px-2.5 py-2 text-micro text-ink-500">
           {t(detail.explanation.caveat)}
         </p>
       )}

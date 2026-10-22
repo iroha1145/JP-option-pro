@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import Icon from '@/components/icons';
+import Icon, { type IconName } from '@/components/icons';
 import { readRootDurationMs } from '@/lib/transitions';
 import { t as __t } from '../i18n/core.ts';
 
@@ -20,10 +20,10 @@ interface ToastItem {
   hiding?: boolean;
 }
 
-const BAR: Record<ToastKind, string> = {
-  success: 'bg-ok-700',
-  error: 'bg-danger-700',
-  info: 'bg-brand-600',
+const STATUS_BADGE: Record<ToastKind, { icon: IconName; cls: string }> = {
+  success: { icon: 'check', cls: 'bg-ok-50 text-ok-700' },
+  error: { icon: 'x', cls: 'bg-danger-50 text-danger-700' },
+  info: { icon: 'bell', cls: 'bg-brand-50 text-brand-700' },
 };
 
 function ToastCard({ t, onDismiss, onRemove }: { t: ToastItem; onDismiss: (id: number) => void; onRemove: (id: number) => void }) {
@@ -74,20 +74,25 @@ function ToastCard({ t, onDismiss, onRemove }: { t: ToastItem; onDismiss: (id: n
             if (!event.currentTarget.contains(event.relatedTarget as Node)) setFocused(false);
           }}
           className={cn(
-            't-toast pointer-events-auto relative overflow-hidden rounded-md border border-line bg-card shadow-sh-2',
+            't-toast pointer-events-auto relative overflow-hidden rounded-[var(--r-group)] border border-line bg-card shadow-sh-3',
             open && 'is-open',
           )}
           data-open={open ? 'true' : 'false'}
         >
-          <span className={cn('absolute inset-y-0 left-0 w-[3px]', BAR[t.kind])} aria-hidden="true" />
-          <div className="flex items-start gap-2 py-2.5 pl-4 pr-2">
+          <div className="flex items-start gap-2.5 py-2.5 pl-3 pr-2">
+            <span
+              className={cn('mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-[var(--r-dropdown-item)]', STATUS_BADGE[t.kind].cls)}
+              aria-hidden="true"
+            >
+              <Icon name={STATUS_BADGE[t.kind].icon} size={13} />
+            </span>
             <div className="min-w-0 flex-1">
               <p className="text-body-s font-medium text-ink-800">{t.title}</p>
               {t.description && <p className="mt-0.5 text-caption text-ink-500">{t.description}</p>}
             </div>
             <button
               onClick={() => onDismiss(t.id)}
-              className="icon-motion-trigger flex size-8 shrink-0 items-center justify-center rounded-sm text-ink-400 transition-[transform,color,background-color] duration-fast hover:bg-paper-2 hover:text-ink-600 active:scale-95"
+              className="icon-motion-trigger mobile-icon-target flex size-8 shrink-0 items-center justify-center rounded-[var(--r-dropdown-item)] text-ink-400 transition-[transform,color,background-color] duration-fast hover:bg-paper-2 hover:text-ink-600 active:scale-95"
               aria-label={__t('关闭通知')}
             >
               <Icon motion name="x" size={13} />

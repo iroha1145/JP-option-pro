@@ -94,6 +94,11 @@
     --r-control: 10px;
     --r-group: 14px;
     --r-pill: 999px;
+    /* 内层圆角随外框和内距配合，菜单 14px − 6px = 8px。 */
+    --r-dropdown-item: 8px;
+    --r-select-item: 10px;
+    --r-palette-item: 12px;
+    --r-dock-item: 14px;
     --ease-snap: cubic-bezier(.22, 1, .36, 1);
     /* v8 阴影三层制：更柔更大（rgba(16,24,40,*)），内高光 .7 保持 */
     --shadow-sh-1: 0 1px 2px rgba(0, 0, 0, .035);
@@ -284,6 +289,7 @@
   body {
     @apply bg-paper text-ink-600 font-sans text-body;
     font-feature-settings: "tnum" 1, "cv05" 1;
+    font-variant-ligatures: common-ligatures contextual;
   }
 
   /* 2026-10-06 第二轮：去掉 §3.5 纸面点阵纹理，页面底色保持纯色（参照 uiarc.dev）。 */
@@ -292,6 +298,16 @@
      单行文字不受影响；不支持的浏览器照常折行。 */
   p, li, dd, blockquote, figcaption {
     text-wrap: pretty;
+  }
+
+  /* 多行标题均匀换行；保留日文标题原有禁则和兜底换行。 */
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+
+  /* 选择控件的标签避免点按时误选正文，其他文本仍可复制。 */
+  label:has(input[type="checkbox"], input[type="radio"], [role="switch"]) {
+    user-select: none;
   }
 
   /* 大标题词内不断行：日文「ブレイクアウト・レ/ーダー」这类片假名词不从中间断开，改在「・」或空格处换行；
@@ -1159,11 +1175,10 @@
   .ft-range::-webkit-slider-thumb, .ft-range::-moz-range-thumb { transition: none; }
 }
 
-/* 雷达卡片定位闪烁：点击历史事件定位到当日卡时，左缘群青竖条 + 外圈光晕闪两次。
-   原先写在 Breakouts.tsx 里的内联 <style>，每次渲染都重建一份样式表。 */
+/* 雷达卡片定位闪烁：用整圈细描边与光晕定位，避免单侧装饰彩条。 */
 @keyframes bk-locate-flash {
-  0% { box-shadow: inset 3px 0 0 var(--brand-600), 0 0 0 3px color-mix(in srgb, var(--brand-600) 25%, transparent); }
-  100% { box-shadow: inset 3px 0 0 transparent, 0 0 0 0 transparent; }
+  0% { box-shadow: inset 0 0 0 1.5px var(--brand-600), 0 0 0 3px color-mix(in srgb, var(--brand-600) 25%, transparent); }
+  100% { box-shadow: inset 0 0 0 1.5px transparent, 0 0 0 0 transparent; }
 }
 .bk-locate { animation: bk-locate-flash 900ms var(--ease-smooth-out) 2; }
 @media (prefers-reduced-motion: reduce) { .bk-locate { animation: none; } }
@@ -1338,4 +1353,10 @@
   .index-summary-grid { gap: 0; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; background: var(--card); }
   .index-summary-grid > *, .index-summary-grid .card-surface { border: 0; border-radius: 0; box-shadow: none; }
   .index-summary-grid > * + * { border-left: 1px solid var(--line); }
+}
+
+/* 手机与触屏的局部操作使用真实布局盒，避免透明外扩覆盖相邻操作。 */
+@media (max-width: 767px), (pointer: coarse) {
+  .mobile-control-target { min-height: 44px; }
+  .mobile-icon-target { min-width: 44px; min-height: 44px; }
 }

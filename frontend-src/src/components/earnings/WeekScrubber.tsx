@@ -179,9 +179,9 @@ export default function WeekScrubber({
                                   navigate(`/stock/${item.display_code}`);
                                 }}
                                 className={cn(
-                                  'flex h-6 w-full items-center gap-1 rounded-xs border-l-2 px-1 transition-[transform,background-color] duration-fast hover:-translate-y-px',
+                                  'mobile-control-target flex h-6 w-full items-center gap-1 rounded-xs border px-1 transition-[transform,background-color] duration-fast hover:-translate-y-px',
                                   item.status === 'confirmed'
-                                    ? 'border-brand-600 bg-brand-50'
+                                    ? 'border-line bg-brand-50'
                                     : item.status === 'released'
                                       ? 'border-ink-300 bg-paper-2'
                                       : 'border-transparent bg-paper-2/70 hover:bg-brand-50',

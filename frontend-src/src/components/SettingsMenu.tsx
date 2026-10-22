@@ -31,7 +31,7 @@ const COLOR_OPTIONS: { value: ColorMode; label: string }[] = [
 
 /* touch-target：手机上原来在「更多」抽屉里的是 44px 高的分段控件，挪进菜单后不能变矮 */
 const ITEM_CLASS =
-  'icon-motion-trigger touch-target flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-body-s transition-colors duration-fast focus-visible:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600';
+  'icon-motion-trigger touch-target flex w-full items-center gap-2 rounded-[var(--r-dropdown-item)] px-2 py-1.5 text-left text-body-s transition-colors duration-fast focus-visible:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600';
 
 export default function SettingsMenu({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
@@ -133,7 +133,7 @@ export default function SettingsMenu({ className }: { className?: string }) {
           data-origin="top-right"
           onKeyDown={onMenuKeyDown}
           className={cn(
-            't-dropdown fixed right-3 top-14 z-40 sm:absolute sm:right-0 sm:top-full sm:mt-2 max-h-[calc(100dvh-10rem)] w-[208px] max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain rounded-md border border-line bg-card p-1.5 shadow-sh-2',
+            't-dropdown fixed right-3 top-14 z-40 sm:absolute sm:right-0 sm:top-full sm:mt-2 max-h-[calc(100dvh-10rem)] w-[208px] max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain rounded-[var(--r-group)] border border-line bg-card p-1.5 shadow-sh-2',
             overlayClassName(phase),
           )}
         >

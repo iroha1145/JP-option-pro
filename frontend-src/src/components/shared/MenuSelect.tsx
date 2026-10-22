@@ -49,7 +49,7 @@ export default function MenuSelect<T extends string | number>({
           ref={triggerRef}
           aria-label={ariaLabel}
           className={cn(
-            'menu-select-trigger flex min-h-9 max-w-full items-center gap-1.5 rounded-md border border-line-strong bg-card pl-2.5 pr-2 text-caption text-ink-600 transition-colors duration-fast hover:bg-paper-2 data-[state=open]:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50',
+            'menu-select-trigger mobile-control-target flex min-h-9 max-w-full items-center gap-1.5 rounded-md border border-line-strong bg-card pl-2.5 pr-2 text-caption text-ink-600 transition-colors duration-fast hover:bg-paper-2 data-[state=open]:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50',
             triggerClassName,
           )}
         >
@@ -78,7 +78,7 @@ export default function MenuSelect<T extends string | number>({
                 <Select.Item
                   key={`${typeof option.value}-${String(option.value)}`}
                   value={`option-${index}`}
-                  className="relative flex min-h-9 cursor-default select-none items-center gap-3 rounded-md py-2 pl-2.5 pr-8 text-caption text-ink-600 outline-none data-[highlighted]:bg-brand-50 data-[highlighted]:text-brand-700 data-[state=checked]:font-semibold"
+                  className="mobile-control-target relative flex min-h-9 cursor-default select-none items-center gap-3 rounded-[var(--r-select-item)] py-2 pl-2.5 pr-8 text-caption text-ink-600 outline-none data-[highlighted]:bg-brand-50 data-[highlighted]:text-brand-700 data-[state=checked]:font-semibold"
                 >
                   <Select.ItemText>{option.label}</Select.ItemText>
                   <Select.ItemIndicator className="absolute right-2 text-brand-600">

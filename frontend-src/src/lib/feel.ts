@@ -5,15 +5,27 @@
  * Uses fixed spring parameters, RK4 trajectories, rubber-band walls and
  * momentum-projected drag release. General spring editors and demos are omitted.
  */
-import { useLayoutEffect, useRef, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
+import { useCallback, useLayoutEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 
 // Fixed parameters used by the Japanese toggle and more-sheet gestures.
-const TOGGLE_MASS = 0.85;
 const SHEET_MASS = 1.3;
 const SHEET_FREQUENCY = 3;
 const SHEET_DAMPING_RATIO = 0.84;
 const SHEET_STIFFNESS = SHEET_MASS * (2 * Math.PI * SHEET_FREQUENCY) ** 2;
 const SHEET_DAMPING = 2 * SHEET_DAMPING_RATIO * Math.sqrt(SHEET_STIFFNESS * SHEET_MASS);
+
+interface SpringParameters { mass: number; stiffness: number; damping: number }
+const SHEET_SPRING: SpringParameters = { mass: SHEET_MASS, stiffness: SHEET_STIFFNESS, damping: SHEET_DAMPING };
+const TOGGLE_MASS = 2.2;
+const TOGGLE_STIFFNESS = TOGGLE_MASS * (2 * Math.PI * 3.3) ** 2;
+const TOGGLE_DAMPING = 2 * 0.78 * Math.sqrt(TOGGLE_STIFFNESS * TOGGLE_MASS);
+const TOGGLE_SPRING: SpringParameters = { mass: TOGGLE_MASS, stiffness: TOGGLE_STIFFNESS, damping: TOGGLE_DAMPING };
+const HAND_STIFFNESS = (2 * Math.PI * 6) ** 2;
+const TOGGLE_HAND: SpringParameters = {
+  mass: TOGGLE_MASS,
+  stiffness: HAND_STIFFNESS,
+  damping: TOGGLE_DAMPING + 2 * Math.sqrt(HAND_STIFFNESS * TOGGLE_MASS),
+};
 
 const DT = 1 / 240;
 const MAX_STEP = 1 / 20;
@@ -63,7 +75,7 @@ export function projectCoast(
 }
 
 /**
- * Internal RK4 spring body used by the sheet animation handoff.
+ * Internal RK4 spring body used by the fixed toggle and sheet springs.
  */
 class Body {
   x: number;
@@ -74,14 +86,28 @@ class Body {
   damping: number;
   asleep: boolean;
 
-  constructor(initial: number) {
+  constructor(initial: number, params: SpringParameters = SHEET_SPRING) {
     this.x = initial;
     this.v = 0;
     this.target = initial;
-    this.mass = SHEET_MASS;
-    this.stiffness = SHEET_STIFFNESS;
-    this.damping = SHEET_DAMPING;
+    this.mass = params.mass;
+    this.stiffness = params.stiffness;
+    this.damping = params.damping;
     this.asleep = true;
+  }
+
+  setParams(params: SpringParameters): this {
+    this.mass = params.mass;
+    this.stiffness = params.stiffness;
+    this.damping = params.damping;
+    return this;
+  }
+
+  set(x: number, v = 0): this {
+    this.x = x;
+    this.v = v;
+    this.asleep = false;
+    return this;
   }
 
   to(target: number): this {
@@ -236,175 +262,155 @@ export function handoff(
   };
 }
 
-/**
- * Tactile thumb drag & press physics hook for `<Switch>` (Fluid Functionalism toggle).
- * Supports both normal clicks/keyboard AND pointer thumb dragging with rubber-band walls
- * and velocity-projected release (`projectCoast`).
- */
-// Velocity expires when the pointer rests. Release coordinates are sampled too.
-const VELOCITY_WINDOW_MS = 80;
-function pointerVelocity(position: number, last: number, now: number, lastT: number, previous: number, released = false) {
-  const elapsed = now - lastT;
-  if (elapsed > VELOCITY_WINDOW_MS) return 0;
-  if (released && position === last) return previous * Math.max(0, 1 - elapsed / VELOCITY_WINDOW_MS);
-  return 0.55 * previous + 0.45 * (position - last) / Math.max(0.001, elapsed / 1000);
+/** The same body follows the hand and continues through release. */
+export class HeavyToggleMotion {
+  readonly spring = TOGGLE_SPRING;
+  // The hand spring adds its damper to the thumb's own drag.
+  readonly hand = TOGGLE_HAND;
+  readonly body: Body;
+  readonly travel: number;
+  constructor(travel: number, checked: boolean) { this.travel = travel; this.body = new Body(checked ? travel : 0, this.spring); }
+  pull(position: number) { this.body.setParams(this.hand).to(wall(position, 0, this.travel, 0.16)); }
+  release() {
+    const checked = projectCoast(this.body.x, this.body.v, this.spring.mass, this.spring.damping) > this.travel / 2;
+    this.to(checked); return checked;
+  }
+  to(checked: boolean) { this.body.setParams(this.spring).to(checked ? this.travel : 0); }
+  snap(checked: boolean) { this.body.set(checked ? this.travel : 0, 0); this.body.target = this.body.x; this.body.asleep = true; }
 }
 
 export function useFeelToggleDrag({ checked, disabled = false, travelPx = 14, onToggle }: {
   checked: boolean; disabled?: boolean; travelPx?: number; onToggle: () => void;
 }) {
-  const dragRef = useRef<{
-    pointerId: number; target: HTMLButtonElement; startX: number; lastX: number;
-    lastT: number; vx: number; moved: boolean; origin: number;
-  } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const latest = useRef({ checked, disabled, onToggle });
+  useLayoutEffect(() => { latest.current = { checked, disabled, onToggle }; }, [checked, disabled, onToggle]);
+  const motionRef = useRef(new HeavyToggleMotion(travelPx, checked));
+  const frameRef = useRef(0);
+  const clockRef = useRef<number | null>(null);
+  const dragRef = useRef<{ pointerId: number; target: HTMLButtonElement; startX: number; origin: number; lastX: number; lastAt: number; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
-  const reset = () => {
-    const st = dragRef.current;
-    dragRef.current = null;
-    if (!st) return;
-    if (st.moved) suppressClick.current = true;
-    delete st.target.dataset.feelPress;
-    delete st.target.dataset.feelDrag;
-    for (const name of ['--thumb-drag-x', '--thumb-scale-x', '--thumb-scale-y']) st.target.style.removeProperty(name);
-    if (st.target.hasPointerCapture?.(st.pointerId)) st.target.releasePointerCapture(st.pointerId);
+  const paint = useCallback(() => {
+    const el = buttonRef.current, motion = motionRef.current!;
+    if (!el) return;
+    const x = wall(motion.body.x, 0, motion.travel, 0.16);
+    const stretch = prefersReducedMotionNow() ? 1 : 1 + Math.min(0.1, Math.abs(motion.body.v) / (2600 * Math.sqrt(motion.body.mass)));
+    el.style.setProperty('--thumb-physical-x', `${x}px`);
+    el.style.setProperty('--thumb-scale-x', String(stretch));
+    el.style.setProperty('--thumb-scale-y', String(1 / Math.sqrt(stretch)));
+    el.style.setProperty('--toggle-fill', String(Math.max(0, Math.min(1, x / motion.travel))));
+  }, []);
+  const stop = useCallback(() => { cancelAnimationFrame(frameRef.current); frameRef.current = 0; clockRef.current = null; }, []);
+  const advance = useCallback((now: number) => {
+    const previous = clockRef.current; clockRef.current = now;
+    if (previous !== null) motionRef.current!.body.step(Math.max(0, (now - previous) / 1000));
+    paint();
+  }, [paint]);
+  const run = useCallback(() => {
+    if (frameRef.current) return;
+    clockRef.current ??= performance.now();
+    const tick = (now: number) => {
+      frameRef.current = 0; advance(now);
+      if (!motionRef.current!.body.asleep || dragRef.current) frameRef.current = requestAnimationFrame(tick);
+      else clockRef.current = null;
+    };
+    frameRef.current = requestAnimationFrame(tick);
+  }, [advance]);
+  const releaseCapture = useCallback(() => {
+    const st = dragRef.current; dragRef.current = null;
+    if (st) {
+      if (st.moved) suppressClick.current = true;
+      delete st.target.dataset.feelDrag;
+      if (st.target.hasPointerCapture?.(st.pointerId)) st.target.releasePointerCapture(st.pointerId);
+    }
+    return st;
+  }, []);
+  const reset = useCallback(() => {
+    if (dragRef.current) suppressClick.current = true;
+    releaseCapture(); stop(); motionRef.current!.snap(latest.current.checked); paint();
+  }, [releaseCapture, stop, paint]);
+  const choose = (next: boolean) => {
+    if (latest.current.disabled) return;
+    motionRef.current!.to(next);
+    if (prefersReducedMotionNow()) { motionRef.current!.snap(next); stop(); paint(); } else run();
+    if (next !== latest.current.checked) latest.current.onToggle();
   };
   useLayoutEffect(() => {
-    if (disabled) reset();
-    window.addEventListener('blur', reset);
-    return () => { window.removeEventListener('blur', reset); reset(); suppressClick.current = false; };
-  }, [disabled]);
-  const onPointerDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
-    if (disabled || e.button !== 0 || e.isPrimary === false || dragRef.current) return;
-    suppressClick.current = false;
-    dragRef.current = { pointerId: e.pointerId, target: e.currentTarget, startX: e.clientX,
-      lastX: e.clientX, lastT: performance.now(), vx: 0, moved: false, origin: checked ? travelPx : 0 };
-    if (!prefersReducedMotionNow()) {
-      e.currentTarget.dataset.feelPress = 'true';
-      e.currentTarget.style.setProperty('--thumb-scale-x', '1.1');
-      e.currentTarget.style.setProperty('--thumb-scale-y', '0.94');
+    if (motionRef.current.travel !== travelPx) {
+      reset();
+      motionRef.current = new HeavyToggleMotion(travelPx, checked);
     }
-    try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* Pointer may have already ended. */ }
+    if (disabled || dragRef.current) reset();
+    else {
+      motionRef.current!.to(checked);
+      if (prefersReducedMotionNow()) { motionRef.current!.snap(checked); stop(); }
+      else if (!motionRef.current!.body.asleep) run();
+      paint();
+    }
+  }, [checked, disabled, travelPx, reset, run, paint, stop]);
+  useLayoutEffect(() => {
+    paint();
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const onPreference = () => { if (media.matches) reset(); };
+    media.addEventListener('change', onPreference); window.addEventListener('blur', reset);
+    return () => {
+      media.removeEventListener('change', onPreference); window.removeEventListener('blur', reset);
+      releaseCapture(); stop(); suppressClick.current = false;
+    };
+  }, [paint, reset, releaseCapture, stop]);
+  const onPointerDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (latest.current.disabled || e.button !== 0 || e.isPrimary === false || dragRef.current) return;
+    suppressClick.current = false; advance(performance.now());
+    dragRef.current = { pointerId: e.pointerId, target: e.currentTarget, startX: e.clientX, origin: motionRef.current!.body.x,
+      lastX: e.clientX, lastAt: performance.now(), moved: false };
+    try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* Pointer may have ended. */ }
   };
   const onPointerMove = (e: ReactPointerEvent<HTMLButtonElement>) => {
     const st = dragRef.current;
-    if (!st || st.pointerId !== e.pointerId || disabled) return;
-    const now = performance.now();
-    st.vx = pointerVelocity(e.clientX, st.lastX, now, st.lastT, st.vx);
-    st.lastX = e.clientX; st.lastT = now;
-    const dx = e.clientX - st.startX;
-    st.moved ||= Math.abs(dx) > 3;
+    if (!st || st.pointerId !== e.pointerId || latest.current.disabled) return;
+    advance(performance.now());
+    const dx = e.clientX - st.startX; st.moved ||= Math.abs(dx) > 3;
     if (st.moved) {
       st.target.dataset.feelDrag = 'true';
-      st.target.style.setProperty('--thumb-drag-x', `${wall(st.origin + dx, 0, travelPx, 0.16)}px`);
-      if (!prefersReducedMotionNow()) {
-        const speed = Math.min(1, Math.abs(st.vx) / 700);
-        st.target.style.setProperty('--thumb-scale-x', String(1.08 + speed * 0.1));
-        st.target.style.setProperty('--thumb-scale-y', String(0.94 - speed * 0.04));
-      }
+      if (prefersReducedMotionNow()) { motionRef.current!.body.set(wall(st.origin + dx, 0, travelPx, 0.16)); paint(); }
+      else { motionRef.current!.pull(st.origin + dx); run(); }
     }
+    st.lastX = e.clientX;
+    st.lastAt = performance.now();
   };
   const finish = (e: ReactPointerEvent<HTMLButtonElement>, cancelled: boolean) => {
     const st = dragRef.current;
     if (!st || st.pointerId !== e.pointerId) return;
-    const moved = st.moved || Math.abs(e.clientX - st.startX) > 3;
-    const velocity = pointerVelocity(e.clientX, st.lastX, performance.now(), st.lastT, st.vx, true);
-    reset();
-    if (cancelled && moved) suppressClick.current = true;
-    if (!cancelled && !disabled && moved) {
-      suppressClick.current = true;
-      const next = projectCoast(st.origin + e.clientX - st.startX, velocity, TOGGLE_MASS, 4.5) > travelPx / 2;
-      if (next !== checked) onToggle();
+    if (cancelled) { reset(); return; }
+    const finalDelta = e.clientX - st.lastX;
+    let unsampledSeconds = Math.min(0.25, Math.max(1 / 240, (performance.now() - st.lastAt) / 1000));
+    onPointerMove(e);
+    // Browsers may coalesce the last move into pointerup. Integrate that final
+    // hand displacement before choosing a stop instead of discarding it when
+    // release() replaces the hand target. Ordinary releases keep their state.
+    if (finalDelta !== 0 && st.moved && !prefersReducedMotionNow()) {
+      // Body.step caps a single frame at 50ms. Subdivide a coalesced interval
+      // rather than dropping the rest; cap background-tab gaps at 250ms.
+      while (unsampledSeconds > 0) {
+        const step = Math.min(unsampledSeconds, 0.05);
+        motionRef.current!.body.step(step);
+        unsampledSeconds -= step;
+      }
+      paint();
     }
+    releaseCapture();
+    if (st.moved && !latest.current.disabled) choose(motionRef.current!.release());
   };
-  return { onPointerDown, onPointerMove,
+  return { attach: (el: HTMLButtonElement | null) => { buttonRef.current = el; }, onPointerDown, onPointerMove,
     onPointerUp: (e: ReactPointerEvent<HTMLButtonElement>) => finish(e, false),
     onPointerCancel: (e: ReactPointerEvent<HTMLButtonElement>) => finish(e, true),
     onLostPointerCapture: (e: ReactPointerEvent<HTMLButtonElement>) => finish(e, true),
-    consumeSuppressedClick: (detail = 1) => {
-      const suppressed = suppressClick.current && detail !== 0;
-      suppressClick.current = false;
-      return suppressed;
+    onKeyDown: (e: import('react').KeyboardEvent<HTMLButtonElement>) => {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); reset(); choose(e.key === 'ArrowRight'); }
     },
-  };
-}
-
-export function useFeelSheetDrag({ panelRef, onClose, enabled = true }: {
-  panelRef: RefObject<HTMLElement | null>; onClose: () => void; enabled?: boolean;
-}) {
-  const dragRef = useRef<{
-    pointerId: number; handle: HTMLElement; panel: HTMLElement; startY: number;
-    originY: number; lastY: number; lastT: number; vy: number; currentY: number;
-  } | null>(null);
-  const animationRef = useRef<ReturnType<typeof handoff> | null>(null);
-  const animatedPanelRef = useRef<HTMLElement | null>(null);
-  const cancelAnimation = () => {
-    const sample = animationRef.current?.sample();
-    animationRef.current?.cancel();
-    animationRef.current = null;
-    return sample;
-  };
-  const release = () => {
-    const st = dragRef.current;
-    dragRef.current = null;
-    if (st) {
-      st.panel.style.transition = '';
-      if (st.handle.hasPointerCapture?.(st.pointerId)) st.handle.releasePointerCapture(st.pointerId);
-    }
-    return st;
-  };
-  useLayoutEffect(() => {
-    const cleanup = () => {
-      cancelAnimation();
-      const st = release();
-      const panel = st?.panel ?? animatedPanelRef.current;
-      if (panel) panel.style.transform = '';
-      animatedPanelRef.current = null;
-    };
-    window.addEventListener('blur', cleanup);
-    return () => { window.removeEventListener('blur', cleanup); cleanup(); };
-  }, [enabled]);
-  const onPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
-    const panel = panelRef.current;
-    if (!enabled || !panel || e.button !== 0 || e.isPrimary === false || dragRef.current) return;
-    // Read before cancelling either a CSS entrance or the spring handoff.
-    // A new grab starts exactly where the panel is currently painted.
-    const transform = getComputedStyle(panel).transform;
-    const originY = transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m42;
-    cancelAnimation();
-    dragRef.current = { pointerId: e.pointerId, handle: e.currentTarget, panel,
-      startY: e.clientY, originY, lastY: e.clientY, lastT: performance.now(), vy: 0, currentY: originY };
-    panel.style.transition = 'none';
-    panel.style.transform = `translate3d(0, ${originY}px, 0)`;
-    try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* Pointer may have already ended. */ }
-  };
-  const update = (e: ReactPointerEvent<HTMLElement>, released = false) => {
-    const st = dragRef.current;
-    if (!st || st.pointerId !== e.pointerId) return null;
-    const now = performance.now();
-    st.vy = pointerVelocity(e.clientY, st.lastY, now, st.lastT, st.vy, released);
-    st.lastY = e.clientY; st.lastT = now;
-    st.currentY = wall(st.originY + e.clientY - st.startY, 0, 800, 0.14);
-    st.panel.style.transform = `translate3d(0, ${st.currentY}px, 0)`;
-    return st;
-  };
-  const finish = (e: ReactPointerEvent<HTMLElement>, cancelled: boolean) => {
-    if (dragRef.current?.pointerId !== e.pointerId) return;
-    if (!cancelled) update(e, true);
-    const st = release();
-    if (!st) return;
-    st.panel.style.transform = '';
-    if (cancelled || !enabled) return;
-    const threshold = Math.min(110, Math.max(56, st.panel.getBoundingClientRect().height * 0.26));
-    if (projectCoast(st.currentY, st.vy, SHEET_MASS, 4.5) > threshold || (st.currentY > 24 && st.vy > 420)) {
-      onClose();
-    } else if (Math.abs(st.currentY) > 1) {
-      animatedPanelRef.current = st.panel;
-      animationRef.current = handoff(st.panel, { fromY: st.currentY, vy: st.vy });
-    }
-  };
-  return { onPointerDown, onPointerMove: update,
-    onPointerUp: (e: ReactPointerEvent<HTMLElement>) => finish(e, false),
-    onPointerCancel: (e: ReactPointerEvent<HTMLElement>) => finish(e, true),
-    onLostPointerCapture: (e: ReactPointerEvent<HTMLElement>) => finish(e, true),
+    activate: () => choose(!latest.current.checked),
+    consumeSuppressedClick: (detail = 1) => {
+      const suppressed = suppressClick.current && detail !== 0; suppressClick.current = false; return suppressed;
+    },
   };
 }
