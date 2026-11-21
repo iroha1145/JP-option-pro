@@ -12,7 +12,6 @@ export default function Footer() {
         />
         <nav aria-label={t('研究工具')} className="flex flex-wrap items-center gap-x-5 gap-y-2 text-caption text-ink-500">
           <Link to="/data-status" className="py-2 hover:text-brand-600">{t('数据状态')}</Link>
-          <Link to="/research" className="py-2 hover:text-brand-600">{t('历史验证')}</Link>
           <span>Optix Japan</span>
         </nav>
       </div>

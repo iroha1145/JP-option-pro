@@ -179,18 +179,6 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
           navigate('/data-status');
         },
       },
-      {
-        id: 'f-research',
-        group: t('功能'),
-        title: t('历史验证'),
-        hint: t('走步验证 · 分层收益'),
-        keywords: '历史验证 research',
-        icon: 'wallet-gauge',
-        action: () => {
-          onClose();
-          navigate('/research');
-        },
-      },
     );
     if (isOwner) {
       list.push({

@@ -19,7 +19,6 @@ const Earnings = lazy(routeLoaders.earnings);
 const News = lazy(routeLoaders.news);
 const StockDetail = lazy(routeLoaders.stockDetail);
 const DataStatus = lazy(routeLoaders.dataStatus);
-const Research = lazy(routeLoaders.research);
 const ShortMonitor = lazy(routeLoaders.shortMonitor);
 const Login = lazy(routeLoaders.login);
 
@@ -44,7 +43,6 @@ export default function App() {
                   <Route path="/news" element={<News />} />
                   <Route path="/short-monitor" element={<ShortMonitor />} />
                   <Route path="/data-status" element={<DataStatus />} />
-                  <Route path="/research" element={<Research />} />
                   <Route path="/stock/:code" element={<StockDetail />} />
                   <Route path="*" element={<NotFound />} />
                 </Route>

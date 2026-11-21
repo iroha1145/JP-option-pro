@@ -8,7 +8,6 @@ export const routeLoaders = {
   news: () => import('@/pages/News'),
   stockDetail: () => import('@/pages/StockDetail'),
   dataStatus: () => import('@/pages/DataStatus'),
-  research: () => import('@/pages/Research'),
   shortMonitor: () => import('@/pages/ShortMonitor'),
   login: () => import('@/pages/Login'),
 } as const;
@@ -23,7 +22,6 @@ const PATH_LOADERS: Record<string, () => Promise<unknown>> = {
   '/earnings': routeLoaders.earnings,
   '/news': routeLoaders.news,
   '/data-status': routeLoaders.dataStatus,
-  '/research': routeLoaders.research,
   '/short-monitor': routeLoaders.shortMonitor,
   '/login': routeLoaders.login,
 };

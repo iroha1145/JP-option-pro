@@ -20,5 +20,4 @@ test('Japan navigation keeps child pages active without prefix collisions', () =
   assert.equal(navAriaCurrent('/screener', screen), 'page');
   assert.equal(isNavGroupActive('/radar-old', screen), false);
   assert.equal(isNavGroupActive('/short-monitor', market), true);
-  assert.equal(isNavGroupActive('/research', market), false);
 });
