@@ -66,8 +66,8 @@ export default function DensityStrip({ items, onJumpDay }: DensityStripProps) {
                       <span className="block text-micro text-ink-300">{t('无财报')}</span>
                     ) : (
                       <span className="mt-0.5 flex flex-wrap gap-1">
-                        {day.rows.slice(0, MAX_TOOLTIP_CODES).map((row) => (
-                          <span key={`${row.canonical_code}-${row.period_type}`} className="tnum text-micro font-medium text-ink-800">
+                        {day.rows.slice(0, MAX_TOOLTIP_CODES).map((row, slot) => (
+                          <span key={`${row.canonical_code}-${row.period_type}-${slot}`} className="tnum text-micro font-medium text-ink-800">
                             {row.display_code}
                           </span>
                         ))}

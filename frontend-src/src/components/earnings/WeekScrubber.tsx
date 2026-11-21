@@ -122,11 +122,11 @@ export default function WeekScrubber({
                   )}
                 </button>
                 <div className="earnings-week-tickers">
-                  {shown.map((item) => {
+                  {shown.map((item, slot) => {
                     const meta = statusMeta(item.status);
                     return (
                       <PointerTooltip
-                        key={`${item.canonical_code}-${item.period_type}`}
+                        key={`${item.canonical_code}-${item.period_type}-${slot}`}
                         passthrough
                         label={earningsChipLabel(item)}
                         width={220}

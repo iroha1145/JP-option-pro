@@ -264,7 +264,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
               </p>
             </div>
 
-            {group.rows.map((row) => {
+            {group.rows.map((row, slot) => {
               rowIndex += 1;
               const index = rowIndex;
               const forecast = row.forecast;
@@ -278,7 +278,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
               const released = actualValue != null ? releasedRaw : undefined;
               const open = () => navigate(`/stock/${row.display_code}`);
               return (
-                <div key={`${row.canonical_code}-${row.period_type}-${row.date}`}>
+                <div key={`${row.canonical_code}-${row.period_type}-${row.date}-${slot}`}>
                   {/* 桌面行 */}
                   <motion.div
                     role="button"

@@ -109,7 +109,11 @@ export default function ResultTable({
                   }}
                   /* 行保持表格语义：整行点击只是鼠标的便利，键盘与读屏走行尾那个真正的展开按钮。 */
                   onClick={(event) => {
-                    if (event.target instanceof Element && event.target.closest('button, a, input, select, textarea, [role="button"], [tabindex]')) return;
+                    // 只让行内的控件接管点击；表格外框自身可聚焦（横向滚动），不算行内控件。
+                    const control = event.target instanceof Element
+                      ? event.target.closest('button, a, input, select, textarea, [role="button"], [tabindex]')
+                      : null;
+                    if (control && event.currentTarget.contains(control)) return;
                     onToggle(row.canonical_code);
                   }}
                   className={cn(

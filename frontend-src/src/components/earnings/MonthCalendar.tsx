@@ -159,11 +159,11 @@ export default function MonthCalendar({ items, selectedDay, onSelectDay, anchorD
                   {dayItems.length > 0 && <span className="earnings-calendar-count tnum">{dayItems.length}</span>}
                 </button>
                 <div className="earnings-month-tickers">
-                  {shown.map((item) => {
+                  {shown.map((item, slot) => {
                     const meta = statusMeta(item.status);
                     return (
                       <PointerTooltip
-                        key={`${item.canonical_code}-${item.period_type}`}
+                        key={`${item.canonical_code}-${item.period_type}-${slot}`}
                         passthrough
                         label={earningsChipLabel(item)}
                         width={220}

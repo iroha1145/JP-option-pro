@@ -385,9 +385,9 @@ function RecentPanel({ items, loading }: { items: EarningsRecentItem[]; loading:
         <EmptyState size="compact" image="/empty-chart.svg" title={t('暂无数据')} className="mt-2" />
       ) : (
         <div className="mt-3 space-y-2.5">
-          {shown.map((row) => (
+          {shown.map((row, slot) => (
             <Link
-              key={`${row.canonical_code}-${row.disclosed_date}-${row.period_type}-${row.type_of_document}`}
+              key={`${row.canonical_code}-${row.disclosed_date}-${row.period_type}-${row.type_of_document}-${slot}`}
               to={`/stock/${row.display_code}`}
               className="flex items-center gap-2 rounded-md px-1 py-0.5 transition-colors hover:bg-paper-2"
             >
