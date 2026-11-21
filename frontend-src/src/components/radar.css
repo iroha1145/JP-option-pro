@@ -7,9 +7,9 @@
   padding: 3px 8px;
   border: 0;
   border-radius: 12px;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
-  line-height: 18px;
+  line-height: 1.3;
   white-space: nowrap;
   vertical-align: middle;
   font-variant-numeric: tabular-nums;
@@ -29,13 +29,12 @@
 }
 .radar-signal-card { padding: 24px; }
 .radar-signal-card .radar-quote-row { margin-top: 17px; margin-bottom: 8px; }
-.radar-quote-row > .tick-flash { padding-left: 0; font-size: 23px; line-height: 1.3; letter-spacing: -.035em; }
-.radar-status { line-height: 1.6; }
+.radar-quote-row > .tick-flash { padding-left: 0; font-size: 1.4375rem; line-height: 1.3; letter-spacing: -.035em; }
 .radar-history-date { background: color-mix(in srgb, var(--paper) 62%, var(--card)); }
 .radar-history-list { padding-inline: 7px; }
 .radar-history-list > li { border-color: color-mix(in srgb, var(--line) 60%, transparent); }
 .radar-history-row { border-radius: 12px; padding-inline: 9px; padding-block: 14px; }
-.radar-history-state { min-height: 24px; padding: 2px 8px; font-size: 14px; line-height: 20px; }
+.radar-history-state { min-height: 24px; padding: 2px 8px; font-size: 0.875rem; line-height: 1.43; }
 .radar-history-state > span { width: 4px; height: 4px; }
 .radar-bar-track { background: color-mix(in srgb, var(--line) 64%, var(--card)); }
 .radar-score-grid > div { min-width: 0; }
@@ -49,7 +48,7 @@
   align-items: baseline;
   gap: 4px;
   color: var(--ink-500);
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.5;
   /* 现价靠近两端时，绝对定位的读数只剩很窄的可用宽度，允许换行会把数值折到下一行、
      压在轨道下方的价位标签上。按内容宽度排一行，配合 left 与自身平移同比例，始终留在轨道内。 */
@@ -58,10 +57,9 @@
   flex-wrap: nowrap;
   white-space: nowrap;
 }
-.radar-current-readout strong { color: var(--ink-800); font-size: 16px; font-weight: 500; }
+.radar-current-readout strong { color: var(--ink-800); font-size: 1rem; font-weight: 500; }
 .radar-reference-invalid { color: var(--down-600); }
 .radar-reference-trigger { color: var(--brand-600); }
-.radar-reference-target { color: var(--up-600); }
 
 .radar-reference-mark {
   position: absolute;
@@ -86,10 +84,10 @@
 .radar-price-key > div:last-child dt { justify-content: flex-end; }
 .radar-price-key > div:not(:first-child):not(:last-child) { text-align: center; }
 .radar-price-key > div:not(:first-child):not(:last-child) dt { justify-content: center; }
-.radar-price-key dt { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--ink-500); font-size: 14px; line-height: 1.5; }
-.radar-price-key dd { margin: 4px 0 0; color: var(--ink-600); font-size: 14px; font-weight: 500; line-height: 1.5; }
-.radar-price-scale-large .radar-price-key dd { font-size: 16px; }
-.radar-price-scale-large .radar-current-readout strong { font-size: 16px; }
+.radar-price-key dt { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--ink-500); font-size: 0.875rem; line-height: 1.5; }
+.radar-price-key dd { margin: 4px 0 0; color: var(--ink-600); font-size: 0.875rem; font-weight: 500; line-height: 1.5; }
+.radar-price-scale-large .radar-price-key dd { font-size: 1rem; }
+.radar-price-scale-large .radar-current-readout strong { font-size: 1rem; }
 .radar-disclosure { border-top: 1px solid color-mix(in srgb, var(--line) 75%, transparent); }
 .radar-disclosure > summary {
   display: flex;
@@ -99,8 +97,8 @@
   gap: 8px;
   padding: 9px 0;
   color: var(--ink-500);
-  font-size: 14px;
-  line-height: 18px;
+  font-size: 0.875rem;
+  line-height: 1.3;
   list-style: none;
   cursor: pointer;
   transition: color 150ms ease;
@@ -132,13 +130,17 @@
   .radar-priority-cell { flex-direction: row; gap: 14px; padding-block: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .radar-disclosure-arrow { transition: none; }
+  .radar-disclosure-arrow,
+  .radar-disclosure > summary,
+  .radar-sibling-chip { transition: none; }
 }
-.bk-rail-scroll { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
-.bk-rail-scroll::-webkit-scrollbar { width: 5px; }
-.bk-rail-scroll::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 999px; }
-.bk-rail-scroll::-webkit-scrollbar-track { background: transparent; }
-.radar-btn-sm { min-height: 2rem; padding: .375rem .875rem; font-size: 13px; gap: .375rem; }
-.radar-sibling-chip { font-size: 13px; font-weight: 400; cursor: pointer; transition: color 150ms ease, background-color 150ms ease; }
+.bk-rail-scroll { scrollbar-width: thin; scrollbar-color: var(--ink-400) transparent; }
+@supports not (scrollbar-color: auto) {
+  .bk-rail-scroll::-webkit-scrollbar { width: 5px; }
+  .bk-rail-scroll::-webkit-scrollbar-thumb { background: var(--ink-400); border-radius: 999px; }
+  .bk-rail-scroll::-webkit-scrollbar-track { background: transparent; }
+}
+.radar-btn-sm { min-height: 2rem; padding: .375rem .875rem; font-size: 0.8125rem; gap: .375rem; }
+.radar-sibling-chip { font-size: 0.8125rem; font-weight: 400; cursor: pointer; transition: color 150ms ease, background-color 150ms ease; }
 .radar-sibling-chip:hover { color: var(--brand-700); background: var(--brand-50); }
 .radar-load-more { display: flex; flex-direction: column; align-items: center; gap: 6px; }

@@ -131,7 +131,6 @@ export function NewsBadge({
           {summary.latest?.published_at && (
             <span className="mt-0.5 block tnum text-micro text-ink-400">{fmtRelativeShort(summary.latest.published_at)}</span>
           )}
-          <span className="mt-1 block text-tag text-ink-300">{t('仅覆盖已接入的 RSS 新闻源')}</span>
         </>
       }
     >

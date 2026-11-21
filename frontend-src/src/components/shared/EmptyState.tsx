@@ -29,6 +29,7 @@ export default function EmptyState({
   className,
 }: EmptyStateProps) {
   const compact = size === 'compact';
+  const imgHeight = image === '/empty-chart.svg' ? (compact ? 60 : 138) : (compact ? 72 : 165);
   return (
     <div className={cn('flex flex-col items-center text-center', compact ? 'px-2 py-4' : 'px-6 py-12', className)}>
       {image ? (
@@ -36,9 +37,10 @@ export default function EmptyState({
           src={image}
           alt=""
           width={compact ? 96 : 220}
-          height={compact ? 72 : 165}
+          height={imgHeight}
           className={cn('h-auto max-w-full opacity-95', compact ? 'mb-2 w-[96px]' : 'mb-5 w-[220px]')}
           loading="lazy"
+          decoding="async"
         />
       ) : (
         <span

@@ -195,7 +195,7 @@ def importance_score(
     weights = {"category": 0.45, "entity": 0.25, "recency": 0.30}
     active = {key: weights[key] for key in components if key in weights}
     if not active:
-        return None, {}, [display_text.line("可用证据不足，未补成中性分数")]
+        return None, {}, [display_text.line("信息不足，未计重要度")]
     total_weight = sum(active.values())
     score = sum(components[key] * weight for key, weight in active.items()) / total_weight
     score = min(100.0, score + bonus)

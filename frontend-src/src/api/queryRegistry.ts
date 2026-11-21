@@ -7,6 +7,7 @@ const QUERY_TTL_MS: Record<string, number> = {
   '/radar/current': 120_000,
   '/earnings/calendar': 300_000,
   '/earnings/recent': 300_000,
+  '/strength/profiles': 300_000,
   '/data-status': 60_000,
   '/settings': 300_000,
   '/worker/status': 15_000,

@@ -1,6 +1,6 @@
 import { t } from '../i18n/core.ts';
 import { apiHeaders, fetchBuffered, parseRetryAfter, ResponseLimitError, TransportTimeoutError } from './transport.ts';
-export interface ApiErrorShape {
+interface ApiErrorShape {
   code: number;
   message: string;
 }
@@ -46,7 +46,7 @@ export const PRINCIPAL_INVALID_EVENT = 'optixjp:principal-invalid';
  */
 const PRINCIPAL_INVALID_CODES = new Set(['owner_login_required', 'account_login_required']);
 
-export function notifyPrincipalInvalid(): void {
+function notifyPrincipalInvalid(): void {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event(PRINCIPAL_INVALID_EVENT));
   }
@@ -59,7 +59,7 @@ export function notifyPrincipalInvalid(): void {
  * 半开连接或代理不终止请求时，该路径的所有页面会永远等同一个 Promise，手动刷新
  * 也不会发起新请求，界面永久停在骨架屏且没有任何错误提示。
  */
-export const REQUEST_TIMEOUT_MS = 20_000;
+const REQUEST_TIMEOUT_MS = 20_000;
 
 function pick(obj: unknown, ...keys: string[]): unknown {
   if (obj && typeof obj === 'object') {
@@ -176,13 +176,6 @@ export function post<T>(path: string, body?: unknown, options?: RequestOptions) 
   return request<T>(path, {
     ...options,
     method: 'POST',
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-}
-export function put<T>(path: string, body?: unknown, options?: RequestOptions) {
-  return request<T>(path, {
-    ...options,
-    method: 'PUT',
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }

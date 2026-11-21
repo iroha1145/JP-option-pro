@@ -140,7 +140,7 @@ export function activateFocusScope(container: HTMLElement, initial?: HTMLElement
 /** Called by a portal ref before its library moves focus out of the dialog subtree. */
 export function registerFocusPortal(root: HTMLElement, trigger: HTMLElement | null): () => void {
   const manager = managers.get(root.ownerDocument);
-  const scope = manager && [...manager.scopes].reverse().find((candidate) => trigger && candidate.root.contains(trigger));
+  const scope = manager && manager.scopes.findLast((candidate) => trigger && candidate.root.contains(trigger));
   if (!manager || !scope) return () => {};
   const portal = { root, scope };
   manager.portals.add(portal);

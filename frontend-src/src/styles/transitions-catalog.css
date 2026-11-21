@@ -189,13 +189,6 @@
   opacity: 1;
   filter: blur(0);
 }
-/* Snap-back when replaying: kill transitions so the reverse
-   (revealed → skeleton) is instant. Drop `.is-resetting`
-   after a forced reflow and the next reveal animates again. */
-.t-skel.is-resetting .t-skel-skeleton,
-.t-skel.is-resetting .t-skel-content {
-  transition: none !important;
-}
 
 /* Pulse: place the animation on the bar/avatar children, not
    on the skeleton itself, so the skeleton's opacity / filter
@@ -313,14 +306,11 @@
    only owns the interpolation. Use a constant border-width
    across states so the tween never shifts inner content. */
 .t-input {
-  transition: border-color 150ms ease-out;
-  will-change: transform;
+  transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
 }
 .t-input.is-error {
-  /* Error border auto-reverts on the hold timer, so the
-     fade-out uses the slower revert duration (matches the
-     message fade). */
-  transition: border-color var(--revert-dur, 280ms) ease-out;
+  border-color: var(--danger-600);
+  transition: border-color var(--revert-dur, 280ms) ease-out, box-shadow 150ms ease-out;
 }
 
 /* Error message reveal. Visibility is delayed by --revert-dur
@@ -348,6 +338,7 @@
    total (80, 60, 80, 60 = 280ms): 28.57%, 57.14%, 78.57%,
    100%. Recompute if any segment duration changes. */
 .t-input.is-shaking {
+  will-change: transform;
   animation: t-input-shake calc(
       var(--shake-dur-a) * 2 + var(--shake-dur-b) * 2
     ) linear;
@@ -370,7 +361,6 @@
   --tabs-text-muted: var(--ink-400);
   --tabs-text-active: var(--ink-800);
   --tabs-bar-bg: var(--card-warm);
-  --tt-bg: var(--card);
   --tt-fg: var(--ink-700);
 }
 
@@ -482,20 +472,6 @@
   transition-delay: var(--tt-delay);
 }
 
-/* Login/password error border uses Paper Terminal down-600. Catalog only owns the tween. */
-.t-input.is-error {
-  border-color: var(--danger-600);
-}
-
-/* catalog 12 的 .t-input 只 transition border-color，会顶掉组件原有的
-   box-shadow 过渡（focus 光环瞬跳）——补上合并声明，时值仍照 catalog。 */
-.t-input {
-  transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
-}
-.t-input.is-error {
-  transition: border-color var(--revert-dur, 280ms) ease-out, box-shadow 150ms ease-out;
-}
-
 /* 行内报错的占位高度用 0fr↔1fr 收放（catalog 21 的手法）：出现/消失都随
    --revert-dur 平滑推开或收回下方内容，而不是 height:0 瞬间开合；文案本身的
    透明度/可见性仍由 catalog 12 的 .t-error-msg 规则驱动。行距 6px 放在
@@ -533,41 +509,6 @@
 .t-toggle[data-on="true"] { --toggle-fill: 1; }
 .t-toggle-thumb { translate: var(--thumb-physical-x, 0px) 0; will-change: translate; }
 .t-toggle[data-on="true"] .t-toggle-thumb { translate: var(--thumb-physical-x, var(--toggle-travel)) 0; }
-
-/* —— 02-number-pop-in.md —— */
-@keyframes t-digit-pop-in {
-  0%   {
-    transform: translate(
-      calc(var(--digit-distance) * var(--digit-dir-x)),
-      calc(var(--digit-distance) * var(--digit-dir-y))
-    );
-    opacity: 0;
-    filter: blur(var(--digit-blur));
-  }
-  100% { transform: translate(0, 0); opacity: 1; filter: blur(0); }
-}
-
-.t-digit-group {
-  display: inline-flex;
-  align-items: baseline;
-}
-.t-digit {
-  display: inline-block;
-  will-change: transform, opacity, filter;
-}
-.t-digit-group.is-animating .t-digit {
-  animation: t-digit-pop-in var(--digit-dur) var(--digit-ease) both;
-}
-.t-digit-group.is-animating .t-digit[data-stagger="1"] {
-  animation-delay: var(--digit-stagger);
-}
-.t-digit-group.is-animating .t-digit[data-stagger="2"] {
-  animation-delay: calc(var(--digit-stagger) * 2);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .t-digit-group .t-digit { animation: none !important; }
-}
 
 /* Feel Fluid Functionalism adaptations: tactile toggle thumb stretch & drag,
    plus physical drag-handle affordance for mobile bottom sheets. */

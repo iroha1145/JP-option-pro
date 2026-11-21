@@ -52,8 +52,7 @@ async function runTransport(
   const abortExternal = () => controller.abort(external?.reason);
   const hold: TransportHold = {};
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let rejectAbort: (reason: unknown) => void = () => {};
-  const aborted = new Promise<never>((_, reject) => { rejectAbort = reject; });
+  const { promise: aborted, reject: rejectAbort } = Promise.withResolvers<never>();
   const onAbort = () => rejectAbort(controller.signal.reason ?? new DOMException('Aborted', 'AbortError'));
   controller.signal.addEventListener('abort', onAbort, { once: true });
   if (external?.aborted) abortExternal();

@@ -44,8 +44,8 @@ function snapshotNumber(snapshot: RadarEvent['snapshot'], key: string): number |
 
 function RetryButton({ onClick, refreshing }: { onClick: () => void; refreshing: boolean }) {
   return (
-    <button type="button" onClick={onClick} disabled={refreshing} className="btn-primary">
-      {refreshing && <span className="size-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />}
+    <button type="button" onClick={onClick} disabled={refreshing} aria-busy={refreshing} className="btn-primary">
+      {refreshing && <span className="size-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />}
       {t('重试')}
     </button>
   );
@@ -153,8 +153,8 @@ export default function Home() {
   const movers = useMemo(() => {
     const mag = (value: number | null | undefined) =>
       typeof value === 'number' && Number.isFinite(value) ? Math.abs(value) : -1;
-    return [...(watchlist.data?.items ?? [])]
-      .sort((a, b) => mag(b.quote?.change_pct) - mag(a.quote?.change_pct))
+    return (watchlist.data?.items ?? [])
+      .toSorted((a, b) => mag(b.quote?.change_pct) - mag(a.quote?.change_pct))
       .slice(0, 6);
   }, [watchlist.data]);
   const indices = market.data?.indices ?? EMPTY_INDICES;
@@ -254,7 +254,7 @@ export default function Home() {
                 <ol className="space-y-1 border-t border-line pt-2">
                   {market.data.sectors.slice(0, 6).map((sector) => (
                     <li key={sector.sector33_code} className="flex items-center justify-between text-body-s">
-                      <span className="truncate text-ink-700">{sector.sector33_name}</span>
+                      <span className="truncate text-ink-700">{t(sector.sector33_name)}</span>
                       <ChangeBadge value={sector.median_return_1d} size="sm" />
                     </li>
                   ))}
@@ -310,8 +310,8 @@ export default function Home() {
           {!canManageWatchlist ? (
             <EmptyState
               image="/empty-watchlist.svg"
-              title={t('登录后可以把关注股票保存在账号里')}
-              description={t('与美股版共用账号，关注列表可跨设备查看')}
+              title={t('登录后可保存关注股票')}
+              description={t('关注列表可跨设备同步查看')}
               action={<Link to="/login" className="btn-primary">{t('去登录 / 注册')}</Link>}
             />
           ) : <ListBody
@@ -363,9 +363,9 @@ function IndexInsightCard({
       <Link
         to={`/market?index=${encodeURIComponent(index.index_code)}`}
         className="card-surface card-hover card-glare index-card flex h-full w-full flex-col gap-2 p-3.5 text-left sm:p-4"
-        aria-label={`${index.name} ${t('趋势快照')}`}
+        aria-label={`${t(index.name)} ${t('趋势快照')}`}
       >
-        <span className="truncate text-caption text-ink-500">{index.name}</span>
+        <span className="truncate text-caption text-ink-500">{t(index.name)}</span>
         <TickPrice flash={flash} className="metric-value text-data-l text-ink-900 tnum">
           {fmtPrice(index.close)}
         </TickPrice>
@@ -437,8 +437,8 @@ function EarningsAnchorRow({ item, todayKey }: { item: EarningsRecentItem; today
       </span>
       <CodeCell displayCode={item.display_code} nameJa={item.name_ja} />
       <span className="ml-auto flex shrink-0 items-center gap-1.5">
-        {item.forecast_direction === 'upward' && <span className="text-micro text-up-700">{t('上方修正')}</span>}
-        {item.forecast_direction === 'downward' && <span className="text-micro text-down-700">{t('下方修正')}</span>}
+        {item.forecast_direction === 'upward' && <span className="text-micro text-up-700">{t('上调预测')}</span>}
+        {item.forecast_direction === 'downward' && <span className="text-micro text-down-700">{t('下调预测')}</span>}
         <span className="rounded-md bg-paper-2 px-2 py-1 text-micro text-ink-600">{item.period_type ?? '—'}</span>
       </span>
     </Link>

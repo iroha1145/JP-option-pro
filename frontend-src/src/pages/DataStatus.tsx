@@ -20,7 +20,6 @@ import { cn } from '@/lib/utils';
 import { t } from '@/i18n/core';
 import { fmtJstDateTime, fmtTimeHHMMSS } from '@/lib/format';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
-import SourceNote from '@/components/shared/SourceNote';
 import type { DatasetStatus } from '@/api/types';
 
 const MANUAL_ACTIONS: { type: string; label: string }[] = [
@@ -51,7 +50,7 @@ export default function DataStatus() {
       width: '26%',
       render: (row) => (
         <span>
-          <span className="block text-body-s text-ink-800">{row.key}</span>
+          <span className="block text-body-s text-ink-800">{t(row.key)}</span>
           <span className="block tnum text-micro text-ink-400">{row.endpoint}</span>
         </span>
       ),
@@ -264,7 +263,6 @@ export default function DataStatus() {
           ) : null}
         </SkeletonReveal>
       )}
-      <SourceNote text={t('本页展示 J-Quants 同步状态与 worker 任务')} />
     </div>
   );
 }

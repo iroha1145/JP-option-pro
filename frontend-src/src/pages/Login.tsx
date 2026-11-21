@@ -1,8 +1,7 @@
 /** 登录和注册页：沿用美国站外观，保留日本站账号与来源返回逻辑。 */
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useAccess } from '@/hooks/useAccess';
-import { accessApi } from '@/api/modules';
 import { ApiError } from '@/api/client';
 import { useToast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
@@ -16,7 +15,7 @@ import { t } from '@/i18n/core';
 
 const FEATURES: { icon: IconName; title: string }[] = [
   { icon: 'radar', title: '日线全市场扫描' },
-  { icon: 'layers', title: '业种热力与广度' },
+  { icon: 'layers', title: '行业强弱与广度' },
   { icon: 'doc-quote', title: '新闻原文与来源' },
 ];
 
@@ -45,6 +44,8 @@ export default function Login() {
     username: signedInName,
     logout,
     loading,
+    identityUnavailable: serviceDown,
+    refresh: probeService,
   } = useAccess();
   const location = useLocation();
   /* 从别处「去登录」带来的来源页（#21）：登录成功回到出发点而不是固定 /watchlist */
@@ -63,26 +64,6 @@ export default function Login() {
      避免同一段话在两处同时出现。 */
   const { inputRef: userInputRef, ...userShake } = useCatalogShake(1200);
   const { inputRef: passwordInputRef, ...pwShake } = useCatalogShake(1200);
-  const [serviceDown, setServiceDown] = useState(false);
-
-
-  /* access/status 失败 → 顶部警告条 + 禁用；探测可重试（原实现置位后永不恢复，
-     一次瞬时失败就把登录表单永久禁用）。 */
-  const probeService = useCallback(() => {
-    accessApi
-      .status()
-      .then(() => setServiceDown(false))
-      .catch(() => setServiceDown(true));
-  }, []);
-  useEffect(() => {
-    let alive = true;
-    accessApi.status().catch(() => {
-      if (alive) setServiceDown(true);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
 
 
   /* 账号相关的错误后端已给出中文说明，直接用；其余保持原有映射。 */
@@ -182,12 +163,14 @@ export default function Login() {
             </h1>
             <div className="mt-5 flex flex-col gap-2.5">
               <button
+                type="button"
                 onClick={() => navigate(fromPath ?? '/watchlist', { replace: true })}
                 className="btn-primary h-11 w-full"
               >
                 {t('继续浏览')}
               </button>
               <button
+                type="button"
                 onClick={() => void logout()}
                 className="h-11 rounded-pill border border-line bg-card text-caption text-ink-600 transition-colors hover:border-brand-400 hover:text-brand-600"
               >
@@ -224,7 +207,7 @@ export default function Login() {
                 </span>
                 <div>
                   <h2 className="font-display text-h2 text-ink-900">{t('登录账号')}</h2>
-                  <p className="mt-0.5 text-caption text-ink-400">{t('登录后关注股票保存在账号里 · 访客可只读浏览')}</p>
+                  <p className="mt-0.5 text-caption text-ink-400">{t('登录后可保存关注股票，未登录亦可浏览全站行情与分析。')}</p>
                 </div>
               </div>
 
@@ -239,7 +222,7 @@ export default function Login() {
             {serviceDown && (
               <p role="status" className="mt-4 flex items-center justify-between gap-2 rounded-[var(--r-control)] border border-warn-600/30 bg-warn-50 px-2.5 py-1.5 text-caption text-warn-600">
                 {t('无法连接服务，登录暂不可用')}
-                <button type="button" onClick={probeService} className="shrink-0 font-medium underline underline-offset-2">
+                <button type="button" onClick={() => void probeService()} className="shrink-0 font-medium underline underline-offset-2">
                   {t('重试')}
                 </button>
               </p>
@@ -247,8 +230,7 @@ export default function Login() {
 
             <form onSubmit={onSubmit} className="mt-5" noValidate>
               <div className={cn('t-input-wrap mb-5', userShake.classes.wrap)}>
-              <label className="block">
-                <span className="mb-2 block text-caption text-ink-500">{t('用户名')}</span>
+                <label htmlFor="login-username" className="mb-2 block text-caption text-ink-500">{t('用户名')}</label>
                 <div
                   ref={userInputRef}
                   className={cn(
@@ -261,7 +243,10 @@ export default function Login() {
                 >
                   <Icon name="command" size={16} className="shrink-0 text-ink-400" />
                   <input
+                    id="login-username"
+                    name="username"
                     type="text"
+                    required
                     value={username}
                     disabled={serviceDown || state === 'verifying' || state === 'success'}
                     onChange={(e) => {
@@ -270,24 +255,24 @@ export default function Login() {
                     }}
                     placeholder={mode === 'register' ? t('起一个用户名') : t('用户名')}
                     maxLength={32}
-                    className="h-full min-w-0 flex-1 bg-transparent text-[16px] text-ink-800 outline-none placeholder:text-ink-400 disabled:opacity-60"
+                    enterKeyHint="next"
+                    className="h-full min-w-0 flex-1 bg-transparent text-body text-ink-800 outline-none placeholder:text-ink-400 disabled:opacity-60"
                     autoComplete="username"
                     autoCapitalize="off"
                     autoCorrect="off"
                     spellCheck={false}
-                    aria-label={t("用户名")}
+                    aria-invalid={userShake.error || undefined}
+                    aria-describedby={userShake.error ? 'login-username-error' : undefined}
                   />
                 </div>
-              </label>
-              <div className="t-error-track">
-                <div className="t-error-clip">
-                  <p className="t-error-msg text-caption text-down-700">{t('请输入用户名')}</p>
+                <div className="t-error-track">
+                  <div className="t-error-clip">
+                    <p id="login-username-error" className="t-error-msg text-caption text-down-700">{t('请输入用户名')}</p>
+                  </div>
                 </div>
               </div>
-              </div>
               <div className={cn('t-input-wrap', pwShake.classes.wrap)}>
-              <label className="block">
-                <span className="mb-2 block text-caption text-ink-500">{t('密码')}</span>
+                <label htmlFor="login-password" className="mb-2 block text-caption text-ink-500">{t('密码')}</label>
                 <div
                   ref={passwordInputRef}
                   className={cn(
@@ -299,7 +284,11 @@ export default function Login() {
                 >
                   <Icon name="shield" size={16} className="shrink-0 text-ink-400" />
                   <input
+                    id="login-password"
+                    name="password"
                     type={showPw ? 'text' : 'password'}
+                    required
+                    minLength={mode === 'register' ? 15 : undefined}
                     value={password}
                     disabled={serviceDown || state === 'verifying' || state === 'success'}
                     onChange={(e) => {
@@ -309,10 +298,15 @@ export default function Login() {
                     onKeyDown={(e) => setCapsLock(e.getModifierState?.('CapsLock') ?? false)}
                     onKeyUp={(e) => setCapsLock(e.getModifierState?.('CapsLock') ?? false)}
                     placeholder={mode === 'register' ? t('设置密码') : t('输入密码')}
-                    className="h-full min-w-0 flex-1 bg-transparent tnum text-[16px] text-ink-800 outline-none placeholder:text-ink-400 disabled:opacity-60"
+                    enterKeyHint="go"
+                    className="h-full min-w-0 flex-1 bg-transparent tnum text-body text-ink-800 outline-none placeholder:text-ink-400 disabled:opacity-60"
                     autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-                    aria-label={t("密码")}
-                    aria-describedby={mode === 'register' ? 'registration-password-hint' : undefined}
+                    aria-invalid={pwShake.error || undefined}
+                    aria-describedby={
+                      [mode === 'register' ? 'registration-password-hint' : '', pwShake.error ? 'login-password-error' : '']
+                        .filter(Boolean)
+                        .join(' ') || undefined
+                    }
                   />
                   <button
                     type="button"
@@ -323,17 +317,16 @@ export default function Login() {
                     <EyeIcon off={!showPw} />
                   </button>
                 </div>
-              </label>
-              {mode === 'register' && (
-                <p id="registration-password-hint" className="mt-2 text-caption text-ink-500">
-                  {t('至少 15 个字符，可使用一句容易记住的长短语')}
-                </p>
-              )}
-              <div className="t-error-track">
-                <div className="t-error-clip">
-                  <p className="t-error-msg text-caption text-down-700">{t('请输入密码')}</p>
+                {mode === 'register' && (
+                  <p id="registration-password-hint" className="mt-2 text-caption text-ink-500">
+                    {t('至少 15 个字符，可使用一句容易记住的长短语')}
+                  </p>
+                )}
+                <div className="t-error-track">
+                  <div className="t-error-clip">
+                    <p id="login-password-error" className="t-error-msg text-caption text-down-700">{t('请输入密码')}</p>
+                  </div>
                 </div>
-              </div>
               </div>
               <p className={cn('mt-1.5 h-4 text-caption text-warn-600 transition-opacity', capsLock ? 'opacity-100' : 'opacity-0')}>
                 {t('Caps Lock 已开启')}
@@ -380,33 +373,15 @@ export default function Login() {
               </p>
             </form>
 
-            {/* 访客入口 */}
-            <div className="mt-2 flex items-center gap-3">
-              <span className="h-px flex-1 bg-line" />
-              <span className="text-caption text-ink-400">{t('或')}</span>
-              <span className="h-px flex-1 bg-line" />
-            </div>
-            <button
-              onClick={() => navigate('/watchlist')}
-              className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-[var(--r-control)] border border-line-strong bg-transparent text-body-s font-medium text-ink-600 shadow-btn transition-colors duration-fast hover:bg-paper-2 hover:text-ink-800"
-            >
-              {t('以访客身份浏览（只读）')}
-            </button>
-
-            <p className="mt-5 text-center text-micro leading-[18px] text-ink-400">
-              {mode === 'register'
-                ? t('账号只用于保存你的关注股票，不改变数据权限')
-                : t('登录即同意研究用途条款 · 登录状态保留 30 天')}
-            </p>
-
-            <div className="mt-4 border-t border-line pt-3 text-center">
-              <Link
-                to="/"
+            <div className="mt-4 border-t border-line pt-4 text-center">
+              <button
+                type="button"
+                onClick={() => navigate(fromPath && fromPath !== '/watchlist' ? fromPath : '/')}
                 className="inline-flex items-center gap-1 text-caption font-medium text-brand-600 transition-colors hover:text-brand-700"
               >
                 <Icon name="chevron-right" size={13} className="rotate-180" />
-                {t('返回公开研究页面')}
-              </Link>
+                {t('暂不登录，直接浏览')}
+              </button>
             </div>
             </div>
           </div>

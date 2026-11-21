@@ -9,9 +9,9 @@ export type IconName =
   | 'radar' | 'crosshair' | 'candle' | 'layers' | 'calendar-spark' | 'bolt' | 'star-line'
   | 'filter-funnel' | 'search' | 'command' | 'clock' | 'bell' | 'sun' | 'moon'
   | 'arrow-up-right' | 'arrow-down-right' | 'chevron-down' | 'chevron-right'
-  | 'dots-grid' | 'spark-ai' | 'shield' | 'target' | 'flag' | 'x' | 'plus'
+  | 'dots-grid' | 'shield' | 'target' | 'flag' | 'x' | 'plus'
   | 'refresh' | 'wallet-gauge' | 'doc-quote' | 'logout' | 'minus'
-  | 'check' | 'menu' | 'display' | 'list' | 'cards' | 'channel' | 'rect' | 'sliders';
+  | 'check' | 'menu' | 'display' | 'list' | 'cards' | 'channel' | 'sliders';
 
 interface IconProps extends SVGProps<SVGSVGElement> {
   name: IconName;
@@ -122,15 +122,6 @@ const PATHS: Record<IconName, ReactElement> = {
       <circle cx="16.8" cy="16.8" r="1.05" fill="currentColor" stroke="none" />
     </>
   ),
-  /* v8.1：弃四角星——「sparkle+AI」是生成式设计的头号刻板组合。
-     改「双弧夹核心点」：从信息流中聚焦提炼一个结论，正是本产品 AI 的职责。 */
-  'spark-ai': (
-    <>
-      <path d="M8.2 4.9a9.7 9.7 0 0 0 0 14.2" />
-      <path d="M15.8 4.9a9.7 9.7 0 0 1 0 14.2" />
-      <circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none" />
-    </>
-  ),
   shield: (
     <>
       <path d="M12 3.2 5 6v5.2c0 4.4 3 7.6 7 9.6 4-2 7-5.2 7-9.6V6l-7-2.8Z" />
@@ -196,7 +187,6 @@ const PATHS: Record<IconName, ReactElement> = {
       <path d="M4.6 19.2 20 11.4" />
     </>
   ),
-  rect: <rect x="5" y="6.2" width="14" height="11.6" rx="1.4" />,
   /* 设置：三条滑轨各带一个旋钮（页头合并后的显示设置入口） */
   sliders: (
     <>
@@ -212,9 +202,9 @@ export const MOTION_NAMES = new Set<IconName>([
   'radar', 'crosshair', 'candle', 'layers', 'calendar-spark', 'bolt', 'star-line',
   'filter-funnel', 'search', 'command', 'clock', 'bell', 'sun', 'moon',
   'arrow-up-right', 'arrow-down-right', 'chevron-down', 'chevron-right',
-  'dots-grid', 'spark-ai', 'shield', 'target', 'flag', 'x', 'plus',
+  'dots-grid', 'shield', 'target', 'flag', 'x', 'plus',
   'refresh', 'wallet-gauge', 'doc-quote', 'logout', 'minus',
-  'check', 'menu', 'display', 'channel', 'rect', 'sliders',
+  'check', 'menu', 'display', 'channel', 'sliders',
 ]);
 
 function motionPaths(name: IconName) {

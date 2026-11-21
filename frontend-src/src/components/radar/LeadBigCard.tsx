@@ -373,8 +373,8 @@ export default function LeadBigCard({
           )}
           <span className="tnum text-micro text-ink-400">{t('发现日')} {fmtDate(event.discovered_date)}</span>
           <span className="hidden min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-micro text-ink-500 lg:inline-flex">
-            {event.sector33_name && <SoftBadge tone="neutral">{event.sector33_name}</SoftBadge>}
-            {event.market_name && <span>{event.market_name}</span>}
+            {event.sector33_name && <SoftBadge tone="neutral">{t(event.sector33_name)}</SoftBadge>}
+            {event.market_name && <span>{t(event.market_name)}</span>}
             <span className="tnum">{t('成交额')} {fmtYenCompact(turnover)}</span>
           </span>
         </div>
@@ -396,8 +396,8 @@ export default function LeadBigCard({
           </Link>
         </h3>
         <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-ink-500 lg:hidden">
-          {event.sector33_name && <SoftBadge tone="neutral">{event.sector33_name}</SoftBadge>}
-          {event.market_name && <span>{event.market_name}</span>}
+          {event.sector33_name && <SoftBadge tone="neutral">{t(event.sector33_name)}</SoftBadge>}
+          {event.market_name && <span>{t(event.market_name)}</span>}
           <span className="tnum">{t('成交额')} {fmtYenCompact(turnover)}</span>
         </p>
         {structure && (
@@ -427,7 +427,7 @@ export default function LeadBigCard({
           </div>
         ) : (
           <div className="radar-mini-chart relative flex h-[120px] items-center justify-center overflow-hidden rounded-md bg-card-warm sm:h-[150px]">
-            <img src="/empty-chart.svg" alt="" className="h-12 w-auto opacity-90" loading="lazy" />
+            <img src="/empty-chart.svg" alt="" width={77} height={48} className="h-12 w-auto opacity-90" loading="lazy" decoding="async" />
           </div>
         )}
       </div>

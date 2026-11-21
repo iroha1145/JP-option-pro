@@ -8,42 +8,93 @@
  * - マイナスは U+2212 を使う（ハイフンより判読しやすい）。
  */
 
-import { localeTag, t } from '@/i18n/core';
+import { getLocale, localeTag, t } from '@/i18n/core';
 
 const MINUS = '−';
+
+const JA_INT_FMT = new Intl.NumberFormat('ja-JP', { maximumFractionDigits: 0 });
+const ZH_INT_FMT = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 0 });
+const EN_INT_FMT = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+const PRICE_1_FMT = new Intl.NumberFormat('ja-JP', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const PRICE_FMT_CACHE = new Map<number, Intl.NumberFormat>([
+  [0, JA_INT_FMT],
+  [1, PRICE_1_FMT],
+]);
+
+function priceFormat(digits: number): Intl.NumberFormat {
+  let fmt = PRICE_FMT_CACHE.get(digits);
+  if (!fmt) {
+    fmt = new Intl.NumberFormat('ja-JP', {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
+    PRICE_FMT_CACHE.set(digits, fmt);
+  }
+  return fmt;
+}
 
 export function fmtPrice(value: number | null | undefined, digits?: number): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
   const resolved = digits ?? (Math.abs(value) < 100 ? 1 : 0);
-  return value.toLocaleString('ja-JP', {
-    minimumFractionDigits: resolved,
-    maximumFractionDigits: resolved,
-  });
+  return priceFormat(resolved).format(value);
 }
 
-export function fmtYen(value: number | null | undefined): string {
-  const text = fmtPrice(value, 0);
-  return text === '—' ? text : `¥${text}`;
-}
-
-/** 円金額の 万/億/兆 圧縮（例: 123.4億）。 */
+/** 円金額の圧縮表示（言語別の単位: ja=兆/億/万, zh=万亿/亿/万, en=¥T/B/M/K）。 */
 export function fmtYenCompact(value: number | null | undefined, digits = 1): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
   const abs = Math.abs(value);
   const sign = value < 0 ? MINUS : '';
-  const CHO = 1_0000_0000_0000; // 兆
-  const OKU = 1_0000_0000; // 億
-  const MAN = 1_0000; // 万
+  const locale = getLocale();
+  if (locale === 'en') {
+    if (abs >= 1e12) return `${sign}¥${(abs / 1e12).toFixed(digits)}T`;
+    if (abs >= 1e9) return `${sign}¥${(abs / 1e9).toFixed(digits)}B`;
+    if (abs >= 1e6) return `${sign}¥${(abs / 1e6).toFixed(digits)}M`;
+    if (abs >= 1e3) return `${sign}¥${(abs / 1e3).toFixed(0)}K`;
+    return `${sign}¥${EN_INT_FMT.format(abs)}`;
+  }
+  const CHO = 1_0000_0000_0000;
+  const OKU = 1_0000_0000;
+  const MAN = 1_0000;
+  if (locale === 'zh') {
+    if (abs >= CHO) return `${sign}${(abs / CHO).toFixed(digits)}万亿`;
+    if (abs >= OKU) return `${sign}${(abs / OKU).toFixed(digits)}亿`;
+    if (abs >= MAN) return `${sign}${(abs / MAN).toFixed(0)}万`;
+    return `${sign}${ZH_INT_FMT.format(abs)}`;
+  }
   if (abs >= CHO) return `${sign}${(abs / CHO).toFixed(digits)}兆`;
   if (abs >= OKU) return `${sign}${(abs / OKU).toFixed(digits)}億`;
   if (abs >= MAN) return `${sign}${(abs / MAN).toFixed(0)}万`;
-  return `${sign}${abs.toLocaleString('ja-JP', { maximumFractionDigits: 0 })}`;
+  return `${sign}${JA_INT_FMT.format(abs)}`;
+}
+
+/** 株数の圧縮表示（信用残・歩み値集計など）。 */
+export function fmtSharesCompact(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  const abs = Math.abs(value);
+  const sign = value < 0 ? MINUS : '';
+  const locale = getLocale();
+  if (locale === 'en') {
+    if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(1)}B sh`;
+    if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(1)}M sh`;
+    if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(1)}K sh`;
+    return `${sign}${EN_INT_FMT.format(Math.round(abs))} sh`;
+  }
+  const OKU = 1_0000_0000;
+  const MAN = 1_0000;
+  if (locale === 'zh') {
+    if (abs >= OKU) return `${sign}${(abs / OKU).toFixed(1)}亿股`;
+    if (abs >= MAN) return `${sign}${(abs / MAN).toFixed(1)}万股`;
+    return `${sign}${ZH_INT_FMT.format(Math.round(abs))}股`;
+  }
+  if (abs >= OKU) return `${sign}${(abs / OKU).toFixed(1)}億株`;
+  if (abs >= MAN) return `${sign}${(abs / MAN).toFixed(1)}万株`;
+  return `${sign}${JA_INT_FMT.format(Math.round(abs))}株`;
 }
 
 /** 株数。桁を落とさずカンマ区切りで出す（karauri 等の開示元と突き合わせるため）。 */
 export function fmtShares(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
-  return Math.round(value).toLocaleString('ja-JP');
+  return JA_INT_FMT.format(Math.round(value));
 }
 
 /** 水準（比率そのもの）。**符号を付けない。**
@@ -100,6 +151,18 @@ export function fmtDate(isoDate: string | null | undefined): string {
   return isoDate.slice(0, 10);
 }
 
+let monthShortTag = '';
+let monthShortFmt: Intl.DateTimeFormat | null = null;
+
+function getMonthShortFmt(): Intl.DateTimeFormat {
+  const tag = localeTag();
+  if (!monthShortFmt || tag !== monthShortTag) {
+    monthShortTag = tag;
+    monthShortFmt = new Intl.DateTimeFormat(tag, { month: 'short' });
+  }
+  return monthShortFmt;
+}
+
 /** 电报行日期锚：日数字 + 本地化短月。ISO 日历日原样拆，不做 TZ 换算。 */
 export function dateAnchorParts(iso: string | null | undefined): { day: number; monthShort: string } | null {
   if (!iso) return null;
@@ -110,9 +173,7 @@ export function dateAnchorParts(iso: string | null | undefined): { day: number; 
   if (!month || !day) return null;
   return {
     day,
-    monthShort: new Intl.DateTimeFormat(localeTag(), { month: 'short' }).format(
-      new Date(Number(match[1]), month - 1, 1),
-    ),
+    monthShort: getMonthShortFmt().format(new Date(Number(match[1]), month - 1, 1)),
   };
 }
 
@@ -180,11 +241,17 @@ export function direction(value: number | null | undefined): 'up' | 'down' | 'fl
   return 'flat';
 }
 
+const JST_TIME_SEC_FMT = new Intl.DateTimeFormat('ja-JP', {
+  timeZone: 'Asia/Tokyo',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+});
+
 /** epoch 秒 → JST の HH:MM（遅延気配の「いつの値か」表示用） */
 export function fmtTimeJst(epochSeconds: number): string {
-  return new Intl.DateTimeFormat('ja-JP', {
-    timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false,
-  }).format(new Date(epochSeconds * 1000));
+  return JST_TIME_FMT.format(new Date(epochSeconds * 1000));
 }
 
 /** 顶栏时钟：当前瞬间的 JST HH:mm。 */
@@ -193,11 +260,5 @@ export function fmtJstClock(date: Date | number): string {
 }
 
 export function fmtTimeHHMMSS(epochMs: number): string {
-  return new Intl.DateTimeFormat('ja-JP', {
-    timeZone: 'Asia/Tokyo',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  }).format(new Date(epochMs));
+  return JST_TIME_SEC_FMT.format(new Date(epochMs));
 }

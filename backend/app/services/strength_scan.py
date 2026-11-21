@@ -28,11 +28,13 @@ STRENGTH_SCORE_VERSION = "jp-strength-v1"
 TIMEFRAMES = ("short", "mid", "long", "all")
 PROFILES = ("conservative", "balanced", "aggressive")
 
-#: 市場レジームのラベル（順風 / 中立 / 逆風）。**画面に出る文字列**なので、
+#: 市場レジームのラベル（顺风 / 中立 / 逆风）。**画面に出る文字列**なので、
 #: 関数の中に埋めずここに置く —— `tests/test_backend_text_is_translatable.py`
 #: がこれを読んで、辞書に ja/en があるかを確かめる。
-REGIME_LABELS = ("順風", "中立", "逆風")
-REGIME_SPREAD_LABEL = "グロース対プライム 20日中央値差"
+REGIME_LABELS = ("顺风", "中立", "逆风")
+REGIME_SPREAD_LABEL = "强弱价差 · 成长−主板"
+REGIME_WARNING_TOPIX_MA200 = "TOPIX 低于 200 日线"
+REGIME_WARNING_BREADTH = "站上 200 日线的股票不足三成"
 
 #: 分類ラベル（米国版 _classify と同じ閾値、RS だけ TOPIX 比）。
 PROFILE_TILT = {
@@ -366,7 +368,7 @@ def compute_market_regime_jp(
         if ma200 is not None:
             score += 12.0 if close > ma200 else -12.0
             if close < ma200:
-                warnings.append("TOPIX が200日線を下回っている")
+                warnings.append(REGIME_WARNING_TOPIX_MA200)
         if len(closes) >= 47:
             slope = ma25 / (sum(closes[-46:-21]) / 25.0) - 1.0
             score += max(-14.0, min(14.0, slope * 400.0))
@@ -417,7 +419,7 @@ def compute_market_regime_jp(
         risk_on_spread = round(max(0.0, min(100.0, 50.0 + spread * 600.0)), 1)
         # Chinese msgid (front-end runs it through t()); keeps the app-wide
         # "backend emits Chinese, frontend localizes" contract.
-        spread_label = "强弱价差 · グロース−プライム"
+        spread_label = REGIME_SPREAD_LABEL
 
     dims = {
         "index_trend": index_trend,
@@ -435,7 +437,7 @@ def compute_market_regime_jp(
     )
     score = composite["score"]
     if breadth is not None and breadth < 30.0:
-        warnings.append("200日線超の銘柄が3割未満（ブレッドス弱い）")
+        warnings.append(REGIME_WARNING_BREADTH)
     label = None
     if score is not None:
         # Chinese msgids; localized on the front-end via t().
@@ -632,14 +634,14 @@ def risk_penalty(row: Mapping[str, Any], profile: str) -> tuple[float, list[str]
         # call hid every branch from the gate.
         warnings.append(
             {
-                "precaution": _line("日证金注意喚起銘柄"),
-                "daily_publication": _line("东证日々公表銘柄"),
-                "restricted": _line("信用取引规制中（增担保/申込停止）"),
-                "severe": _line("监理・整理・不明确信息"),
-            }.get(level, _line("信用规制あり"))
+                "precaution": _line("日证金风险提示股"),
+                "daily_publication": _line("东证每日公布股"),
+                "restricted": _line("信用交易受限（提高保证金/暂停开仓）"),
+                "severe": _line("监理或退市整理股"),
+            }.get(level, _line("存在信用交易限制"))
         )
     elif severity is not None and severity < 0:
-        warnings.append(_line("信用规制状态未知（数据未更新）"))
+        warnings.append(_line("信用限制状态待更新"))
 
     vol_price = details.get("vol_price") or {}
     # vol_price_match never emits `risk_penalty_adjustment`, so the previous read was

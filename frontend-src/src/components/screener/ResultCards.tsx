@@ -80,8 +80,8 @@ export default function ResultCards({
                   <span className="flex flex-wrap items-center gap-1.5">
                     <span className="tnum text-body-s font-medium text-ink-800">{row.display_code}</span>
                     {row.sector33_name && (
-                      <SoftBadge className="max-w-[7.5rem]" title={row.sector33_name}>
-                        <span className="truncate">{row.sector33_name}</span>
+                      <SoftBadge className="max-w-[7.5rem]" title={t(row.sector33_name)}>
+                        <span className="truncate">{t(row.sector33_name)}</span>
                       </SoftBadge>
                     )}
                   </span>

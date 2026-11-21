@@ -48,11 +48,12 @@ function HeatRow({ sector, metric, rank, scale, covered, selected, onSelect }: {
   const coverage = covered === undefined ? null : t('盘中覆盖 {covered}/{total}', { covered, total: sector.member_count });
   const memberCaption = covered === undefined ? members : t('{n} 只', { n: `${covered}/${sector.member_count}` });
   const leader = sector.leaders[0];
+  const sectorName = t(sector.sector33_name);
 
   return (
     <PointerTooltip passthrough side="top" width={224} className="block min-w-0" contentClassName="p-2.5" content={
       <span className="block text-left">
-        <span className="eyebrow block">{sector.sector33_name}</span>
+        <span className="eyebrow block">{sectorName}</span>
         <span className="mt-1.5 block space-y-1 text-micro">
           <span className="flex items-center justify-between gap-2">
             <span className="text-ink-500">{t('1日 中位')}</span><span className="tnum text-ink-800">{fmtPct(sector.median_return_1d)}</span>
@@ -72,11 +73,11 @@ function HeatRow({ sector, metric, rank, scale, covered, selected, onSelect }: {
       </span>
     }>
       <button type="button" onClick={onSelect} aria-pressed={selected}
-        aria-label={`${sector.sector33_name}，${periodLabel} ${fmtPct(value)}，${members}，${t('上涨占比')} ${validShare ? fmtPctLevel(share, 0) : '—'}${coverage ? `，${coverage}` : ''}`}
+        aria-label={`${sectorName}，${periodLabel} ${fmtPct(value)}，${members}，${t('上涨占比')} ${validShare ? fmtPctLevel(share, 0) : '—'}${coverage ? `，${coverage}` : ''}`}
         className={cn(ROW_GRID, 'sector-heat-row group relative min-h-14 w-full min-w-0 rounded-[var(--r-control)] px-2 py-3 text-left transition-colors duration-fast motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600', selected ? 'bg-brand-50' : 'hover:bg-paper-2')}>
         <span className="text-right text-caption text-ink-400 tnum">{hasReturn ? rank : '—'}</span>
         <span className="min-w-0">
-          <span className={cn('block break-words text-body-s font-medium', hasReturn ? 'text-ink-800' : 'text-ink-500')}>{sector.sector33_name}</span>
+          <span className={cn('block break-words text-body-s font-medium', hasReturn ? 'text-ink-800' : 'text-ink-500')}>{sectorName}</span>
           <span className="mt-1 block text-micro text-ink-400 tnum">{memberCaption}</span>
         </span>
         <span className="relative block h-3" aria-hidden="true">

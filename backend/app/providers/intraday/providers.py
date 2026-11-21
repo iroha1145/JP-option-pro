@@ -69,7 +69,7 @@ class YahooDelayedProvider:
         return ProviderStatus(
             name=self.name, available=True, delay_class=self.delay_class,
             is_official=False, is_realtime=False, delay_minutes=self.delay_minutes,
-            detail=f"約{self.delay_minutes}分遅延・非公式ソース",
+            detail=f"約{self.delay_minutes}分遅延",
         )
 
     def _wrap(self, raw, *, key: str, received_at: datetime, session: str) -> Quote:

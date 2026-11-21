@@ -8,7 +8,6 @@
  * 无「客户端条件只作用于前 N 名」问题；新闻摘要一次批量取回。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { newsApi, quotesApi, strengthApi, workerApi, type StrengthScanParams } from '@/api/modules';
 import { ApiError } from '@/api/client';
 import type { StrengthProfilesMeta, StrengthScanResponse, StrengthRow } from '@/api/types';
@@ -27,7 +26,6 @@ import ResultTable from '@/components/screener/ResultTable';
 import ResultCards from '@/components/screener/ResultCards';
 import ScanHistoryPopover from '@/components/screener/ScanHistoryPopover';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
-import SourceNote from '@/components/shared/SourceNote';
 import { MarketRegimeCard, MethodCard, TierHistogram } from '@/components/screener/SideCards';
 import {
   DEFAULT_FILTERS,
@@ -46,7 +44,6 @@ import {
   type TierFilter,
 } from '@/components/screener/types';
 import { t } from '@/i18n/core';
-import { EASE_PAPER } from '@/lib/motion';
 import { usePolling } from '@/hooks/usePolling';
 import { useTickFlash } from '@/hooks/useTickFlash';
 import { quoteSourceLabel } from '@/lib/quoteSource';
@@ -137,7 +134,7 @@ export default function Screener() {
   useEffect(() => {
     let alive = true;
     newsApi
-      .securities(72)
+      .securities(72, { priority: 'low' })
       .then((data) => {
         if (!alive) return;
         const map: NewsSummaryMap = {};
@@ -422,7 +419,7 @@ export default function Screener() {
 
   const onTierFromHistogram = useCallback(
     (tier: TierFilter) => {
-      patchAndScan({ tier, presetId: null, minScore: null });
+      patchAndScan({ tier, minScore: null });
     },
     [patchAndScan],
   );
@@ -444,15 +441,16 @@ export default function Screener() {
     if (f.timeframe !== 'all')
       list.push({ key: 'tf', label: t('周期 {tf}', { tf: TIMEFRAME_CN[f.timeframe] }), onRemove: () => patchAndScan({ timeframe: 'all' }) });
     if (f.profile !== 'balanced')
-      list.push({ key: 'pf', label: t('偏好 {profile}', { profile: PROFILE_CN[f.profile] }), onRemove: () => patchAndScan({ profile: 'balanced', presetId: null }) });
+      list.push({ key: 'pf', label: t('偏好 {profile}', { profile: PROFILE_CN[f.profile] }), onRemove: () => patchAndScan({ profile: 'balanced' }) });
     if (f.topN > 0 && f.topN !== 20) list.push({ key: 'top', label: `Top ${f.topN}`, onRemove: () => patchAndScan({ topN: 20 }) });
-    f.sectors.forEach((sectorId) =>
+    f.sectors.forEach((sectorId) => {
+      const sectorName = meta?.sectors.find((s) => s.id === sectorId)?.name;
       list.push({
         key: `sec-${sectorId}`,
-        label: meta?.sectors.find((s) => s.id === sectorId)?.name ?? sectorId,
+        label: sectorName ? t(sectorName) : sectorId,
         onRemove: () => patchAndScan({ sectors: f.sectors.filter((x) => x !== sectorId) }),
-      }),
-    );
+      });
+    });
     if (f.priceMin !== null || f.priceMax !== null) {
       const lo = f.priceMin !== null ? `¥${f.priceMin}` : '—';
       const hi = f.priceMax !== null ? `¥${f.priceMax}` : '—';
@@ -462,7 +460,7 @@ export default function Screener() {
       const option = TURNOVER_OPTIONS.find((o) => o.value === f.minTurnover);
       list.push({ key: 'tv', label: t('成交额 {v}', { v: option?.label ?? `≥${fmtYenCompact(f.minTurnover)}` }), onRemove: () => patchAndScan({ minTurnover: DEFAULT_FILTERS.minTurnover }) });
     }
-    if (f.minScore !== null) list.push({ key: 'ms', label: t('强度 ≥{n}', { n: f.minScore }), onRemove: () => patchAndScan({ minScore: null, presetId: null }) });
+    if (f.minScore !== null) list.push({ key: 'ms', label: t('强度 ≥{n}', { n: f.minScore }), onRemove: () => patchAndScan({ minScore: null }) });
     return list;
   }, [applied, meta, patchAndScan]);
 
@@ -475,7 +473,7 @@ export default function Screener() {
       <PageHeader
         section="screener"
         title={t('条件选股')}
-        description={t('收盘后按日线全市场计算强度分，扫描读取已保存发布，不会触发供应商。')}
+        description={t('按收盘日线对全市场多维评分与筛选。')}
         meta={
           <>
             <DataThrough date={response?.input_data_through ?? response?.trade_date} />
@@ -498,7 +496,7 @@ export default function Screener() {
               onClick={() => void runScan(applied, { cache: 'reload' })}
               spinning={scanState === 'scanning'}
               label={t('重新读取')}
-              title={t('按当前条件重新读取已保存发布，不会重算日线')}
+              title={t('重新读取当前筛选结果')}
               testId="screener-reread"
             />
             {isOwner && (
@@ -506,7 +504,7 @@ export default function Screener() {
                 onClick={() => void onOwnerRefresh()}
                 spinning={refreshState === 'queued' || refreshState === 'running'}
                 label={t('更新日线与评分')}
-                title={t('所有者提交有界后台任务：拉取日线并发布新评分')}
+                title={t('拉取最新日线并重算评分')}
                 testId="screener-owner-refresh"
               />
             )}
@@ -522,7 +520,6 @@ export default function Screener() {
           tierCounts={tierCounts}
           universeCount={response?.universe_count ?? null}
           meta={meta}
-          metaFailed={metaFailed}
           scanning={scanState === 'scanning'}
           dirty={dirty}
           onScan={onScanClick}
@@ -568,27 +565,27 @@ export default function Screener() {
             )}
             {response && (response.freshness === 'stale' || response.calendar_state === 'stale') && (
               <SoftBadge tone="warn" className="whitespace-normal">
-                {t('快照日期早于当前目标交易日，这是筛选结果不是新的日线计算')}
+                {t('快照早于最新交易日')}
               </SoftBadge>
             )}
             {response && response.freshness === 'partial' && (
               <SoftBadge tone="warn" className="whitespace-normal">
-                {t('输入不完整，不能当作最新日线')}
+                {t('日线数据不完整')}
               </SoftBadge>
             )}
             {response && response.freshness === 'degraded' && (
               <SoftBadge tone="warn" className="whitespace-normal">
-                {t('指数输入偏旧，股票评分可用但不是完整新鲜')}
+                {t('基准指数未更新')}
               </SoftBadge>
             )}
             {response && response.freshness === 'unknown' && (
               <SoftBadge tone="warn" className="whitespace-normal">
-                {t('日历覆盖未知，不能当作最新日线')}
+                {t('交易日历待更新')}
               </SoftBadge>
             )}
             {response && response.score_compatible === false && (
               <SoftBadge tone="warn" className="whitespace-normal">
-                {t('已保存评分版本与当前代码不一致')}
+                {t('评分版本待更新')}
               </SoftBadge>
             )}
             {unverified && (
@@ -608,16 +605,13 @@ export default function Screener() {
               />
             </div>
           </div>
-          {sortMode !== 'deterministic' && (
-            <p className="mt-2 text-micro text-ink-400">{t('催化排序基于 72h 新闻摘要（仅覆盖已接入 RSS 源）；无新闻的股票排在其后。')}</p>
-          )}
           {refreshMessage && (
             <p className="mt-2 text-micro text-ink-500" data-testid="screener-refresh-status">
               {refreshMessage}
             </p>
           )}
 
-          <div className="mt-4">
+          <div className="mt-4 min-h-[70dvh]">
             {scanState === 'scanning' && !response ? (
               <div className="card-surface">
                 <SkeletonRows rows={8} />
@@ -643,7 +637,7 @@ export default function Screener() {
                   action={
                     <div className="flex flex-wrap justify-center gap-2">
                       {(applied.tier !== 'all' || applied.minScore !== null) && (
-                        <SuggestButton label={t('放宽一档')} onClick={() => patchAndScan({ tier: 'all', minScore: null, presetId: null })} />
+                        <SuggestButton label={t('放宽一档')} onClick={() => patchAndScan({ tier: 'all', minScore: null })} />
                       )}
                       {applied.sectors.length > 0 && <SuggestButton label={t('清除行业')} onClick={() => patchAndScan({ sectors: [] })} />}
                       {(applied.priceMin !== null || applied.priceMax !== null) && (
@@ -669,14 +663,14 @@ export default function Screener() {
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <PointerTooltip
                       passthrough
-                      label={t('用{n}分延迟的盘中价筛选，分数与排序仍来自夜间官方数据', {
+                      label={t('按 {n} 分钟延迟盘中价筛选，评分仍基于收盘日线', {
                         n: overlay.data?.delayed_minutes ?? 15,
                       })}
                       width={260}
                       contentClassName="p-2.5"
                       content={
                         <span className="text-micro text-ink-600">
-                          {t('用{n}分延迟的盘中价筛选，分数与排序仍来自夜间官方数据', {
+                          {t('按 {n} 分钟延迟盘中价筛选，评分仍基于收盘日线', {
                             n: overlay.data?.delayed_minutes ?? 15,
                           })}
                         </span>
@@ -693,7 +687,7 @@ export default function Screener() {
                     </button>
                     </PointerTooltip>
                     <span className="text-micro text-ink-400">{quoteSourceLabel(overlay.data).text}</span>
-                    <span className="text-micro text-ink-400">{t('盘中价较新不等于日线评分已更新')}</span>
+                    <span className="text-micro text-ink-400">{t('评分基于收盘日线')}</span>
                   </div>
                 )}
                 <div className={scanState === 'scanning' ? 'hidden opacity-60 xl:block' : 'hidden xl:block'}>
@@ -769,32 +763,8 @@ export default function Screener() {
             onSelect={onTierFromHistogram}
           />
           <MethodCard meta={meta} profileId={applied.profile} loading={!meta && !metaFailed} error={metaFailed} onRetry={loadMeta} />
-          <AnimatePresence>
-            {scanState === 'done' && sorted.length === 0 && (
-              <motion.div
-                key="relax"
-                initial={{ opacity: 0, y: 14 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, transition: { duration: 0.16 } }}
-                transition={{ duration: 0.48, ease: EASE_PAPER }}
-                className="card-surface p-5"
-              >
-                <p className="eyebrow">{t('无命中引导')}</p>
-                <p className="mt-2.5 text-body-s text-ink-500">{t('当前条件过严，没有标的进入结果集。')}</p>
-                <button
-                  type="button"
-                  onClick={() => patchAndScan({ tier: 'all', minScore: null, presetId: null })}
-                  className="control-button mobile-control-target mt-3"
-                >
-                  <Icon name="filter-funnel" size={13} />
-                  {t('放宽一档试试')}
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </aside>
       </div>
-      <SourceNote text={t('强度扫描结果 · 日线收盘后快照')} />
     </div>
   );
 }

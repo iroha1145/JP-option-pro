@@ -13,10 +13,12 @@
     /* 隐私模式下读不到存储：按系统外观与浏览器语言处理 */
   }
   const dark = theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  const scheme = theme === 'dark' || theme === 'light' ? theme : 'light dark';
   const root = document.documentElement;
   root.classList.toggle('dark', dark);
   root.dataset.theme = dark ? 'dark' : 'light';
   root.style.colorScheme = dark ? 'dark' : 'light';
+  document.querySelector('meta[name="color-scheme"]')?.setAttribute('content', scheme);
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#0F0F10' : '#FAFAFA');
 
   const tags = { en: 'en-US', ja: 'ja-JP', zh: 'zh-CN' };

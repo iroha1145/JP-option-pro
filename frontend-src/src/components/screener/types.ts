@@ -27,9 +27,9 @@ export const PROFILE_CN: Record<ProfilePref, string> = {
 };
 
 export const SORT_CN: Record<SortMode, string> = {
-  deterministic: t('确定性'),
-  latest: t('最新催化'),
-  impact: t('影响力'),
+  deterministic: t('强度优先'),
+  latest: t('最新新闻'),
+  impact: t('新闻重要度'),
 };
 
 export function tierOf(score: number): Tier {
@@ -76,7 +76,6 @@ export interface ScanFilters {
   /** 20日均売買代金下限（円）；0 = 不限 */
   minTurnover: number;
   minScore: number | null;
-  presetId: string | null;
 }
 
 export const DEFAULT_TOP_N = 20;
@@ -92,7 +91,6 @@ export const DEFAULT_FILTERS: ScanFilters = {
   priceMax: null,
   minTurnover: 100_000_000,
   minScore: null,
-  presetId: null,
 };
 
 export const TOPN_OPTIONS: { value: number; label: string }[] = [

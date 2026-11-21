@@ -1,12 +1,11 @@
 /** 领域 API 模块：registry 走共享注册表，其余直连。 */
 
-import { del, get, patch as patchVerb, post, toQuery } from './client.ts';
+import { del, get, patch as patchVerb, post, toQuery, type RequestOptions } from './client.ts';
 import { registryGet } from './queryRegistry.ts';
 import type {
   AccessStatus,
   ResearchReport,
   DataStatusResponse,
-  EarningsCalendarItem,
   EarningsRecentItem,
   EarningsUpcomingResponse,
   IntradayChart,
@@ -17,21 +16,18 @@ import type {
   IntradayOverlayResponse,
   SectorMemberSort,
   SectorMembersView,
-  MarketRegime,
   NewsFeedResponse,
   NewsHotspotGroup,
   NewsSecurityRow,
   NewsStatus,
   RadarCurrent,
   RadarEvent,
-  ScreenerResponse,
   ShortMonitorDetail,
   ShortMonitorEvents,
   ShortMonitorOverview,
   ShortMonitorRankings,
   ShortMonitorView,
   SearchResult,
-  SettingsView,
   StockBar,
   StockOverview,
   StrengthProfilesMeta,
@@ -49,7 +45,7 @@ export const marketApi = {
     );
   },
   intradaySectors(): Promise<IntradaySectorsResponse> {
-    return get('/quotes/sectors/intraday', { timeoutMs: 60_000 });
+    return get('/quotes/sectors/intraday', { timeoutMs: 60_000, priority: 'low' });
   },
   sectorMembers(code: string, sort: SectorMemberSort, limit = 12): Promise<SectorMembersView> {
     return get(`/market/sectors/${encodeURIComponent(code)}/members?${toQuery({ sort, limit })}`);
@@ -57,8 +53,8 @@ export const marketApi = {
 };
 
 export const stocksApi = {
-  search(q: string): Promise<{ query: string; results: SearchResult[] }> {
-    return get(`/stocks/search?${toQuery({ q })}`);
+  search(q: string, options?: RequestOptions): Promise<{ query: string; results: SearchResult[] }> {
+    return get(`/stocks/search?${toQuery({ q })}`, options);
   },
   overview(code: string): Promise<StockOverview> {
     return get(`/stocks/${encodeURIComponent(code)}`);
@@ -70,45 +66,10 @@ export const stocksApi = {
     return get(`/stocks/${encodeURIComponent(code)}/chart?${toQuery({ interval })}`);
   },
   intradayQuotes(codes: string[]): Promise<IntradayQuotesResponse> {
-    return get(`/quotes/intraday?${toQuery({ codes: codes.join(',') })}`);
+    return get(`/quotes/intraday?${toQuery({ codes: codes.join(',') })}`, { priority: 'low' });
   },
   tickView(code: string): Promise<TickView> {
     return get(`/stocks/${encodeURIComponent(code)}/ticks`);
-  },
-};
-
-export interface ScreenerQueryBody {
-  markets?: string[];
-  sectors?: string[];
-  watchlist_codes?: string[];
-  min_price?: number;
-  max_price?: number;
-  min_avg_turnover?: number;
-  min_turnover_ratio?: number;
-  max_pct_from_high_252?: number;
-  ma_alignment?: boolean;
-  above_ma25?: boolean;
-  above_ma75?: boolean;
-  above_ma200?: boolean;
-  min_return_20d?: number;
-  min_rs_topix_63d?: number;
-  min_volatility_contraction?: number;
-  min_listed_days?: number;
-  max_margin_ratio?: number;
-  sort_by?: string;
-  sort_dir?: 'asc' | 'desc';
-  limit?: number;
-  offset?: number;
-}
-
-export const screenerApi = {
-  options() {
-    return get<{ markets: { code: string; name: string }[]; sectors: { code: string; name: string }[]; sort_keys: string[] }>(
-      '/screener/options',
-    );
-  },
-  query(body: ScreenerQueryBody): Promise<ScreenerResponse> {
-    return post('/screener/query', body);
   },
 };
 
@@ -131,12 +92,6 @@ export const watchlistApi = {
 };
 
 export const earningsApi = {
-  calendar(start?: string, end?: string): Promise<{ coverage_note: string; items: EarningsCalendarItem[] }> {
-    const query = toQuery({ start, end });
-    return query
-      ? get(`/earnings/calendar?${query}`)
-      : registryGet('/earnings/calendar');
-  },
   upcoming(): Promise<EarningsUpcomingResponse> {
     return get('/earnings/upcoming');
   },
@@ -153,7 +108,7 @@ export const researchApi = {
 
 export const quotesApi = {
   overlay(scope: 'radar' | 'screener', limit = 200): Promise<IntradayOverlayResponse> {
-    return get(`/quotes/overlay?${toQuery({ scope, limit })}`);
+    return get(`/quotes/overlay?${toQuery({ scope, limit })}`, { priority: 'low' });
   },
 };
 
@@ -164,9 +119,6 @@ export const radarApi = {
   },
   event(eventId: string): Promise<RadarEvent> {
     return get(`/radar/events/${encodeURIComponent(eventId)}`);
-  },
-  forSecurity(code: string): Promise<{ canonical_code: string; display_code: string; events: RadarEvent[] }> {
-    return get(`/radar/securities/${encodeURIComponent(code)}`);
   },
 };
 
@@ -213,12 +165,6 @@ export const dataStatusApi = {
   },
 };
 
-export const settingsApi = {
-  get(): Promise<SettingsView> {
-    return registryGet('/settings');
-  },
-};
-
 export const accessApi = {
   status(): Promise<AccessStatus> {
     return get('/access/status');
@@ -239,15 +185,9 @@ export const accountApi = {
   register(username: string, password: string) {
     return post<{ logged_in: boolean; username: string }>('/account/register', { username, password });
   },
-  me() {
-    return get<{ logged_in: boolean; username: string | null }>('/account/me');
-  },
 };
 
 export const workerApi = {
-  status() {
-    return registryGet<Record<string, unknown>>('/worker/status');
-  },
   trigger(actionType: string, body?: { code?: string }) {
     return post<{
       action_type: string;
@@ -285,11 +225,8 @@ export interface StrengthScanParams {
 }
 
 export const strengthApi = {
-  scan(params: StrengthScanParams = {}, options?: { cache?: RequestCache }): Promise<StrengthScanResponse> {
+  scan(params: StrengthScanParams = {}, options?: RequestOptions): Promise<StrengthScanResponse> {
     return get(`/strength/scan?${toQuery({ ...params })}`, options);
-  },
-  market(): Promise<{ trade_date: string; built_at: string; market_regime: MarketRegime; universe_count: number }> {
-    return get('/strength/market');
   },
   profiles(): Promise<StrengthProfilesMeta> {
     return registryGet('/strength/profiles');
@@ -305,9 +242,10 @@ export const newsApi = {
       `/news/hotspots?${toQuery({ hours })}`,
     );
   },
-  securities(hours = 72) {
+  securities(hours = 72, options?: RequestOptions) {
     return get<{ window_hours?: number; rows: NewsSecurityRow[]; note_ja?: string }>(
       `/news/securities?${toQuery({ hours })}`,
+      options,
     );
   },
   status() {

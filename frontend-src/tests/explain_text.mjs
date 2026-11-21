@@ -113,7 +113,7 @@ check('数値入りテンプレートは置換後も訳せる', () => {
 
 check('パラメータが訳語を持つときは値も訳す', () => {
   const line = explanationLine({
-    template: '近 20 日动向归为「{label}」。这是按公开报告的净变化做的规则分类，不代表机构意图。',
+    template: '近 20 日动向归为「{label}」。',
     params: { label: '方向反复' },
   });
   assert.ok(!line.includes('{label}'), `未置換: ${line}`);

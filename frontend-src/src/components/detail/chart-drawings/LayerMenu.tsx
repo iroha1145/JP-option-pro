@@ -45,25 +45,15 @@ function layerInputEnabled(
   return { enabled: true, reason: null };
 }
 
-function PopValue({ text }: { text: string }) {
-  return (
-    <span className="t-digit-group">
-      {[...text].map((ch, i) => (
-        <span key={`${ch}-${i}`} className="t-digit">{ch}</span>
-      ))}
-    </span>
-  );
-}
-
 function ValueBadge({ text, className }: { text: string; className?: string }) {
   return (
     <span
       className={cn(
-        'inline-flex h-6 items-center justify-center rounded-sm bg-paper-2 tnum leading-none text-ink-700 tnum',
+        'inline-flex h-6 items-center justify-center rounded-sm bg-paper-2 tnum leading-none text-ink-700',
         className,
       )}
     >
-      <PopValue text={text} />
+      {text}
     </span>
   );
 }

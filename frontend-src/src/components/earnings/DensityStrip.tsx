@@ -4,7 +4,6 @@
  */
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
-import SourceNote from '@/components/shared/SourceNote';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import type { EarningsUpcomingItem } from '@/api/types';
 import { addDays, fmtMDCN, fmtMMDD, jstToday, weekdayCN } from './types';
@@ -39,7 +38,7 @@ export default function DensityStrip({ items, onJumpDay }: DensityStripProps) {
   return (
     <section className="paper-panel p-5 sm:p-6" aria-label={t('财报密度')}>
       <h2 className="section-heading">{t('财报密度 · 未来 35 天')}</h2>
-      <div className="mt-3 flex h-16 items-end gap-[2px]" role="list" aria-label={t('每日财报件数')}>
+      <div className="mt-3 flex h-16 items-end gap-[2px]" role="list" aria-label={t('每日财报家数')}>
         {days.map((day, index) => {
           const n = day.rows.length;
           const solid = day.rows.filter((row) => row.status !== 'estimated').length;
@@ -58,7 +57,7 @@ export default function DensityStrip({ items, onJumpDay }: DensityStripProps) {
                       {fmtMMDD(day.date)} {weekdayCN(day.date)}
                       {n > 0 && (
                         <span className="ml-1 text-ink-400">
-                          {t('確定')} {solid} / {t('目安')} {n - solid}
+                          {t('已确认')} {solid} / {t('预估')} {n - solid}
                         </span>
                       )}
                     </span>
@@ -82,7 +81,7 @@ export default function DensityStrip({ items, onJumpDay }: DensityStripProps) {
               <button
                 type="button"
                 onClick={() => onJumpDay(day.date)}
-                aria-label={t('{date} {weekday}，{n} 件财报，跳转', { date: fmtMDCN(day.date), weekday: weekdayCN(day.date), n })}
+                aria-label={t('{date} {weekday}，{n} 家财报，跳转', { date: fmtMDCN(day.date), weekday: weekdayCN(day.date), n })}
                 className={cn(
                   'group relative flex h-full w-full items-end focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600',
                   /* 今天 = 整列淡底 + 列顶圆点（环套在数像素高的柱段上会成一个怪方块） */
@@ -127,9 +126,8 @@ export default function DensityStrip({ items, onJumpDay }: DensityStripProps) {
       </div>
       <div className="mt-2 flex items-center gap-3 text-micro text-ink-400">
         <span className="flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-[2px] bg-brand-500" />{t('已确认/已公布')}</span>
-        <span className="flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-[2px] bg-brand-300/50" />{t('目安')}</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-[2px] bg-brand-300/50" />{t('预估')}</span>
       </div>
-      <SourceNote className="mt-3" text={t('已确认：J-Quants 计划 · 预估：上年同期披露日期推算')} />
     </section>
   );
 }

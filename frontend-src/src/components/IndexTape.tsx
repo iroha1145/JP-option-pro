@@ -22,22 +22,23 @@ function TapeItem({
 }) {
   const change = typeof q.change_pct === 'number' && Number.isFinite(q.change_pct) ? q.change_pct : null;
   const tone = change === null ? 'missing' : change > 0 ? 'up' : change < 0 ? 'down' : 'flat';
+  const name = t(q.name);
   return (
     <button
       type="button"
       onClick={() => onOpen(q.index_code)}
-      title={t('查看大盘强弱 · {code}', { code: q.name })}
+      title={t('查看大盘强弱 · {code}', { code: name })}
       aria-label={
         tone === 'missing'
           ? t('查看大盘强弱，{code} 最新价 {price}，{flat}', {
-              code: q.name,
+              code: name,
               price: fmtPrice(q.close),
               flat: t('涨跌数据缺失'),
             })
           : tone === 'flat'
-            ? t('查看大盘强弱，{code} 最新价 {price}，{flat}', { code: q.name, price: fmtPrice(q.close), flat: t('持平') })
+            ? t('查看大盘强弱，{code} 最新价 {price}，{flat}', { code: name, price: fmtPrice(q.close), flat: t('持平') })
             : t('查看大盘强弱，{code} 最新价 {price}，涨跌 {pct}', {
-                code: q.name,
+                code: name,
                 price: fmtPrice(q.close),
                 pct: fmtPct(q.change_pct),
               })
@@ -48,7 +49,7 @@ function TapeItem({
         flash === 'down' && 'tick-flash-down',
       )}
     >
-      <span className="tnum text-caption font-medium text-ink-700">{q.name}</span>
+      <span className="tnum text-caption font-medium text-ink-700">{name}</span>
       <span className="tnum text-caption text-ink-600">{fmtPrice(q.close)}</span>
       <span
         className={cn(

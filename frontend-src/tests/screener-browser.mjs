@@ -32,7 +32,7 @@ async function screenerBrowser(page) {
   const enterAfterIdentity = async () => {
     await page.goto(`${origin}/`);
     await page.getByRole('button', {name:'退出 admin', exact:true}).waitFor();
-    await page.getByRole('navigation', {name:'主导航'}).getByRole('link', {name:'筛选', exact:true}).click();
+    await page.getByRole('navigation', {name:'主导航'}).getByRole('link', {name:'选股', exact:true}).click();
   };
   const action = (outcome, id = 'P2', status = 'completed') => ({
     status, result:{outcome,radar:{publication:{publication_id:id,trade_date:source.trade_date,score_version:source.stored_score_version}}},
@@ -75,7 +75,7 @@ async function screenerBrowser(page) {
       await route.fulfill({json:publication('P1',11)});
     });
     await page.goto(`${origin}/screener`);
-    await page.getByRole('heading', {name:'选股扫描',exact:true}).waitFor();
+    await page.getByRole('heading', {name:'条件选股',exact:true}).waitFor();
     await pause(120);
     releaseIdentity();
     await page.getByTestId('screener-owner-refresh').waitFor();
@@ -175,7 +175,7 @@ async function screenerBrowser(page) {
     await waitUntil(() => hasCount(11), 'initial publication is missing');
     await page.getByTestId('screener-owner-refresh').click();
     await page.getByTestId('screener-refresh-status').waitFor();
-    await waitUntil(() => statusHas('快照日期早于'), 'stale already_current was not distinguished');
+    await waitUntil(() => statusHas('快照早于最新交易日'), 'stale already_current was not distinguished');
     check(!(await statusHas('已是最新可用日线')), 'stale data was labelled latest');
   });
 
@@ -228,8 +228,8 @@ async function screenerBrowser(page) {
     await waitUntil(() => hasCount(11), 'initial publication is missing');
     await page.getByTestId('screener-owner-refresh').click();
     await page.getByRole('button', {name:'退出 admin',exact:true}).click();
-    await page.getByRole('heading', {name:'自选股',exact:true}).waitFor();
-    await page.getByRole('navigation', {name:'主导航'}).getByRole('link', {name:'筛选',exact:true}).click();
+    await page.getByRole('heading', {name:'我的关注',exact:true}).waitFor();
+    await page.getByRole('navigation', {name:'主导航'}).getByRole('link', {name:'选股',exact:true}).click();
     await waitUntil(() => hasCount(33), 'the new identity did not finish loading');
     releaseAction();
     await pause(250);

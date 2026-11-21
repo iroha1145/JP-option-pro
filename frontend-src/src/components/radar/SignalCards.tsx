@@ -81,7 +81,7 @@ function SignalCard({
             </Link>
             <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               <p className="min-w-0 truncate text-micro text-ink-400">{event.name_ja ?? '—'}</p>
-              {event.sector33_name && <SoftBadge tone="neutral">{event.sector33_name}</SoftBadge>}
+              {event.sector33_name && <SoftBadge tone="neutral">{t(event.sector33_name)}</SoftBadge>}
             </div>
           </div>
           <span className="shrink-0 tnum text-micro text-ink-400">{fmtDate(event.discovered_date)}</span>

@@ -39,8 +39,8 @@
   gap: 2px;
   text-align: center;
   text-wrap: balance;
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 0.875rem;
+  line-height: 1.43;
   color: var(--ink-800);
 }
 
@@ -56,7 +56,7 @@
 
 .earnings-calendar-today {
   padding-inline: 12px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .earnings-week-scroll,
@@ -64,7 +64,7 @@
   overflow-x: auto;
   overscroll-behavior-inline: contain;
   scrollbar-width: thin;
-  scrollbar-color: var(--ink-300) var(--paper-2);
+  scrollbar-color: var(--ink-400) var(--paper-2);
   border-end-start-radius: inherit;
   border-end-end-radius: inherit;
 }
@@ -113,9 +113,9 @@
   justify-content: space-between;
   gap: 6px;
   inline-size: 100%;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
-  line-height: 20px;
+  line-height: 1.43;
 }
 
 .earnings-week-tickers {
@@ -136,9 +136,9 @@
   background: var(--paper-2);
   color: var(--ink-800);
   text-align: start;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
-  line-height: 18px;
+  line-height: 1.5;
   transition: background-color 160ms, color 160ms;
 }
 
@@ -152,7 +152,7 @@
 
 .earnings-week-tickers .earnings-calendar-ticker {
   min-block-size: 44px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .earnings-calendar-ticker[aria-pressed='true'] {
@@ -169,15 +169,15 @@
   border-radius: 999px;
   background: var(--paper-2);
   color: var(--ink-600);
-  font-size: 12px;
-  line-height: 20px;
+  font-size: 0.75rem;
+  line-height: 1.67;
 }
 
 .earnings-calendar-extra {
   padding-inline: 6px;
   color: var(--ink-500);
-  font-size: 12px;
-  line-height: 20px;
+  font-size: 0.75rem;
+  line-height: 1.67;
 }
 
 .earnings-month-weekdays,
@@ -192,8 +192,8 @@
   color: var(--ink-500);
   background: var(--paper-2);
   text-align: center;
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 0.75rem;
+  line-height: 1.5;
 }
 
 .earnings-month-day {
@@ -238,8 +238,8 @@
   min-inline-size: 28px;
   min-block-size: 28px;
   border-radius: 999px;
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 0.875rem;
+  line-height: 1.43;
 }
 
 .earnings-month-date[aria-current='date'] .earnings-month-number {
@@ -295,6 +295,16 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .earnings-calendar-nav,
+  .earnings-calendar-today,
+  .earnings-week-day,
+  .earnings-calendar-ticker,
+  .earnings-month-day {
+    transition: none;
+  }
+}
+
 /* 三态标记：確定=品牌浅底，目安=虚线细框，已公布=默认灰底。圆点在组件里按 statusMeta 输出。 */
 .earnings-calendar-ticker.is-confirmed {
   background: var(--brand-50);
@@ -309,12 +319,12 @@
   margin-inline-start: auto;
   flex-shrink: 0;
   color: var(--ink-400);
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 0.75rem;
+  line-height: 1.5;
 }
 
 .earnings-week-note {
   color: var(--ink-400);
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 0.75rem;
+  line-height: 1.5;
 }

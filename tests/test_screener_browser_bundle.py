@@ -106,8 +106,8 @@ def test_h03_f01_production_frontend_serves_filter_not_update(dual_service):
         for path in (REPO / "frontend" / "assets").glob("Screener-*.js")
     )
     assert "更新日线与评分" in bundle
-    assert "盘中价较新不等于日线评分已更新" in bundle
-    assert "快照日期早于当前目标交易日" in bundle
+    assert "评分基于收盘日线" in bundle
+    assert "快照早于最新交易日" in bundle
     assert js == ""
 
 
@@ -130,4 +130,4 @@ def test_g07_g08_bundle_keeps_quote_and_score_copy():
         path.read_text(encoding="utf-8", errors="ignore")
         for path in (REPO / "frontend" / "assets").glob("Screener-*.js")
     )
-    assert "盘中价较新不等于日线评分已更新" in bundle
+    assert "评分基于收盘日线" in bundle

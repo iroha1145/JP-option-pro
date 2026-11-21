@@ -26,7 +26,7 @@ const at = (r: Rail, x: number) => r.slope * x + r.intercept;
 const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 export function medianRange(values: readonly number[]): number {
   if (!values.length) return 0;
-  const sorted = [...values].sort((a, b) => a - b), mid = Math.floor(sorted.length / 2);
+  const sorted = values.toSorted((a, b) => a - b), mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 /** Robust median true range, deliberately not labelled ATR. */

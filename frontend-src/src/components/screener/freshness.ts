@@ -117,12 +117,12 @@ export function interpretOwnerRefresh(input: {
 }
 
 export function freshnessNotCurrentMessage(freshness: string | null | undefined): string {
-  if (freshness === 'stale') return '快照日期早于当前目标交易日，这是筛选结果不是新的日线计算';
-  if (freshness === 'partial') return '输入不完整，不能当作最新日线';
-  if (freshness === 'degraded') return '指数输入偏旧，股票评分可用但不是完整新鲜';
-  if (freshness === 'unknown') return '日历覆盖未知，不能当作最新日线';
-  if (freshness === 'incompatible') return '已保存评分版本与当前代码不一致';
-  return '读回新鲜度不是当前，不能当作最新日线';
+  if (freshness === 'stale') return '快照早于最新交易日';
+  if (freshness === 'partial') return '日线数据不完整';
+  if (freshness === 'degraded') return '基准指数未更新';
+  if (freshness === 'unknown') return '交易日历待更新';
+  if (freshness === 'incompatible') return '评分版本待更新';
+  return '数据未更新至最新交易日';
 }
 
 export function silentScanMayCommit(input: {

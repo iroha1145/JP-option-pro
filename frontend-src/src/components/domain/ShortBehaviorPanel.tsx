@@ -18,12 +18,12 @@ import { SHORT_HINTS, type ScoreHint } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
 
 const EVENT_LABELS: Record<string, string> = {
-  new: '新规进入',
+  new: '新进',
   reentry: '重新进入',
   increased: '增仓',
   decreased: '减仓',
   below_threshold: '跌破门槛',
-  closed: '解消',
+  closed: '已平仓',
 };
 
 /** 对股票的方向：红=买方有利（空头回补），绿=卖方有利（新空头进场）。 */
@@ -93,10 +93,6 @@ export default function ShortBehaviorPanel({ code }: { code: string }) {
 
   return (
     <div className="space-y-3">
-      <p className="rounded-md bg-paper-2 px-2.5 py-1.5 text-micro text-ink-500">
-        {t('跌破公开披露门槛不代表实际空头仓位归零，后续精确仓位不可见。')}
-      </p>
-
       {/* 下层：事实指标。只陈述数到的东西，不打分。 */}
       <dl className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
         <Metric
@@ -280,11 +276,6 @@ function EventRow({ event }: { event: ShortMonitorEvent }) {
           </span>
         </PointerTooltip>
       </div>
-      {event.event_type === 'below_threshold' && (
-        <p className="pb-2 pl-14 text-micro text-ink-400">
-          {t('该机构已降至公开披露门槛以下，实际剩余仓位未知。')}
-        </p>
-      )}
     </li>
   );
 }

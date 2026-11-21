@@ -67,7 +67,7 @@ export default function DataTable<T>({
        当 0 分会让它随排序方向在头尾跳动，被读成极值。 */
     const missing = (v: unknown) =>
       v === null || v === undefined || (typeof v === 'number' && !Number.isFinite(v));
-    return [...rows].sort((a, b) => {
+    return rows.toSorted((a, b) => {
       const va = col.sortValue!(a);
       const vb = col.sortValue!(b);
       const ma = missing(va);
@@ -147,7 +147,7 @@ export default function DataTable<T>({
                         /* 只处理落在行本体上的按键：行内真按钮（如「从自选移除」）
                            的 Enter 激活是 keydown 的默认动作，容器 preventDefault
                            会吃掉它，让键盘用户执行到相反的动作（打开详情）。 */
-                        if (event.target !== event.currentTarget) return;
+                        if (event.target !== event.currentTarget || event.nativeEvent.isComposing || event.keyCode === 229) return;
                         if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault();
                           onRowClick(row);

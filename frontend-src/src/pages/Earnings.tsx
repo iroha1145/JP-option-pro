@@ -129,7 +129,7 @@ export default function Earnings() {
   const error503 = q.error && !q.data;
 
   const calendarHeading = (
-    <div className="page-toolbar mb-4">
+    <div className="page-toolbar mb-4 justify-between">
       <Segmented
         options={[
           { value: 'week' as const, label: t('周') },
@@ -138,6 +138,13 @@ export default function Earnings() {
         value={calView}
         onChange={setCalView}
       />
+      {counts && (
+        <span className="hidden items-center gap-1.5 sm:flex">
+          <SoftBadge>{t('已公布')} {counts.released}</SoftBadge>
+          <SoftBadge tone="brand">{t('已确认')} {counts.confirmed}</SoftBadge>
+          <SoftBadge tone="warn">{t('预估')} {counts.estimated}</SoftBadge>
+        </span>
+      )}
     </div>
   );
 
@@ -146,16 +153,9 @@ export default function Earnings() {
       {/* B0 页头带 */}
       <PageHeader
         title={t('财报日历')}
-        description={t('已确认日期来自官方计划；其余参考上年同期披露日期估算。')}
+        description={t('已确认日期来自交易所计划；预估日期按上年同期推算。')}
         meta={
           <>
-            {counts && (
-              <span className="hidden items-center gap-1.5 sm:flex">
-                <SoftBadge>{t('已公布')} {counts.released}</SoftBadge>
-                <SoftBadge tone="brand">{t('確定')} {counts.confirmed}</SoftBadge>
-                <SoftBadge tone="warn">{t('目安')} {counts.estimated}</SoftBadge>
-              </span>
-            )}
             <DataThrough date={q.data?.today} />
             {q.lastUpdatedAt && (
               <span className="hidden tnum text-caption text-ink-400 sm:inline">
@@ -302,14 +302,14 @@ export default function Earnings() {
                   <p className="text-caption text-ink-500">
                     {t('已显示')} <span className="tnum text-ink-800">{listState.visibleItems.length}</span>
                     {' / '}
-                    <span className="tnum text-ink-800">{listState.listItems.length}</span> {t('件')}
+                    <span className="tnum text-ink-800">{listState.listItems.length}</span> {t('家')}
                   </p>
                   <button
                     type="button"
                     onClick={() => setVisibleLimit((limit) => limit + LIST_PAGE_SIZE)}
                     className="mobile-control-target rounded-pill border border-line bg-card-warm px-4 text-caption text-ink-600 shadow-btn transition-colors hover:border-brand-400 hover:text-brand-600"
                   >
-                    {t('显示更多 ·')} {Math.min(LIST_PAGE_SIZE, listState.listItems.length - listState.visibleItems.length)} {t('件')}
+                    {t('显示更多 ·')} {Math.min(LIST_PAGE_SIZE, listState.listItems.length - listState.visibleItems.length)} {t('家')}
                   </button>
                 </div>
               )}
@@ -320,7 +320,7 @@ export default function Earnings() {
                     onClick={() => setVisibleLimit(LIST_PAGE_SIZE)}
                     className="mobile-control-target px-2 text-caption text-ink-400 transition-colors hover:text-brand-600"
                   >
-                    {t('收起至前')} {LIST_PAGE_SIZE} {t('件')}
+                    {t('收起至前')} {LIST_PAGE_SIZE} {t('家')}
                   </button>
                 </div>
               )}
@@ -361,13 +361,6 @@ export default function Earnings() {
         <aside className="grid min-w-0 grid-cols-1 content-start gap-6 xl:col-span-4" aria-label={t('侧栏')}>
           {loading ? <SkeletonCard /> : !error503 && <DensityStrip items={items} onJumpDay={onJumpDay} />}
           <RecentPanel items={recentQ.data?.items ?? []} loading={recentQ.loading && !recentQ.data} />
-          {q.data?.coverage_note && (
-            <div className="paper-panel p-5 sm:p-6">
-              <h2 className="section-heading">{t('覆盖口径')}</h2>
-              <p className="mt-2.5 max-w-prose text-caption text-ink-500">{t(q.data.coverage_note)}</p>
-              <SourceNote className="mt-3" text={t('预估日期可能调整，请以公司公告为准。')} />
-            </div>
-          )}
         </aside>
       </div>
     </div>
@@ -398,7 +391,7 @@ function RecentPanel({ items, loading }: { items: EarningsRecentItem[]; loading:
                 <span className="block truncate text-caption text-ink-700">{row.name_ja ?? '—'}</span>
                 <span className="block truncate text-micro text-ink-400">
                   {row.disclosed_date?.slice(5)} · {row.period_type ?? '—'}
-                  {row.is_forecast_revision ? ` · ${t('业绩预想修正')}` : ''}
+                  {row.is_forecast_revision ? ` · ${t('业绩预测修正')}` : ''}
                 </span>
               </span>
               <span className="shrink-0 text-right">
@@ -406,12 +399,12 @@ function RecentPanel({ items, loading }: { items: EarningsRecentItem[]; loading:
                 {row.forecast_direction === 'upward' && (
                   <PointerTooltip
                     passthrough
-                    label={t('上方修正')}
+                    label={t('上调预测')}
                     width={120}
                     contentClassName="p-2"
-                    content={<span className="text-micro text-ink-600">{t('上方修正')}</span>}
+                    content={<span className="text-micro text-ink-600">{t('上调预测')}</span>}
                   >
-                    <span className="inline-flex text-up-700" aria-label={t('上方修正')}>
+                    <span className="inline-flex text-up-700" aria-label={t('上调预测')}>
                       <Icon name="arrow-up-right" size={12} />
                     </span>
                   </PointerTooltip>
@@ -419,12 +412,12 @@ function RecentPanel({ items, loading }: { items: EarningsRecentItem[]; loading:
                 {row.forecast_direction === 'downward' && (
                   <PointerTooltip
                     passthrough
-                    label={t('下方修正')}
+                    label={t('下调预测')}
                     width={120}
                     contentClassName="p-2"
-                    content={<span className="text-micro text-ink-600">{t('下方修正')}</span>}
+                    content={<span className="text-micro text-ink-600">{t('下调预测')}</span>}
                   >
-                    <span className="inline-flex text-down-700" aria-label={t('下方修正')}>
+                    <span className="inline-flex text-down-700" aria-label={t('下调预测')}>
                       <Icon name="arrow-down-right" size={12} />
                     </span>
                   </PointerTooltip>
@@ -434,7 +427,7 @@ function RecentPanel({ items, loading }: { items: EarningsRecentItem[]; loading:
           ))}
         </div>
       )}
-      <SourceNote className="mt-3.5" text={t('金额为营业利益 · 修正箭头表示会社预想方向')} />
+      <SourceNote className="mt-3.5" text={t('金额为营业利润')} />
     </section>
   );
 }

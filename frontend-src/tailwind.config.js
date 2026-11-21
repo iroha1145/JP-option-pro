@@ -179,11 +179,16 @@ module.exports = {
           from: { transform: 'translateX(0)' },
           to: { transform: 'translateX(-100%)' },
         },
+        'spin-once': {
+          from: { transform: 'rotate(0deg)' },
+          to: { transform: 'rotate(360deg)' },
+        },
       },
       animation: {
         'led-pulse': 'led-pulse 1.5s cubic-bezier(.45,0,.15,1) infinite',
         'grow-bar': 'grow-bar 700ms cubic-bezier(.16,1,.3,1) both',
         marquee: 'marquee 28s linear infinite',
+        'spin-once': 'spin-once 520ms cubic-bezier(.16,1,.3,1)',
       },
     },
   },

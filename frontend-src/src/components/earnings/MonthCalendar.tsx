@@ -152,7 +152,7 @@ export default function MonthCalendar({ items, selectedDay, onSelectDay, anchorD
                   className="earnings-month-date"
                   aria-pressed={isSelected}
                   aria-current={isToday ? 'date' : undefined}
-                  aria-label={t('{md}，{n} 件财报', { md: fmtMDCN(date), n: dayItems.length })}
+                  aria-label={t('{md}，{n} 家财报', { md: fmtMDCN(date), n: dayItems.length })}
                   onClick={() => onSelectDay(isSelected ? null : date)}
                 >
                   <span className="earnings-month-number tnum">{Number(date.slice(8, 10))}</span>

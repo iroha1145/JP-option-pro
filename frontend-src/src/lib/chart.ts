@@ -3,7 +3,7 @@
  * 发丝网格 / 毛玻璃 tooltip / 绘制动画 / 点阵面积 / 斜纹柱
  */
 import * as echarts from 'echarts/core';
-import { BarChart, CandlestickChart, CustomChart, LineChart, PieChart } from 'echarts/charts';
+import { BarChart, CandlestickChart, CustomChart, LineChart } from 'echarts/charts';
 import {
   DataZoomComponent,
   DataZoomSliderComponent,
@@ -16,7 +16,7 @@ import {
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import type { ComposeOption } from 'echarts/core';
-import type { BarSeriesOption, CandlestickSeriesOption, CustomSeriesOption, LineSeriesOption, PieSeriesOption } from 'echarts/charts';
+import type { BarSeriesOption, CandlestickSeriesOption, CustomSeriesOption, LineSeriesOption } from 'echarts/charts';
 import type {
   DataZoomComponentOption,
   GraphicComponentOption,
@@ -73,7 +73,7 @@ function surface(appearance: Appearance = getAppearance()) {
 }
 
 echarts.use([
-  LineChart, BarChart, CandlestickChart, PieChart, CustomChart,
+  LineChart, BarChart, CandlestickChart, CustomChart,
   GridComponent, TooltipComponent, DataZoomComponent, DataZoomSliderComponent,
   MarkLineComponent, MarkPointComponent, MarkAreaComponent, GraphicComponent,
   CanvasRenderer,
@@ -87,7 +87,6 @@ export type ChartOption = ComposeOption<
   | LineSeriesOption
   | BarSeriesOption
   | CandlestickSeriesOption
-  | PieSeriesOption
   | CustomSeriesOption
   | GridComponentOption
   | TooltipComponentOption
@@ -172,19 +171,13 @@ export function escapeTooltipText(value: unknown): string {
     .replace(/"/g, '&quot;');
 }
 
-function hexRgba(hex: string, alpha: number): string {
-  const raw = hex.replace('#', '');
-  const value = Number.parseInt(raw, 16);
-  return `rgba(${(value >> 16) & 255},${(value >> 8) & 255},${value & 255},${alpha})`;
-}
-
 /** Beautiful UI Insight Cards：自上而下淡出的面积填充 */
-export function insightAreaStyle(color: string = CH.brand600): LineSeriesOption['areaStyle'] {
+function insightAreaStyle(color: string = CH.brand600): LineSeriesOption['areaStyle'] {
   return {
     color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-      { offset: 0, color: hexRgba(color, 0.24) },
-      { offset: 0.72, color: hexRgba(color, 0.06) },
-      { offset: 1, color: hexRgba(color, 0) },
+      { offset: 0, color: withAlpha(color, 0.24) },
+      { offset: 0.72, color: withAlpha(color, 0.06) },
+      { offset: 1, color: withAlpha(color, 0) },
     ]),
   };
 }
@@ -219,7 +212,7 @@ export function insightLineSeries(options: {
     areaStyle: insightAreaStyle(color),
     emphasis: {
       scale: false,
-      itemStyle: { color, borderColor: CH.endpointRing, borderWidth: 2, shadowBlur: 10, shadowColor: hexRgba(color, 0.45) },
+      itemStyle: { color, borderColor: CH.endpointRing, borderWidth: 2, shadowBlur: 10, shadowColor: withAlpha(color, 0.45) },
     },
     markPoint:
       lastValue != null && Number.isFinite(lastValue)
@@ -233,7 +226,7 @@ export function insightLineSeries(options: {
               borderColor: CH.endpointRing,
               borderWidth: 2,
               shadowBlur: 8,
-              shadowColor: hexRgba(color, 0.5),
+              shadowColor: withAlpha(color, 0.5),
             },
             data: [{ name: 'last', coord: [lastIndex, lastValue] }],
           }

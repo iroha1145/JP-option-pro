@@ -11,7 +11,6 @@ import { cn } from '@/lib/utils';
 import Icon from '@/components/icons';
 import Segmented from '@/components/shared/Segmented';
 import FilterButton from '@/components/shared/FilterButton';
-import PointerTooltip from '@/components/shared/PointerTooltip';
 import SelectionViewport from '@/components/shared/SelectionViewport';
 import SoftBadge from '@/components/shared/SoftBadge';
 import MenuSelect from '@/components/shared/MenuSelect';
@@ -217,7 +216,6 @@ interface FilterWorkbenchProps {
   tierCounts: Record<TierFilter, number> | null;
   universeCount: number | null;
   meta: StrengthProfilesMeta | null;
-  metaFailed: boolean;
   scanning: boolean;
   dirty: boolean;
   onScan: () => void;
@@ -229,7 +227,6 @@ export default function FilterWorkbench({
   tierCounts,
   universeCount,
   meta,
-  metaFailed,
   scanning,
   dirty,
   onScan,
@@ -246,37 +243,15 @@ export default function FilterWorkbench({
     patch({ sectors: has ? draft.sectors.filter((x) => x !== id) : [...draft.sectors, id] });
   };
 
-  const applyPreset = (id: string) => {
-    if (draft.presetId === id) {
-      patch({ presetId: null, minScore: null });
-      return;
-    }
-    if (id === 'conservative' || id === 'balanced' || id === 'aggressive') {
-      patch({ presetId: id, profile: id, minScore: null });
-      return;
-    }
-    const preset = meta?.presets.find((item) => item.id === id);
-    if (preset) {
-      patch({
-        presetId: id,
-        profile: (preset.profile as ProfilePref) || 'balanced',
-        minScore: preset.min_score,
-      });
-    }
-  };
-
   const row = {
     hidden: { opacity: 0 },
     show: { opacity: 1, transition: { duration: 0.48, ease: EASE_PAPER } },
   };
 
-  const presetChips = [
-    ...(meta?.profiles ?? []).map((profile) => ({ id: profile.id, name: profile.name, description: profile.description })),
-    ...(meta?.presets ?? []).map((preset) => ({ id: preset.id, name: preset.name, description: preset.description })),
-  ];
-
-  const selectedPreset = presetChips.find((preset) => preset.id === draft.presetId);
-  const selectedSectors = draft.sectors.map((id) => sectorOptions.find((sector) => sector.id === id)?.name ?? id);
+  const selectedSectors = draft.sectors.map((id) => {
+    const name = sectorOptions.find((sector) => sector.id === id)?.name;
+    return name ? t(name) : id;
+  });
   const priceSummary =
     draft.priceMin !== null && draft.priceMax !== null
       ? `${t('价格区间')} ¥${draft.priceMin} – ¥${draft.priceMax}`
@@ -290,7 +265,6 @@ export default function FilterWorkbench({
       ? `${t('成交额下限')} ${TURNOVER_OPTIONS.find((option) => option.value === draft.minTurnover)?.label ?? draft.minTurnover}`
       : null;
   const advancedSummary = [
-    selectedPreset?.name,
     selectedSectors.length > 0
       ? `${selectedSectors.slice(0, 2).join(' / ')}${selectedSectors.length > 2 ? ` +${selectedSectors.length - 2}` : ''}`
       : null,
@@ -307,6 +281,7 @@ export default function FilterWorkbench({
       aria-label={t('筛选工作台')}
       data-testid="screener-filter-workbench"
     >
+      <search aria-label={t('筛选工作台')}>
       <motion.div variants={row} className="grid min-w-0 grid-cols-1 items-end gap-5 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
         <div className="min-w-0 sm:col-span-2 xl:col-span-1">
           <FieldLabel hint={STRENGTH_HINTS.tierCounts}>{t('强度分档')}</FieldLabel>
@@ -314,7 +289,7 @@ export default function FilterWorkbench({
             value={draft.tier}
             counts={tierCounts}
             coversPool={tierCounts !== null}
-            onChange={(tier) => patch({ tier, presetId: null, minScore: null })}
+            onChange={(tier) => patch({ tier, minScore: null })}
           />
         </div>
         <div className="min-w-0">
@@ -332,7 +307,7 @@ export default function FilterWorkbench({
           <Segmented<ProfilePref>
             options={(['conservative', 'balanced', 'aggressive'] as const).map((value) => ({ value, label: PROFILE_CN[value], tone: PROFILE_TONE[value] }))}
             value={draft.profile}
-            onChange={(profile) => patch({ profile, presetId: null })}
+            onChange={(profile) => patch({ profile })}
             ariaLabel={t('偏好')}
             className="max-w-full flex-wrap"
           />
@@ -367,60 +342,13 @@ export default function FilterWorkbench({
               advancedSummary.map((label, index) => <SoftBadge key={index}>{label}</SoftBadge>)
             ) : (
               <span>
-                {t('预设策略')} · {t('行业（多选）')} · {t('价格区间')} · {t('成交额下限')}
+                {t('行业（多选）')} · {t('价格区间')} · {t('成交额下限')}
               </span>
             )}
           </span>
         </summary>
 
         <div className="space-y-4 pt-4">
-          <div className="min-w-0">
-            <FieldLabel>{t('预设策略')}</FieldLabel>
-            {metaFailed ? (
-              <p className="flex h-8 items-center text-caption text-ink-400">{t('预设暂不可用 · 使用默认条件')}</p>
-            ) : presetChips.length === 0 ? (
-              <div className="t-skel flex gap-2" data-state="loading" aria-hidden="true">
-                <div className="t-skel-skeleton is-pulsing flex gap-2">
-                  {Array.from({ length: 3 }, (_, i) => (
-                    <SkeletonBlock key={i} className="h-8 w-20 rounded-pill" />
-                  ))}
-                </div>
-                <div className="t-skel-content" />
-              </div>
-            ) : (
-              <SelectionViewport>
-                <div className="mobile-selection-rail flex flex-wrap items-center gap-2">
-                  {presetChips.map((preset) => {
-                    const active = draft.presetId === preset.id;
-                    const button = (
-                      <FilterButton
-                        key={preset.id}
-                        onClick={() => applyPreset(preset.id)}
-                        active={active}
-                        className={CHOICE_CHIP}
-                      >
-                        <Icon name="spark-ai" size={13} className={active ? 'text-brand-600' : 'text-ink-400'} />
-                        {preset.name}
-                      </FilterButton>
-                    );
-                    return preset.description ? (
-                      <PointerTooltip
-                        key={preset.id}
-                        passthrough
-                        label={t(preset.description)}
-                        content={<span className="text-micro text-ink-600">{t(preset.description)}</span>}
-                      >
-                        {button}
-                      </PointerTooltip>
-                    ) : (
-                      button
-                    );
-                  })}
-                </div>
-              </SelectionViewport>
-            )}
-          </div>
-
           <div data-screener-field="sectors" className="min-w-0">
             <FieldLabel>{t('行业（多选）')}</FieldLabel>
             {sectorOptions.length === 0 ? (
@@ -446,7 +374,7 @@ export default function FilterWorkbench({
                       <span className={CHOICE_CHECK} aria-hidden="true">
                         <Icon name="check" size={13} />
                       </span>
-                      {sector.name}
+                      {t(sector.name)}
                     </FilterButton>
                   ))}
                   {/* 展开与收起和芯片同形同色，字色浅一档，箭头指明是展开不是筛选项 */}
@@ -496,6 +424,7 @@ export default function FilterWorkbench({
           </div>
         </div>
       </details>
+      </search>
     </motion.section>
   );
 }
