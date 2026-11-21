@@ -557,7 +557,7 @@ export default function Screener() {
                 {chips.map((chip) => (
                   <SoftBadge key={chip.key} className="gap-1 whitespace-normal">
                     {chip.label}
-                    <button type="button" onClick={chip.onRemove} aria-label={t('移除条件 {label}', { label: chip.label })} className="inline-grid min-h-11 min-w-11 shrink-0 place-items-center rounded-[var(--r-control)] text-ink-300 transition-colors hover:text-down-600 sm:min-h-8 sm:min-w-8">
+                    <button type="button" onClick={chip.onRemove} aria-label={t('移除条件 {label}', { label: chip.label })} className="inline-grid min-h-11 min-w-11 shrink-0 place-items-center rounded-[var(--r-control)] text-ink-400 transition-colors duration-fast hover:text-ink-800 sm:min-h-8 sm:min-w-8">
                       <Icon name="x" size={10} />
                     </button>
                   </SoftBadge>
@@ -565,6 +565,36 @@ export default function Screener() {
               </>
             ) : (
               <h2 className="section-heading">{t('扫描结果')}</h2>
+            )}
+            {response && (response.freshness === 'stale' || response.calendar_state === 'stale') && (
+              <SoftBadge tone="warn" className="whitespace-normal">
+                {t('快照日期早于当前目标交易日，这是筛选结果不是新的日线计算')}
+              </SoftBadge>
+            )}
+            {response && response.freshness === 'partial' && (
+              <SoftBadge tone="warn" className="whitespace-normal">
+                {t('输入不完整，不能当作最新日线')}
+              </SoftBadge>
+            )}
+            {response && response.freshness === 'degraded' && (
+              <SoftBadge tone="warn" className="whitespace-normal">
+                {t('指数输入偏旧，股票评分可用但不是完整新鲜')}
+              </SoftBadge>
+            )}
+            {response && response.freshness === 'unknown' && (
+              <SoftBadge tone="warn" className="whitespace-normal">
+                {t('日历覆盖未知，不能当作最新日线')}
+              </SoftBadge>
+            )}
+            {response && response.score_compatible === false && (
+              <SoftBadge tone="warn" className="whitespace-normal">
+                {t('已保存评分版本与当前代码不一致')}
+              </SoftBadge>
+            )}
+            {unverified && (
+              <SoftBadge tone="warn" data-testid="screener-unverified">
+                {t('核验未完成，列表可能不是最新')}
+              </SoftBadge>
             )}
             <div className="flex w-full min-w-0 flex-wrap items-center gap-3 border-t border-line pt-4">
               <Segmented<SortMode>
@@ -581,43 +611,13 @@ export default function Screener() {
           {sortMode !== 'deterministic' && (
             <p className="mt-2 text-micro text-ink-400">{t('催化排序基于 72h 新闻摘要（仅覆盖已接入 RSS 源）；无新闻的股票排在其后。')}</p>
           )}
-          {response && (response.freshness === 'stale' || response.calendar_state === 'stale') && (
-            <SoftBadge tone="warn" className="mt-2">
-              {t('快照日期早于当前目标交易日，这是筛选结果不是新的日线计算')}
-            </SoftBadge>
-          )}
-          {response && response.freshness === 'partial' && (
-            <SoftBadge tone="warn" className="mt-2">
-              {t('输入不完整，不能当作最新日线')}
-            </SoftBadge>
-          )}
-          {response && response.freshness === 'degraded' && (
-            <SoftBadge tone="warn" className="mt-2">
-              {t('指数输入偏旧，股票评分可用但不是完整新鲜')}
-            </SoftBadge>
-          )}
-          {response && response.freshness === 'unknown' && (
-            <SoftBadge tone="warn" className="mt-2">
-              {t('日历覆盖未知，不能当作最新日线')}
-            </SoftBadge>
-          )}
-          {response && response.score_compatible === false && (
-            <SoftBadge tone="warn" className="mt-2">
-              {t('已保存评分版本与当前代码不一致')}
-            </SoftBadge>
-          )}
-          {unverified && (
-            <SoftBadge tone="warn" className="mt-2" data-testid="screener-unverified">
-              {t('核验未完成，列表可能不是最新')}
-            </SoftBadge>
-          )}
           {refreshMessage && (
             <p className="mt-2 text-micro text-ink-500" data-testid="screener-refresh-status">
               {refreshMessage}
             </p>
           )}
 
-          <div className="mt-6">
+          <div className="mt-4">
             {scanState === 'scanning' && !response ? (
               <div className="card-surface">
                 <SkeletonRows rows={8} />
@@ -685,11 +685,8 @@ export default function Screener() {
                     <button
                       type="button"
                       onClick={() => setOnlyLiveUp((prev) => !prev)}
-                      className={`mobile-control-target flex items-center gap-1.5 rounded-pill border px-2.5 py-1 text-caption transition-colors duration-fast ${
-                        onlyLiveUp
-                          ? 'border-brand-400 bg-brand-50 text-brand-700'
-                          : 'border-line bg-card text-ink-600 hover:border-brand-400 hover:text-brand-600'
-                      }`}
+                      aria-pressed={onlyLiveUp}
+                      className="control-button mobile-control-target"
                     >
                       <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
                       {t('盘中上涨')} {liveUpCount}
@@ -699,7 +696,7 @@ export default function Screener() {
                     <span className="text-micro text-ink-400">{t('盘中价较新不等于日线评分已更新')}</span>
                   </div>
                 )}
-                <div className={scanState === 'scanning' ? 'hidden opacity-60 md:block' : 'hidden md:block'}>
+                <div className={scanState === 'scanning' ? 'hidden opacity-60 xl:block' : 'hidden xl:block'}>
                   <ResultTable
                     rows={pageRows}
                     startIndex={(safePage - 1) * PAGE_SIZE}
@@ -718,7 +715,7 @@ export default function Screener() {
                     stale={staleResults}
                   />
                 </div>
-                <div className={scanState === 'scanning' ? 'opacity-60 md:hidden' : 'md:hidden'}>
+                <div className={scanState === 'scanning' ? 'opacity-60 xl:hidden' : 'xl:hidden'}>
                   <ResultCards
                     rows={pageRows}
                     expanded={expanded}
@@ -735,11 +732,11 @@ export default function Screener() {
                   />
                   {totalPages > 1 && (
                     <div className="mt-4 flex items-center justify-center gap-2">
-                      <SuggestButton label={t('上一页')} onClick={() => setPage(Math.max(1, safePage - 1))} />
+                      <PagerButton disabled={safePage <= 1} onClick={() => setPage(safePage - 1)} label={t('上一页')} />
                       <span className="tnum text-caption text-ink-500">
                         {safePage} / {totalPages}
                       </span>
-                      <SuggestButton label={t('下一页')} onClick={() => setPage(Math.min(totalPages, safePage + 1))} />
+                      <PagerButton disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)} label={t('下一页')} />
                     </div>
                   )}
                 </div>
@@ -749,7 +746,7 @@ export default function Screener() {
         </section>
 
         {/* B3 右侧栏 */}
-        <aside className="grid min-w-0 grid-cols-1 gap-6 self-start md:grid-cols-2 lg:col-span-12 2xl:sticky 2xl:top-20 2xl:col-span-3 2xl:grid-cols-1" aria-label={t('侧栏')}>
+        <aside className="grid min-w-0 grid-cols-1 items-start gap-6 self-start md:grid-cols-2 lg:col-span-12 2xl:sticky 2xl:top-20 2xl:col-span-3 2xl:grid-cols-1" aria-label={t('侧栏')}>
           {response?.market_regime ? (
             <MarketRegimeCard regime={response.market_regime} />
           ) : scanState === 'scanning' || scanState === 'idle' ? (
@@ -787,7 +784,7 @@ export default function Screener() {
                 <button
                   type="button"
                   onClick={() => patchAndScan({ tier: 'all', minScore: null, presetId: null })}
-                  className="mobile-control-target mt-3 flex items-center gap-1.5 rounded-pill bg-brand-600 px-3 py-1.5 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105"
+                  className="control-button mobile-control-target mt-3"
                 >
                   <Icon name="filter-funnel" size={13} />
                   {t('放宽一档试试')}
@@ -799,6 +796,14 @@ export default function Screener() {
       </div>
       <SourceNote text={t('强度扫描结果 · 日线收盘后快照')} />
     </div>
+  );
+}
+
+function PagerButton({ label, disabled, onClick }: { label: string; disabled: boolean; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} className="control-button mobile-control-target">
+      {label}
+    </button>
   );
 }
 

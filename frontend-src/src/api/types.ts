@@ -352,6 +352,8 @@ export interface ScorePack {
   confidence: number;
   status: string;
   missing?: string[];
+  /** 各分项对总分的贡献；只有告警优先级这一项会带。 */
+  contributions?: Record<string, number>;
 }
 
 export interface RadarScores {

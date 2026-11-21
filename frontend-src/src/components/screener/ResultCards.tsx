@@ -11,6 +11,7 @@ import ChangeBadge from '@/components/shared/ChangeBadge';
 import InfoHint from '@/components/shared/InfoHint';
 import SoftBadge from '@/components/shared/SoftBadge';
 import TickPrice from '@/components/shared/TickPrice';
+import CodeMark from '@/components/shared/CodeMark';
 import { STRENGTH_HINTS } from '@/lib/indicatorHints';
 import RowExpansion from './RowExpansion';
 import { NewsBadge, SubscoreTicks } from './cells';
@@ -51,7 +52,7 @@ export default function ResultCards({
   stale = false,
 }: ResultCardsProps) {
   return (
-    <div className={cn('grid grid-cols-1 gap-3', stale && 'opacity-60')} key={animKey}>
+    <div className={cn('grid grid-cols-1 gap-3 md:grid-cols-2 md:items-start', stale && 'opacity-60')} key={animKey}>
       {rows.map((row, index) => {
         const isOpen = expanded === row.canonical_code;
         const score = row.ranking_score;
@@ -62,37 +63,35 @@ export default function ResultCards({
           <motion.div
             key={row.canonical_code}
             layout="position"
-            initial={page === 1 ? { opacity: 0, y: 14 } : false}
-            animate={{ opacity: 1, y: 0 }}
+            initial={page === 1 ? { opacity: 0 } : false}
+            animate={{ opacity: 1 }}
             transition={{
               duration: 0.4,
               ease: EASE_PAPER,
               delay: page === 1 ? Math.min(index * 0.03, 0.3) : 0,
               layout: { duration: 0.32, ease: EASE_PAPER },
             }}
-            whileHover={{ y: -3, transition: { duration: 0.24, ease: 'easeOut' } }}
-            className="card-surface overflow-hidden transition-shadow duration-240 ease-out hover:shadow-sh-2"
+            className="card-surface card-lift overflow-hidden"
           >
             <button type="button" onClick={() => onToggle(row.canonical_code)} aria-expanded={isOpen} className="flex w-full flex-col p-4 text-left">
               <span className="flex items-center gap-2.5">
-                <span className="rounded-md bg-brand-50 px-1.5 py-0.5 tnum text-body-s font-medium text-brand-700">
-                  {row.display_code}
-                </span>
+                <CodeMark code={row.display_code} size={32} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-body-s text-ink-800">{row.name_ja ?? '—'}</span>
-                  {row.sector33_name ? (
-                    <SoftBadge className="mt-0.5 max-w-[11rem]" title={row.sector33_name}>
-                      <span className="truncate">{row.sector33_name}</span>
-                    </SoftBadge>
-                  ) : (
-                    <span className="block truncate text-micro text-ink-400">—</span>
-                  )}
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <span className="tnum text-body-s font-medium text-ink-800">{row.display_code}</span>
+                    {row.sector33_name && (
+                      <SoftBadge className="max-w-[7.5rem]" title={row.sector33_name}>
+                        <span className="truncate">{row.sector33_name}</span>
+                      </SoftBadge>
+                    )}
+                  </span>
+                  <span className="block truncate text-micro text-ink-400" title={row.name_ja ?? undefined}>{row.name_ja ?? '—'}</span>
                 </span>
                 <ChangeBadge value={quote.change} size="sm" />
                 <Icon
                   name="chevron-down"
                   size={14}
-                  className={cn('text-ink-300 transition-transform duration-200', isOpen && 'rotate-180 text-brand-600')}
+                  className={cn('text-ink-400 transition-transform duration-fast', isOpen && 'rotate-180 text-brand-600')}
                 />
               </span>
               <span className="mt-3 flex items-end justify-between gap-3">
@@ -161,7 +160,7 @@ export default function ResultCards({
                   transition={{ duration: 0.26, ease: EASE_PAPER }}
                   className="overflow-hidden"
                 >
-                  <RowExpansion row={row} weights={weights} canManageWatchlist={canManageWatchlist} live={overlay?.[row.canonical_code]} />
+                  <RowExpansion row={row} layout="card" weights={weights} canManageWatchlist={canManageWatchlist} live={overlay?.[row.canonical_code]} />
                 </motion.div>
               )}
             </AnimatePresence>

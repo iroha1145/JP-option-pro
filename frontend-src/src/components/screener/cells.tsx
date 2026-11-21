@@ -35,11 +35,11 @@ export function ScoreCell({ score }: { score: number | null; index?: number }) {
       }
     >
       <span className="inline-flex items-center gap-2.5">
-      <SoftBadge tone={strength.badgeTone} className="metric-value w-[3.25rem] shrink-0 justify-end text-body-s font-medium tnum">
+      <SoftBadge tone={strength.badgeTone} className="metric-value w-[3.25rem] shrink-0 justify-end text-[15px] font-medium leading-[20px] tnum">
         {score.toFixed(1)}
       </SoftBadge>
       <span
-        className="strength-track h-1 w-16 overflow-hidden rounded-pill bg-paper"
+        className="strength-track h-1 w-12 overflow-hidden rounded-pill bg-paper"
         role="progressbar"
         aria-valuemin={0}
         aria-valuemax={100}
