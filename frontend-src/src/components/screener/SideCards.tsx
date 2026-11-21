@@ -77,10 +77,10 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
                 content={
                   <>
                     <span className="flex items-baseline justify-between">
-                      <span className="text-caption font-semibold text-ink-800">{dim.label}</span>
+                      <span className="text-caption font-medium text-ink-800">{dim.label}</span>
                       <span className="tnum text-micro text-ink-400">{dim.en}</span>
                     </span>
-                    {hint && <span className="mt-1.5 block text-micro leading-[16px] text-ink-500">{hint.body}</span>}
+                    {hint && <span className="mt-1.5 block text-micro text-ink-500">{hint.body}</span>}
                     <span className="mt-1.5 block tnum text-caption text-brand-600">
                       {value !== null ? `${Math.round(value * 10) / 10} / 100` : t('暂无数据')}
                     </span>
@@ -165,7 +165,7 @@ export function TierHistogram({
                 !selectable && 'cursor-default opacity-70',
               )}
             >
-              <span className="metric-value text-[11px] leading-none text-ink-500 tnum">{hit}</span>
+              <span className="metric-value text-tag leading-none text-ink-500 tnum">{hit}</span>
               {ref !== null && (
                 <span
                   className="w-full max-w-[26px] rounded-t-[3px] border border-ink-300/30"
@@ -187,7 +187,7 @@ export function TierHistogram({
       </div>
       <div className="mt-1.5 flex gap-2.5">
         {TIERS.map((tier) => (
-          <span key={tier} className={cn('flex-1 text-center tnum text-[10px] tnum', activeTier === tier ? 'text-brand-600' : 'text-ink-400')}>
+          <span key={tier} className={cn('flex-1 text-center tnum text-tag tnum', activeTier === tier ? 'text-brand-600' : 'text-ink-400')}>
             {tier}
           </span>
         ))}
@@ -258,7 +258,7 @@ export function MethodCard({
                   <button
                     type="button"
                     onClick={onRetry}
-                    className="mt-2 flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-caption text-ink-600 shadow-btn transition-colors hover:border-brand-400 hover:text-brand-600"
+                    className="mobile-control-target mt-2 flex items-center gap-1.5 rounded-pill border border-line px-2.5 py-1 text-caption text-ink-600 shadow-btn transition-colors hover:border-brand-400 hover:text-brand-600"
                   >
                     <Icon name="refresh" size={12} />
                     {t('重试')}
@@ -294,7 +294,7 @@ export function MethodCard({
                   ? t(profile.description)
                   : t('内在强度为六族加权合成（0–100，缺失重新配权）。')}
               </p>
-              <p className="mt-1.5 text-micro leading-[16px] text-ink-400">
+              <p className="mt-1.5 text-micro text-ink-400">
                 {t('最终排序分 = 内在 78% + 市场形态 8% + 偏好适配 14%（置信度加权）。')}
               </p>
             </>

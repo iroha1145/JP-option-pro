@@ -39,7 +39,7 @@ export interface SectorStrength {
   leaders: { canonical_code: string; name_ja: string | null; return_1d: number | null }[];
 }
 
-/** 板块最热门个股（美版「板块 IV 横截面排名」的日股替代） */
+/** 板块最热门个股 */
 export type SectorMemberSort = 'turnover' | 'heat' | 'change';
 
 export interface SectorMemberRow {

@@ -1,4 +1,4 @@
-/** 指数收盘价：沿用美股 CTA 历史图的线条、图台与游标，不引入仓位口径。 */
+/** 指数收盘价折线：细线、图台与游标，只画收盘价，不含仓位口径。 */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ReactECharts from './ReactECharts';
 import type { useChartCursor } from './useChartCursor';

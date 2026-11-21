@@ -1,10 +1,9 @@
 /**
- * B1 JST 周历 scrubber — 对标美版 WeekScrubber（ET→JST，盘前/盘后→三态标记）。
+ * B1 JST 周历 — 结构与样式对齐美版 WeekScrubber（样式在 calendar.css）。
  * 周一→周日 7 日格 · 每日件数 + 前 3 个代码 chips（確定=实心点 / 目安=空心点 / 已公布=灰点）
- * 点击日格过滤当天；点击 chip 跳个股页；‹ › 周切换整带 slide。
+ * 点击日格过滤当天；点击 chip 跳个股页；‹ › 切周。
  */
 import { useEffect, useMemo, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate } from 'react-router';
 import { cn } from '@/lib/utils';
 import Icon from '@/components/icons';
@@ -13,11 +12,13 @@ import type { EarningsUpcomingItem } from '@/api/types';
 import { EarningsChipContent, earningsChipLabel } from './chipTip';
 import { fmtMDCN, fmtMMDD, jstToday, periodShort, statusMeta, weekDays, weekdayCN } from './types';
 import { t } from '@/i18n/core';
+import './calendar.css';
 
 interface WeekScrubberProps {
   items: EarningsUpcomingItem[];
   monday: string;
-  weekDir: number;
+  /** 保留给页面的现有接口；周历不再做滑动动画，不读取。 */
+  weekDir?: number;
   onWeekChange: (dir: -1 | 1) => void;
   selectedDay: string | null;
   onSelectDay: (date: string | null) => void;
@@ -25,11 +26,12 @@ interface WeekScrubberProps {
 }
 
 const MAX_CHIPS = 3;
+/** 三个触控尺寸的代码按钮加「+N」，让相邻周与加载骨架高度一致。 */
+export const WEEK_DAY_MIN_H = 'min-h-[248px]';
 
 export default function WeekScrubber({
   items,
   monday,
-  weekDir,
   onWeekChange,
   selectedDay,
   onSelectDay,
@@ -72,152 +74,88 @@ export default function WeekScrubber({
   }, [items]);
 
   return (
-    <section className="card-surface overflow-hidden" aria-label={t('周历')}>
-      <div className="flex h-11 items-center justify-between border-b border-line px-4">
-        <button
-          type="button"
-          onClick={() => onWeekChange(-1)}
-          className="flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-500 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600"
-          aria-label={t('上一周')}
-        >
-          <Icon name="chevron-right" size={14} className="rotate-180" />
+    <section className="paper-panel earnings-calendar" aria-label={t('周历')}>
+      <div className="earnings-calendar-toolbar">
+        <button type="button" className="earnings-calendar-nav" onClick={() => onWeekChange(-1)} aria-label={t('上一周')}>
+          <Icon name="chevron-right" size={16} className="rotate-180" />
         </button>
-        <p className="tnum text-caption text-ink-600" aria-live="polite">
-          {fmtMDCN(days[0])} – {fmtMDCN(days[6])}
-          <span className="ml-2 font-sans text-micro text-ink-400">JST</span>
+        <p className="earnings-calendar-period tnum" aria-live="polite">
+          <span>{fmtMDCN(days[0])} – {fmtMDCN(days[6])}</span>
+          <span className="text-caption text-ink-400">JST</span>
         </p>
-        <button
-          type="button"
-          onClick={() => onWeekChange(1)}
-          className="flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-500 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600"
-          aria-label={t('下一周')}
-        >
-          <Icon name="chevron-right" size={14} />
+        <button type="button" className="earnings-calendar-nav" onClick={() => onWeekChange(1)} aria-label={t('下一周')}>
+          <Icon name="chevron-right" size={16} />
         </button>
       </div>
 
-      <div className="relative">
-        <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-6 bg-gradient-to-r from-card to-transparent sm:hidden" aria-hidden="true" />
-        <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-6 bg-gradient-to-l from-card to-transparent sm:hidden" aria-hidden="true" />
-        <AnimatePresence mode="popLayout" initial={false}>
-          <motion.div
-            key={monday}
-            initial={{ x: weekDir * 44, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: weekDir * -44, opacity: 0 }}
-            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-            className="flex snap-x snap-mandatory overflow-x-auto no-scrollbar sm:grid sm:grid-cols-7 sm:overflow-visible"
-          >
-            {days.map((date, dayIndex) => {
-              const dayItems = byDate.get(date) ?? [];
-              const isToday = date === today;
-              const isSelected = selectedDay === date;
-              const shown = dayItems.slice(0, MAX_CHIPS);
-              const extra = dayItems.length - shown.length;
-              // Only truly-confirmed dates count toward the 確定 badge; released
-              // (already-disclosed) items are not 確定 and were being mislabeled.
-              const confirmedCount = dayItems.filter((it) => it.status === 'confirmed').length;
-              return (
-                <motion.div
-                  key={date}
-                  role="button"
-                  tabIndex={0}
+      <div className="earnings-week-scroll">
+        <div className="earnings-week-grid">
+          {days.map((date) => {
+            const dayItems = byDate.get(date) ?? [];
+            const isToday = date === today;
+            const isSelected = selectedDay === date;
+            const shown = dayItems.slice(0, MAX_CHIPS);
+            const extra = dayItems.length - shown.length;
+            // 只有真正「確定」的日期才计入確定；已公布的不算。
+            const confirmedCount = dayItems.filter((it) => it.status === 'confirmed').length;
+            return (
+              <div key={date} className={cn(
+                'earnings-week-day tick-flash', WEEK_DAY_MIN_H,
+                isSelected && 'is-selected',
+                flashing && dayItems.length > 0 && 'tick-flash-up',
+              )}>
+                <button
+                  type="button"
+                  className="earnings-week-date"
                   aria-pressed={isSelected}
+                  aria-current={isToday ? 'date' : undefined}
                   aria-label={t('{weekday} {md}，{n} 件财报', { weekday: weekdayCN(date), md: fmtMMDD(date), n: dayItems.length })}
                   onClick={() => onSelectDay(isSelected ? null : date)}
-                  onKeyDown={(event) => {
-                    if (event.target !== event.currentTarget) return;
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      onSelectDay(isSelected ? null : date);
-                    }
-                  }}
-                  initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.48, ease: [0.16, 1, 0.3, 1], delay: dayIndex * 0.035 }}
-                  className={cn(
-                    'flex min-h-[148px] w-[86px] shrink-0 cursor-pointer snap-start flex-col border-r border-line px-2 py-2.5 text-left transition-colors duration-fast last:border-r-0 sm:w-auto sm:min-w-0',
-                    isSelected ? 'bg-brand-50' : 'hover:bg-paper-2',
-                    'tick-flash',
-                    flashing && dayItems.length > 0 && 'tick-flash-up',
-                  )}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className={cn('text-caption', isToday ? 'font-semibold text-brand-600' : 'text-ink-500')}>
-                      {weekdayCN(date)}
-                    </span>
-                    {isToday && <span className="size-1.5 rounded-full bg-brand-600" aria-label={t('今天')} />}
-                  </div>
-                  <span className={cn('tnum text-micro tnum', isToday ? 'text-brand-600' : 'text-ink-400')}>
-                    {fmtMMDD(date)}
+                  <span className={cn('earnings-week-weekday', isToday && 'text-brand-600')}>
+                    {weekdayCN(date)}
+                    {dayItems.length > 0 && <span className="earnings-calendar-count tnum">{dayItems.length}</span>}
                   </span>
-
-                  <div className="mt-2 flex flex-1 flex-col gap-1">
-                    {dayItems.length === 0 ? (
-                      <span className="pt-1 tnum text-micro text-ink-300" aria-hidden="true">—</span>
-                    ) : (
-                      <>
-                        {shown.map((item, chipIndex) => {
-                          const meta = statusMeta(item.status);
-                          return (
-                            <PointerTooltip
-                              key={`${item.canonical_code}-${item.period_type}`}
-                              passthrough
-                              label={earningsChipLabel(item)}
-                              width={220}
-                              contentClassName="p-2.5"
-                              className="block w-full"
-                              content={<EarningsChipContent item={item} />}
-                            >
-                              <motion.button
-                                type="button"
-                                initial={{ opacity: 0, scale: 0.9 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{ type: 'spring', stiffness: 520, damping: 32, delay: dayIndex * 0.035 + chipIndex * 0.02 }}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  navigate(`/stock/${item.display_code}`);
-                                }}
-                                className={cn(
-                                  'flex h-6 w-full items-center gap-1 rounded-xs border-l-2 px-1 transition-[transform,background-color] duration-fast hover:-translate-y-px',
-                                  item.status === 'confirmed'
-                                    ? 'border-brand-600 bg-brand-50'
-                                    : item.status === 'released'
-                                      ? 'border-ink-300 bg-paper-2'
-                                      : 'border-transparent bg-paper-2/70 hover:bg-brand-50',
-                                )}
-                              >
-                                <span className={cn('size-1.5 shrink-0 rounded-full', meta.dotClass)} aria-hidden="true" />
-                                <span className="min-w-0 truncate tnum text-micro font-medium text-ink-800">{item.display_code}</span>
-                                <span className="ml-auto shrink-0 tnum text-[9px] text-ink-400">{periodShort(item.period_type)}</span>
-                              </motion.button>
-                            </PointerTooltip>
-                          );
-                        })}
-                        {extra > 0 && <span className="px-1 tnum text-[10px] leading-4 text-ink-400">+{extra}</span>}
-                      </>
-                    )}
-                  </div>
-
-                  <span className="mt-1 truncate whitespace-nowrap tnum text-[10px] leading-4 text-ink-300">
-                    {/* 7 日グリッドの 1 セルは端末幅で ~48px。確定内訳は sm 以上でのみ出す
-                        （英語 "101 · 76 confirmed" は必ず切れる。状態は上のチップが示す） */}
-                    {dayItems.length > 0 ? (
-                      <>
-                        <span className="sm:hidden">{t('{n} 件', { n: dayItems.length })}</span>
-                        <span className="hidden sm:inline">
-                          {confirmedCount > 0 && confirmedCount < dayItems.length
-                            ? t('{n} 件 · 確定{c}', { n: dayItems.length, c: confirmedCount })
-                            : t('{n} 件', { n: dayItems.length })}
-                        </span>
-                      </>
-                    ) : ''}
-                  </span>
-                </motion.div>
-              );
-            })}
-          </motion.div>
-        </AnimatePresence>
+                  <span className={cn('text-caption tnum', isToday ? 'text-brand-600' : 'text-ink-500')}>{fmtMMDD(date)}</span>
+                  {confirmedCount > 0 && confirmedCount < dayItems.length && (
+                    <span className="earnings-week-note tnum">{t('{n} 件 · 確定{c}', { n: dayItems.length, c: confirmedCount })}</span>
+                  )}
+                </button>
+                <div className="earnings-week-tickers">
+                  {shown.map((item, slot) => {
+                    const meta = statusMeta(item.status);
+                    return (
+                      <PointerTooltip
+                        key={`${item.canonical_code}-${item.period_type}-${slot}`}
+                        passthrough
+                        label={earningsChipLabel(item)}
+                        width={220}
+                        contentClassName="p-2.5"
+                        className="block w-full"
+                        content={<EarningsChipContent item={item} />}
+                      >
+                        <button
+                          type="button"
+                          className={cn(
+                            'earnings-calendar-ticker w-full',
+                            item.status === 'confirmed' && 'is-confirmed',
+                            item.status === 'estimated' && 'is-estimated',
+                          )}
+                          onClick={() => navigate(`/stock/${item.display_code}`)}
+                        >
+                          <span className={cn('size-1.5 shrink-0 rounded-full', meta.dotClass)} aria-hidden="true" />
+                          <span className="min-w-0 tnum">{item.display_code}</span>
+                          <span className="earnings-calendar-ticker-period tnum">{periodShort(item.period_type)}</span>
+                        </button>
+                      </PointerTooltip>
+                    );
+                  })}
+                  {extra > 0 && <span className="earnings-calendar-extra tnum">+{extra}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </section>
   );

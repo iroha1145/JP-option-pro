@@ -166,7 +166,7 @@ export default function ShortMonitor() {
   }, [refreshOverview, refreshRanking]);
 
   return (
-    <div className="space-y-6">
+    <div className="page-stack">
       <PageHeader
         section="market"
         title={t('机构空卖')}
@@ -195,7 +195,8 @@ export default function ShortMonitor() {
 
       {overview ? <OverviewCards overview={overview} onPickView={setView} /> : <OverviewSkeleton />}
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+      <div className="grid grid-cols-1 gap-2">
+      <div className="page-toolbar">
         <Segmented<string>
           options={VIEWS.map((item) => ({ value: item.key, label: t(item.label) }))}
           value={view}
@@ -216,7 +217,8 @@ export default function ShortMonitor() {
           />
         </label>
       </div>
-      <p className="-mt-3 text-micro text-ink-400">{t(activeView.hint)}</p>
+      <p className="text-micro text-ink-400">{t(activeView.hint)}</p>
+      </div>
 
       {state === 'error' ? (
         <div className="card-surface">
@@ -232,10 +234,10 @@ export default function ShortMonitor() {
         <SkeletonReveal
           loading={state === 'loading'}
           skeleton={
-            <>
+            <div className="page-stack">
               <SkeletonCard className="h-80" />
               <SkeletonRows rows={6} />
-            </>
+            </div>
           }
         >
           {state === 'empty' ? (
@@ -247,10 +249,10 @@ export default function ShortMonitor() {
               />
             </div>
           ) : (
-            <>
+            <div className="page-stack">
               {lead && <LeadCard key={lead.canonical_code} row={lead} />}
               {/* 2 列。1 枚に全項目を載せるので、3 列に詰めると数字が折り返す。 */}
-              <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                 {rows
                   .filter((row) => row.canonical_code !== lead?.canonical_code)
                   .map((row) => (
@@ -281,11 +283,11 @@ export default function ShortMonitor() {
                   <span>{t('相对收益按正负使用系统涨跌配色')}</span>
                 </p>
               </div>
-            </>
+            </div>
           )}
         </SkeletonReveal>
       )}
-      <SourceNote className="mt-8" text={t('公开披露的机构空卖持仓 · 非全市场空头')} />
+      <SourceNote text={t('公开披露的机构空卖持仓 · 非全市场空头')} />
     </div>
   );
 }
@@ -331,7 +333,7 @@ function OverviewCards({
       <StatCard
         label={t('置信度偏低')}
         value={coverage?.low_confidence ?? 0}
-        icon="clock-ny"
+        icon="clock"
         sub={t('占覆盖 {p} · 报告陈旧、可见机构少或流动性薄', { p: share(coverage?.low_confidence ?? 0) })}
         // 2 列のとき 3 枚目が半端に余る。横いっぱいに伸ばして空きマスを作らない。
         className="col-span-2 xl:col-span-1"
@@ -360,7 +362,7 @@ function StateDistribution({
               <button
                 type="button"
                 onClick={() => onPickView(item.view)}
-                className="group grid w-full grid-cols-[0.375rem_minmax(0,8rem)_minmax(2.5rem,1fr)_2rem] items-center gap-2 rounded-xs text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
+                className="group grid w-full grid-cols-[0.375rem_minmax(0,8rem)_minmax(2.5rem,1fr)_2rem] items-center gap-2 rounded-xs text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
               >
                 <span
                   className={cn('size-1.5 shrink-0 rounded-full', STATE_DOTS[item.state] ?? 'bg-ink-300')}
@@ -404,10 +406,10 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
 
   return (
     <motion.article
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
       transition={{ duration: DUR_SECTION, ease: EASE_PAPER }}
-      className="radar-lead-card card-surface overflow-hidden p-5"
+      className="radar-lead-card card-surface overflow-hidden p-5 sm:p-6"
     >
       <div className="grid grid-cols-1 lg:grid-cols-3">
         {/* 左 2/3：标题 + 事实 + K 线（机构事件标在图上） */}
@@ -544,7 +546,7 @@ function LeadCard({ row }: { row: ShortMonitorRow }) {
 
           <Link
             to={`/stock/${row.display_code}`}
-            className="mt-auto flex items-center justify-center gap-1.5 rounded-md bg-brand-600 px-3.5 py-2 text-caption font-medium text-white shadow-btn-hi transition-[transform,background-color] duration-fast hover:bg-brand-700 active:scale-[0.98]"
+            className="mobile-control-target mt-auto flex items-center justify-center gap-1.5 rounded-pill bg-brand-600 px-3.5 py-2 text-caption font-medium text-white shadow-btn-hi transition-[transform,background-color] duration-fast hover:bg-brand-700 active:scale-[0.98]"
           >
             {t('打开研究页')}
             <Icon name="arrow-up-right" size={13} />
@@ -574,7 +576,7 @@ function Explanation({ detail }: { detail: ShortMonitorDetail }) {
           : detail.explanation.lines.map((line, index) => <li key={index}>{line}</li>)}
       </ul>
       {detail.explanation.caveat && (
-        <p className="mt-1.5 border-l-2 border-warn-200 pl-2 text-micro text-ink-500">
+        <p className="mt-1.5 max-w-[75ch] rounded-[var(--r-control)] border border-line bg-paper-2/60 px-2.5 py-2 text-micro text-ink-500">
           {t(detail.explanation.caveat)}
         </p>
       )}
@@ -650,7 +652,7 @@ function EventLine({ event }: { event: ShortMonitorEvent }) {
   return (
     <li className="flex min-h-[60px] items-center gap-3 px-1 py-[14px] transition-colors duration-fast hover:bg-paper-2/70">
       <div className="flex w-11 shrink-0 flex-col items-center pt-0.5">
-        <span className="tnum text-[11px] leading-[14px] text-ink-400">
+        <span className="tnum text-tag leading-[14px] text-ink-400">
           {fmtDateShort(event.effective_trade_date)}
         </span>
         <span className="mt-1.5 hidden w-[2px] flex-1 rounded-full bg-line sm:block" aria-hidden="true" />
@@ -833,7 +835,7 @@ function InstitutionStatusNotes({ row, className }: { row: ShortMonitorRow; clas
         <PointerTooltip
           key={status.label}
           label={`${status.label} ${status.count}`}
-          className="max-w-full rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
+          className="max-w-full rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
           content={<span className="text-micro leading-relaxed text-ink-600">{status.detail}</span>}
         >
           <span className="min-w-0 whitespace-normal break-words">{status.label} <span className="tnum">{status.count}</span></span>
@@ -861,7 +863,7 @@ function FactBlock({ title, facts }: { title: string; facts: Fact[] }) {
               <PointerTooltip
                 passthrough
                 label={fact.label}
-                content={<span className="text-micro leading-[16px] text-ink-600">{fact.label}</span>}
+                content={<span className="text-micro text-ink-600">{fact.label}</span>}
               >
                 <span className="truncate">{fact.label}</span>
               </PointerTooltip>
@@ -954,7 +956,7 @@ function FlagList({
           passthrough
           label={rest.map((flag) => t(FLAG_LABELS[flag] ?? flag)).join(' · ')}
           content={
-            <span className="text-micro leading-[16px] text-ink-600">
+            <span className="text-micro text-ink-600">
               {rest.map((flag) => t(FLAG_LABELS[flag] ?? flag)).join(' · ')}
             </span>
           }
@@ -1000,7 +1002,7 @@ function ShortDelta({ value, className }: { value: number | null; className?: st
     <PointerTooltip
       passthrough
       label={tip}
-      content={<span className="text-micro leading-[16px] text-ink-600">{tip}</span>}
+      content={<span className="text-micro text-ink-600">{tip}</span>}
     >
       {node}
     </PointerTooltip>

@@ -27,7 +27,7 @@ export function ScoreCell({ score }: { score: number | null; index?: number }) {
       contentClassName="p-2.5"
       content={
         <>
-          <span className="block text-caption font-semibold text-ink-800">
+          <span className="block text-caption font-medium text-ink-800">
             {strength.band} · {strength.label}
           </span>
           <span className="mt-1 block tnum text-micro text-ink-500">{score.toFixed(1)}</span>
@@ -35,7 +35,7 @@ export function ScoreCell({ score }: { score: number | null; index?: number }) {
       }
     >
       <span className="inline-flex items-center gap-2.5">
-      <SoftBadge tone={strength.badgeTone} className="metric-value w-[3.25rem] shrink-0 justify-end text-[15px] leading-[20px] font-semibold tnum">
+      <SoftBadge tone={strength.badgeTone} className="metric-value w-[3.25rem] shrink-0 justify-end text-body-s font-medium tnum">
         {score.toFixed(1)}
       </SoftBadge>
       <span
@@ -131,7 +131,7 @@ export function NewsBadge({
           {summary.latest?.published_at && (
             <span className="mt-0.5 block tnum text-micro text-ink-400">{fmtRelativeShort(summary.latest.published_at)}</span>
           )}
-          <span className="mt-1 block text-[10px] text-ink-300">{t('仅覆盖已接入的 RSS 新闻源')}</span>
+          <span className="mt-1 block text-tag text-ink-300">{t('仅覆盖已接入的 RSS 新闻源')}</span>
         </>
       }
     >
@@ -139,7 +139,7 @@ export function NewsBadge({
         <Icon name="bolt" size={11} />
         <span className="tnum">{summary.news_count}</span>
         {summary.max_importance !== null && (
-          <span className="tnum text-[10px] opacity-80">· {Math.round(importance)}</span>
+          <span className="tnum text-tag opacity-80">· {Math.round(importance)}</span>
         )}
       </SoftBadge>
     </PointerTooltip>

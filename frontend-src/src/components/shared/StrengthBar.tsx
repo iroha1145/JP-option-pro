@@ -29,7 +29,7 @@ export default function StrengthBar({
           />
         )}
       </span>
-      {showScore && <span className="text-[12px] font-medium leading-[18px] text-ink-600 tnum">{valid ? score : '—'}</span>}
+      {showScore && <span className="text-micro leading-[18px] text-ink-600 tnum">{valid ? score : '—'}</span>}
     </span>
   );
 }

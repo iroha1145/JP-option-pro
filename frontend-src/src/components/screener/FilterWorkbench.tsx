@@ -65,7 +65,7 @@ function TierSegmented({
       renderLabel={(option, active) => (
         <span className="flex items-center gap-1.5">
           {option.label}
-          <span className={cn('min-w-4 rounded-[5px] px-1 py-px tnum text-[11px] leading-[14px] tnum', active ? 'bg-paper-2 text-ink-600' : 'text-ink-400')}>
+          <span className={cn('min-w-4 rounded-xs px-1 py-px tnum text-micro', active ? 'bg-paper-2 text-ink-600' : 'text-ink-400')}>
             {counts ? counts[option.value] : '—'}
           </span>
         </span>
@@ -122,7 +122,7 @@ function PriceInput({
     setText(value === null ? '' : String(value));
   }
   return (
-    <div className="relative">
+    <div className="relative min-w-0">
       <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 tnum text-caption text-ink-300">¥</span>
       <input
         value={text}
@@ -136,7 +136,7 @@ function PriceInput({
           const number = Number(raw);
           onCommit(raw === '' || !Number.isFinite(number) ? null : number);
         }}
-        className="screener-price-input h-8 w-[88px] rounded-[9px] border border-line/70 bg-paper-2/50 pl-6 pr-2 tnum text-caption text-ink-800 placeholder:text-ink-300 hover:border-line-strong focus-visible:border-brand-400"
+        className="screener-price-input h-11 w-full min-w-0 rounded-[var(--r-control)] border border-line/70 bg-paper-2/50 pl-6 pr-2 tnum text-caption text-ink-800 placeholder:text-ink-300 hover:border-line-strong focus-visible:border-brand-400"
       />
     </div>
   );
@@ -168,7 +168,7 @@ export function ScanButton({
       }
       transition={dirty && !scanning ? { duration: 1.2, repeat: 2 } : { duration: 0.16 }}
       className={cn(
-        'scan-trigger relative h-9 min-w-[168px] overflow-hidden rounded-[9px] bg-brand-600 px-4 text-white shadow-btn-hi transition-[filter] duration-fast',
+        'scan-trigger relative min-h-11 min-w-[168px] overflow-hidden rounded-pill bg-brand-600 px-4 text-white shadow-btn-hi transition-[filter] duration-fast',
         scanning ? 'cursor-wait' : 'hover:brightness-105',
         className,
       )}
@@ -297,7 +297,7 @@ export default function FilterWorkbench({
       initial="hidden"
       animate="show"
       variants={{ show: { transition: { staggerChildren: 0.06 } } }}
-      className="card-surface p-4 sm:p-5"
+      className="paper-panel min-w-0 p-5 sm:p-6"
       aria-label={t('筛选工作台')}
       data-testid="screener-filter-workbench"
     >
@@ -348,7 +348,7 @@ export default function FilterWorkbench({
       </motion.div>
 
       <details className="group/filters mt-5 border-t border-line/70 pt-3" data-testid="screener-advanced-filters">
-        <summary className="disclosure-trigger flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-2 rounded-lg py-1 text-caption text-ink-500 outline-none transition-colors hover:text-ink-800 focus-visible:ring-2 focus-visible:ring-brand-400/40 [&::-webkit-details-marker]:hidden">
+        <summary className="disclosure-trigger flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-2 min-h-11 rounded-[var(--r-control)] py-2 text-caption text-ink-500 transition-colors hover:text-ink-800 [&::-webkit-details-marker]:hidden">
           <span className="inline-flex shrink-0 items-center gap-2 font-medium text-ink-700">
             <Icon name="filter-funnel" size={14} className="text-ink-400" />
             {t('更多筛选')}
@@ -399,7 +399,7 @@ export default function FilterWorkbench({
                         key={preset.id}
                         passthrough
                         label={t(preset.description)}
-                        content={<span className="text-micro leading-[16px] text-ink-600">{t(preset.description)}</span>}
+                        content={<span className="text-micro text-ink-600">{t(preset.description)}</span>}
                       >
                         {button}
                       </PointerTooltip>
@@ -440,7 +440,7 @@ export default function FilterWorkbench({
                     <button
                       type="button"
                       onClick={() => setShowAllSectors(true)}
-                      className="flex h-8 shrink-0 items-center whitespace-nowrap rounded-lg bg-paper-2 px-2.5 tnum text-caption text-ink-500 transition-colors hover:bg-paper hover:text-ink-800"
+                      className="mobile-control-target flex h-8 shrink-0 items-center whitespace-nowrap rounded-pill bg-paper-2 px-2.5 tnum text-caption text-ink-500 transition-colors hover:bg-paper hover:text-ink-800"
                     >
                       +{hiddenCount}
                     </button>
@@ -449,7 +449,7 @@ export default function FilterWorkbench({
                     <button
                       type="button"
                       onClick={() => setShowAllSectors(false)}
-                      className="flex h-8 shrink-0 items-center whitespace-nowrap rounded-lg px-2 text-caption text-ink-400 transition-colors hover:text-ink-600"
+                      className="mobile-control-target flex h-8 shrink-0 items-center whitespace-nowrap rounded-pill px-2 text-caption text-ink-400 transition-colors hover:text-ink-600"
                     >
                       {t('收起')}
                     </button>
@@ -459,16 +459,16 @@ export default function FilterWorkbench({
             )}
           </div>
 
-          <div className="flex flex-wrap items-end gap-x-6 gap-y-4 border-t border-line/60 pt-4">
-            <div data-screener-field="price">
+          <div className="grid grid-cols-1 items-start gap-5 border-t border-line/60 pt-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div data-screener-field="price" className="min-w-0">
               <FieldLabel>{t('价格区间')}</FieldLabel>
-              <div className="flex items-center gap-1.5">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
                 <PriceInput value={draft.priceMin} placeholder={t('最低')} ariaLabel={t('最低价格')} onCommit={(priceMin) => patch({ priceMin })} />
                 <span className="text-ink-300" aria-hidden="true">–</span>
                 <PriceInput value={draft.priceMax} placeholder={t('最高')} ariaLabel={t('最高价格')} onCommit={(priceMax) => patch({ priceMax })} />
               </div>
             </div>
-            <div data-screener-field="dollar-volume">
+            <div data-screener-field="dollar-volume" className="min-w-0">
               <FieldLabel hint={STRENGTH_HINTS.avgTurnover}>{t('成交额下限')}</FieldLabel>
               <SelectField
                 ariaLabel={t('成交额下限')}

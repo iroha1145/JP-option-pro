@@ -87,6 +87,21 @@ jobs:
             frontend-src/tests/watchlist-search-lifecycle.mjs \
             frontend-src/tests/page-refresh-cache.mjs
 
+      # 版式约定、首帧前的主题与语言脚本、底部面板的物理手感。
+      - name: Layout and pre-paint gates
+        run: |
+          node --experimental-strip-types --test \
+            frontend-src/tests/ui-foundations.mjs \
+            frontend-src/tests/theme-boot.mjs \
+            frontend-src/tests/magnetic-sheet.mjs
+
+      - name: UI viewport and gesture regression
+        working-directory: frontend-src
+        run: |
+          node --experimental-strip-types --test tests/jp-mobile-controls.mjs tests/heavy-toggle-motion.mjs tests/jp-feel-alignment.mjs
+          npx playwright install --with-deps chromium
+          npm run test:browser
+
       - name: Screener freshness gate
         run: node --experimental-strip-types --test frontend-src/tests/screener-freshness.mjs
 
@@ -119,8 +134,9 @@ jobs:
 
       - name: US-market residue gate
         run: |
-          ! grep -rniE "America/New_York|premarket|postmarket|implied.?volatilit|option.?chain|\bSPY\b|\bQQQ\b" \
-            --include="*.py" --include="*.ts" --include="*.tsx" \
+          ! grep -rniE "America/New_York|premarket|postmarket|implied.?volatilit|option.?chain|\bSPY\b|\bQQQ\b|\bNVDA\b|\bAAPL\b|\bTSLA\b|\bCTA\b|clock-ny|sun-bmo|moon-amc|timing-(bmo|amc)" \
+            --include="*.py" --include="*.ts" --include="*.tsx" --include="*.css" \
             backend/app/services backend/app/api backend/app/repositories backend/app/providers \
             frontend-src/src/pages frontend-src/src/components frontend-src/src/api \
+            frontend-src/src/lib frontend-src/src/hooks frontend-src/src/styles frontend-src/src/index.css \
             || (echo "US-market residue found" && exit 1)

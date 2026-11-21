@@ -29,7 +29,7 @@ export default class RouteErrorBoundary extends Component<Props, State> {
     if (!this.state.error) return this.props.children;
     return (
       <div className="mx-auto mt-10 max-w-xl rounded-lg border border-down-600/25 bg-down-50/60 p-6 text-center">
-        <p className="font-display text-[18px] font-semibold text-ink-900">{t('页面渲染中断')}</p>
+        <p className="font-display text-[18px] font-medium text-ink-900">{t('页面渲染中断')}</p>
         <p className="mt-2 break-all tnum text-micro text-ink-500">
           {this.state.error.name}: {this.state.error.message}
         </p>

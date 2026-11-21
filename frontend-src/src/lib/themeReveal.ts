@@ -14,7 +14,8 @@ export function revealThemePreference(preference: ThemePreference, trigger: HTML
   for (const name of ['--theme-x', '--theme-y', '--theme-r']) root.style.removeProperty(name);
 
   const apply = () => flushSync(() => setThemePreference(preference));
-  if (!trigger || typeof document.startViewTransition !== 'function'
+  if (!trigger
+    || typeof document.startViewTransition !== 'function'
     || window.matchMedia('(prefers-reduced-motion: reduce)').matches
     || resolveAppearance(preference) === getAppearance()) {
     apply();
@@ -37,15 +38,10 @@ export function revealThemePreference(preference: ThemePreference, trigger: HTML
     delete root.dataset.themeSwitching;
     for (const name of ['--theme-x', '--theme-y', '--theme-r']) root.style.removeProperty(name);
   };
-  try {
-    owner.transition = document.startViewTransition(() => {
-      if (active === owner) apply();
-    });
-    // ready rejects when the browser skips a snapshot (e.g. a hidden tab).
-    void owner.transition.ready.catch(() => {});
-    void owner.transition.finished.catch(() => {}).finally(cleanup);
-  } catch {
-    apply();
-    cleanup();
-  }
+  owner.transition = document.startViewTransition(() => {
+    if (active === owner) apply();
+  });
+  // A cancelled snapshot still applies the theme, but rejects ready.
+  void owner.transition.ready.catch(() => {});
+  void owner.transition.finished.finally(cleanup);
 }

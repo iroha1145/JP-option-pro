@@ -96,14 +96,14 @@ export default function Research() {
   const meta = VERDICT_TEXT[verdict] ?? VERDICT_TEXT.insufficient_data;
 
   return (
-    <div className="space-y-6">
+    <div className="page-stack">
       <PageHeader
         title={t('历史验证')}
         description={t('走步验证：分数是否真的具有排序能力')}
       />
 
       {state === 'loading' && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="metric-grid">
           {Array.from({ length: 4 }, (_, index) => (
             <SkeletonCard key={index} />
           ))}
@@ -111,8 +111,8 @@ export default function Research() {
       )}
 
       {state === 'running' && (
-        <section className="card-surface p-5">
-          <h3 className="mt-1 text-h3 text-ink-900">{t('历史验证')}</h3>
+        <section className="paper-panel p-5 sm:p-6">
+          <h2 className="section-heading">{t('历史验证')}</h2>
           <EmptyState
             image="/empty-chart.svg"
             title={t('验证正在运行')}
@@ -122,8 +122,8 @@ export default function Research() {
       )}
 
       {state === 'empty' && (
-        <section className="card-surface p-5">
-          <h3 className="mt-1 text-h3 text-ink-900">{t('历史验证')}</h3>
+        <section className="paper-panel p-5 sm:p-6">
+          <h2 className="section-heading">{t('历史验证')}</h2>
           <EmptyState
             image="/empty-chart.svg"
             title={t('尚未运行历史验证')}
@@ -133,8 +133,8 @@ export default function Research() {
       )}
 
       {state === 'error' && (
-        <section className="card-surface p-5">
-          <h3 className="mt-1 text-h3 text-ink-900">{t('历史验证')}</h3>
+        <section className="paper-panel p-5 sm:p-6">
+          <h2 className="section-heading">{t('历史验证')}</h2>
           <EmptyState
             image="/empty-chart.svg"
             title={t('读取失败')}
@@ -145,8 +145,8 @@ export default function Research() {
       )}
 
       {state === 'done' && report && (
-        <div className="space-y-4">
-          <section className="card-surface p-5">
+        <div className="page-stack">
+          <section className="paper-panel p-5 sm:p-6">
             <p className="eyebrow">{t('验证结论')}</p>
             <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <SoftBadge tone={meta.tone} size="md">{t(meta.label)}</SoftBadge>
@@ -160,7 +160,7 @@ export default function Research() {
             <p className="mt-2 text-caption text-ink-600">{t(meta.note)}</p>
           </section>
 
-          <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <section className="metric-grid">
             <StatCard label={t('信号样本')} value={report.signals ?? 0} icon="crosshair" />
             <StatCard label={t('评估日')} value={report.evaluation_dates ?? 0} icon="calendar-spark" />
             <StatCard label={t('验证窗口')} value={report.summary?.windows ?? 0} icon="layers" />
@@ -183,8 +183,8 @@ export default function Research() {
           </section>
 
           {(report.windows ?? []).map((window) => (
-            <section key={`${window.test[0]}-${window.test[1]}`} className="card-surface p-5">
-              <p className="text-caption font-medium text-ink-500">{t('验证窗口')}</p>
+            <section key={`${window.test[0]}-${window.test[1]}`} className="paper-panel p-5 sm:p-6">
+              <h2 className="section-heading">{t('验证窗口')}</h2>
               <header className="mb-2 mt-1 flex flex-wrap items-baseline justify-between gap-2">
                 <span className="tnum text-caption text-ink-700">
                   {window.test[0]} — {window.test[1]}
@@ -194,7 +194,7 @@ export default function Research() {
                   {t('单调')}: {window.decile_monotonic === null ? '—' : window.decile_monotonic ? '✓' : '✗'}
                 </span>
               </header>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto overscroll-x-contain" tabIndex={0}>
                 <table className="w-full min-w-[420px] text-caption">
                   <thead>
                     <tr className="text-ink-400">
@@ -235,9 +235,8 @@ export default function Research() {
             </section>
           ))}
 
-          <section className="card-surface p-5 text-caption text-ink-600">
-
-            <h3 className="mb-1 mt-1 text-h3 text-ink-900">{t('点时限制')}</h3>
+          <section className="paper-panel p-5 text-caption text-ink-600 sm:p-6">
+            <h2 className="section-heading mb-2">{t('点时限制')}</h2>
             <ul className="list-disc space-y-1 pl-5">
               {(report.point_in_time_limits ?? []).map((limit) => (
                 <li key={limit}>{t(limit)}</li>

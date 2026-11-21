@@ -19,8 +19,8 @@ import Icon, { type IconName } from '@/components/icons';
 
 const OPTIONS: { value: ThemePreference; label: string; icon: IconName }[] = [
   { value: 'system', label: t('跟随系统'), icon: 'display' },
-  { value: 'light', label: t('浅色'), icon: 'sun-bmo' },
-  { value: 'dark', label: t('深色'), icon: 'moon-amc' },
+  { value: 'light', label: t('浅色'), icon: 'sun' },
+  { value: 'dark', label: t('深色'), icon: 'moon' },
 ];
 
 function preferenceLabel(preference: ThemePreference): string {
@@ -40,7 +40,7 @@ export default function ThemeSwitcher({ className }: { className?: string }) {
   const closeMs = readRootDurationMs('--dropdown-close-dur', 150);
   const phase = useOverlayPhase(open, closeMs);
   const mounted = overlayVisible(open, phase);
-  const triggerIcon: IconName = appearance === 'dark' ? 'moon-amc' : 'sun-bmo';
+  const triggerIcon: IconName = appearance === 'dark' ? 'moon' : 'sun';
 
   useEffect(() => {
     if (!open) return;

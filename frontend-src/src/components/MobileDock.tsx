@@ -3,9 +3,9 @@
  */
 import { useEffect, useId, useState, useRef, type CSSProperties } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { DUR_FAST, DUR_UI, EASE_PAPER } from '@/lib/motion';
-import { useFeelSheetDrag } from '@/lib/feel';
+import { useFeelSheetDrag } from '@/hooks/useFeelMagneticSheet';
 import { cn, isNavPathActive } from '@/lib/utils';
 import { useAccess } from '@/hooks/useAccess';
 import { useToast } from '@/hooks/useToast';
@@ -53,25 +53,28 @@ function MobileDockContent({ onHeightChange }: MobileDockProps) {
     if (!dock || !onHeightChange) return;
     const measure = () => onHeightChange(dock.getBoundingClientRect().height);
     measure();
-    if (typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(measure);
     observer.observe(dock);
     return () => observer.disconnect();
   }, [onHeightChange]);
+  const backdropRef = useRef<HTMLDivElement | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
-  const sheetDrag = useFeelSheetDrag({ enabled: moreOpen, panelRef: sheetRef, onClose: () => setMoreOpen(false) });
-  useFocusTrap(sheetRef, moreOpen);
+  const { requestClose: closeSheet, ...sheetDrag } = useFeelSheetDrag({ enabled: moreOpen, panelRef: sheetRef, backdropRef, onClose: () => setMoreOpen(false) });
   const overlayId = useId();
   const morePhase = useOverlayPhase(moreOpen, DUR_FAST * 1000);
-  useBodyScrollLock(overlayVisible(moreOpen, morePhase));
+  const moreVisible = overlayVisible(moreOpen, morePhase);
+  useBodyScrollLock(moreVisible);
+  useFocusTrap(sheetRef, moreVisible);
 
+  const closeSheetRef = useRef(closeSheet);
+  closeSheetRef.current = closeSheet;
   useEffect(() => {
     if (!moreOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || e.keyCode === 229 || !isTopFocusScope(sheetRef.current)) return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      setMoreOpen(false);
+      closeSheetRef.current();
     };
     document.addEventListener('keydown', onKey);
     return () => {
@@ -88,7 +91,7 @@ function MobileDockContent({ onHeightChange }: MobileDockProps) {
     return (
       <div key={item.path} className="relative flex min-w-0 flex-1 basis-0">
         {active && (
-          <GlidePill dependency={location.pathname} layoutId={dockGlideId} className="inset-1 rounded-md bg-brand-50 shadow-none" />
+          <GlidePill dependency={location.pathname} layoutId={dockGlideId} className="inset-1 rounded-[var(--r-dock-item)] bg-brand-50 shadow-none" />
         )}
         <Link
           to={item.path}
@@ -114,7 +117,7 @@ function MobileDockContent({ onHeightChange }: MobileDockProps) {
           {DOCK_ITEMS.map(renderItem)}
           <div className="relative flex min-w-0 flex-1 basis-0">
             {moreActive && (
-              <GlidePill dependency={location.pathname} layoutId={dockGlideId} className="inset-1 rounded-md bg-brand-50 shadow-none" />
+              <GlidePill dependency={location.pathname} layoutId={dockGlideId} className="inset-1 rounded-[var(--r-dock-item)] bg-brand-50 shadow-none" />
             )}
             <button
               onClick={() => setMoreOpen(true)}
@@ -129,22 +132,15 @@ function MobileDockContent({ onHeightChange }: MobileDockProps) {
         </motion.div>
       </nav>
 
-      <AnimatePresence>
-        {moreOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: DUR_FAST }}
-              className="fixed inset-0 z-[64] bg-[var(--scrim)] xl:hidden"
-              onClick={() => setMoreOpen(false)}
-              data-focus-backdrop={overlayId}
-              aria-hidden="true"
-            />
-          </>
-        )}
-      </AnimatePresence>
+      {moreVisible && (
+        <div
+          ref={backdropRef}
+          className={cn('t-backdrop fixed inset-0 z-[64] bg-[var(--scrim)] xl:hidden', morePhase === 'open' && 'is-open')}
+          onClick={closeSheet}
+          data-focus-backdrop={overlayId}
+          aria-hidden="true"
+        />
+      )}
       {overlayVisible(moreOpen, morePhase) && (
         <div
           data-open={morePhase === 'open' ? 'true' : 'false'}
@@ -161,23 +157,22 @@ function MobileDockContent({ onHeightChange }: MobileDockProps) {
           data-focus-overlay={overlayId}
           aria-label={t('更多功能')}
         >
-          <div
+          <button
+            type="button"
             data-handle
-            onPointerDown={sheetDrag.onPointerDown}
-            onPointerMove={sheetDrag.onPointerMove}
-            onPointerUp={sheetDrag.onPointerUp}
-            onPointerCancel={sheetDrag.onPointerCancel}
-            onLostPointerCapture={sheetDrag.onLostPointerCapture}
-            className="icon-motion-trigger flex justify-center pb-1 pt-2 text-ink-300">
-            <Icon motion name="dots-grid" size={18} />
-          </div>
+            {...sheetDrag}
+            aria-label={t('收起')}
+            aria-keyshortcuts="ArrowUp ArrowDown Home End"
+            className="icon-motion-trigger flex min-h-11 w-full items-center justify-center text-ink-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600">
+            <Icon motion name="dots-grid" size={18} aria-hidden="true" />
+          </button>
           <p className="eyebrow px-5 pb-2 pt-1">{t('更多功能')}</p>
           <div className="px-3">
             {MORE_ITEMS.map((m) => (
               <button
                 key={m.path}
                 onClick={() => {
-                  setMoreOpen(false);
+                  closeSheet();
                   navigate(m.path);
                 }}
                 aria-current={isNavPathActive(location.pathname, m.path) ? 'page' : undefined}
@@ -206,13 +201,13 @@ function MobileDockContent({ onHeightChange }: MobileDockProps) {
               disabled={loggingOut}
               onClick={() => {
                 if (!isSignedIn) {
-                  setMoreOpen(false);
+                  closeSheet();
                   navigate('/login', { state: { from: location.pathname + location.search } });
                   return;
                 }
                 setLoggingOut(true);
                 void logout()
-                  .then(() => setMoreOpen(false))
+                  .then(closeSheet)
                   .catch((error: unknown) => {
                     toast.error(t('退出失败'), error instanceof Error ? error.message : undefined);
                   })
@@ -238,7 +233,7 @@ function MobileDockContent({ onHeightChange }: MobileDockProps) {
               <button
                 type="button"
                 onClick={() => {
-                  setMoreOpen(false);
+                  closeSheet();
                   navigate('/login', { state: { from: location.pathname + location.search } });
                 }}
                 className="icon-motion-trigger flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-micro text-ink-500 transition-[background-color] hover:bg-paper-2 active:bg-line/60"

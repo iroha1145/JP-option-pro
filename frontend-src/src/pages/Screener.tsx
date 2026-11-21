@@ -470,7 +470,7 @@ export default function Screener() {
   const animKey = `${requestSeq.current}:${safePage}`;
 
   return (
-    <div>
+    <div className="page-stack">
       {/* B0 页头带 */}
       <PageHeader
         section="screener"
@@ -515,7 +515,7 @@ export default function Screener() {
       />
 
       {/* B1 筛选工作台 */}
-      <div className="mt-6">
+      <div className="min-w-0">
         <FilterWorkbench
           draft={draft}
           onChange={setDraft}
@@ -529,10 +529,10 @@ export default function Screener() {
         />
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-12">
+      <div className="page-grid items-start">
         {/* B2 结果区 */}
-        <section className="lg:col-span-8" aria-label={t('扫描结果')}>
-          <div className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-2">
+        <section className="min-w-0 lg:col-span-12 2xl:col-span-9" aria-label={t('扫描结果')}>
+          <div className="paper-panel flex min-w-0 flex-wrap items-center gap-x-3 gap-y-3 p-5 sm:p-6">
             {scanState === 'scanning' ? (
               <span className="flex items-center gap-2 text-body-s text-ink-500">
                 <span className="size-3.5 animate-spin rounded-full border-2 border-brand-600/25 border-t-brand-600" aria-hidden="true" />
@@ -540,7 +540,7 @@ export default function Screener() {
               </span>
             ) : scanState === 'done' || (scanState === 'error' && response) ? (
               <>
-                <h2 className="font-display text-[18px] leading-[24px] text-ink-900">
+                <h2 className="section-heading">
                   {t('命中')} <span className="tnum">{response?.matched_count ?? rows.length}</span> {t('只')}
                 </h2>
                 <span className="tnum text-caption text-ink-400">{t('耗时')} {(scanDurationMs / 1000).toFixed(1)}s</span>
@@ -555,19 +555,20 @@ export default function Screener() {
                   </SoftBadge>
                 )}
                 {chips.map((chip) => (
-                  <SoftBadge key={chip.key} className="gap-1">
+                  <SoftBadge key={chip.key} className="gap-1 whitespace-normal">
                     {chip.label}
-                    <button type="button" onClick={chip.onRemove} aria-label={t('移除条件 {label}', { label: chip.label })} className="text-ink-300 transition-colors hover:text-down-600">
+                    <button type="button" onClick={chip.onRemove} aria-label={t('移除条件 {label}', { label: chip.label })} className="inline-grid min-h-11 min-w-11 shrink-0 place-items-center rounded-[var(--r-control)] text-ink-300 transition-colors hover:text-down-600 sm:min-h-8 sm:min-w-8">
                       <Icon name="x" size={10} />
                     </button>
                   </SoftBadge>
                 ))}
               </>
             ) : (
-              <h2 className="font-display text-[18px] leading-[24px] text-ink-900">{t('扫描结果')}</h2>
+              <h2 className="section-heading">{t('扫描结果')}</h2>
             )}
-            <div className="ml-auto flex items-center gap-2">
+            <div className="flex w-full min-w-0 flex-wrap items-center gap-3 border-t border-line pt-4">
               <Segmented<SortMode>
+                className="max-w-full flex-wrap"
                 options={(['deterministic', 'latest', 'impact'] as const).map((value) => ({ value, label: SORT_CN[value] }))}
                 value={sortMode}
                 onChange={(value) => {
@@ -616,7 +617,7 @@ export default function Screener() {
             </p>
           )}
 
-          <div className="mt-4">
+          <div className="mt-6">
             {scanState === 'scanning' && !response ? (
               <div className="card-surface">
                 <SkeletonRows rows={8} />
@@ -674,7 +675,7 @@ export default function Screener() {
                       width={260}
                       contentClassName="p-2.5"
                       content={
-                        <span className="text-micro leading-[16px] text-ink-600">
+                        <span className="text-micro text-ink-600">
                           {t('用{n}分延迟的盘中价筛选，分数与排序仍来自夜间官方数据', {
                             n: overlay.data?.delayed_minutes ?? 15,
                           })}
@@ -684,7 +685,7 @@ export default function Screener() {
                     <button
                       type="button"
                       onClick={() => setOnlyLiveUp((prev) => !prev)}
-                      className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-caption transition-colors duration-fast ${
+                      className={`mobile-control-target flex items-center gap-1.5 rounded-pill border px-2.5 py-1 text-caption transition-colors duration-fast ${
                         onlyLiveUp
                           ? 'border-brand-400 bg-brand-50 text-brand-700'
                           : 'border-line bg-card text-ink-600 hover:border-brand-400 hover:text-brand-600'
@@ -748,7 +749,7 @@ export default function Screener() {
         </section>
 
         {/* B3 右侧栏 */}
-        <aside className="grid grid-cols-1 gap-4 self-start md:grid-cols-2 lg:sticky lg:top-20 lg:col-span-4 lg:grid-cols-1" aria-label={t('侧栏')}>
+        <aside className="grid min-w-0 grid-cols-1 gap-6 self-start md:grid-cols-2 lg:col-span-12 2xl:sticky 2xl:top-20 2xl:col-span-3 2xl:grid-cols-1" aria-label={t('侧栏')}>
           {response?.market_regime ? (
             <MarketRegimeCard regime={response.market_regime} />
           ) : scanState === 'scanning' || scanState === 'idle' ? (
@@ -786,7 +787,7 @@ export default function Screener() {
                 <button
                   type="button"
                   onClick={() => patchAndScan({ tier: 'all', minScore: null, presetId: null })}
-                  className="mt-3 flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105"
+                  className="mobile-control-target mt-3 flex items-center gap-1.5 rounded-pill bg-brand-600 px-3 py-1.5 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105"
                 >
                   <Icon name="filter-funnel" size={13} />
                   {t('放宽一档试试')}
@@ -796,7 +797,7 @@ export default function Screener() {
           </AnimatePresence>
         </aside>
       </div>
-      <SourceNote className="mt-8" text={t('强度扫描结果 · 日线收盘后快照')} />
+      <SourceNote text={t('强度扫描结果 · 日线收盘后快照')} />
     </div>
   );
 }

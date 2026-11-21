@@ -25,10 +25,6 @@ export function overlayClassName(phase: OverlayPhase): string {
   return '';
 }
 
-export function overlayDataOpen(phase: OverlayPhase): 'true' | 'false' {
-  return phase === 'open' ? 'true' : 'false';
-}
-
 /** Keep the node mounted while `open` or the close clock is still playing. */
 export function overlayVisible(open: boolean, phase: OverlayPhase): boolean {
   return open || phase !== 'closed';

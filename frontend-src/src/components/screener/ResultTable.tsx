@@ -60,7 +60,7 @@ export default function ResultTable({
   stale = false,
 }: ResultTableProps) {
   return (
-    <div className={cn('card-surface overflow-x-auto overscroll-x-contain', stale && 'opacity-60')}>
+    <div tabIndex={0} className={cn('card-surface min-w-0 overflow-x-auto overscroll-x-contain', stale && 'opacity-60')}>
       <table className="w-full border-collapse">
         <thead>
           <tr className="bg-card-warm">
@@ -100,30 +100,26 @@ export default function ResultTable({
             return (
               <Fragment key={row.canonical_code}>
                 <motion.tr
-                  layout="position"
                   initial={page === 1 ? { opacity: 0, y: 14 } : false}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{
                     duration: 0.4,
                     ease: EASE_PAPER,
                     delay: page === 1 ? Math.min(index * 0.03, 0.3) : 0,
-                    layout: { duration: 0.32, ease: EASE_PAPER },
                   }}
-                  onClick={() => onToggle(row.canonical_code)}
-                  tabIndex={0}
-                  role="button"
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      onToggle(row.canonical_code);
-                    }
+                  /* 行保持表格语义：整行点击只是鼠标的便利，键盘与读屏走行尾那个真正的展开按钮。 */
+                  onClick={(event) => {
+                    // 只让行内的控件接管点击；表格外框自身可聚焦（横向滚动），不算行内控件。
+                    const control = event.target instanceof Element
+                      ? event.target.closest('button, a, input, select, textarea, [role="button"], [tabindex]')
+                      : null;
+                    if (control && event.currentTarget.contains(control)) return;
+                    onToggle(row.canonical_code);
                   }}
                   className={cn(
                     'group h-11 cursor-pointer border-b border-line transition-colors duration-fast hover:bg-paper-2',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500/30',
                     isOpen && 'bg-paper-2',
                   )}
-                  aria-expanded={isOpen}
                 >
                   <td className="px-3 py-2 tnum text-caption text-ink-400">{startIndex + index + 1}</td>
                   <td className="px-3 py-2">
@@ -167,19 +163,24 @@ export default function ResultTable({
                     {fmtYenCompact(row.avg_turnover_20d)}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <span
+                    <button
+                      type="button"
+                      onClick={() => onToggle(row.canonical_code)}
+                      aria-expanded={isOpen}
+                      aria-controls={isOpen ? `screener-row-${row.canonical_code}` : undefined}
+                      aria-label={t('展开或收起 {code} 详情', { code: row.display_code })}
                       className={cn(
-                        'inline-flex size-6 items-center justify-center rounded-sm border border-line text-ink-400 transition-transform duration-200',
-                        isOpen && 'rotate-180 border-brand-400 text-brand-600',
+                        'mobile-icon-target inline-flex size-8 items-center justify-center rounded-pill border border-line text-ink-400 transition-[color,border-color,transform] duration-fast active:scale-[.94] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600',
+                        isOpen && 'border-brand-400 text-brand-600',
                       )}
                     >
-                      <Icon name="chevron-down" size={13} />
-                    </span>
+                      <Icon name="chevron-down" size={13} className={cn('transition-transform duration-200', isOpen && 'rotate-180')} />
+                    </button>
                   </td>
                 </motion.tr>
                 <AnimatePresence>
                   {isOpen && (
-                    <tr key={`${row.canonical_code}-exp`}>
+                    <tr key={`${row.canonical_code}-exp`} id={`screener-row-${row.canonical_code}`}>
                       <td colSpan={9} className="p-0">
                         <motion.div
                           initial={{ height: 0, opacity: 0 }}
@@ -217,7 +218,7 @@ export default function ResultTable({
               onClick={() => onPageChange(p)}
               aria-current={p === page ? 'page' : undefined}
               className={cn(
-                'flex size-7 items-center justify-center rounded-sm border tnum text-caption tnum transition-colors duration-fast',
+                'mobile-icon-target flex size-7 items-center justify-center rounded-sm border tnum text-caption tnum transition-colors duration-fast',
                 p === page
                   ? 'border-brand-600 bg-brand-600 text-white shadow-chip'
                   : 'border-line text-ink-500 hover:border-brand-400 hover:text-brand-600',
@@ -248,7 +249,7 @@ function Th({
     <th
       style={width ? { width } : undefined}
       className={cn(
-        'whitespace-nowrap border-b border-line px-3 py-2.5 text-eyebrow font-sans uppercase tracking-[0.14em] text-ink-400',
+        'whitespace-nowrap border-b border-line px-3 py-2.5 text-eyebrow font-sans text-ink-400',
         align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left',
       )}
     >
@@ -274,7 +275,7 @@ function PageButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
-      className="flex size-7 items-center justify-center rounded-sm border border-line text-ink-500 shadow-btn transition-colors hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
+      className="mobile-icon-target flex size-7 items-center justify-center rounded-sm border border-line text-ink-500 shadow-btn transition-colors hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
     >
       {children}
     </button>

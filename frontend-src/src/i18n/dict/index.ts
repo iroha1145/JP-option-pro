@@ -2410,4 +2410,6 @@ export const DICT: Record<string, [string, string, string?]> = {
   '最后报告仍达到 0.5%，但超过 125 个交易日未更新。不计入近期公开持仓，仍保留在册合计。': ["The last reported ratio still meets 0.5%, but has not been updated for more than 125 trading days. It is excluded from recent disclosed positions and retained in the in-scope total.","最終報告は0.5%以上ですが、125営業日を超えて更新されていません。最近の公開残高には含めず、開示対象合計には残します。"],
   '比例缺失': ["Ratio missing","比率欠損"],
   '最新报告缺少可读持仓比例，无法判断持仓状态；不表示机构名称不明或持仓已清零。': ["The latest report has no readable position ratio, so the position status cannot be determined. This does not mean the institution is unidentified or its position is zero.","最新報告の残高比率が読み取れず、持ち高の状態を判定できません。機関名が不明、または残高ゼロという意味ではありません。"],
+  '展开或收起 {code} 详情': ["Expand or collapse details for {code}","{code} の詳細を開閉"],
+  '重新取得': ["Fetch again","再取得"],
 };

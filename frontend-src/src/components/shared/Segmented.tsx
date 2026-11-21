@@ -4,7 +4,7 @@
  * 也走这里，靠 renderLabel + scrollable 定制，不再各抄一份 onKeyDown。
  * 弹簧与 reduced-motion 归零由 GlidePill 自持，这里不包 MotionConfig。
  */
-import { type ReactNode } from 'react';
+import { type ReactNode, useLayoutEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import GlidePill from '@/components/shared/GlidePill';
@@ -49,6 +49,13 @@ export default function Segmented<T extends string>({
   /* 当前值不在选项里时（如新闻页停在「更多」菜单里的消息来源），没有哪一项是选中的；
      仍让第一项可以用 Tab 进入，否则键盘用户回不到这组切换。 */
   const hasSelection = options.some((option) => option.value === value);
+  const tablistRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    // Selection can resize the rail; reveal its focused tab after that layout commits.
+    const focused = tablistRef.current?.querySelector<HTMLElement>('.t-tab:focus');
+    const scrollOptions = { block: 'nearest', inline: 'nearest', container: 'nearest', behavior: 'instant' } as const;
+    focused?.scrollIntoView(scrollOptions);
+  }, [value]);
 
   return (
     /* 投影作用域二选一：layoutRoot 把 layoutId 的坐标收进条内（MobileDock 是
@@ -56,6 +63,7 @@ export default function Segmented<T extends string>({
        layoutScroll，布局测量计入容器滚动偏移，否则滚动后切换滑块跳位。 */
     <SelectionViewport>
     <motion.div
+      ref={tablistRef}
       layoutRoot={!scrollable}
       layoutScroll={scrollable}
       role="tablist"
@@ -74,7 +82,7 @@ export default function Segmented<T extends string>({
               type="button"
               role="tab"
               className={cn(
-                't-tab relative z-10 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600',
+                't-tab relative z-10 scroll-mx-1.5 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600',
                 scrollable && 'shrink-0 whitespace-nowrap',
               )}
               aria-selected={active}

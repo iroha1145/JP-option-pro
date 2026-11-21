@@ -1,13 +1,11 @@
 /** 登录和注册页：沿用美国站外观，保留日本站账号与来源返回逻辑。 */
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
-import { motion, useReducedMotion } from 'framer-motion';
 import { useAccess } from '@/hooks/useAccess';
 import { accessApi } from '@/api/modules';
 import { ApiError } from '@/api/client';
 import { useToast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
-import { EASE_PAPER } from '@/lib/motion';
 import { useCatalogShake } from '@/lib/transitions';
 import Icon from '@/components/icons';
 import DotsLoader from '@/components/shared/DotsLoader';
@@ -15,99 +13,6 @@ import Segmented from '@/components/shared/Segmented';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
 import type { IconName } from '@/components/icons';
 import { t } from '@/i18n/core';
-
-/* ---------------- L0 主视觉（内联 login-motif + K 线循环） ---------------- */
-function LoginMotif({ className }: { className?: string }) {
-  return (
-    <div className={cn('login-drift', className)} aria-hidden="true">
-      <svg viewBox="0 0 1200 900" fill="none" className="h-auto w-full">
-        <defs>
-          <pattern id="login-motif-dots" width="18" height="18" patternUnits="userSpaceOnUse">
-            <circle cx="4" cy="4" r="1.6" fill="var(--ink-800)" opacity="0.32" />
-          </pattern>
-          <clipPath id="login-globe-clip">
-            <circle cx="430" cy="430" r="238" />
-          </clipPath>
-        </defs>
-
-        <g clipPath="url(#login-globe-clip)">
-          <rect x="192" y="192" width="476" height="476" fill="url(#login-motif-dots)" />
-          <g stroke="var(--ink-800)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="var(--paper)">
-            <path d="M300 300c34-26 84-30 112-12 20 13 14 38-6 48-26 13-20 40-44 52-22 11-52-2-62-26-9-21-18-44 0-62Z" />
-            <path d="M430 480c26-10 58 0 64 24 5 22-14 44-38 42-22-2-38-22-36-42 1-10 4-19 10-24Z" />
-            <path d="M500 330c30-16 72-12 90 10 14 18 2 42-22 48-28 7-62-6-72-28-5-11-3-23 4-30Z" />
-          </g>
-        </g>
-        <circle cx="430" cy="430" r="238" stroke="var(--ink-800)" strokeWidth="1.6" fill="none" />
-        <ellipse cx="430" cy="430" rx="238" ry="96" stroke="var(--ink-800)" strokeWidth="1.6" fill="none" opacity="0.45" />
-        <path d="M430 192v476" stroke="var(--ink-800)" strokeWidth="1.6" opacity="0.3" />
-
-        <g stroke="var(--ink-800)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-          <ellipse cx="880" cy="640" rx="118" ry="30" />
-          <path d="M762 640v-44M998 640v-44" opacity="0.8" />
-          <ellipse cx="880" cy="596" rx="118" ry="30" />
-          <path d="M774 566v-40M986 566v-40" opacity="0.8" />
-          <ellipse cx="880" cy="526" rx="106" ry="27" />
-          <path d="M788 500v-38M972 500v-38" opacity="0.8" />
-          <ellipse cx="880" cy="462" rx="92" ry="24" />
-        </g>
-        <g stroke="var(--brand-600)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="880" cy="392" r="42" />
-          <path d="M880 350l22 24-21 20-23-19 22-25Z" opacity="0.85" />
-        </g>
-
-        {/* 手绘 K 线：循环生长（6s 绘制 → 3s 停留 → 1s 淡出） */}
-        <path
-          className="login-kline-loop"
-          d="M150 640 300 560l96 44 120-110 108 56 130-96 120 40 76-60 74-54"
-          pathLength={1000}
-          stroke="var(--brand-600)"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <g stroke="var(--brand-600)" strokeWidth="1.6">
-          <path d="M486 512v-20M486 556v16" />
-          <rect x="476" y="492" width="20" height="64" rx="3" fill="var(--paper)" />
-          <path d="M716 452v-18M716 508v14" />
-          <rect x="706" y="434" width="20" height="74" rx="3" fill="var(--brand-600)" fillOpacity="0.14" />
-        </g>
-        {/* 末端 up 绿点缀 + 拖尾涟漪 */}
-        <path d="M1074 340l-2 22M1074 340l-20 6" stroke="var(--up-600)" strokeWidth="2.2" strokeLinecap="round" />
-        <circle cx="1074" cy="340" r="5" fill="var(--up-600)" />
-        <circle className="login-kline-blip" cx="1074" cy="340" r="14" fill="none" stroke="var(--up-600)" strokeWidth="1.6" />
-
-        <g stroke="var(--ink-800)" strokeWidth="1.6" strokeLinecap="round" opacity="0.5">
-          <path d="M150 760h120M150 778h72" />
-        </g>
-      </svg>
-    </div>
-  );
-}
-
-/* ---------------- 逐字入场大标 ---------------- */
-function CharStagger({ text, className, delayBase = 0 }: { text: string; className?: string; delayBase?: number }) {
-  const reduced = useReducedMotion();
-  let characterIndex = 0;
-  return (
-    <span className={className} aria-label={text} role="text">
-      {text.split(/(\s+)/).map((part, wordIndex) => {
-        if (/^\s+$/.test(part)) return <span key={wordIndex} aria-hidden="true">{part}</span>;
-        return (
-          <span key={wordIndex} aria-hidden="true" className={/[\u3040-\u30ff\u3400-\u9fff]/u.test(part) ? undefined : 'inline-block whitespace-nowrap'}>
-            {Array.from(part).map((ch, index) => (
-              <motion.span key={index} className="inline-block"
-                initial={reduced ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.22, ease: EASE_PAPER, delay: reduced ? 0 : delayBase + characterIndex++ * 0.02 }}>
-                {ch}
-              </motion.span>
-            ))}
-          </span>
-        );
-      })}
-    </span>
-  );
-}
 
 const FEATURES: { icon: IconName; title: string }[] = [
   { icon: 'radar', title: '日线全市场扫描' },
@@ -145,7 +50,6 @@ export default function Login() {
   /* 从别处「去登录」带来的来源页（#21）：登录成功回到出发点而不是固定 /watchlist */
   const fromPath = (location.state as { from?: string } | null)?.from ?? null;
   const toast = useToast();
-  const reduced = useReducedMotion();
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
@@ -180,14 +84,6 @@ export default function Login() {
     };
   }, []);
 
-  /* 页面不可见时暂停 K 线循环 */
-  useEffect(() => {
-    const root = document.getElementById('login-root');
-    if (!root) return;
-    const onVis = () => root.classList.toggle('login-paused', document.visibilityState !== 'visible');
-    document.addEventListener('visibilitychange', onVis);
-    return () => document.removeEventListener('visibilitychange', onVis);
-  }, []);
 
   /* 账号相关的错误后端已给出中文说明，直接用；其余保持原有映射。 */
   const ACCOUNT_ERROR_CODES = new Set([
@@ -265,111 +161,72 @@ export default function Login() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="dot-grid-dense relative flex min-h-[100dvh] items-center justify-center bg-paper">
-        <div className="absolute right-4 top-4 z-20 md:right-8 md:top-6"><ThemeSwitcher /></div>
-        <DotsLoader label={t('加载中')} />
-      </div>
-    );
-  }
 
-  /* 私网 Owner 是网络授权，不是账号会话。退出只清 cookie，is_owner 仍为 true，
-     不能把登录表单藏掉。密码模式 Owner / 访客账号才算「已登录」。 */
   const hasAccountSession = isCustomer || (accessMode === 'password' && isOwner);
-  if (hasAccountSession) {
-    /* 已登录不再无条件弹走：客户账号此前被这里立刻 replace 回 /watchlist，
-       整个 UI 没有任何地方能结束会话或换账号。 */
-    return (
-      <div className="dot-grid-dense relative flex min-h-[100dvh] items-center justify-center bg-paper px-4">
-        <div className="absolute right-4 top-4 z-20 md:right-8 md:top-6"><ThemeSwitcher /></div>
-        <div className="card-surface w-full max-w-[360px] p-6 text-center">
-          <p className="eyebrow">{t('当前会话')}</p>
-          <p className="mt-2 text-h3 text-ink-800">
-            {isOwner ? t('管理员已登录') : t('已登录 {name}', { name: signedInName ?? '' })}
-          </p>
-          <div className="mt-5 flex flex-col gap-2.5">
-            <button
-              onClick={() => navigate(fromPath ?? '/watchlist', { replace: true })}
-              className="btn-primary h-11 w-full"
-            >
-              {t('继续浏览')}
-            </button>
-            <button
-              onClick={() => void logout()}
-              className="h-11 rounded-pill border border-line bg-card text-caption text-ink-600 transition-colors hover:border-brand-400 hover:text-brand-600"
-            >
-              {t('退出并换账号')}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  /* 私网 Owner 是网络授权，不是账号会话。退出只清 cookie，is_owner 仍为 true，
+     不能把登录表单藏掉。密码模式 Owner / 访客账号才算「已登录」。
+     加载、已登录、登录表单共用同一个根节点和同一个主题控件，状态切换时已打开的菜单不会消失。 */
   return (
-    <div id="login-root" className="dot-grid-dense relative min-h-[100dvh] overflow-hidden bg-paper">
+    <main id="login-root" className="login-page">
       <div className="absolute right-4 top-4 z-20 md:right-8 md:top-6"><ThemeSwitcher /></div>
-      {/* v8 清新：顶部右侧极淡 pastel 群青晕染（Tally 感，不动结构） */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        aria-hidden="true"
-        style={{ background: 'radial-gradient(60% 40% at 85% 0%, rgba(46,70,224,.05), transparent 70%)' }}
-      />
-      {/* 主视觉只在手机顶部展示，桌面保留与美站一致的点阵背景。 */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[45dvh] overflow-hidden opacity-50 lg:hidden" aria-hidden="true">
-        <LoginMotif className="mx-auto w-[560px] max-w-none" />
-      </div>
-
-      <div className="relative z-10 mx-auto grid min-h-[100dvh] w-full max-w-shell grid-cols-1 items-center gap-10 px-6 py-12 lg:grid-cols-12 lg:gap-12 lg:px-16">
-        {/* L1 左侧编辑区 */}
-        <div className="lg:col-span-7">
-          <motion.div
-            initial={reduced ? false : { opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.22, ease: EASE_PAPER }}
-            className="flex items-center gap-3"
-          >
-            <img src="/logo.svg" alt="" className="size-10 dark:brightness-0 dark:invert" />
-            <p className="font-display text-h2 font-semibold text-ink-900">Optix Japan</p>
-          </motion.div>
-
-          <h1 className="mt-6 font-display text-display-l text-ink-900 lg:mt-10 lg:text-display-xl">
-            <span className="marker"><CharStagger text={t('日股研究')} delayBase={0.06} /></span>
-            <br />
-            <CharStagger text={t('从这里开始。')} className="text-brand-600" delayBase={0.12} />
-          </h1>
-
-          <div className="mt-8 hidden flex-col gap-5 lg:flex">
-            {FEATURES.map((feature, index) => (
-              <motion.div key={feature.title}
-                initial={reduced ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.22, ease: EASE_PAPER, delay: reduced ? 0 : 0.14 + index * 0.02 }}
-                className="flex items-center gap-3">
-                <Icon name={feature.icon} size={20} className="text-brand-600" />
-                <p className="text-[15px] text-ink-800">{t(feature.title)}</p>
-              </motion.div>
-            ))}
+      {loading ? (
+        <div className="grid min-h-[100dvh] place-items-center">
+          <DotsLoader label={t('加载中')} />
+        </div>
+      ) : hasAccountSession ? (
+        <div className="grid min-h-[100dvh] place-items-center px-4">
+          <div className="card-surface w-full max-w-[360px] p-6 text-center">
+            <p className="eyebrow">{t('当前会话')}</p>
+            <h1 className="mt-2 text-h3 text-ink-800">
+              {isOwner ? t('管理员已登录') : t('已登录 {name}', { name: signedInName ?? '' })}
+            </h1>
+            <div className="mt-5 flex flex-col gap-2.5">
+              <button
+                onClick={() => navigate(fromPath ?? '/watchlist', { replace: true })}
+                className="btn-primary h-11 w-full"
+              >
+                {t('继续浏览')}
+              </button>
+              <button
+                onClick={() => void logout()}
+                className="h-11 rounded-pill border border-line bg-card text-caption text-ink-600 transition-colors hover:border-brand-400 hover:text-brand-600"
+              >
+                {t('退出并换账号')}
+              </button>
+            </div>
           </div>
         </div>
-
-        {/* L2 右侧登录卡 */}
-        <div className="flex justify-center lg:col-span-5">
-          <motion.div
-            initial={reduced ? false : { opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.22, ease: EASE_PAPER }}
-            className="glass w-full max-w-[400px] rounded-xl border border-line p-9 shadow-sh-3 max-lg:p-6"
-          >
-            <div className="flex items-start gap-3">
-              <span className="mt-0.5 text-brand-600">
-                <Icon name="command" size={20} />
-              </span>
-              <div>
-                <h2 className="font-display text-h2 text-ink-900">{t('登录账号')}</h2>
-                <p className="mt-0.5 text-caption text-ink-400">{t('登录后关注股票保存在账号里 · 访客可只读浏览')}</p>
-              </div>
+      ) : (
+        <div className="login-layout">
+          <section className="login-intro">
+            <Link to="/" className="inline-flex items-center gap-3">
+              <img src="/logo.svg" alt="" width="40" height="40" className="dark:brightness-0 dark:invert" />
+              <span className="font-display text-h2 font-medium text-ink-900">Optix Japan</span>
+            </Link>
+            <h1 className="mt-6 font-display text-display-m text-ink-900 lg:mt-10 lg:text-display-xl">
+              <span>{t('日股研究')}</span><br />
+              <span className="text-brand-600">{t('从这里开始。')}</span>
+            </h1>
+            <div className="mt-10 hidden grid-cols-3 gap-3 lg:grid">
+              {FEATURES.map((feature) => (
+                <div key={feature.title} className="paper-panel p-4">
+                  <Icon name={feature.icon} size={22} className="text-brand-600" />
+                  <p className="mt-4 text-body-s font-medium text-ink-900">{t(feature.title)}</p>
+                </div>
+              ))}
             </div>
+          </section>
+          <div className="min-w-0">
+            <div className="glass-panel w-full p-5 sm:p-8">
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 text-brand-600">
+                  <Icon name="command" size={20} />
+                </span>
+                <div>
+                  <h2 className="font-display text-h2 text-ink-900">{t('登录账号')}</h2>
+                  <p className="mt-0.5 text-caption text-ink-400">{t('登录后关注股票保存在账号里 · 访客可只读浏览')}</p>
+                </div>
+              </div>
 
             <Segmented<'login' | 'register'>
               options={[{ value: 'login', label: t('登录') }, { value: 'register', label: t('注册账号') }]}
@@ -380,7 +237,7 @@ export default function Login() {
             />
 
             {serviceDown && (
-              <p role="status" className="mt-4 flex items-center justify-between gap-2 rounded-xs border border-warn-600/30 bg-warn-50 px-2.5 py-1.5 text-caption text-warn-600">
+              <p role="status" className="mt-4 flex items-center justify-between gap-2 rounded-[var(--r-control)] border border-warn-600/30 bg-warn-50 px-2.5 py-1.5 text-caption text-warn-600">
                 {t('无法连接服务，登录暂不可用')}
                 <button type="button" onClick={probeService} className="shrink-0 font-medium underline underline-offset-2">
                   {t('重试')}
@@ -389,13 +246,13 @@ export default function Login() {
             )}
 
             <form onSubmit={onSubmit} className="mt-5" noValidate>
-              <div className={cn('t-input-wrap mb-4', userShake.classes.wrap)}>
+              <div className={cn('t-input-wrap mb-5', userShake.classes.wrap)}>
               <label className="block">
-                <span className="mb-1.5 block text-caption font-medium text-ink-500">{t('用户名')}</span>
+                <span className="mb-2 block text-caption text-ink-500">{t('用户名')}</span>
                 <div
                   ref={userInputRef}
                   className={cn(
-                    't-input flex h-12 items-center gap-2 rounded-sm border bg-card px-3',
+                    't-input flex h-12 items-center gap-2 rounded-[var(--r-control)] border bg-card px-3',
                     'transition-[box-shadow,border-color] duration-fast',
                     'focus-within:border-brand-600 focus-within:shadow-focus-ring',
                     userShake.classes.input,
@@ -430,11 +287,11 @@ export default function Login() {
               </div>
               <div className={cn('t-input-wrap', pwShake.classes.wrap)}>
               <label className="block">
-                <span className="mb-1.5 block text-caption font-medium text-ink-500">{t('密码')}</span>
+                <span className="mb-2 block text-caption text-ink-500">{t('密码')}</span>
                 <div
                   ref={passwordInputRef}
                   className={cn(
-                    't-input flex h-12 items-center gap-2 rounded-sm border bg-card px-3 transition-[box-shadow,border-color] duration-fast',
+                    't-input flex h-12 items-center gap-2 rounded-[var(--r-control)] border bg-card px-3 transition-[box-shadow,border-color] duration-fast',
                     'focus-within:border-brand-600 focus-within:shadow-focus-ring',
                     pwShake.classes.input,
                     pwShake.error ? 'border-down-600' : 'border-line-strong',
@@ -460,7 +317,7 @@ export default function Login() {
                   <button
                     type="button"
                     onClick={() => setShowPw((v) => !v)}
-                    className="touch-target flex shrink-0 items-center justify-center rounded-pill p-1 text-ink-400 transition-colors hover:text-ink-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
+                    className="touch-target flex shrink-0 items-center justify-center rounded-xs p-1 text-ink-400 transition-colors hover:text-ink-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
                     aria-label={showPw ? t('隐藏密码') : t('显示密码')}
                   >
                     <EyeIcon off={!showPw} />
@@ -531,7 +388,7 @@ export default function Login() {
             </div>
             <button
               onClick={() => navigate('/watchlist')}
-              className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-pill border border-line bg-transparent text-body-s font-medium text-ink-600 shadow-btn transition-colors duration-fast hover:bg-paper-2 hover:text-ink-800"
+              className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-[var(--r-control)] border border-line-strong bg-transparent text-body-s font-medium text-ink-600 shadow-btn transition-colors duration-fast hover:bg-paper-2 hover:text-ink-800"
             >
               {t('以访客身份浏览（只读）')}
             </button>
@@ -551,9 +408,10 @@ export default function Login() {
                 {t('返回公开研究页面')}
               </Link>
             </div>
-          </motion.div>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+    </main>
   );
 }

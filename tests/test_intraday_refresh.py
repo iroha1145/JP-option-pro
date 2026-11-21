@@ -2,7 +2,7 @@
 
 import io
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from fastapi import FastAPI
@@ -46,6 +46,9 @@ class PublishedProvider:
 def setup(data_dir, monkeypatch):
     monkeypatch.setenv("JQUANTS_API_KEY", "test-only")
     reset_settings_for_tests()
+    # Retention is measured from "today". Pin it next to the fixture dates so the
+    # freshly fetched day is not pruned once the real calendar moves past the window.
+    monkeypatch.setattr("app.domain.timeutil.today_jst", lambda: date(2026, 10, 12))
     deps.reset_dependencies_for_tests()
     context = TaskContext()
     context._client = PublishedProvider()

@@ -9,6 +9,7 @@ import { useColorMode } from '@/hooks/useColorMode';
 import { useAppearance } from '@/hooks/useAppearance';
 import { t } from '@/i18n/core';
 import type { SectorStrength } from '@/api/types';
+import './heat-matrix.css';
 import { metricValue, rankByReturn, returnScale, type HeatMetric } from './returnRanking';
 
 export { rankByReturn } from './returnRanking';
@@ -19,7 +20,7 @@ const LIST_GRID = 'grid grid-cols-1 gap-y-0.5 xl:grid-flow-col xl:grid-cols-2 xl
 
 function ColumnHeader({ metric, className }: { metric: HeatMetric; className?: string }) {
   return (
-    <div className={cn(ROW_GRID, 'border-b border-line px-2 pb-2 text-micro text-ink-500', className)} aria-hidden="true">
+    <div className={cn(ROW_GRID, 'sector-heat-header border-b border-line px-2 pb-2 text-micro text-ink-500', className)} aria-hidden="true">
       <span />
       <span>{t('行业')}</span>
       <span className="col-span-2 text-right">{metric === 'r1' ? t('1日 中位') : t('20日 中位')}</span>
@@ -72,11 +73,11 @@ function HeatRow({ sector, metric, rank, scale, covered, selected, onSelect }: {
     }>
       <button type="button" onClick={onSelect} aria-pressed={selected}
         aria-label={`${sector.sector33_name}，${periodLabel} ${fmtPct(value)}，${members}，${t('上涨占比')} ${validShare ? fmtPctLevel(share, 0) : '—'}${coverage ? `，${coverage}` : ''}`}
-        className={cn(ROW_GRID, 'group relative w-full min-w-0 rounded-md px-2 py-1.5 text-left transition-colors duration-fast motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600', selected ? 'bg-brand-50' : 'hover:bg-paper-2')}>
+        className={cn(ROW_GRID, 'sector-heat-row group relative min-h-14 w-full min-w-0 rounded-[var(--r-control)] px-2 py-3 text-left transition-colors duration-fast motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600', selected ? 'bg-brand-50' : 'hover:bg-paper-2')}>
         <span className="text-right text-caption text-ink-400 tnum">{hasReturn ? rank : '—'}</span>
         <span className="min-w-0">
-          <span className={cn('block truncate text-body-s font-medium', hasReturn ? 'text-ink-800' : 'text-ink-500')}>{sector.sector33_name}</span>
-          <span className="block truncate text-micro text-ink-400 tnum">{memberCaption}</span>
+          <span className={cn('block break-words text-body-s font-medium', hasReturn ? 'text-ink-800' : 'text-ink-500')}>{sector.sector33_name}</span>
+          <span className="mt-1 block text-micro text-ink-400 tnum">{memberCaption}</span>
         </span>
         <span className="relative block h-3" aria-hidden="true">
           {hasReturn ? (
@@ -113,7 +114,7 @@ export default function HeatMatrix({ sectors, metric, selectedCode, onSelect, co
   const scale = useMemo(() => returnScale(ranked, metric), [ranked, metric]);
   const perColumn = Math.ceil(ranked.length / 2);
   return (
-    <div className={LIST_GRID} style={{ '--heat-rows': perColumn + 1 } as CSSProperties} role="group" aria-label={t('行业中位收益排名')}>
+    <div className={cn('sector-heat-matrix', LIST_GRID)} style={{ '--heat-rows': perColumn + 1 } as CSSProperties} role="group" aria-label={t('行业中位收益排名')}>
       <ColumnHeader metric={metric} />
       {ranked.map((sector, index) => (
         <Fragment key={sector.sector33_code}>
@@ -127,12 +128,12 @@ export default function HeatMatrix({ sectors, metric, selectedCode, onSelect, co
 
 export function HeatMatrixSkeleton() {
   return (
-    <div className={LIST_GRID} style={{ '--heat-rows': 18 } as CSSProperties} aria-hidden="true">
+    <div className={cn('sector-heat-matrix', LIST_GRID)} style={{ '--heat-rows': 18 } as CSSProperties} aria-hidden="true">
       <ColumnHeader metric="r1" />
       {Array.from({ length: 33 }, (_, index) => (
         <Fragment key={index}>
           {index === 17 && <ColumnHeader metric="r1" className="hidden xl:grid" />}
-          <div className={cn(ROW_GRID, 'h-11 px-2')}>
+          <div className={cn(ROW_GRID, 'sector-heat-row min-h-14 px-2 py-3')}>
             <SkeletonBlock className="h-3 w-3 justify-self-end" />
             <SkeletonBlock className="h-3.5 w-full" />
             <SkeletonBlock className="h-3 w-full" />

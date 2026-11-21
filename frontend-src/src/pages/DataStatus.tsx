@@ -105,7 +105,7 @@ export default function DataStatus() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="page-stack">
       <PageHeader
         title={t('数据状态')}
         description={t('查看数据更新时间、同步状态和后台任务')}
@@ -133,7 +133,7 @@ export default function DataStatus() {
       />
 
       {state === 'error' ? (
-        <section className="card-surface">
+        <section className="card-surface min-w-0">
           <EmptyState
             variant="error"
             image="/empty-chart.svg"
@@ -146,8 +146,8 @@ export default function DataStatus() {
         <SkeletonReveal
           loading={state === 'loading'}
           skeleton={
-            <div className="space-y-4" aria-busy="true">
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div className="page-stack" aria-busy="true">
+              <div className="metric-grid">
                 {Array.from({ length: 4 }, (_, i) => (
                   <SkeletonCard key={i} className="h-24" />
                 ))}
@@ -159,11 +159,11 @@ export default function DataStatus() {
           }
         >
           {query.data ? (
-        <>
+        <div className="page-stack">
           {state === 'stale' && (
             <StaleStrip onRetry={refreshStatus} refreshing={query.refreshing} />
           )}
-          <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <section className="metric-grid">
             <StatCard
               label={t('数据集')}
               value={query.data.datasets.length}
@@ -194,14 +194,14 @@ export default function DataStatus() {
           </section>
 
           {canRefreshPublicData && (
-            <div className="card-surface flex flex-wrap items-center gap-2 p-5">
+            <div className="paper-panel page-toolbar p-5 sm:p-6">
               <p className="eyebrow w-full">{t('手动刷新')}</p>
               {MANUAL_ACTIONS.filter((action) => isOwner || ["radar_refresh", "news_sync", "short_monitor_refresh"].includes(action.type)).map((action) => (
                 <button
                   key={action.type}
                   type="button"
                   disabled={pendingAction !== null}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-line bg-card px-3 py-1.5 text-caption text-ink-600 shadow-btn transition-colors hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 mobile-control-target rounded-pill border border-line bg-card px-3 py-1.5 text-caption text-ink-600 shadow-btn transition-colors hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
                   onClick={async () => {
                     if (pendingAction) return;
                     setPendingAction(action.type);
@@ -228,20 +228,20 @@ export default function DataStatus() {
           )}
 
           <section>
-            <h2 className="mb-3 mt-1 text-h3 text-ink-900">{t('数据集')}</h2>
+            <h2 className="section-heading mb-3">{t('数据集')}</h2>
             <DataTable columns={columns} rows={query.data.datasets} rowKey={(row) => row.key} rowHeight={56} />
           </section>
 
-          <section className="card-surface p-5">
-            <h2 className="mb-2 mt-1 text-h3 text-ink-900">
+          <section className="paper-panel p-5 sm:p-6">
+            <h2 className="section-heading mb-2">
               {query.data.intraday.enabled ? t('盘中数据') : t('盘中数据未接入')}
             </h2>
             <p className="text-body-s text-ink-500">{t(query.data.intraday.note_ja ?? '')}</p>
           </section>
 
           {query.data.worker && (
-            <section className="card-surface p-5">
-              <h2 className="mb-2 mt-1 flex items-center gap-2 text-h3 text-ink-900">
+            <section className="paper-panel p-5 sm:p-6">
+              <h2 className="section-heading mb-2 !justify-start">
                 {t('后台任务')}
                 <SoftBadge tone={query.data.worker.healthy ? 'brand' : 'warn'}>
                   {query.data.worker.healthy ? t('运行正常') : t('已降级')}
@@ -260,11 +260,11 @@ export default function DataStatus() {
               </ul>
             </section>
           )}
-        </>
+        </div>
           ) : null}
         </SkeletonReveal>
       )}
-      <SourceNote className="mt-8" text={t('本页展示 J-Quants 同步状态与 worker 任务')} />
+      <SourceNote text={t('本页展示 J-Quants 同步状态与 worker 任务')} />
     </div>
   );
 }

@@ -12,7 +12,7 @@ import { placeGlide } from '@/lib/transitions';
 import { tokyoSession, tokyoSessionLabel } from '@/lib/tokyoSession';
 import Icon from '@/components/icons';
 import { SessionDot } from '@/components/shared/SessionLED';
-import SettingsMenu from '@/components/SettingsMenu';
+import SettingsMenu from '@/components/LazySettingsMenu';
 import { NAV_GROUPS, isNavGroupActive, navAriaCurrent } from '@/lib/navigation';
 import { t } from '@/i18n/core';
 
@@ -155,7 +155,7 @@ export default function Navbar({ onOpenPalette }: { onOpenPalette: () => void })
           >
             <Icon motion name="search" size={14} />
             <span className="flex-1 truncate text-left">{t('搜索代码或功能…')}</span>
-            <kbd className="flex items-center gap-0.5 tnum text-[10px] text-ink-400">
+            <kbd className="flex items-center gap-0.5 tnum text-tag text-ink-400">
               <Icon motion name="command" size={11} />K
             </kbd>
           </button>

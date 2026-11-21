@@ -6,7 +6,7 @@
  * 结构沿用原外观菜单：role="menu" + 三组 menuitemradio，方向键在全部选项间移动、
  * 回车或点击才生效——语言切换会整页重载，不能像分段控件那样焦点一到就切。
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { cn } from '@/lib/utils';
 import { overlayClassName, overlayVisible, readRootDurationMs, useOverlayPhase } from '@/lib/transitions';
 import { type ThemePreference } from '@/lib/themePreference.ts';
@@ -20,8 +20,8 @@ import { LOCALES, getLocale, setLocale, t } from '../i18n/core.ts';
 
 const THEME_OPTIONS: { value: ThemePreference; label: string; icon: IconName }[] = [
   { value: 'system', label: t('跟随系统'), icon: 'display' },
-  { value: 'light', label: t('浅色'), icon: 'sun-bmo' },
-  { value: 'dark', label: t('深色'), icon: 'moon-amc' },
+  { value: 'light', label: t('浅色'), icon: 'sun' },
+  { value: 'dark', label: t('深色'), icon: 'moon' },
 ];
 
 const COLOR_OPTIONS: { value: ColorMode; label: string }[] = [
@@ -29,15 +29,25 @@ const COLOR_OPTIONS: { value: ColorMode; label: string }[] = [
   { value: 'asian', label: t('红涨绿跌') },
 ];
 
-/* touch-target：手机上原来在「更多」抽屉里的是 44px 高的分段控件，挪进菜单后不能变矮 */
+/* touch-target：手机上原来在「更多」抽屉里的是 44px 高的分段控件，挪进菜单后不能变矮；
+   同心圆角（TypeUI concentric-radius）：外层菜单用 --r-group，内层条目用 --r-dropdown-item。 */
 const ITEM_CLASS =
-  'icon-motion-trigger touch-target flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-body-s transition-colors duration-fast focus-visible:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600';
+  'icon-motion-trigger touch-target flex w-full items-center gap-2 rounded-[var(--r-dropdown-item)] px-2 py-1.5 text-left text-body-s transition-colors duration-fast focus-visible:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600';
 
-export default function SettingsMenu({ className }: { className?: string }) {
-  const [open, setOpen] = useState(false);
+export interface SettingsMenuProps {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  containerRef: RefObject<HTMLDivElement | null>;
+  triggerRef: RefObject<HTMLButtonElement | null>;
+}
+
+export default function SettingsMenu({ open, setOpen, containerRef, triggerRef }: SettingsMenuProps) {
   const [themeMenuClosed, setThemeMenuClosed] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [previousOpen, setPreviousOpen] = useState(open);
+  if (previousOpen !== open) {
+    setPreviousOpen(open);
+    if (open) setThemeMenuClosed(false);
+  }
   const menuRef = useRef<HTMLDivElement>(null);
   const locale = getLocale();
   const themePreference = useThemePreference();
@@ -57,7 +67,7 @@ export default function SettingsMenu({ className }: { className?: string }) {
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -71,7 +81,7 @@ export default function SettingsMenu({ className }: { className?: string }) {
       document.removeEventListener('mousedown', onDoc);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [open, setOpen, containerRef, triggerRef]);
 
   const onMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     /* 选项不进 Tab 顺序（tabIndex=-1，方向键移动）；Tab 离开即关闭，菜单不会留在页面上 */
@@ -99,32 +109,7 @@ export default function SettingsMenu({ className }: { className?: string }) {
   };
 
   return (
-    <div ref={ref} className={cn('relative', className)}>
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => {
-          setThemeMenuClosed(false);
-          setOpen((v) => !v);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-            e.preventDefault();
-            setThemeMenuClosed(false);
-            setOpen(true);
-          }
-        }}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={t('显示设置')}
-        title={t('显示设置')}
-        /* 外层是透明触控区（手机 44px），看得见的 32px 按钮在 .header-chip；展开态由 aria-expanded 着色 */
-        className="icon-motion-trigger touch-target header-action"
-      >
-        <span className="header-chip">
-          <Icon motion name="sliders" size={15} />
-        </span>
-      </button>
+    <>
       {mounted && !themeMenuClosed && (
         <div
           ref={menuRef}
@@ -133,7 +118,7 @@ export default function SettingsMenu({ className }: { className?: string }) {
           data-origin="top-right"
           onKeyDown={onMenuKeyDown}
           className={cn(
-            't-dropdown fixed right-3 top-14 z-40 sm:absolute sm:right-0 sm:top-full sm:mt-2 max-h-[calc(100dvh-10rem)] w-[208px] max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain rounded-md border border-line bg-card p-1.5 shadow-sh-2',
+            't-dropdown fixed right-3 top-14 z-40 sm:absolute sm:right-0 sm:top-full sm:mt-2 max-h-[calc(100dvh-10rem)] w-[208px] max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain rounded-[var(--r-group)] border border-line bg-card p-1.5 shadow-sh-2',
             overlayClassName(phase),
           )}
         >
@@ -216,6 +201,6 @@ export default function SettingsMenu({ className }: { className?: string }) {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

@@ -53,6 +53,7 @@
   .t-panel-slide { transition: none !important; }
 }
 
+
 /* —— 06-modal.md —— */
 .t-modal {
   transform-origin: center;
@@ -148,28 +149,8 @@
   color: var(--tabs-text-active);
 }
 
-/* The pill: width + transform are written inline by JS so
-   the transition tweens between the previous and next
-   measured positions. */
-.t-tabs-pill {
-  position: absolute;
-  top: 3px;
-  left: 0;
-  height: 30px;
-  width: 0;
-  background: var(--tabs-pill-bg);
-  border-radius: 48px;
-  transform: translateX(0);
-  transition:
-    transform var(--tabs-dur) var(--tabs-ease),
-    width     var(--tabs-dur) var(--tabs-ease);
-  will-change: transform, width;
-  z-index: 0;
-  pointer-events: none;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .t-tabs-pill, .t-tab { transition: none !important; }
+  .t-tab { transition: none !important; }
 }
 
 /* —— 14-skeleton-reveal.md —— */
@@ -389,7 +370,6 @@
   --tabs-text-muted: var(--ink-400);
   --tabs-text-active: var(--ink-800);
   --tabs-bar-bg: var(--card-warm);
-  --tabs-pill-bg: var(--card);
   --tt-bg: var(--card);
   --tt-fg: var(--ink-700);
 }
@@ -448,10 +428,7 @@
   transition: none;
 }
 
-/* Paper Terminal geometry for catalog tabs：r-md 语言 + 旧 Segmented 的 30px
-   总高（catalog demo 是 48px 药丸 / 36px 高）。只改条与标签：滑块换成了
-   framer 的 GlidePill（自带白底胶囊几何），.t-tabs-pill 在本仓已无人渲染，
-   给它留一份适配就是没人看得见的死样式。 */
+/* Tab geometry shares the indicator supplied by GlidePill. */
 .t-tabs {
   gap: 2px;
   padding: 2px;
@@ -549,27 +526,13 @@
 }
 
 /* —— 27-toggle.md —— */
-.t-toggle { transition: background var(--toggle-track) var(--toggle-ease); }
-.t-toggle-thumb { translate: 0 0; will-change: translate; }
-.t-toggle[data-on="true"] .t-toggle-thumb { translate: var(--toggle-travel) 0; }
-.t-toggle.is-init[data-on="true"] .t-toggle-thumb { animation: t-toggle-on var(--toggle-dur) var(--toggle-ease) both; }
-.t-toggle.is-init[data-on="false"] .t-toggle-thumb { animation: t-toggle-off var(--toggle-dur) var(--toggle-ease) both; }
-@keyframes t-toggle-on {
-  0% { translate: 0 0; }
-  55% { translate: calc(var(--toggle-travel) + var(--toggle-ov1)) 0; }
-  80% { translate: calc(var(--toggle-travel) - var(--toggle-ov2)) 0; }
-  100% { translate: var(--toggle-travel) 0; }
+.t-toggle {
+  --toggle-fill: 0;
+  background-color: color-mix(in srgb, var(--brand-600) calc(var(--toggle-fill) * 100%), var(--ink-300));
 }
-@keyframes t-toggle-off {
-  0% { translate: var(--toggle-travel) 0; }
-  55% { translate: calc(0px - var(--toggle-ov1)) 0; }
-  80% { translate: var(--toggle-ov2) 0; }
-  100% { translate: 0 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .t-toggle-thumb { animation: none !important; }
-}
+.t-toggle[data-on="true"] { --toggle-fill: 1; }
+.t-toggle-thumb { translate: var(--thumb-physical-x, 0px) 0; will-change: translate; }
+.t-toggle[data-on="true"] .t-toggle-thumb { translate: var(--thumb-physical-x, var(--toggle-travel)) 0; }
 
 /* —— 02-number-pop-in.md —— */
 @keyframes t-digit-pop-in {
@@ -610,11 +573,11 @@
    plus physical drag-handle affordance for mobile bottom sheets. */
 .t-toggle-thumb {
   scale: var(--thumb-scale-x, 1) var(--thumb-scale-y, 1);
-  transition: scale var(--duration-quick, 150ms) var(--ease-feel-press, ease-out);
+  transition: none;
 }
 .t-toggle[data-feel-drag="true"] .t-toggle-thumb {
   animation: none !important;
-  translate: var(--thumb-drag-x, 0px) 0 !important;
+  translate: var(--thumb-physical-x, 0px) 0 !important;
 }
 [data-handle] {
   cursor: grab;
@@ -643,6 +606,11 @@
 .t-more-sheet[data-open="true"] {
   transform: translateY(0);
   transition-duration: var(--sheet-open-duration);
+}
+/* A magnetic gesture already finished the exit before overlay teardown. */
+[data-feel-sheet][data-feel-dismissed="true"] {
+  transform: translateY(100%) !important;
+  transition: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
   .t-more-sheet { transition: none !important; }

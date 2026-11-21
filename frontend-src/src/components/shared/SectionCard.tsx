@@ -16,11 +16,12 @@ export default function SectionCard({
   className?: string;
 }) {
   return (
-    <section className={cn('card-surface', className)} aria-label={title}>
-      <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-4 md:px-5 md:pt-5">
-        <h3 className="text-h3 text-ink-900">{title}</h3>
+    <section className={cn('paper-panel flex min-w-0 flex-col', className)} aria-label={title}>
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-2 pt-5 sm:px-6 sm:pt-6">
+        <h2 className="section-heading">{title}</h2>
         <Link
           to={to}
+          aria-label={`${t('查看全部')}：${title}`}
           className="link-learn shrink-0 text-caption font-medium text-brand-700 transition-colors duration-fast hover:text-brand-600"
         >
           {t('查看全部')}
