@@ -137,7 +137,7 @@ export function StatusChip({ item }: { item: EarningsUpcomingItem }) {
           width={240}
           contentClassName="p-2.5"
           content={
-            <span className="block text-micro leading-[16px] text-ink-600">
+            <span className="block text-micro text-ink-600">
               {t('前年同期开示日推导的目安，以公司正式公告为准')}
             </span>
           }

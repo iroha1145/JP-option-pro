@@ -21,6 +21,7 @@ export default function SectionCard({
         <h2 className="section-heading">{title}</h2>
         <Link
           to={to}
+          aria-label={`${t('查看全部')}：${title}`}
           className="link-learn shrink-0 text-caption font-medium text-brand-700 transition-colors duration-fast hover:text-brand-600"
         >
           {t('查看全部')}

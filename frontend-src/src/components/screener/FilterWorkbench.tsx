@@ -399,7 +399,7 @@ export default function FilterWorkbench({
                         key={preset.id}
                         passthrough
                         label={t(preset.description)}
-                        content={<span className="text-micro leading-[16px] text-ink-600">{t(preset.description)}</span>}
+                        content={<span className="text-micro text-ink-600">{t(preset.description)}</span>}
                       >
                         {button}
                       </PointerTooltip>

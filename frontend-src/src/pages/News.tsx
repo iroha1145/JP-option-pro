@@ -566,7 +566,7 @@ function NewsRow({ item, index, animate = true }: { item: NewsItem; index: numbe
           <time dateTime={item.published_at ?? undefined} className="tnum">{fmtRelative(item.published_at)}</time>
           <span className="ml-auto"><ImportanceBadge value={item.importance} /></span>
         </p>
-        <h3 className="mt-2 text-body font-medium text-ink-900">
+        <h3 className="mt-2 max-w-prose text-body font-medium text-ink-900">
           {item.source_url ? (
             <a href={item.source_url} target="_blank" rel="noreferrer" className="rounded-xs underline-offset-4 hover:text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600">
               {title}

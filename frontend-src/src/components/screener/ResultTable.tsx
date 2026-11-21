@@ -249,7 +249,7 @@ function Th({
     <th
       style={width ? { width } : undefined}
       className={cn(
-        'whitespace-nowrap border-b border-line px-3 py-2.5 text-eyebrow font-sans uppercase tracking-[0.14em] text-ink-400',
+        'whitespace-nowrap border-b border-line px-3 py-2.5 text-eyebrow font-sans text-ink-400',
         align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left',
       )}
     >

@@ -863,7 +863,7 @@ function FactBlock({ title, facts }: { title: string; facts: Fact[] }) {
               <PointerTooltip
                 passthrough
                 label={fact.label}
-                content={<span className="text-micro leading-[16px] text-ink-600">{fact.label}</span>}
+                content={<span className="text-micro text-ink-600">{fact.label}</span>}
               >
                 <span className="truncate">{fact.label}</span>
               </PointerTooltip>
@@ -956,7 +956,7 @@ function FlagList({
           passthrough
           label={rest.map((flag) => t(FLAG_LABELS[flag] ?? flag)).join(' · ')}
           content={
-            <span className="text-micro leading-[16px] text-ink-600">
+            <span className="text-micro text-ink-600">
               {rest.map((flag) => t(FLAG_LABELS[flag] ?? flag)).join(' · ')}
             </span>
           }
@@ -1002,7 +1002,7 @@ function ShortDelta({ value, className }: { value: number | null; className?: st
     <PointerTooltip
       passthrough
       label={tip}
-      content={<span className="text-micro leading-[16px] text-ink-600">{tip}</span>}
+      content={<span className="text-micro text-ink-600">{tip}</span>}
     >
       {node}
     </PointerTooltip>

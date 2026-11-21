@@ -246,9 +246,9 @@ export default function Login() {
             )}
 
             <form onSubmit={onSubmit} className="mt-5" noValidate>
-              <div className={cn('t-input-wrap mb-4', userShake.classes.wrap)}>
+              <div className={cn('t-input-wrap mb-5', userShake.classes.wrap)}>
               <label className="block">
-                <span className="mb-1.5 block text-caption text-ink-500">{t('用户名')}</span>
+                <span className="mb-2 block text-caption text-ink-500">{t('用户名')}</span>
                 <div
                   ref={userInputRef}
                   className={cn(
@@ -287,7 +287,7 @@ export default function Login() {
               </div>
               <div className={cn('t-input-wrap', pwShake.classes.wrap)}>
               <label className="block">
-                <span className="mb-1.5 block text-caption text-ink-500">{t('密码')}</span>
+                <span className="mb-2 block text-caption text-ink-500">{t('密码')}</span>
                 <div
                   ref={passwordInputRef}
                   className={cn(

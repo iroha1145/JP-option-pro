@@ -81,7 +81,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
         {warnings.length > 0 && (
           <ul className="mt-2.5 space-y-1">
             {warnings.map((warning, index) => (
-              <li key={index} className="flex items-start gap-1.5 text-micro leading-[16px] text-warn-600">
+              <li key={index} className="flex items-start gap-1.5 text-micro text-warn-600">
                 <span className="mt-px shrink-0" aria-hidden="true">⚠</span>
                 {warning}
               </li>
@@ -148,7 +148,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
             <p className="mb-1 text-micro text-ink-400">{t('评分依据')}</p>
             <ul className="space-y-0.5">
               {reasons.map((reason, index) => (
-                <li key={index} className="text-micro leading-[16px] text-ink-600">· {reason}</li>
+                <li key={index} className="text-micro text-ink-600">· {reason}</li>
               ))}
             </ul>
           </div>

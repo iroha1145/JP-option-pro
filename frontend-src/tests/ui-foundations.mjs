@@ -94,6 +94,21 @@ test('排版基础：标题均匀断行、标签不被误选中、字重只用�
   }
 });
 
+test('排版：说明文字用字阶自带行高，表头不做全大写加字距，新闻标题限制行宽', async () => {
+  for (const file of await walk(src)) {
+    if (!/\.tsx?$/.test(file)) continue;
+    const text = codeOf(await readFile(file, 'utf8'));
+    const rel = path.relative(src, file);
+    // 13px 的多行说明不压成 16px 行高（约 1.23 倍，低于 1.4 到 1.6 的可读范围）。
+    assert.doesNotMatch(text, /text-micro\s+leading-\[16px\]/, rel);
+    assert.doesNotMatch(text, /\buppercase\b[^'"`]*tracking-\[/, rel);
+  }
+  const tailwind = await readFile(path.resolve(src, '..', 'tailwind.config.js'), 'utf8');
+  assert.match(tailwind, /body:\s*\['1rem',\s*\{\s*lineHeight:\s*'1\.625'/);
+  assert.match(tailwind, /micro:\s*\['\.8125rem',\s*\{\s*lineHeight:\s*'1\.4'/);
+  assert.match(await code('pages/News.tsx'), /<h3 className="mt-2 max-w-prose /);
+});
+
 test('每个页面都放在同一套页面堆叠里，整页不会被内容撑宽', async () => {
   const css = await code('index.css');
   assert.match(css, /\.page-stack\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);

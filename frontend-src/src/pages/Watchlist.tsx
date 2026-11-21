@@ -214,7 +214,7 @@ export default function Watchlist() {
             <PointerTooltip
               passthrough
               label={row.sector33_name}
-              content={<span className="text-micro leading-[16px] text-ink-600">{row.sector33_name}</span>}
+              content={<span className="text-micro text-ink-600">{row.sector33_name}</span>}
             >
               <SoftBadge className="max-w-[7.5rem]">
                 <span className="truncate">{row.sector33_name}</span>
@@ -271,7 +271,7 @@ export default function Watchlist() {
               <PointerTooltip
                 passthrough
                 label={t('标记重点')}
-                content={<span className="text-micro leading-[16px] text-ink-600">{t('标记重点')}</span>}
+                content={<span className="text-micro text-ink-600">{t('标记重点')}</span>}
               >
                 <button
                   type="button"
@@ -292,7 +292,7 @@ export default function Watchlist() {
               <PointerTooltip
                 passthrough
                 label={t('从关注移除 {code}', { code: row.display_code })}
-                content={<span className="text-micro leading-[16px] text-ink-600">{t('移出关注')}</span>}
+                content={<span className="text-micro text-ink-600">{t('移出关注')}</span>}
               >
                 <button
                   type="button"
@@ -685,7 +685,7 @@ function WatchCard({
               <PointerTooltip
                 passthrough
                 label={item.sector33_name}
-                content={<span className="text-micro leading-[16px] text-ink-600">{item.sector33_name}</span>}
+                content={<span className="text-micro text-ink-600">{item.sector33_name}</span>}
               >
                 <SoftBadge className="mt-0.5 max-w-[8rem]">
                   <span className="truncate">{item.sector33_name}</span>

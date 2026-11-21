@@ -92,7 +92,7 @@ export default function ScanHistoryPopover({ history }: { history: ScanHistoryEn
                       label={entry.summary}
                       width={240}
                       contentClassName="p-2.5"
-                      content={<span className="block text-micro leading-[16px] text-ink-600">{entry.summary}</span>}
+                      content={<span className="block text-micro text-ink-600">{entry.summary}</span>}
                     >
                       <span className="min-w-0 flex-1 truncate text-micro text-ink-500">{entry.summary}</span>
                     </PointerTooltip>

@@ -93,7 +93,7 @@ export default function DataTable<T>({
                 scope="col"
                 style={c.width ? { width: c.width } : undefined}
                 className={cn(
-                  'border-b border-line px-4 py-2.5 text-eyebrow font-sans uppercase tracking-[0.14em] text-ink-400',
+                  'border-b border-line px-4 py-2.5 text-eyebrow font-sans text-ink-400',
                   c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left',
                   c.sortable && 'select-none',
                 )}

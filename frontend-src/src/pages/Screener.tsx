@@ -675,7 +675,7 @@ export default function Screener() {
                       width={260}
                       contentClassName="p-2.5"
                       content={
-                        <span className="text-micro leading-[16px] text-ink-600">
+                        <span className="text-micro text-ink-600">
                           {t('用{n}分延迟的盘中价筛选，分数与排序仍来自夜间官方数据', {
                             n: overlay.data?.delayed_minutes ?? 15,
                           })}

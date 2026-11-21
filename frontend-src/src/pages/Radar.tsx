@@ -233,7 +233,7 @@ export default function Radar() {
             width={240}
             contentClassName="p-2.5"
             content={
-              <span className="text-micro leading-[16px] text-ink-600">
+              <span className="text-micro text-ink-600">
                 {t('用延迟{n}分的盘中价与夜间枢轴比较', { n: overlay.data?.delayed_minutes ?? 15 })}
               </span>
             }
