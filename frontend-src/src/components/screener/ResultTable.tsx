@@ -13,7 +13,7 @@ import ChangeBadge from '@/components/shared/ChangeBadge';
 import InfoHint from '@/components/shared/InfoHint';
 import SoftBadge from '@/components/shared/SoftBadge';
 import TickPrice from '@/components/shared/TickPrice';
-import { CodeCell } from '@/components/domain';
+import CodeMark from '@/components/shared/CodeMark';
 import { STRENGTH_HINTS } from '@/lib/indicatorHints';
 import RowExpansion from './RowExpansion';
 import { NewsBadge, ScoreCell, SubscoreTicks } from './cells';
@@ -60,8 +60,8 @@ export default function ResultTable({
   stale = false,
 }: ResultTableProps) {
   return (
-    <div tabIndex={0} className={cn('card-surface min-w-0 overflow-x-auto overscroll-x-contain', stale && 'opacity-60')}>
-      <table className="w-full border-collapse">
+    <div tabIndex={0} className={cn('paper-panel min-w-0 overflow-x-auto overscroll-x-contain', stale && 'opacity-60')}>
+      <table className="w-full min-w-[980px] border-collapse">
         <thead>
           <tr className="bg-card-warm">
             <Th width="36px">#</Th>
@@ -100,8 +100,8 @@ export default function ResultTable({
             return (
               <Fragment key={row.canonical_code}>
                 <motion.tr
-                  initial={page === 1 ? { opacity: 0, y: 14 } : false}
-                  animate={{ opacity: 1, y: 0 }}
+                  initial={page === 1 ? { opacity: 0 } : false}
+                  animate={{ opacity: 1 }}
                   transition={{
                     duration: 0.4,
                     ease: EASE_PAPER,
@@ -121,48 +121,57 @@ export default function ResultTable({
                     isOpen && 'bg-paper-2',
                   )}
                 >
-                  <td className="px-3 py-2 tnum text-caption text-ink-400">{startIndex + index + 1}</td>
-                  <td className="px-3 py-2">
-                    <CodeCell displayCode={row.display_code} nameJa={row.name_ja} />
-                    {row.sector33_name ? (
-                      <SoftBadge className="mt-0.5 max-w-[11rem]" title={row.sector33_name}>
-                        <span className="truncate">{row.sector33_name}</span>
-                      </SoftBadge>
-                    ) : (
-                      <span className="block max-w-[180px] truncate pl-0.5 text-micro text-ink-400">—</span>
-                    )}
+                  <td className="px-2.5 py-2 text-caption text-ink-400 tnum">{startIndex + index + 1}</td>
+                  <td className="px-2.5 py-2">
+                    <span className="flex items-center gap-2.5">
+                      <CodeMark code={row.display_code} size={28} />
+                      <span className="min-w-0">
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <span className="tnum text-body-s font-medium text-ink-800">{row.display_code}</span>
+                          {row.sector33_name && (
+                            <SoftBadge className="max-w-[8rem]" title={row.sector33_name}>
+                              <span className="truncate">{row.sector33_name}</span>
+                            </SoftBadge>
+                          )}
+                        </span>
+                        <span className="block max-w-[220px] truncate text-micro text-ink-400" title={row.name_ja ?? undefined}>{row.name_ja ?? '—'}</span>
+                      </span>
+                    </span>
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-2.5 py-2">
                     <ScoreCell score={score} index={index} />
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-2.5 py-2">
                     {row.classification ? (
                       <SoftBadge>{t(row.classification)}</SoftBadge>
                     ) : (
                       <span className="text-ink-300">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-2.5 py-2">
                     <SubscoreTicks row={row} tipSide={index < 3 ? 'bottom' : 'top'} />
                   </td>
-                  <td className="px-3 py-2 text-right">
-                    <TickPrice
-                      flash={flashes[row.canonical_code]}
-                      className="tnum text-body-s text-ink-900"
-                    >
-                      {fmtPrice(quote.price)}
-                    </TickPrice>
-                    <span className="ml-1.5 align-middle">
-                      <ChangeBadge value={quote.change} size="sm" />
+                  <td className="px-2.5 py-2 text-right">
+                    <span className="inline-flex flex-col items-end">
+                      <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+                        <TickPrice
+                          flash={flashes[row.canonical_code]}
+                          className="tnum text-body-s text-ink-900"
+                        >
+                          {fmtPrice(quote.price)}
+                        </TickPrice>
+                        <ChangeBadge value={quote.change} size="sm" />
+                      </span>
+                      <span className="whitespace-nowrap text-micro text-ink-400">{quote.live ? t('盘中') : t('收盘')}</span>
                     </span>
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-2.5 py-2">
                     <NewsBadge summary={news[row.canonical_code]} loaded={newsLoaded} tipSide={index < 3 ? 'bottom' : 'top'} />
                   </td>
-                  <td className="px-3 py-2 text-right tnum text-body-s text-ink-600">
+                  <td className="px-2.5 py-2 text-right text-body-s text-ink-600 tnum">
                     {fmtYenCompact(row.avg_turnover_20d)}
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="px-2.5 py-2 text-right">
                     <button
                       type="button"
                       onClick={() => onToggle(row.canonical_code)}
@@ -218,9 +227,9 @@ export default function ResultTable({
               onClick={() => onPageChange(p)}
               aria-current={p === page ? 'page' : undefined}
               className={cn(
-                'mobile-icon-target flex size-7 items-center justify-center rounded-sm border tnum text-caption tnum transition-colors duration-fast',
+                'mobile-icon-target flex size-7 items-center justify-center rounded-pill border tnum text-caption transition-colors duration-fast',
                 p === page
-                  ? 'border-brand-600 bg-brand-600 text-white shadow-chip'
+                  ? 'border-brand-600 bg-brand-600 text-on-accent'
                   : 'border-line text-ink-500 hover:border-brand-400 hover:text-brand-600',
               )}
             >
@@ -249,7 +258,7 @@ function Th({
     <th
       style={width ? { width } : undefined}
       className={cn(
-        'whitespace-nowrap border-b border-line px-3 py-2.5 text-eyebrow font-sans text-ink-400',
+        'whitespace-nowrap border-b border-line px-2.5 py-2.5 text-caption text-ink-400',
         align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left',
       )}
     >
@@ -275,7 +284,7 @@ function PageButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
-      className="mobile-icon-target flex size-7 items-center justify-center rounded-sm border border-line text-ink-500 shadow-btn transition-colors hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
+      className="mobile-icon-target flex size-7 items-center justify-center rounded-pill border border-line text-ink-500 shadow-btn transition-colors hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
     >
       {children}
     </button>

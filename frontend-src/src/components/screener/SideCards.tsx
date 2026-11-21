@@ -25,13 +25,13 @@ const TIERS: Tier[] = ['S', 'A', 'B', 'C', 'D'];
 
 /* ---------------- 市场形态 6 维 ---------------- */
 
-const REGIME_DIMS: { key: keyof MarketRegime['dims']; label: string; en: string }[] = [
-  { key: 'index_trend', label: t('指数趋势'), en: 'INDEX TREND' },
-  { key: 'momentum', label: t('市场动量'), en: 'MOMENTUM' },
-  { key: 'breadth', label: t('市场广度'), en: 'BREADTH' },
-  { key: 'volume', label: t('量能配合'), en: 'VOLUME' },
-  { key: 'risk_appetite', label: t('风险偏好'), en: 'RISK APPETITE' },
-  { key: 'risk_on_spread', label: t('强弱价差'), en: 'RISK-ON SPREAD' },
+const REGIME_DIMS: { key: keyof MarketRegime['dims']; label: string }[] = [
+  { key: 'index_trend', label: t('指数趋势') },
+  { key: 'momentum', label: t('市场动量') },
+  { key: 'breadth', label: t('市场广度') },
+  { key: 'volume', label: t('量能配合') },
+  { key: 'risk_appetite', label: t('风险偏好') },
+  { key: 'risk_on_spread', label: t('强弱价差') },
 ];
 
 export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
@@ -39,13 +39,13 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
     <div className="card-surface p-5">
       <div className="flex items-baseline justify-between">
         <p className="eyebrow">
-          {t('市场形态 · MARKET REGIME')}
+          {t('市场形态')}
           <InfoHint hint={STRENGTH_HINTS.marketRegime} side="bottom" size={12} className="ml-1" />
         </p>
         {regime.score !== null ? (
           <span className="metric-value text-data-m text-ink-900 tnum">{regime.score}</span>
         ) : (
-          <span className="tnum text-micro text-ink-300">{t('6 维')}</span>
+          <span className="tnum text-micro text-ink-400">{t('6 维')}</span>
         )}
       </div>
       {(regime.label || regime.spread_label) && (
@@ -76,10 +76,7 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
                 contentClassName="p-3"
                 content={
                   <>
-                    <span className="flex items-baseline justify-between">
-                      <span className="text-caption font-medium text-ink-800">{dim.label}</span>
-                      <span className="tnum text-micro text-ink-400">{dim.en}</span>
-                    </span>
+                    <span className="block text-caption font-medium text-ink-800">{dim.label}</span>
                     {hint && <span className="mt-1.5 block text-micro text-ink-500">{hint.body}</span>}
                     <span className="mt-1.5 block tnum text-caption text-brand-600">
                       {value !== null ? `${Math.round(value * 10) / 10} / 100` : t('暂无数据')}
@@ -258,7 +255,7 @@ export function MethodCard({
                   <button
                     type="button"
                     onClick={onRetry}
-                    className="mobile-control-target mt-2 flex items-center gap-1.5 rounded-pill border border-line px-2.5 py-1 text-caption text-ink-600 shadow-btn transition-colors hover:border-brand-400 hover:text-brand-600"
+                    className="control-button mobile-control-target mt-2"
                   >
                     <Icon name="refresh" size={12} />
                     {t('重试')}

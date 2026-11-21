@@ -93,7 +93,8 @@ jobs:
           node --experimental-strip-types --test \
             frontend-src/tests/ui-foundations.mjs \
             frontend-src/tests/theme-boot.mjs \
-            frontend-src/tests/magnetic-sheet.mjs
+            frontend-src/tests/magnetic-sheet.mjs \
+            frontend-src/tests/radar-group-signals.mjs
 
       - name: UI viewport and gesture regression
         working-directory: frontend-src

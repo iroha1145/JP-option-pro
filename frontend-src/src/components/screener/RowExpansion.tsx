@@ -28,9 +28,11 @@ export interface RowExpansionProps {
   live?: { live_price: number; live_change_pct?: number; live_pct_from_high_252?: number | null };
   weights: Record<string, number> | null;
   canManageWatchlist: boolean;
+  /** card：手机与平板卡片内单列；table：表格行内三列。 */
+  layout?: 'card' | 'table';
 }
 
-export default function RowExpansion({ row, weights, canManageWatchlist, live }: RowExpansionProps) {
+export default function RowExpansion({ row, weights, canManageWatchlist, live, layout = 'table' }: RowExpansionProps) {
   const [added, setAdded] = useState(false);
   const technicals = row.structure.technicals;
   const priceAction = row.structure.price_action;
@@ -40,11 +42,11 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
   const warnings = explanationLines(row.warning_items, row.warnings);
   const reasons = explanationLines(row.reason_items, row.reasons);
   return (
-    <div className="grid grid-cols-1 gap-x-8 gap-y-5 border-t border-line bg-card-warm/60 px-4 py-4 md:grid-cols-3">
+    <div className={cn('grid grid-cols-1 gap-x-8 gap-y-5 border-t border-line bg-card-warm/60 px-4 py-4', layout === 'table' && 'md:grid-cols-3')}>
       {/* ① 六族分项 */}
       <div>
         <p className="eyebrow">
-          {t('分项强度 · BREAKDOWN')}
+          {t('分项强度')}
           <InfoHint hint={STRENGTH_HINTS.families} side="bottom" size={11} className="ml-1" />
         </p>
         <div className="mt-3 grid grid-cols-[max-content_minmax(0,1fr)_max-content] gap-y-2.5">
@@ -67,7 +69,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
                 </span>
                 <span className="text-right tnum text-caption text-ink-800">
                   {value !== null ? Math.round(value) : '—'}
-                  {weight !== null && <span className="ml-1 text-micro text-ink-300">×{Math.round(weight * 100)}%</span>}
+                  {weight !== null && <span className="ml-1 text-micro text-ink-400">×{Math.round(weight * 100)}%</span>}
                 </span>
               </div>
             );
@@ -93,7 +95,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
       {/* ② 结构信号（夜间结构分析，随行返回） */}
       <div>
         <p className="eyebrow">
-          {t('结构信号 · STRUCTURE')}
+          {t('结构信号')}
           <InfoHint hint={STRUCTURE_HINTS.market_structure} side="bottom" size={11} className="ml-1" />
         </p>
         <div className="mt-3 space-y-2 text-caption">
@@ -161,7 +163,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
         <div className="mt-3 flex flex-col items-start gap-2">
           <Link
             to={`/stock/${row.canonical_code}`}
-            className="flex items-center gap-1.5 mobile-control-target rounded-pill border border-line bg-card px-3 py-1.5 text-caption text-ink-600 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600"
+            className="control-button mobile-control-target"
           >
             <Icon name="arrow-up-right" size={13} />
             {t('打开详情')}
@@ -178,7 +180,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
                   /* 已在自选等情况静默 */
                 }
               }}
-              className="flex items-center gap-1.5 mobile-control-target rounded-pill border border-line bg-card px-3 py-1.5 text-caption text-ink-600 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
+              className="control-button mobile-control-target"
             >
               <Icon name={added ? 'check' : 'plus'} size={13} />
               {added ? t('已加入关注') : t('加入关注')}

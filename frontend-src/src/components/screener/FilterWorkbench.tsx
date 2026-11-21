@@ -33,13 +33,21 @@ import { t } from '@/i18n/core';
 const EASE_PAPER = [0.16, 1, 0.3, 1] as [number, number, number, number];
 const SECTOR_COLLAPSE_AT = 6;
 
-const TIER_OPTIONS: { value: TierFilter; label: string }[] = [
+const TIER_OPTIONS: { value: TierFilter; label: string; tone?: 'ok' | 'warn' }[] = [
   { value: 'all', label: t('全部') },
-  { value: 'S', label: 'S' },
+  { value: 'S', label: 'S', tone: 'ok' },
   { value: 'A', label: 'A' },
   { value: 'B', label: 'B' },
-  { value: 'C', label: 'C' },
+  { value: 'C', label: 'C', tone: 'warn' },
 ];
+/* 偏好由冷到暖：稳健天蓝、均衡品牌色、进取橙，与美国站一致。 */
+const PROFILE_TONE = { conservative: 'sky', balanced: undefined, aggressive: 'orange' } as const;
+
+/* 多选芯片：桌面端灰底胶囊，选中浅品牌底；对勾从 0 宽长出（同美国站 choice-chip）。 */
+const CHOICE_CHECK =
+  'inline-flex w-0 -mr-1.5 overflow-hidden opacity-0 transition-[width,margin,opacity] duration-fast group-aria-pressed/chip:mr-0 group-aria-pressed/chip:w-[13px] group-aria-pressed/chip:opacity-100 motion-reduce:transition-none';
+const CHOICE_CHIP =
+  'group/chip shrink-0 md:border-transparent md:bg-[var(--control-track)] md:px-[14px] md:text-ink-700 md:aria-pressed:border-brand-600/25 md:aria-pressed:bg-brand-50 md:aria-pressed:text-brand-700 md:[&:not([aria-pressed=true])]:hover:bg-line md:[&:not([aria-pressed=true])]:hover:text-ink-900';
 
 function TierSegmented({
   value,
@@ -65,7 +73,7 @@ function TierSegmented({
       renderLabel={(option, active) => (
         <span className="flex items-center gap-1.5">
           {option.label}
-          <span className={cn('min-w-4 rounded-xs px-1 py-px tnum text-micro', active ? 'bg-paper-2 text-ink-600' : 'text-ink-400')}>
+          <span className={cn('min-w-[calc(2ch+0.5rem)] rounded-sm px-1 py-px text-center tnum text-micro', active ? 'bg-paper-2 text-ink-600' : 'text-ink-400')}>
             {counts ? counts[option.value] : '—'}
           </span>
         </span>
@@ -76,7 +84,7 @@ function TierSegmented({
 
 function FieldLabel({ children, hint }: { children: string; hint?: ScoreHint }) {
   return (
-    <p className="mb-2 flex items-center gap-0.5 text-caption font-medium text-ink-500">
+    <p className="mb-2 flex items-center gap-0.5 text-caption text-ink-500">
       {children}
       {hint && <InfoHint hint={hint} side="bottom" size={11} />}
     </p>
@@ -123,7 +131,7 @@ function PriceInput({
   }
   return (
     <div className="relative min-w-0">
-      <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 tnum text-caption text-ink-300">¥</span>
+      <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 tnum text-caption text-ink-400">¥</span>
       <input
         value={text}
         inputMode="decimal"
@@ -136,7 +144,7 @@ function PriceInput({
           const number = Number(raw);
           onCommit(raw === '' || !Number.isFinite(number) ? null : number);
         }}
-        className="screener-price-input h-11 w-full min-w-0 rounded-[var(--r-control)] border border-line/70 bg-paper-2/50 pl-6 pr-2 tnum text-caption text-ink-800 placeholder:text-ink-300 hover:border-line-strong focus-visible:border-brand-400"
+        className="screener-price-input h-11 w-full min-w-0 rounded-[var(--r-control)] border border-line/70 bg-paper-2/50 pl-6 pr-2 tnum text-caption text-ink-800 placeholder:text-ink-400 hover:border-line-strong focus-visible:border-brand-400"
       />
     </div>
   );
@@ -155,7 +163,8 @@ export function ScanButton({
   onScan: () => void;
   className?: string;
 }) {
-  const base = 'inset 0 1px 0 rgba(255,255,255,.12), 0 1px 2px rgba(16,24,40,.12), 0 3px 7px -4px rgba(16,24,40,.24)';
+  /* 基础影读 CSS 变量；脉冲环走内联 boxShadow，会压掉 class 阴影，所以基础影并进每一帧。 */
+  const base = 'var(--btn-hi-shadow)';
   return (
     <motion.button
       type="button"
@@ -163,15 +172,11 @@ export function ScanButton({
       disabled={scanning}
       animate={
         dirty && !scanning
-          ? { boxShadow: [`${base}, 0 0 0 0 rgba(46,70,224,.38)`, `${base}, 0 0 0 9px rgba(46,70,224,0)`, `${base}, 0 0 0 0 rgba(46,70,224,0)`] }
-          : { boxShadow: `${base}, 0 0 0 0 rgba(46,70,224,0)` }
+          ? { boxShadow: [`${base}, 0 0 0 0 color-mix(in srgb, var(--brand-600) 38%, transparent)`, `${base}, 0 0 0 9px transparent`, `${base}, 0 0 0 0 transparent`] }
+          : { boxShadow: `${base}, 0 0 0 0 transparent` }
       }
       transition={dirty && !scanning ? { duration: 1.2, repeat: 2 } : { duration: 0.16 }}
-      className={cn(
-        'scan-trigger relative min-h-11 min-w-[168px] overflow-hidden rounded-pill bg-brand-600 px-4 text-white shadow-btn-hi transition-[filter] duration-fast',
-        scanning ? 'cursor-wait' : 'hover:brightness-105',
-        className,
-      )}
+      className={cn('btn-primary scan-trigger relative min-h-11 min-w-[168px] overflow-hidden', className)}
       aria-live="polite"
       aria-busy={scanning}
       data-testid="screener-apply-filters"
@@ -185,10 +190,10 @@ export function ScanButton({
           aria-hidden="true"
         />
       )}
-      <span className="relative z-10 flex items-center justify-center gap-2">
+      <span className="relative z-10 flex flex-wrap items-center justify-center gap-2">
         {scanning ? (
           <>
-            <span className="size-[18px] animate-spin rounded-full border-2 border-white/35 border-t-white" aria-hidden="true" />
+            <span className="size-[18px] animate-spin rounded-full border-2 border-[color-mix(in_srgb,var(--on-accent)_35%,transparent)] border-t-on-accent" aria-hidden="true" />
             <span className="text-body-s font-medium">{t('扫描中…')}</span>
           </>
         ) : (
@@ -196,7 +201,7 @@ export function ScanButton({
             <Icon name="crosshair" size={16} />
             <span className="text-body-s font-medium">{t('开始扫描')}</span>
             {universeCount !== null && (
-              <span className="tnum text-micro text-white/70">≈{universeCount} {t('只')}</span>
+              <span className="tnum text-micro text-on-accent">≈{universeCount} {t('只')}</span>
             )}
           </>
         )}
@@ -260,8 +265,8 @@ export default function FilterWorkbench({
   };
 
   const row = {
-    hidden: { opacity: 0, y: 14 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.48, ease: EASE_PAPER } },
+    hidden: { opacity: 0 },
+    show: { opacity: 1, transition: { duration: 0.48, ease: EASE_PAPER } },
   };
 
   const presetChips = [
@@ -301,8 +306,8 @@ export default function FilterWorkbench({
       aria-label={t('筛选工作台')}
       data-testid="screener-filter-workbench"
     >
-      <motion.div variants={row} className="flex min-w-0 flex-wrap items-end gap-x-5 gap-y-4">
-        <div className="w-full min-w-0 sm:w-auto">
+      <motion.div variants={row} className="grid min-w-0 grid-cols-1 items-end gap-5 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
+        <div className="min-w-0 sm:col-span-2 xl:col-span-1">
           <FieldLabel hint={STRENGTH_HINTS.tierCounts}>{t('强度分档')}</FieldLabel>
           <TierSegmented
             value={draft.tier}
@@ -311,25 +316,27 @@ export default function FilterWorkbench({
             onChange={(tier) => patch({ tier, presetId: null, minScore: null })}
           />
         </div>
-        <div className="w-full min-w-0 sm:w-auto">
+        <div className="min-w-0">
           <FieldLabel hint={STRENGTH_HINTS.timeframe}>{t('周期')}</FieldLabel>
           <Segmented<Timeframe>
             options={(['short', 'mid', 'long', 'all'] as const).map((value) => ({ value, label: TIMEFRAME_CN[value] }))}
             value={draft.timeframe}
             onChange={(timeframe) => patch({ timeframe })}
             ariaLabel={t('周期')}
+            className="max-w-full flex-wrap"
           />
         </div>
         <div className="min-w-0">
           <FieldLabel hint={STRENGTH_HINTS.profile}>{t('偏好')}</FieldLabel>
           <Segmented<ProfilePref>
-            options={(['conservative', 'balanced', 'aggressive'] as const).map((value) => ({ value, label: PROFILE_CN[value] }))}
+            options={(['conservative', 'balanced', 'aggressive'] as const).map((value) => ({ value, label: PROFILE_CN[value], tone: PROFILE_TONE[value] }))}
             value={draft.profile}
             onChange={(profile) => patch({ profile, presetId: null })}
             ariaLabel={t('偏好')}
+            className="max-w-full flex-wrap"
           />
         </div>
-        <div>
+        <div className="min-w-0">
           <FieldLabel hint={STRENGTH_HINTS.topN}>{t('返回数量')}</FieldLabel>
           <SelectField
             ariaLabel={t('返回数量 Top N')}
@@ -343,13 +350,13 @@ export default function FilterWorkbench({
           dirty={dirty}
           universeCount={universeCount}
           onScan={onScan}
-          className="w-full sm:ml-auto sm:w-auto"
+          className="w-full sm:col-span-2 xl:col-span-1"
         />
       </motion.div>
 
       <details className="group/filters mt-5 border-t border-line/70 pt-3" data-testid="screener-advanced-filters">
-        <summary className="disclosure-trigger flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-2 min-h-11 rounded-[var(--r-control)] py-2 text-caption text-ink-500 transition-colors hover:text-ink-800 [&::-webkit-details-marker]:hidden">
-          <span className="inline-flex shrink-0 items-center gap-2 font-medium text-ink-700">
+        <summary className="disclosure-trigger flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-2 min-h-11 rounded-[var(--r-control)] py-2 text-caption text-ink-500 transition-colors duration-fast hover:text-ink-800 [&::-webkit-details-marker]:hidden">
+          <span className="inline-flex shrink-0 items-center gap-2 text-ink-700">
             <Icon name="filter-funnel" size={14} className="text-ink-400" />
             {t('更多筛选')}
             <Icon name="chevron-down" size={13} className="text-ink-400 transition-transform group-open/filters:rotate-180" />
@@ -374,14 +381,14 @@ export default function FilterWorkbench({
               <div className="t-skel flex gap-2" data-state="loading" aria-hidden="true">
                 <div className="t-skel-skeleton is-pulsing flex gap-2">
                   {Array.from({ length: 3 }, (_, i) => (
-                    <SkeletonBlock key={i} className="h-8 w-20 rounded-md" />
+                    <SkeletonBlock key={i} className="h-8 w-20 rounded-pill" />
                   ))}
                 </div>
                 <div className="t-skel-content" />
               </div>
             ) : (
               <SelectionViewport>
-                <div className="mobile-selection-rail flex flex-wrap gap-2">
+                <div className="mobile-selection-rail flex flex-wrap items-center gap-2">
                   {presetChips.map((preset) => {
                     const active = draft.presetId === preset.id;
                     const button = (
@@ -389,6 +396,7 @@ export default function FilterWorkbench({
                         key={preset.id}
                         onClick={() => applyPreset(preset.id)}
                         active={active}
+                        className={CHOICE_CHIP}
                       >
                         <Icon name="spark-ai" size={13} className={active ? 'text-brand-600' : 'text-ink-400'} />
                         {preset.name}
@@ -418,40 +426,47 @@ export default function FilterWorkbench({
               <div className="t-skel flex flex-wrap gap-2" data-state="loading" aria-hidden="true">
                 <div className="t-skel-skeleton is-pulsing flex flex-wrap gap-2">
                   {Array.from({ length: 5 }, (_, i) => (
-                    <SkeletonBlock key={i} className="h-7 w-16 rounded-md" />
+                    <SkeletonBlock key={i} className="h-7 w-16 rounded-pill" />
                   ))}
                 </div>
                 <div className="t-skel-content" />
               </div>
             ) : (
               <SelectionViewport>
-                <div className="mobile-selection-rail flex flex-wrap items-center gap-1.5">
+                <div className="mobile-selection-rail flex flex-wrap items-center gap-2">
                   {visibleSectors.map((sector) => (
                     <FilterButton
                       key={sector.id}
                       onClick={() => toggleSector(sector.id)}
                       active={draft.sectors.includes(sector.id)}
-                      className="shrink-0"
+                      className={CHOICE_CHIP}
                     >
+                      {/* 多选：选中时对勾从 0 宽长出，无障碍名称仍只是行业名 */}
+                      <span className={CHOICE_CHECK} aria-hidden="true">
+                        <Icon name="check" size={13} />
+                      </span>
                       {sector.name}
                     </FilterButton>
                   ))}
+                  {/* 展开与收起和芯片同形同色，字色浅一档，箭头指明是展开不是筛选项 */}
                   {hiddenCount > 0 && (
                     <button
                       type="button"
                       onClick={() => setShowAllSectors(true)}
-                      className="mobile-control-target flex h-8 shrink-0 items-center whitespace-nowrap rounded-pill bg-paper-2 px-2.5 tnum text-caption text-ink-500 transition-colors hover:bg-paper hover:text-ink-800"
+                      className={cn('control-button tnum', CHOICE_CHIP, 'md:text-ink-500')}
                     >
                       +{hiddenCount}
+                      <Icon name="chevron-down" size={13} />
                     </button>
                   )}
                   {showAllSectors && sectorOptions.length > SECTOR_COLLAPSE_AT && (
                     <button
                       type="button"
                       onClick={() => setShowAllSectors(false)}
-                      className="mobile-control-target flex h-8 shrink-0 items-center whitespace-nowrap rounded-pill px-2 text-caption text-ink-400 transition-colors hover:text-ink-600"
+                      className={cn('control-button', CHOICE_CHIP, 'md:text-ink-500')}
                     >
                       {t('收起')}
+                      <Icon name="chevron-down" size={13} className="rotate-180" />
                     </button>
                   )}
                 </div>
