@@ -1313,6 +1313,8 @@ export const DICT: Record<string, [string, string, string?]> = {
   '存在信用交易限制': ['Margin restriction active', '信用規制あり'],
   '信用限制状态待更新': ['Margin restriction status pending update', '信用規制状態は未更新'],
   '信息不足，未计重要度': ['Insufficient context to score importance', '情報不足のため重要度未算出'],
+  // 旧文案：已入库的新闻仍带这一句，保留词条并用第三项覆盖中文显示。
+  '可用证据不足，未补成中性分数': ['Insufficient context to score importance', '情報不足のため重要度未算出', '信息不足，未计重要度'],
   '近期更新的报告义务中机构 {n} 家，公开持仓合计 {ratio}。': ['{n} active institutional filers, totaling {ratio} disclosed short.', '直近更新のある報告義務機関は {n} 社、公開空売り残高合計は {ratio}。'],
   '当前无近期更新的报告义务中机构，公开持仓比例为 0。': ['No recently updated institutional filings; disclosed short ratio is 0.', '直近更新のある報告義務機関はなく、公開空売り残高比率は 0 です。'],
   '公开空头拥挤度：高（近期机构 ≥ 4 家，或公开持仓 ≥ 4%）。': ['Short crowding: High (≥4 recent filers or ≥4% disclosed).', '公開空売りの混雑度：高（直近機関 4社以上、または公開残高 4%以上）。'],
@@ -1323,7 +1325,7 @@ export const DICT: Record<string, [string, string, string?]> = {
   '公开持仓回补约 {days} 天。': ['Disclosed short equals ~{days} days to cover.', '公開残高の買い戻し日数は約 {days} 日。'],
   '仅统计达到披露门槛的持仓，门槛以下未计入。': ['Counts positions at or above the 0.5% threshold only.', '0.5%の開示基準以上の残高のみ集計（基準未満は含まず）。'],
   '仅统计报告义务范围内的减持，跌破门槛后的剩余持仓不可见。': ['Reflects reductions within disclosure scope; positions below 0.5% are no longer reported.', '報告義務範囲内の減少分のみ集計（0.5%未満へ低下後の残高は非開示）。'],
-  '近 20 日与近 5 日净变动方向相反，机构间增减互现。': ['20-day and 5-day net changes point in opposite directions across filers.', '直近20日と5日の純変化が逆方向で、機関間の増減が交錯しています。'],
+  '近 20 日与近 5 日的净变动方向不一致。': ['The 20-day and 5-day net changes do not agree in direction.', '直近20日と直近5日で純変化の向きが一致していません。'],
   '另有 {n} 家已跌破公开披露门槛，未计入合计。': ['{n} additional filer(s) fell below the 0.5% threshold and are excluded.', 'ほかに {n} 社が開示基準（0.5%）を下回り、合計から除外されています。'],
   '另有 {n} 家最后报告在 {days} 个交易日之前，未计入公开持仓；含其在册合计为 {ratio}。': ['{n} filer(s) last reported over {days} trading days ago (excluded above; in-scope total with them is {ratio}).', 'ほかに最終報告が {days} 営業日前の機関が {n} 社あり公開残高から除外（含めた報告義務内合計は {ratio}）。'],
   '另有 {n} 家最后报告在 {days} 个交易日之前，未计入公开持仓。': ['{n} filer(s) last reported over {days} trading days ago and are excluded from disclosed positions.', 'ほかに最終報告が {days} 営業日前の機関が {n} 社あり、公開残高から除外されています。'],

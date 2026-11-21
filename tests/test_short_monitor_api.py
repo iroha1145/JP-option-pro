@@ -292,7 +292,7 @@ def test_directional_states_always_carry_their_caveat():
     covering = explain.describe({"primary_state": states.STATE_COVERING})
     assert "剩余持仓不可见" in covering["caveat"]
     mixed = explain.describe({"primary_state": states.STATE_MIXED})
-    assert "增减互现" in mixed["caveat"]
+    assert "方向不一致" in mixed["caveat"]
 
 
 def test_explanation_never_claims_intent():
