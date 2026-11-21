@@ -1,17 +1,12 @@
-/** 突破雷达 — 美版布局移植：Lead 大卡（K线+枢轴带）→ 信号卡片流 → 生命周期。
- *  数据仍为收盘后日线扫描，Lead 卡的 K 线按需拉取单只标的。 */
+/** 突破雷达 —— 版式照美国站「突破雷达」：页头与范围切换 → 状态带 → 数据覆盖 → 筛选面板
+ *  → 排序说明 → 当日信号（首要大卡 8 栏 + 历史事件 4 栏）→ 其余信号小卡（同股合并、分批显示）。
+ *  数据仍为收盘后日线扫描；盘中价只来自延迟报价叠加层。 */
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link } from 'react-router';
-import { motion } from 'framer-motion';
-import { quotesApi, radarApi, stocksApi, watchlistApi, workerApi } from '@/api/modules';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { quotesApi, radarApi, watchlistApi, workerApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { useTickFlash } from '@/hooks/useTickFlash';
-import { useColorMode } from '@/hooks/useColorMode';
-import { useAppearance } from '@/hooks/useAppearance';
 import TickPrice from '@/components/shared/TickPrice';
-import PointerTooltip from '@/components/shared/PointerTooltip';
-import PriorityRing from '@/components/shared/PriorityRing';
 import Icon from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { remoteState } from '@/hooks/remoteState';
@@ -21,26 +16,24 @@ import EmptyRetryButton from '@/components/shared/EmptyRetryButton';
 import DataTable, { type Column } from '@/components/shared/DataTable';
 import Segmented from '@/components/shared/Segmented';
 import FilterButton from '@/components/shared/FilterButton';
+import MenuSelect from '@/components/shared/MenuSelect';
+import PointerTooltip from '@/components/shared/PointerTooltip';
 import SelectionViewport from '@/components/shared/SelectionViewport';
 import { SkeletonCard } from '@/components/shared/Skeleton';
-import ReactECharts from '@/components/charts/ReactECharts';
-import { CH, baseGrid, categoryAxis, glassTooltip, valueAxis } from '@/lib/chart';
-import { CodeCell, DataThrough, RADAR_STATE_LABELS, ScoreBar, SignalChip, StateChip } from '@/components/domain';
-import StrengthBar from '@/components/shared/StrengthBar';
+import { CodeCell, DataThrough, SignalChip, StateChip } from '@/components/domain';
 import HistoryRail from '@/components/radar/HistoryRail';
+import LeadBigCard from '@/components/radar/LeadBigCard';
+import SignalCards from '@/components/radar/SignalCards';
+import { groupSignalsByStock } from '@/components/radar/groupSignals';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
-import PriceScale from '@/components/radar/PriceScale';
-import ScoreBarsMini from '@/components/radar/ScoreBarsMini';
 import { useAccess } from '@/hooks/useAccess';
 import { useToast } from '@/hooks/useToast';
 import StaleStrip from '@/components/shared/StaleStrip';
-import SoftBadge from '@/components/shared/SoftBadge';
 import SourceNote from '@/components/shared/SourceNote';
-import { RADAR_SCORE_HINTS } from '@/lib/indicatorHints';
-import { DUR_SECTION, EASE_PAPER } from '@/lib/motion';
+import { quoteSourceLabel } from '@/lib/quoteSource';
 import { t } from '@/i18n/core';
-import { fmtDate, fmtPct, fmtPrice, fmtTimeHHMMSS, fmtYenCompact } from '@/lib/format';
-import type { RadarEvent, StockBar } from '@/api/types';
+import { fmtDate, fmtPrice, fmtTimeHHMMSS, fmtYenCompact } from '@/lib/format';
+import type { RadarEvent } from '@/api/types';
 import '@/components/radar.css';
 
 type StateGroup = 'active' | 'confirmed' | 'watching' | 'closed' | 'all';
@@ -52,6 +45,19 @@ const SCORE_CAPS = [
   { value: 80, label: t('80 分以上') },
 ];
 
+const GROUP_OPTIONS: { value: StateGroup; label: string }[] = [
+  { value: 'active', label: t('已触发') },
+  { value: 'confirmed', label: t('已确认') },
+  { value: 'watching', label: t('观察中') },
+  { value: 'closed', label: t('已失效') },
+  { value: 'all', label: t('全部') },
+];
+
+const WATCH_SCOPE_OPTIONS = [
+  { value: 'all', label: t('全部') },
+  { value: 'watchlist', label: t('只看关注') },
+];
+
 const GROUP_STATES: Record<StateGroup, string | undefined> = {
   all: undefined,
   active: 'triggered,confirmed,holding,retesting,retest_held,reaccelerating,extended',
@@ -59,6 +65,9 @@ const GROUP_STATES: Record<StateGroup, string | undefined> = {
   watching: 'discovered,watching',
   closed: 'failed,expired',
 };
+
+/** 接口单次最多返回的事件数；达到上限时如实标注，不把它当全量。 */
+const FETCH_LIMIT = 200;
 
 export default function Radar() {
   const { canRefreshPublicData, canManageWatchlist, principalKey } = useAccess();
@@ -75,7 +84,6 @@ export default function Radar() {
     setLocateId(id);
     if (locateTimer.current) window.clearTimeout(locateTimer.current);
     locateTimer.current = window.setTimeout(() => setLocateId(null), 2000);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   useEffect(
@@ -86,7 +94,7 @@ export default function Radar() {
   );
 
   const query = usePolling(
-    () => radarApi.current(GROUP_STATES[group] ? { states: GROUP_STATES[group], limit: 200 } : { limit: 200 }),
+    () => radarApi.current(GROUP_STATES[group] ? { states: GROUP_STATES[group], limit: FETCH_LIMIT } : { limit: FETCH_LIMIT }),
     120_000,
     [group],
     { identity: group },
@@ -143,10 +151,20 @@ export default function Radar() {
     setLeadId(null);
   }, [group, minScore, onlyWatch]);
 
-  const restEvents = useMemo(
-    () => events.filter((event) => event.event_id !== lead?.event_id),
+  /* 首要卡那只股票的其他信号挂在首要卡上；其余股票按股票合并成小卡。 */
+  const leadSiblings = useMemo(
+    () => (lead ? events.filter((event) => event.canonical_code === lead.canonical_code && event.event_id !== lead.event_id) : []),
     [events, lead],
   );
+  const restGroups = useMemo(
+    () => groupSignalsByStock(events.filter((event) => event.canonical_code !== lead?.canonical_code)),
+    [events, lead],
+  );
+  const restSignalCount = useMemo(
+    () => restGroups.reduce((sum, item) => sum + 1 + item.others.length, 0),
+    [restGroups],
+  );
+  const stockCount = useMemo(() => new Set(events.map((event) => event.canonical_code)).size, [events]);
   const remoteCount = query.data?.events.length ?? 0;
   const filteredEmpty =
     (state === 'ready' || state === 'stale') && remoteCount > 0 && events.length === 0;
@@ -155,78 +173,99 @@ export default function Radar() {
     setOnlyAbovePivot(false);
     setOnlyWatch(false);
   };
+  const filterKey = `${group}:${onlyAbovePivot}:${minScore}`;
+  const cardsKey = `${filterKey}:${onlyWatch}:${watchFilterPending}`;
+
+  /* 「更多筛选」折叠时的一行摘要：写明当前生效的全部条件。 */
+  const filterSummary: [string, string][] = [
+    [t('查看范围'), onlyWatch ? t('只看关注') : t('全部')],
+    [t('状态'), GROUP_OPTIONS.find((option) => option.value === group)?.label ?? ''],
+    [t('评分'), SCORE_CAPS.find((cap) => cap.value === minScore)?.label ?? ''],
+    ...(onlyAbovePivot ? [[t('盘中站上枢轴'), t('已启用')] as [string, string]] : []),
+  ];
+
+  const historyRail = (
+    <HistoryRail events={events} filterKey={filterKey} onPromoteLead={promoteLead} />
+  );
+  const overlayOn = Boolean(overlay.data?.enabled);
 
   return (
     <div className="page-stack">
       <PageHeader
         section="screener"
         title={t('突破雷达')}
-        description={t('收盘后扫描日线，追踪价格突破与形态变化')}
         meta={
-          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-3 gap-y-2 [&>button]:shrink-0 [&>button]:whitespace-nowrap">
-            <DataThrough date={query.data?.scan_date} className="min-w-0 max-w-full [&_[data-soft-badge]]:whitespace-normal" />
-            {query.lastUpdatedAt && (
-              <span className="shrink-0 whitespace-nowrap tnum text-caption text-ink-400">
-                {t('更新')} {fmtTimeHHMMSS(query.lastUpdatedAt)}
+          <>
+            <Segmented
+              options={WATCH_SCOPE_OPTIONS}
+              value={onlyWatch ? 'watchlist' : 'all'}
+              onChange={(value) => setOnlyWatch(value === 'watchlist')}
+              ariaLabel={t('查看范围')}
+              className="max-w-full flex-wrap"
+            />
+            {watchFilterPending && (
+              <span className="text-caption text-ink-400">
+                {watchFailed ? t('关注读取失败 · 暂显示全部') : t('关注加载中 · 暂显示全部')}
               </span>
             )}
-            {canRefreshPublicData && (
-              <ForceRefreshButton
-                onClick={async () => {
-                  if (rescanning) return;
-                  setRescanning(true);
-                  try {
-                    await workerApi.trigger('radar_refresh');
-                    toast.success(t('重算雷达'), t('已提交'));
-                    query.refresh({ force: true });
-                  } catch (error) {
-                    toast.error(t('重算雷达'), String((error as Error).message ?? error));
-                  } finally {
-                    setRescanning(false);
-                  }
-                }}
-                spinning={rescanning}
-                label={t('重算雷达')}
-                title={t('重算雷达')}
-              />
-            )}
-          </div>
+          </>
         }
       />
 
-      <div className="radar-filterbar paper-panel page-toolbar p-5 sm:p-6">
-        <Segmented<StateGroup>
-          options={[
-            { value: 'active', label: t('已触发') },
-            { value: 'confirmed', label: t('已确认') },
-            { value: 'watching', label: t('观察中') },
-            { value: 'closed', label: t('已失效') },
-            { value: 'all', label: t('全部') },
-          ]}
-          value={group}
-          onChange={setGroup}
-        />
+      {/* 状态带：日本站只有收盘后扫描，没有扫描服务与下次扫描；只写接口真有的信息。 */}
+      <div className="radar-status paper-panel grid min-w-0 grid-cols-2 gap-4 p-4 sm:gap-6 sm:p-6 xl:grid-cols-4">
+        <div className="col-span-2 min-w-0 space-y-3 xl:col-span-1">
+          <span className="inline-flex items-center gap-2 text-body-s text-ink-700">
+            <span className={cn('size-2 shrink-0 rounded-full', query.data ? 'bg-ok-600' : 'bg-ink-300')} aria-hidden="true" />
+            {t('收盘后扫描日线，追踪价格突破与形态变化')}
+          </span>
+        </div>
+        <dl className="min-w-0 space-y-2 text-caption">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <dt className="text-ink-400">{t('数据截至')}</dt>
+            <dd className="tnum text-ink-700">{fmtDate(query.data?.scan_date)}</dd>
+          </div>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <dt className="text-ink-400">{t('更新')}</dt>
+            <dd className="tnum text-ink-700">{query.lastUpdatedAt ? fmtTimeHHMMSS(query.lastUpdatedAt) : '—'}</dd>
+          </div>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <dt className="text-ink-400">{t('活跃信号')}</dt>
+            <dd className="tnum text-ink-700">
+              {query.data ? remoteCount : '—'}
+              {remoteCount >= FETCH_LIMIT && <span className="ml-1 text-ink-400">{t('（单次最多 {n} 条）', { n: FETCH_LIMIT })}</span>}
+            </dd>
+          </div>
+        </dl>
+        <dl className="min-w-0 space-y-2 text-caption">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <dt className="text-ink-400">{t('盘中报价')}</dt>
+            <dd className="text-ink-700">
+              {!overlay.data ? '—' : overlayOn ? quoteSourceLabel(overlay.data).text : t('未叠加')}
+            </dd>
+          </div>
+        </dl>
+        <dl className="min-w-0 space-y-2 text-caption">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <dt className="text-ink-400">{t('涉及股票')}</dt>
+            <dd className="tnum text-ink-700">{query.data ? t('{n} 只', { n: new Set(query.data.events.map((event) => event.canonical_code)).size }) : '—'}</dd>
+          </div>
+        </dl>
+      </div>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-caption text-ink-500">
+        <DataThrough date={query.data?.scan_date} className="min-w-0 max-w-full [&_[data-soft-badge]]:whitespace-normal" />
+      </div>
+
+      {/* 状态收成一个下拉；评分门槛收进「更多筛选」，折叠时一行摘要写明全部条件。 */}
+      <div className="radar-filterbar paper-panel flex min-w-0 flex-wrap items-center gap-x-5 gap-y-4 p-5 sm:p-6">
         <div className="flex max-w-full flex-wrap items-center gap-2">
           <span className="flex items-center gap-1.5 text-caption text-ink-500">
             <Icon name="filter-funnel" size={13} />
-            {t('评分')}
+            {t('状态')}
           </span>
-          <SelectionViewport>
-            <div className="filter-group" role="group" aria-label={t('评分')}>
-              {SCORE_CAPS.map((cap) => (
-                <FilterButton
-                  key={cap.value}
-                  active={minScore === cap.value}
-                  onClick={() => setMinScore(cap.value)}
-                  aria-label={t('评分{label}', { label: cap.label })}
-                >
-                  {cap.label}
-                </FilterButton>
-              ))}
-            </div>
-          </SelectionViewport>
+          <MenuSelect<StateGroup> ariaLabel={t('状态')} value={group} onChange={setGroup} options={GROUP_OPTIONS} />
         </div>
-        {overlay.data?.enabled && (
+        {overlayOn && (
           <PointerTooltip
             passthrough
             label={t('用延迟{n}分的盘中价与夜间枢轴比较', { n: overlay.data?.delayed_minutes ?? 15 })}
@@ -241,12 +280,8 @@ export default function Radar() {
             <button
               type="button"
               onClick={() => setOnlyAbovePivot((v) => !v)}
-              className={cn(
-                'mobile-control-target flex items-center gap-1.5 rounded-pill border px-2.5 py-1.5 text-caption transition-colors',
-                onlyAbovePivot
-                  ? 'border-up-600/40 bg-up-50 text-up-700'
-                  : 'border-line bg-card text-ink-600 hover:border-brand-400',
-              )}
+              aria-pressed={onlyAbovePivot}
+              className="control-button mobile-control-target"
             >
               <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
               {t('盘中站上枢轴')}
@@ -254,22 +289,7 @@ export default function Radar() {
             </button>
           </PointerTooltip>
         )}
-        <span className="flex max-w-full flex-wrap items-center gap-1.5 sm:ml-auto">
-          <Segmented
-            options={[
-              { value: 'all', label: t('全部') },
-              { value: 'watchlist', label: t('只看关注') },
-            ]}
-            value={onlyWatch ? 'watchlist' : 'all'}
-            onChange={(value) => setOnlyWatch(value === 'watchlist')}
-            ariaLabel={t('查看范围')}
-            className="max-w-full flex-wrap"
-          />
-          {watchFilterPending && (
-            <span className="text-micro text-ink-400">
-              {watchFailed ? t('关注读取失败 · 暂显示全部') : t('关注加载中 · 暂显示全部')}
-            </span>
-          )}
+        <span className="flex flex-wrap items-center gap-3 sm:ml-auto">
           <Segmented<ViewMode>
             options={[
               { value: 'cards', label: t('卡片') },
@@ -278,37 +298,89 @@ export default function Radar() {
             value={view}
             onChange={setView}
           />
+          {query.lastUpdatedAt && (
+            <span className="tnum text-micro text-ink-400">{t('更新')} {fmtTimeHHMMSS(query.lastUpdatedAt)}</span>
+          )}
+          {canRefreshPublicData && (
+            <ForceRefreshButton
+              onClick={async () => {
+                if (rescanning) return;
+                setRescanning(true);
+                try {
+                  await workerApi.trigger('radar_refresh');
+                  toast.success(t('重算雷达'), t('已提交'));
+                  query.refresh({ force: true });
+                } catch (error) {
+                  toast.error(t('重算雷达'), String((error as Error).message ?? error));
+                } finally {
+                  setRescanning(false);
+                }
+              }}
+              spinning={rescanning}
+              label={t('重算雷达')}
+              title={t('重算雷达')}
+            />
+          )}
         </span>
+        <details className="group/more basis-full border-t border-line/70 pt-3">
+          <summary className="disclosure-trigger flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-2 rounded-lg py-1 text-caption text-ink-500 outline-none transition-colors duration-fast hover:text-ink-800 focus-visible:ring-2 focus-visible:ring-brand-600 [&::-webkit-details-marker]:hidden">
+            <span className="inline-flex shrink-0 items-center gap-2 text-ink-700">
+              {t('更多筛选')}
+              <Icon name="chevron-down" size={13} className="text-ink-400 transition-transform group-open/more:rotate-180" />
+            </span>
+            <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-micro">
+              {filterSummary.map(([name, value]) => (
+                <span key={name}>
+                  <span className="text-ink-400">{name}</span> <span className="text-ink-700">{value}</span>
+                </span>
+              ))}
+            </span>
+          </summary>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3 pt-3">
+            <div className="flex max-w-full flex-wrap items-center gap-2">
+              <span className="text-caption text-ink-500">{t('评分')}</span>
+              <SelectionViewport>
+                <div className="filter-group flex-wrap" role="group" aria-label={t('评分')}>
+                  {SCORE_CAPS.map((cap) => (
+                    <FilterButton
+                      key={cap.value}
+                      active={minScore === cap.value}
+                      onClick={() => setMinScore(cap.value)}
+                      aria-label={t('评分{label}', { label: cap.label })}
+                    >
+                      {cap.label}
+                    </FilterButton>
+                  ))}
+                </div>
+              </SelectionViewport>
+            </div>
+          </div>
+        </details>
       </div>
+      <p className="min-w-0 text-caption text-ink-500">
+        {t('按告警优先级从高到低排列；同一只股票的多条信号合并为一张卡。')}
+      </p>
 
-      <section className="min-w-0 space-y-6" aria-label={t('当日信号')}>
-        <div className="radar-section-heading flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 className="section-heading">{t('当日信号')}</h2>
-          </div>
-          <div className="text-right">
-            <p className="tnum text-caption text-ink-400">
-              {t('{n} 个活跃', { n: events.length })}
-              {onlyWatch && !watchFilterPending ? t(' · 只看关注') : ''}
-            </p>
-            {query.lastUpdatedAt && (
-              <span className="tnum text-micro text-ink-400">
-                {t('更新')} {fmtTimeHHMMSS(query.lastUpdatedAt)}
-              </span>
-            )}
-          </div>
+      <section className="min-w-0" aria-label={t('当日信号')}>
+        <div className="radar-section-heading mb-5 flex flex-wrap items-end justify-between gap-3">
+          <h2 className="text-h2 text-ink-900">{t('当日信号')}</h2>
+          <p className="tnum text-caption text-ink-400">
+            {t('{n} 个活跃', { n: events.length })}
+            {events.length > 0 ? ` · ${t('{n} 只', { n: stockCount })}` : ''}
+            {onlyWatch && !watchFilterPending ? t(' · 只看关注') : ''}
+          </p>
         </div>
 
       {state === 'loading' ? (
         <>
           <div className="page-grid items-start">
-            <SkeletonCard className="h-[380px] lg:col-span-8" />
-            <SkeletonCard className="h-[420px] lg:col-span-4" />
+            <SkeletonCard className="h-[460px] lg:col-span-8" />
+            <SkeletonCard className="h-[560px] lg:col-span-4" />
           </div>
-          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <SkeletonCard className="h-[220px]" />
-            <SkeletonCard className="h-[220px]" />
-            <SkeletonCard className="h-[220px]" />
+          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <SkeletonCard className="h-[280px]" />
+            <SkeletonCard className="h-[280px]" />
+            <SkeletonCard className="h-[280px]" />
           </div>
         </>
       ) : state === 'error' ? (
@@ -322,7 +394,7 @@ export default function Radar() {
               action={<EmptyRetryButton onClick={() => query.refresh({ force: true })} refreshing={query.refreshing} />}
             />
           </div>
-          <div className="min-w-0 lg:col-span-4"><HistoryRail events={[]} filterKey={`${group}:${onlyAbovePivot}:${minScore}`} onPromoteLead={promoteLead} /></div>
+          <div className="min-w-0 lg:col-span-4"><HistoryRail events={[]} filterKey={filterKey} onPromoteLead={promoteLead} /></div>
         </div>
       ) : state === 'empty' ? (
         <div className="page-grid items-start">
@@ -333,10 +405,10 @@ export default function Radar() {
               description={query.data?.note ?? t('新信号出现时会立刻出现在这里。')}
             />
           </div>
-          <div className="min-w-0 lg:col-span-4"><HistoryRail events={events} filterKey={`${group}:${onlyAbovePivot}:${minScore}`} onPromoteLead={promoteLead} /></div>
+          <div className="min-w-0 lg:col-span-4">{historyRail}</div>
         </div>
       ) : (
-        <>
+        <div className="space-y-6">
           {state === 'stale' && (
             <StaleStrip onRetry={() => query.refresh()} refreshing={query.refreshing} />
           )}
@@ -359,44 +431,38 @@ export default function Radar() {
             <div className="page-grid items-start">
               <div className="min-w-0 lg:col-span-8">
                 <LeadBigCard
+                  key={lead.event_id}
                   event={lead}
+                  siblings={leadSiblings}
                   live={overlayRows[lead.event_id]}
                   flash={flashes[lead.event_id]}
                   locate={locateId === lead.event_id}
+                  onPromote={promoteLead}
                 />
               </div>
               <div className="min-w-0 lg:col-span-4">
-                <HistoryRail events={events} filterKey={`${group}:${onlyAbovePivot}:${minScore}`} onPromoteLead={promoteLead} />
+                <div className="self-start lg:sticky lg:top-20">{historyRail}</div>
               </div>
             </div>
           )}
-          {restEvents.length > 0 && (
-            <div className="radar-section-heading flex flex-wrap items-baseline justify-between gap-2">
-              <p className="text-body-s font-medium text-ink-800">
-                {t('其余信号')} · <span className="tnum">{restEvents.length}</span>
-              </p>
-              <p className="text-micro text-ink-400">{t('点击小卡设为首要信号 · 点击代码打开个股页')}</p>
-            </div>
-          )}
           {!filteredEmpty && view === 'cards' ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {restEvents
-                .map((event, index) => (
-                  <motion.div
-                    key={event.event_id}
-                    initial={{ opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: DUR_SECTION, ease: EASE_PAPER, delay: Math.min(index * 0.045, 0.5) }}
-                  >
-                    <EventCard
-                      event={event}
-                      live={overlayRows[event.event_id]}
-                      flash={flashes[event.event_id]}
-                      onSelect={() => promoteLead(event.event_id)}
-                    />
-                  </motion.div>
-                ))}
-            </div>
+            restGroups.length > 0 && (
+              <div>
+                <div className="radar-section-heading mb-3 flex flex-wrap items-baseline justify-between gap-2 pb-2">
+                  <p className="text-body-s font-medium text-ink-800">
+                    {t('其余信号')} · <span className="tnum">{t('{stocks} 只股票 · {signals} 条信号', { stocks: restGroups.length, signals: restSignalCount })}</span>
+                  </p>
+                  <p className="text-micro text-ink-400">{t('点击小卡设为首要信号 · 点击代码打开个股页')}</p>
+                </div>
+                <SignalCards
+                  key={cardsKey}
+                  groups={restGroups}
+                  overlay={overlayRows}
+                  flashes={flashes}
+                  onPromote={promoteLead}
+                />
+              </div>
+            )
           ) : !filteredEmpty ? (
             <RadarTable
               events={events}
@@ -405,352 +471,11 @@ export default function Radar() {
               onSelect={(event) => promoteLead(event.event_id)}
             />
           ) : null}
-        </>
+        </div>
       )}
       </section>
       <SourceNote text={t('突破扫描结果 · 日线收盘后更新')} />
     </div>
-  );
-}
-
-/* ---------------- Lead 大卡（美版 LeadBigCard 対応） ---------------- */
-
-function LeadBigCard({
-  event,
-  live,
-  flash,
-  locate = false,
-}: {
-  event: RadarEvent;
-  live?: { live_price: number; pivot_distance_pct?: number; above_pivot?: boolean };
-  flash?: 'up' | 'down';
-  locate?: boolean;
-}) {
-  const chart = usePolling(
-    () => stocksApi.chart(event.canonical_code, '6m'),
-    null,
-    [event.canonical_code],
-    { identity: event.canonical_code },
-  );
-  const scores = event.scores ?? {};
-  const structure = event.structure ?? null;
-  const invalidation = structure?.base?.invalidation_price ?? null;
-
-  return (
-    <motion.article
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: DUR_SECTION, ease: EASE_PAPER }}
-      aria-label={t('{code} 首要信号大卡', { code: event.display_code })}
-      className={cn('radar-lead-card paper-panel p-5 sm:p-6', locate && 'bk-locate')}
-    >
-      <div className="flex flex-wrap items-center gap-1.5">
-        <SignalChip signal={event.signal_type} />
-        <StateChip state={event.state} />
-        <span className="radar-chip radar-chip-neutral">
-          {event.sector33_name ?? '—'} · {event.market_name ?? '—'}
-        </span>
-        <span className="tnum text-micro text-ink-400">{t('发现日')} {fmtDate(event.discovered_date)}</span>
-        <span className="radar-chip radar-chip-brand ml-auto">
-          <Icon name="radar" size={12} />
-          {t('首要信号')}
-        </span>
-      </div>
-
-      <h3 className="mt-2.5 font-display text-display-m text-ink-900">
-        {event.name_ja ?? '—'}{' '}
-        <Link
-          to={`/stock/${event.display_code}`}
-          className="text-brand-600 underline-offset-4 transition-colors hover:text-brand-700 hover:underline"
-        >
-          {event.display_code}
-        </Link>
-      </h3>
-
-      <div className="mt-3">
-        <p className="mb-1 text-micro text-ink-400">{t('日线 · 最多 30 个交易日')}</p>
-        {chart.loading && !chart.data ? (
-          <SkeletonCard className="h-[150px]" />
-        ) : chart.data && chart.data.bars.length > 0 ? (
-          <div className="radar-mini-chart relative h-[120px] overflow-hidden rounded-md bg-card-warm sm:h-[150px]">
-            <LeadChart bars={chart.data.bars.slice(-30)} event={event} />
-          </div>
-        ) : (
-          <div className="radar-mini-chart relative flex h-[120px] items-center justify-center overflow-hidden rounded-md bg-card-warm sm:h-[150px]">
-            <img src="/empty-chart.svg" alt="" className="h-12 w-auto opacity-90" loading="lazy" />
-          </div>
-        )}
-      </div>
-
-      {structure && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {structure.structure_label && <SoftBadge tone="brand">{t(structure.structure_label)}</SoftBadge>}
-          {structure.setup_label && <SoftBadge tone="ai">{t(structure.setup_label)}</SoftBadge>}
-          {(structure.pattern_labels ?? []).map((label) => (
-            <SoftBadge key={label}>{t(label)}</SoftBadge>
-          ))}
-          {structure.spring && <SoftBadge tone="up">{t('Spring 假跌破回收')}</SoftBadge>}
-          {structure.upthrust && <SoftBadge tone="down">{t('Upthrust 假突破')}</SoftBadge>}
-        </div>
-      )}
-
-      <div className="mt-3 flex flex-col gap-2.5 sm:flex-row sm:items-stretch">
-        <div className="grid flex-1 grid-cols-1 gap-2.5 sm:grid-cols-3">
-          <div className="radar-value-cell px-3 py-2.5">
-            <p className="text-micro text-ink-400">{live ? t('盘中价') : t('当前价')}</p>
-            <p className="mt-0.5">
-              <TickPrice flash={flash} className="tnum text-data-l text-ink-900">
-                {fmtPrice(live?.live_price ?? (event.snapshot.close as number | null))}
-              </TickPrice>
-            </p>
-          </div>
-          <div className="radar-value-cell px-3 py-2.5">
-            <p className="flex items-center gap-1 text-micro text-ink-400">
-              <span className="radar-reference-glyph radar-reference-trigger" aria-hidden />
-              {t('突破枢轴')}
-            </p>
-            <p className="mt-0.5 tnum text-data-l text-ink-900">{fmtPrice(event.pivot_price)}</p>
-          </div>
-          <div className="radar-value-cell px-3 py-2.5">
-            <p className="flex items-center gap-1 text-micro text-ink-400">
-              <span className="radar-reference-glyph radar-reference-invalid" aria-hidden />
-              {t('失效位置')}
-            </p>
-            <p className="mt-0.5 tnum text-data-l text-ink-900">{fmtPrice(invalidation)}</p>
-          </div>
-        </div>
-        <div className="radar-value-cell radar-priority-cell flex flex-col items-center justify-center gap-1.5 px-3 py-1.5">
-          <PriorityRing
-            score={event.alert_priority}
-            label={t('告警优先级')}
-            hint={RADAR_SCORE_HINTS.优先级}
-            emptyLabel={t('告警优先级数据不足')}
-          />
-        </div>
-      </div>
-      <PriceScale
-        className="mt-3"
-        large
-        invalidation={invalidation}
-        trigger={event.trigger_price ?? event.pivot_price}
-        current={live?.live_price ?? (event.snapshot.close as number | null)}
-        flash={flash}
-      />
-
-      <div className="mt-4 grid grid-cols-1 gap-4 border-t border-line pt-3 lg:grid-cols-[minmax(0,1fr)_220px]">
-        <section aria-label={t('分项评分')}>
-          <p className="eyebrow mb-2">{t('分项评分')}</p>
-          <div className="space-y-1.5">
-            <ScoreBar label="综合质量" score={scores.breakout_quality?.score ?? null} />
-            <ScoreBar label="趋势质量" score={scores.trend_quality?.score ?? null} />
-            <ScoreBar label="基底质量" score={scores.base_quality?.score ?? null} />
-            <ScoreBar label="突破确认" score={scores.breakout_confirmation?.score ?? null} />
-            <ScoreBar label="相对强度" score={scores.relative_strength?.score ?? null} />
-            <ScoreBar label="量能" score={scores.participation?.score ?? null} />
-            <ScoreBar label="流动性" score={scores.liquidity?.score ?? null} />
-            <ScoreBar label="市场契合" score={scores.market_fit ?? null} />
-            <ScoreBar label="行业契合" score={scores.sector_fit ?? null} />
-            <ScoreBar label="追高风险" score={scores.chase_risk ?? null} />
-            <ScoreBar label="拥挤度" score={scores.crowding_risk ?? null} />
-          </div>
-        </section>
-        <div className="flex flex-col gap-3">
-          {event.transitions && event.transitions.length > 0 && (
-            <div>
-              <p className="eyebrow mb-1.5">{t('生命周期')}</p>
-              <ol className="space-y-1 text-caption text-ink-600">
-                {event.transitions.slice(-5).map((transition, index) => (
-                  <li key={index} className="flex items-center gap-2">
-                    <span className="tnum text-ink-400">{fmtDate(transition.date)}</span>
-                    <span>{t(RADAR_STATE_LABELS[transition.to] ?? transition.to)}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
-          <p className="text-caption text-ink-500">
-            {t('成交额')} <span className="tnum text-ink-800">{fmtYenCompact(event.snapshot.turnover_today as number | null)}</span>
-          </p>
-          <Link
-            to={`/stock/${event.display_code}`}
-            className="mobile-control-target mt-auto flex items-center justify-center gap-1.5 rounded-pill bg-brand-600 px-3.5 py-2 text-caption font-medium text-white shadow-btn-hi transition-[transform,background-color] duration-fast hover:bg-brand-700 active:scale-[0.98]"
-          >
-            {t('打开研究页')}
-            <Icon name="arrow-up-right" size={13} />
-          </Link>
-        </div>
-      </div>
-    </motion.article>
-  );
-}
-
-function LeadChart({ bars, event }: { bars: StockBar[]; event: RadarEvent }) {
-  const colorMode = useColorMode();
-  const appearance = useAppearance();
-  const option = useMemo(() => {
-    void colorMode;
-    void appearance;
-    const dates = bars.map((bar) => bar.trade_date.slice(5));
-    const candles = bars.map((bar) => [
-      bar.adj_open ?? bar.open,
-      bar.adj_close ?? bar.close,
-      bar.adj_low ?? bar.low,
-      bar.adj_high ?? bar.high,
-    ]);
-    const markLines: Record<string, unknown>[] = [];
-    if (event.pivot_price !== null) {
-      markLines.push({
-        yAxis: event.pivot_price,
-        lineStyle: { color: CH.brand600, type: 'dashed', width: 1.2 },
-        label: { formatter: `${t('枢轴价')} ${fmtPrice(event.pivot_price)}`, position: 'insideEndTop', color: CH.brand600, fontSize: 10 },
-      });
-    }
-    const base = event.structure?.base;
-    if (base?.invalidation_price != null) {
-      markLines.push({
-        yAxis: base.invalidation_price,
-        lineStyle: { color: CH.down600, type: 'dotted', width: 1 },
-        label: { formatter: t('失效位'), position: 'insideEndBottom', color: CH.down600, fontSize: 10 },
-      });
-    }
-    return {
-      grid: baseGrid({ top: 10, bottom: 4, left: 4, right: 44 }),
-      tooltip: glassTooltip({ trigger: 'axis' }),
-      xAxis: categoryAxis(dates),
-      yAxis: valueAxis({ scale: true, position: 'right' }),
-      series: [
-        {
-          type: 'candlestick' as const,
-          data: candles,
-          itemStyle: {
-            color: CH.up600, color0: CH.down600,
-            borderColor: CH.up600, borderColor0: CH.down600,
-          },
-          markLine: {
-            symbol: 'none',
-            data: markLines,
-            animation: false,
-          },
-          ...(base?.resistance_high != null && base?.resistance_low != null
-            ? {
-                markArea: {
-                  silent: true,
-                  itemStyle: { color: CH.brand400, opacity: 0.08 },
-                  data: [
-                    [{ yAxis: base.resistance_low }, { yAxis: base.resistance_high }] as [
-                      { yAxis: number },
-                      { yAxis: number },
-                    ],
-                  ],
-                },
-              }
-            : {}),
-        },
-      ],
-    };
-  }, [appearance, bars, colorMode, event]);
-  return <ReactECharts className="h-full w-full" option={option} ariaLabel={`${event.display_code} lead chart`} />;
-}
-
-/* ---------------- イベントカード ---------------- */
-
-function EventCard({ event, onSelect, live, flash }: {
-  event: RadarEvent;
-  onSelect: () => void;
-  live?: { live_price: number; pivot_distance_pct?: number; above_pivot?: boolean };
-  flash?: 'up' | 'down';
-}) {
-  const structure = event.structure ?? null;
-  /* 遅延気配なので必ず「遅延」と分かる見た目にする。スコアは夜間のまま。 */
-  const above = live?.above_pivot === true;
-  const current = live?.live_price ?? (event.snapshot.close as number | null);
-  return (
-    <article className="relative h-full w-full">
-      <button
-        type="button"
-        onClick={onSelect}
-        aria-label={t('{code} 雷达信号卡', { code: event.display_code })}
-        className="absolute inset-0 z-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
-      />
-      <div
-        className="radar-signal-card card-surface card-lift relative z-10 flex h-full cursor-pointer flex-col"
-        onClick={(click) => {
-          const target = click.target as Element;
-          if (target.closest('button, a, summary, [role="button"]')) return;
-          if (window.getSelection()?.toString()) return;
-          onSelect();
-        }}
-      >
-      <div className="flex items-center gap-2">
-        <CodeCell displayCode={event.display_code} nameJa={event.name_ja} />
-        <span className="ml-auto tnum text-data-l text-ink-900">
-          {event.alert_priority !== null ? Math.round(event.alert_priority) : '—'}
-        </span>
-      </div>
-      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-        <SignalChip signal={event.signal_type} />
-        <StateChip state={event.state} />
-        {structure?.setup_label && <SoftBadge tone="ai">{t(structure.setup_label)}</SoftBadge>}
-        {above && (
-          <SoftBadge tone="up">
-            <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
-            {t('盘中站上枢轴')}
-          </SoftBadge>
-        )}
-      </div>
-      <div className="mt-3 grid grid-cols-3 gap-1 text-caption">
-        {live ? (
-          <CardFact
-            label={t('盘中价')}
-            value={
-              <TickPrice flash={flash} className="tnum text-body-s text-ink-800">
-                {fmtPrice(live.live_price)}
-                {live.pivot_distance_pct != null ? ` (${fmtPct(live.pivot_distance_pct)})` : ''}
-              </TickPrice>
-            }
-          />
-        ) : (
-          <CardFact
-            label={t('收盘')}
-            value={
-              <TickPrice flash={flash} className="tnum text-body-s text-ink-800">
-                {fmtPrice(event.snapshot.close as number | null)}
-              </TickPrice>
-            }
-          />
-        )}
-        <CardFact label={t('枢轴价')} value={fmtPrice(event.pivot_price)} />
-        <CardFact label={t('成交额')} value={fmtYenCompact(event.snapshot.turnover_today as number | null)} />
-      </div>
-      <PriceScale
-        className="mt-2"
-        invalidation={structure?.base?.invalidation_price}
-        trigger={event.trigger_price ?? event.pivot_price}
-        current={current}
-        flash={flash}
-      />
-      <details className="radar-disclosure mt-3">
-        <summary>
-          <span>{t('评分套组')}</span>
-          <Icon name="chevron-down" size={14} className="radar-disclosure-arrow" />
-        </summary>
-        <ScoreBarsMini event={event} className="pb-3 pt-1" />
-      </details>
-      <div className="radar-card-footer mt-auto flex items-center justify-between gap-3 pt-3">
-        <StrengthBar score={event.scores?.relative_strength?.score ?? event.alert_priority} width={64} />
-        <span className="tnum text-micro text-ink-400">{fmtDate(event.discovered_date)}</span>
-      </div>
-      </div>
-    </article>
-  );
-}
-
-function CardFact({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <span>
-      <span className="block text-micro text-ink-400">{label}</span>
-      <span className="tnum text-body-s text-ink-800">{value}</span>
-    </span>
   );
 }
 
