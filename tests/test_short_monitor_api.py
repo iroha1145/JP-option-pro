@@ -15,8 +15,35 @@ AS_OF = DAYS[-1]
 CODES = [f"1{i:04d}" for i in range(5)]
 
 
-@pytest.fixture()
-def client(data_dir, monkeypatch):
+BASE_POSITIONS = [
+    {
+        "canonical_code": "10000", "holder_name": "Alpha Capital Ltd",
+        "calculated_date": "2026-06-20", "disclosed_date": "2026-06-22",
+        "short_position_ratio": 0.010, "short_position_shares": 500_000,
+        "previous_ratio": None, "notes": "-", "previous_report_date": "",
+    },
+    {
+        "canonical_code": "10000", "holder_name": "Alpha Capital Ltd",
+        "calculated_date": "2026-07-28", "disclosed_date": "2026-07-30",
+        "short_position_ratio": 0.040, "short_position_shares": 2_000_000,
+        "previous_ratio": 0.010, "notes": "-", "previous_report_date": "2026-06-20",
+    },
+    {
+        "canonical_code": "10000", "holder_name": "Beta Securities Ltd",
+        "calculated_date": "2026-07-20", "disclosed_date": "2026-07-22",
+        "short_position_ratio": 0.004, "short_position_shares": 200_000,
+        "previous_ratio": 0.008, "notes": "-", "previous_report_date": "2026-07-10",
+    },
+]
+
+
+def _serve(data_dir, *, codes, positions, categories=None):
+    """`codes` の銘柄・日足と `positions` の報告を入れて、API を立てる。
+
+    `categories` は {code: product_category}（ETF = 014 / ETN = 023 など）。
+    """
+
+    categories = categories or {}
     import app.access as access_module
     import app.api.deps as deps
     import app.config as config_module
@@ -31,7 +58,7 @@ def client(data_dir, monkeypatch):
     core.initialize()
     core.upsert_trading_days([{"calendar_date": d, "holiday_division": "1"} for d in DAYS])
     bars, index = [], []
-    for code in CODES:
+    for code in codes:
         price = 1000.0
         for day in DAYS:
             price *= 0.996
@@ -50,29 +77,11 @@ def client(data_dir, monkeypatch):
             "canonical_code": code, "display_code": code[:4], "name_ja": f"銘柄{code}",
             "sector33_code": "3650", "sector33_name": "電気機器",
             "market_code": "0111", "market_name": "プライム",
-        } for code in CODES],
+            "product_category": categories.get(code),
+        } for code in codes],
         as_of_date=AS_OF,
     )
-    core.upsert_short_positions([
-        {
-            "canonical_code": "10000", "holder_name": "Alpha Capital Ltd",
-            "calculated_date": "2026-06-20", "disclosed_date": "2026-06-22",
-            "short_position_ratio": 0.010, "short_position_shares": 500_000,
-            "previous_ratio": None, "notes": "-", "previous_report_date": "",
-        },
-        {
-            "canonical_code": "10000", "holder_name": "Alpha Capital Ltd",
-            "calculated_date": "2026-07-28", "disclosed_date": "2026-07-30",
-            "short_position_ratio": 0.040, "short_position_shares": 2_000_000,
-            "previous_ratio": 0.010, "notes": "-", "previous_report_date": "2026-06-20",
-        },
-        {
-            "canonical_code": "10000", "holder_name": "Beta Securities Ltd",
-            "calculated_date": "2026-07-20", "disclosed_date": "2026-07-22",
-            "short_position_ratio": 0.004, "short_position_shares": 200_000,
-            "previous_ratio": 0.008, "notes": "-", "previous_report_date": "2026-07-10",
-        },
-    ])
+    core.upsert_short_positions(positions)
     pipeline.rebuild_events(core)
     pipeline.refresh_snapshots(core, as_of_date=AS_OF)
 
@@ -98,12 +107,76 @@ def client(data_dir, monkeypatch):
     deps.reset_dependencies_for_tests()
 
 
+@pytest.fixture()
+def client(data_dir, monkeypatch):
+    yield from _serve(data_dir, codes=CODES, positions=BASE_POSITIONS)
+
+
+def _report(code, holder, calculated, ratio, *, previous=None, disclosed=None):
+    return {
+        "canonical_code": code, "holder_name": holder,
+        "calculated_date": calculated, "disclosed_date": disclosed or calculated,
+        "short_position_ratio": ratio, "short_position_shares": int(ratio * 50_000_000),
+        "previous_ratio": previous, "notes": "-", "previous_report_date": "",
+    }
+
+
+#: 拥挤度・状態・ETF 除外を見るための銘柄群（値はどれも手で数えられる）。
+#:   10000 Alpha 1.0%→4.0%             1 家 / 4.0%   高（比率）  building
+#:   10001 Gamma 1.2% + Delta 1.1%     2 家 / 2.3%   中          steady
+#:   10002 Epsilon 3.0%→2.4%           1 家 / 2.4%   中（比率）  covering（−0.6）
+#:   10003 H1..H4 各 0.65%（窓内初出） 4 家 / 2.6%   高（機関数）new_entry・building
+#:   10004 Zeta 退出後の再参入 0.55%   1 家 / 0.55%  低          reentry
+#:   10005 ETF(014) Eta 6.0%           公開持仓が最大。既定では出ない
+#:   10006 公開持仓なし
+#:   10007 ETN(023) Iota 5.0%
+#:   10008 Theta 2.0%→1.3%             1 家 / 1.3%   低          covering（−0.7）
+RICH_CODES = [f"1{i:04d}" for i in range(9)]
+RICH_CATEGORIES = {"10005": "014", "10007": "023"}
+RICH_POSITIONS = [
+    *BASE_POSITIONS,
+    _report("10001", "Gamma Partners Ltd", "2026-06-10", 0.012),
+    _report("10001", "Delta Trading Ltd", "2026-06-12", 0.011),
+    _report("10002", "Epsilon Asset Ltd", "2026-06-10", 0.030),
+    _report("10002", "Epsilon Asset Ltd", "2026-07-20", 0.024, previous=0.030, disclosed="2026-07-22"),
+    *[_report("10003", f"Holder {n} Ltd", "2026-07-15", 0.0065, disclosed="2026-07-17") for n in "1234"],
+    _report("10004", "Zeta Capital Ltd", "2026-06-05", 0.006),
+    _report("10004", "Zeta Capital Ltd", "2026-06-20", 0.004, previous=0.006),
+    _report("10004", "Zeta Capital Ltd", "2026-07-20", 0.0055, previous=0.0031, disclosed="2026-07-22"),
+    _report("10005", "Eta Fund Mgmt Ltd", "2026-06-10", 0.060),
+    _report("10007", "Iota Fund Mgmt Ltd", "2026-06-10", 0.050),
+    _report("10008", "Theta Asset Ltd", "2026-06-10", 0.020),
+    _report("10008", "Theta Asset Ltd", "2026-07-20", 0.013, previous=0.020, disclosed="2026-07-22"),
+]
+
+
+@pytest.fixture()
+def rich_client(data_dir, monkeypatch):
+    yield from _serve(
+        data_dir, codes=RICH_CODES, positions=RICH_POSITIONS, categories=RICH_CATEGORIES,
+    )
+
+
+def _rank(client, **params):
+    response = client.get("/api/short-monitor/rankings", params={"limit": 200, **params})
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def _codes(payload):
+    return [row["canonical_code"] for row in payload["rows"]]
+
+
 def test_overview_carries_the_disclosure_note_and_version(client):
     payload = client.get("/api/short-monitor/overview").json()
     assert payload["as_of_date"] == AS_OF
     assert "不代表市场全部空头仓位" in payload["note"]
-    assert payload["validated"] == {"gates": False, "score": False}
+    assert payload["api_version"] == "jp-short-monitor-v4"
+    # v4 は検証結論・点数版を持たない（持たないことも契約）
+    for gone in ("validated", "validation", "score_version"):
+        assert gone not in payload
     assert payload["coverage"]["covered"] == len(CODES)
+    assert payload["radar_link"]["enabled"] is False
 
 
 def test_overview_returns_304_on_matching_etag(client):
@@ -114,13 +187,15 @@ def test_overview_returns_304_on_matching_etag(client):
 
 
 def test_rankings_are_bounded_and_explainable(client):
-    payload = client.get("/api/short-monitor/rankings", params={"limit": 3}).json()
+    payload = client.get("/api/short-monitor/rankings", params={"limit": 3, "view": "all"}).json()
     assert payload["total"] == len(CODES)
     assert len(payload["rows"]) == 3
     row = payload["rows"][0]
-    # 点数だけを返さない
-    assert set(row["scores"]) >= {"absorption", "covering", "low_position", "risk"}
+    # 点数を返さない。事実の列と、固定の規則で決まる分類だけ。
+    for gone in ("scores", "behavior_score", "monitor_priority"):
+        assert gone not in row
     assert "visible_short_ratio" in row
+    assert {"crowding_level", "security_kind", "last_report_age_days", "confidence_reasons"} <= set(row)
     assert "total_short_ratio" not in row, "総空売り残高であるかのような名前を出している"
 
 
@@ -132,10 +207,16 @@ def test_rankings_reject_unknown_sort_columns(client):
     """並び替え列は許可リスト。任意の列名を SQL に通さない。"""
 
     payload = client.get(
-        "/api/short-monitor/rankings", params={"order_by": "1; DROP TABLE securities"}
+        "/api/short-monitor/rankings",
+        params={"order_by": "1; DROP TABLE securities", "view": "all"},
     ).json()
-    assert payload["order_by"] == "1; DROP TABLE securities"
+    # 応答には **実際に使った列** を返す（受け取った文字列を鸚鵡返しにしない）
+    assert payload["order_by"] == "visible_short_ratio"
     assert payload["total"] == len(CODES)   # 既定列にフォールバックして壊れない
+    # 既定列 = visible_short_ratio の降順で並んでいる（無効な列名は無視される）
+    ratios = [row["visible_short_ratio"] or 0.0 for row in payload["rows"]]
+    assert ratios == sorted(ratios, reverse=True)
+    assert payload["rows"][0]["canonical_code"] == "10000"
 
 
 def test_rankings_filter_by_state_and_confidence(client):
@@ -191,7 +272,10 @@ def test_status_reports_versions(client):
     payload = raw.json()
     assert payload["as_of_date"] == AS_OF
     assert "inst-" in payload["algorithm_version"]
-    assert payload["validated"]["score"] is False
+    assert payload["api_version"] == "jp-short-monitor-v4"
+    assert payload["radar_link"]["enabled"] is False
+    assert payload["radar_link"]["crowding_validation"]["status"] == "not_applied"
+    assert "validated" not in payload and "validation" not in payload
 
 
 def test_institutions_do_not_merge_legal_entities(client):
@@ -200,11 +284,15 @@ def test_institutions_do_not_merge_legal_entities(client):
     assert {"Alpha Capital Ltd", "Beta Securities Ltd"} <= names
 
 
-def test_squeeze_label_always_carries_its_caveat():
-    """「挤空确认」の但し書きは外せない。"""
+def test_directional_states_always_carry_their_caveat():
+    """増減・方向反復の但し書きは外せない。持仓が見えている範囲の話でしかない。"""
 
-    described = explain.describe({"primary_state": states.STATE_SQUEEZE_CONFIRMED})
-    assert described["caveat"] and "不表示掌握全部市场空头仓位" in described["caveat"]
+    building = explain.describe({"primary_state": states.STATE_BUILDING})
+    assert "门槛以下的仓位看不到" in building["caveat"]
+    covering = explain.describe({"primary_state": states.STATE_COVERING})
+    assert "剩余仓位未知" in covering["caveat"]
+    mixed = explain.describe({"primary_state": states.STATE_MIXED})
+    assert "换手" in mixed["caveat"]
 
 
 def test_explanation_never_claims_intent():
@@ -228,7 +316,7 @@ def test_explanation_row_count_matches_the_summed_ratio():
 
     described = explain.describe(
         {"visible_short_ratio": 0.0123, "reported_in_scope_ratio": 0.0523,
-         "primary_state": states.STATE_NORMAL_SHORTING},
+         "primary_state": states.STATE_BUILDING},
         [
             {"visibility_status": "reporting", "stale_reporting": False},
             {"visibility_status": "reporting", "stale_reporting": True,
@@ -242,22 +330,6 @@ def test_explanation_row_count_matches_the_summed_ratio():
     # 2 口径: 新鮮な「公开可见」と公式ルールの「在册」を両方言う
     assert "在册合计为 5.23%" in joined
     assert "未计入" in joined
-
-
-def test_the_api_says_the_validation_failed_not_that_it_never_ran(client):
-    """「まだ検証していない」と「検証したが通らなかった」は別のこと。
-
-    通らなかったのに `未検証` と出し続けるのは、事実を弱めて伝えることになる。
-    """
-
-    payload = client.get("/api/short-monitor/overview").json()
-    assert payload["validated"]["score"] is False
-    assert payload["validation"]["status"] == "failed"
-    assert payload["validation"]["signals"] > 0
-    assert "跑输" in payload["validation"]["summary"]
-
-    status = client.get("/api/short-monitor/status").json()
-    assert status["validation"]["status"] == "failed"
 
 
 def test_rankings_can_filter_by_institution(client):
@@ -278,3 +350,99 @@ def test_rankings_can_filter_by_institution(client):
         "/api/short-monitor/rankings", params={"institutions": beta},
     ).json()
     assert by_beta["rows"] == []
+
+
+# ---------------------------------------------------------------------------
+# v4: 排行のビュー・拥挤度・ETF 除外
+# ---------------------------------------------------------------------------
+
+def test_default_view_is_crowded_ordered_by_visible_ratio_and_only_holdings(rich_client):
+    payload = _rank(rich_client)
+    assert payload["view"] == "crowded"
+    assert payload["order_by"] == "visible_short_ratio"
+    assert payload["order_dir"] == "desc"
+    # 公開持仓のある株式だけ（持仓なしの 10006 も、ETF・ETN も出ない）
+    assert set(_codes(payload)) == {"10000", "10001", "10002", "10003", "10004", "10008"}
+    assert all(row["visible_institution_count"] > 0 for row in payload["rows"])
+    ratios = [row["visible_short_ratio"] for row in payload["rows"]]
+    assert ratios == sorted(ratios, reverse=True)
+    assert _codes(payload)[0] == "10000"
+    assert payload["total"] == 6
+
+
+def test_covering_view_is_ordered_by_ratio_change_ascending(rich_client):
+    payload = _rank(rich_client, view="covering")
+    assert payload["order_by"] == "ratio_change_20d" and payload["order_dir"] == "asc"
+    assert set(_codes(payload)) == {"10002", "10008"}
+    assert all(row["primary_state"] == states.STATE_COVERING for row in payload["rows"])
+    changes = [row["ratio_change_20d"] for row in payload["rows"]]
+    assert changes == sorted(changes)
+    assert _codes(payload) == ["10008", "10002"]        # −0.7 → −0.6（最も減った順）
+
+    building = _rank(rich_client, view="building")
+    assert building["order_dir"] == "desc"
+    # +3.0 → +2.6 → +0.24（再参入は報告自身の前回値 0.31% が起点）
+    assert _codes(building) == ["10000", "10003", "10004"]
+
+
+def test_entries_view_accepts_both_new_entry_and_reentry(rich_client):
+    payload = _rank(rich_client, view="entries")
+    seen = {flag for row in payload["rows"] for flag in row["flags"]}
+    assert states.FLAG_NEW_ENTRY in seen and states.FLAG_REENTRY in seen
+    assert set(_codes(payload)) == {"10003", "10004"}
+    for row in payload["rows"]:
+        assert {states.FLAG_NEW_ENTRY, states.FLAG_REENTRY} & set(row["flags"])
+
+
+def test_min_crowding_three_keeps_only_four_institutions_or_four_percent(rich_client):
+    everything = _rank(rich_client)
+    high = _rank(rich_client, min_crowding=3)
+    assert set(_codes(high)) == {"10000", "10003"}
+    assert 0 < high["total"] < everything["total"]
+    for row in high["rows"]:
+        assert row["visible_institution_count"] >= 4 or row["visible_short_ratio"] >= 0.04
+        assert row["crowding_level"] == states.CROWDING_HIGH
+
+    # 中以上は「機関数 2 以上 または 比率 2% 以上」。持仓の無い銘柄は入らない。
+    mid = _rank(rich_client, min_crowding=2)
+    assert set(_codes(mid)) == {"10000", "10001", "10002", "10003"}
+    assert all(row["crowding_level"] >= states.CROWDING_MID for row in mid["rows"])
+
+
+def test_etf_and_etn_are_hidden_unless_funds_are_requested(rich_client):
+    default = _rank(rich_client, view="all")
+    assert "10005" not in _codes(default) and "10007" not in _codes(default)
+    assert default["total"] == len(RICH_CODES) - 2
+    assert all(row["security_kind"] != "fund" for row in default["rows"])
+
+    with_funds = _rank(rich_client, view="all", include_funds=True)
+    assert with_funds["total"] == len(RICH_CODES)
+    kinds = {row["canonical_code"]: row["security_kind"] for row in with_funds["rows"]}
+    assert kinds["10005"] == "fund" and kinds["10007"] == "fund"
+    assert kinds["10000"] == "stock"
+    # 持仓比率が最大なのは ETF（6.0%）。含めたときだけ先頭に来る。
+    assert _codes(with_funds)[0] == "10005"
+    assert _codes(_rank(rich_client, view="all"))[0] == "10000"
+
+
+def test_the_overview_crowding_counts_add_up_to_visible_shorts(rich_client):
+    payload = rich_client.get("/api/short-monitor/overview").json()
+    crowding = payload["crowding"]
+    assert set(crowding) == {"high", "mid", "low"}
+    assert sum(crowding.values()) == payload["coverage"]["with_visible_short"]
+    assert crowding == {"high": 2, "mid": 2, "low": 2}
+    # 件数は ETF・ETN を含まない
+    assert payload["coverage"]["covered"] == len(RICH_CODES) - 2
+    assert set(payload["states"]) == set(states.ORDERED_STATES)
+    assert "evidence" in payload
+
+
+def test_rows_never_carry_the_retired_score_keys(rich_client):
+    for view in ("crowded", "all"):
+        for row in _rank(rich_client, view=view, include_funds=True)["rows"]:
+            for gone in ("scores", "behavior_score", "monitor_priority"):
+                assert gone not in row
+    detail = rich_client.get("/api/short-monitor/stocks/1000").json()
+    for gone in ("scores", "behavior_score", "monitor_priority"):
+        assert gone not in detail
+    assert all("behavior_score" not in item for item in detail["history"])

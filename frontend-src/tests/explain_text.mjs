@@ -4,8 +4,8 @@
  * 「テンプレートを t() に通す」だけでは足りない場面が 2 つあり、どちらも
  * 一度は本番で中文が漏れた:
  *
- *   1. **パラメータ自身が訳語を持つ** —— 「当前被分类为『{label}』」の label は
- *      「卖压吸收」で、辞書に載っている。訳さないと文の中だけ中文で残る。
+ *   1. **パラメータ自身が訳語を持つ** —— 「近 20 日动向归为『{label}』」の label は
+ *      「方向反复」で、辞書に載っている。訳さないと文の中だけ中文で残る。
  *   2. **列挙は結合前に訳す** —— 「3家减仓、1家跌破门槛」は結合済みなので
  *      辞書のどのキーにも当たらない。1 項目ずつ訳して、区切りも言語で選ぶ。
  *
@@ -113,15 +113,30 @@ check('数値入りテンプレートは置換後も訳せる', () => {
 
 check('パラメータが訳語を持つときは値も訳す', () => {
   const line = explanationLine({
-    template: '当前被分类为「{label}」，数据置信度 {confidence}。该结果是模型分类，不代表机构意图。',
-    params: { label: '卖压吸收', confidence: '0.50' },
+    template: '近 20 日动向归为「{label}」。这是按公开报告的净变化做的规则分类，不代表机构意图。',
+    params: { label: '方向反复' },
   });
-  assert.ok(line.includes('0.50'), line);
   assert.ok(!line.includes('{label}'), `未置換: ${line}`);
   // 訳語を持つ言語では、文の中に中文の label が残っていてはいけない。
-  if (locale !== 'zh') assert.ok(!line.includes('卖压吸收'), `label が中文のまま: ${line}`);
-  if (locale === 'en') assert.ok(line.includes('Absorption'), line);
-  if (locale === 'ja') assert.ok(line.includes('売り圧の吸収'), line);
+  if (locale !== 'zh') assert.ok(!line.includes('方向反复'), `label が中文のまま: ${line}`);
+  if (locale === 'zh') assert.ok(line.includes('「方向反复」'), line);
+  if (locale === 'en') assert.ok(line.includes('Mixed'), line);
+  if (locale === 'ja') assert.ok(line.includes('方向まちまち'), line);
+});
+
+check('空卖 v4 の状態名と新しい説明文はすべて訳せる', () => {
+  for (const label of ['增加中', '减少中', '方向反复', '持平', '无公开空头动向']) {
+    const out = t(label);
+    if (locale === 'zh') assert.equal(out, label);
+    else assert.notEqual(out, label, `状態名が未訳: ${label}`);
+  }
+  const line = explanationLine({
+    template: '过去 20 个交易日公开空头净增加 {delta}，相当于约 {size} 个20 日平均成交量。',
+    params: { delta: '0.42%', size: '1.30' },
+  });
+  assert.ok(line.includes('0.42%') && line.includes('1.30'), line);
+  assert.ok(!line.includes('{delta}') && !line.includes('{size}'), `未置換: ${line}`);
+  if (locale !== 'zh') assert.ok(!line.includes('公开空头'), `中文のまま: ${line}`);
 });
 
 check('列挙は結合前に訳し、区切りも辞書から取る', () => {

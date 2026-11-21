@@ -19,59 +19,62 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from app.api.deps import core_repository
 from app.domain.symbols import display_code, normalize_input_code
+from app.repositories.core import FUND_PRODUCT_CATEGORIES, REIT_PRODUCT_CATEGORY
 from app.services.short_monitor import explain
 from app.services.short_monitor.radar_link import (
     CROWDING_LINK_ENABLED,
     CROWDING_VALIDATION,
-    MAX_PRIORITY_SHIFT,
     PRIORITY_LINK_ENABLED,
 )
-from app.services.short_monitor.scoring import SCORE_VALIDATED, SCORE_VERSION, VALIDATION
 from app.services.short_monitor.snapshot import SNAPSHOT_VERSION
 from app.services.short_monitor.states import (
-    GATES_VALIDATED,
+    CROWDING_HIGH,
+    CROWDING_LOW,
+    CROWDING_MID,
+    CROWDING_RULES,
+    EVIDENCE,
+    FLAG_NEW_ENTRY,
+    FLAG_REENTRY,
     ORDERED_STATES,
-    STATE_ABSORPTION,
-    STATE_COVERING_START,
-    STATE_DIVERGENCE_FAILED,
-    STATE_LOW_CONFLICT,
-    STATE_SQUEEZE_CONFIRMED,
+    STATE_BUILDING,
+    STATE_COVERING,
+    crowding_level,
 )
 
 router = APIRouter(prefix="/api/short-monitor", tags=["short-monitor"])
 
-#: v3: 回補開始・挤空確認が informed 口径の減少を要求（sbs-v3）、行に
-#: `informed` / `parked_below_count` / `reporter_classes` を追加、status に
-#: 拥挤度叠加のスイッチと検証状態を追加。
-SHORT_MONITOR_API_VERSION = "jp-short-monitor-v3"
+#: v4: 点数（行動分・分項・監視優先度）と旧 6 状態を廃止。行に
+#: `crowding_level` / `security_kind` / `last_report_age_days` /
+#: `confidence_reasons` を追加、状態は building / covering / mixed / steady /
+#: no_signal。ビューは事実の列で並べる。ETF・ETN は既定で外す。
+SHORT_MONITOR_API_VERSION = "jp-short-monitor-v4"
 
-#: 画面の各ビューが要求する状態・並び順。ここに無い名前は受け付けない。
+#: 画面の各ビュー。**並び順はどれも事実の列**（合成した点数では並べない）。
+#: ここに無い名前は受け付けない。
 VIEWS: dict[str, dict[str, Any]] = {
-    "low_conflict": {
-        "states": [STATE_LOW_CONFLICT],
-        "order_by": "low_position_score",
+    # 公開持仓比率が高い順。既定のビュー。
+    "crowded": {"visible_only": True, "order_by": "visible_short_ratio", "descending": True},
+    "building": {"states": [STATE_BUILDING], "order_by": "ratio_change_20d", "descending": True},
+    "covering": {"states": [STATE_COVERING], "order_by": "ratio_change_20d", "descending": False},
+    "entries": {
+        "any_flags": [FLAG_NEW_ENTRY, FLAG_REENTRY],
+        "order_by": "ratio_change_20d", "descending": True,
     },
-    "absorption": {
-        "states": [STATE_ABSORPTION],
-        "order_by": "absorption_score",
-    },
-    "covering": {
-        "states": [STATE_COVERING_START, STATE_SQUEEZE_CONFIRMED],
-        "order_by": "covering_score",
-    },
-    "reentry": {
-        "states": None, "flags": ["reentry"], "order_by": "monitor_priority",
-    },
-    "rotation": {
-        "states": None, "flags": ["rotation"], "order_by": "rotation_score",
-    },
-    "squeeze": {
-        "states": [STATE_SQUEEZE_CONFIRMED], "order_by": "monitor_priority",
-    },
-    "divergence_failed": {
-        "states": [STATE_DIVERGENCE_FAILED], "order_by": "pressure_adv20_20d",
-    },
-    "all": {"states": None, "order_by": "monitor_priority"},
+    "days_to_cover": {"visible_only": True, "order_by": "visible_days_to_cover", "descending": True},
+    "all": {"order_by": "visible_short_ratio", "descending": True},
+}
+
+#: 並べ替えに使える列。**どれも事実の列。** ここに無い名前はビューの既定に戻す
+#: （応答の `order_by` にも実際に使った列を返す —— 受け取った文字列を鸚鵡返し
+#: にすると、並びと表示が食い違う）。
+ORDER_COLUMNS = frozenset({
+    "visible_short_ratio", "visible_institution_count", "ratio_change_20d", "ratio_change_5d",
+    "pressure_adv20_20d", "visible_days_to_cover", "drawdown_52w", "rel_topix_20d",
+})
+
+#: `min_crowding` → (機関数の下限, 比率の下限)。1 は「公開持仓がある」だけ。
+_CROWDING_FLOORS: dict[int, tuple[int, float]] = {
+    level: (count, ratio) for level, count, ratio in CROWDING_RULES
 }
 
 #: 画面に常時出す語義の注意書き。ここを消さない。
@@ -152,11 +155,19 @@ def _informed_view(components: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _security_kind(product_category: Any) -> str:
+    category = str(product_category or "")
+    if category in FUND_PRODUCT_CATEGORIES:
+        return "fund"
+    return "reit" if category == REIT_PRODUCT_CATEGORY else "stock"
+
+
 def _row_view(row: dict[str, Any]) -> dict[str, Any]:
-    """1 行分の説明可能な形。**点数だけを返さない。**"""
+    """1 行分。**事実の列と、固定の規則で決まる 2 つの分類だけ。**"""
 
     code = row.get("canonical_code") or ""
     components = _components(row)
+    confidence = components.get("confidence")
     return {
         "canonical_code": code,
         "display_code": row.get("display_code") or display_code(code),
@@ -165,6 +176,7 @@ def _row_view(row: dict[str, Any]) -> dict[str, Any]:
         "market_name": row.get("market_name"),
         "sector33_code": row.get("sector33_code"),
         "sector33_name": row.get("sector33_name"),
+        "security_kind": _security_kind(row.get("product_category")),
         "as_of_date": row.get("as_of_date"),
         "close": row.get("close"),
         "drawdown_52w": row.get("drawdown_52w"),
@@ -189,33 +201,27 @@ def _row_view(row: dict[str, Any]) -> dict[str, Any]:
         "pressure_adv20_5d": row.get("pressure_adv20_5d"),
         "pressure_adv20_20d": row.get("pressure_adv20_20d"),
         "visible_days_to_cover": row.get("visible_days_to_cover"),
+        "combined_visible_days_to_cover": components.get("combined_visible_days_to_cover"),
         "rel_topix_20d": row.get("rel_topix_20d"),
         "rel_sector_20d": row.get("rel_sector_20d"),
         "entry_count_20d": row.get("entry_count_20d"),
         "reentry_count_20d": row.get("reentry_count_20d"),
         "reduction_count_20d": row.get("reduction_count_20d"),
         "threshold_exit_count_20d": row.get("threshold_exit_count_20d"),
-        "scores": {
-            "low_position": row.get("low_position_score"),
-            "short_pressure": row.get("short_pressure_score"),
-            "price_damage": row.get("price_damage_score"),
-            "absorption": row.get("absorption_score"),
-            "covering": row.get("covering_score"),
-            "rotation": row.get("rotation_score"),
-            "catalyst": row.get("catalyst_score"),
-            "risk": row.get("risk_score"),
-        },
-        "behavior_score": row.get("behavior_score"),
-        "monitor_priority": row.get("monitor_priority"),
+        # 拥挤度は保存値ではなく 2 つの列から毎回決める（規則が 1 か所で済む）。
+        "crowding_level": crowding_level(
+            row.get("visible_institution_count"), row.get("visible_short_ratio"),
+        ),
+        "last_report_age_days": components.get("days_since_last_report"),
         "data_confidence": row.get("data_confidence"),
+        "confidence_reasons": (
+            list(confidence.get("reasons") or []) if isinstance(confidence, dict) else []
+        ),
         "primary_state": row.get("primary_state"),
         "flags": _flags(row),
-        # informed 口径 / 潜伏空頭 / 報告主体クラス（v3）。古いスナップショット
-        # 行には無いので None。
         "informed": _informed_view(components),
         "parked_below_count": components.get("parked_below_count"),
         "reporter_classes": components.get("reporter_classes"),
-        "combined_visible_days_to_cover": components.get("combined_visible_days_to_cover"),
         "algorithm_version": row.get("algorithm_version"),
     }
 
@@ -230,11 +236,13 @@ def overview(request: Request, response: Response, date: str | None = Query(defa
             "states": {}, "api_version": SHORT_MONITOR_API_VERSION,
         }
     state = repository.sync_state("short_behavior") or {}
-    coverage = repository.short_behavior_coverage(as_of)
+    coverage = repository.short_behavior_coverage(
+        as_of, crowding_rules=[(count, ratio) for _level, count, ratio in CROWDING_RULES],
+    )
     counts = repository.short_behavior_state_counts(as_of)
     etag = _etag(
         "overview", as_of, state.get("last_success_at"),
-        _run_token(repository, as_of), SNAPSHOT_VERSION,
+        _run_token(repository, as_of), SNAPSHOT_VERSION, SHORT_MONITOR_API_VERSION,
     )
     if _maybe_304(request, response, etag):
         response.status_code = 304
@@ -242,22 +250,44 @@ def overview(request: Request, response: Response, date: str | None = Query(defa
     return {
         "as_of_date": as_of,
         "synced_at": state.get("last_success_at"),
-        "coverage": coverage,
+        "coverage": {
+            "covered": coverage["covered"],
+            "with_visible_short": coverage["with_visible_short"],
+            "low_confidence": coverage["low_confidence"],
+        },
         "states": {name: counts.get(name, 0) for name in ORDERED_STATES},
+        "crowding": _crowding_counts(coverage),
         "note": DISCLOSURE_NOTE,
         "algorithm_version": SNAPSHOT_VERSION,
-        "score_version": SCORE_VERSION,
-        # 検証の状況を API 自身が名乗る。「まだやっていない」と「やったが
-        # 通らなかった」は別のことなので、結果も一緒に返す。
-        "validated": {"gates": GATES_VALIDATED, "score": SCORE_VALIDATED},
-        "validation": VALIDATION,
-        # 検証を通るまでレーダーの並び順には一切影響しない（表示・絞り込み・
-        # 影子分のみ）。ここが False の間、priority_shift は常に 0。
-        "radar_link": {
-            "enabled": PRIORITY_LINK_ENABLED, "max_shift": MAX_PRIORITY_SHIFT,
-            "crowding_enabled": CROWDING_LINK_ENABLED, "crowding_validation": CROWDING_VALIDATION,
-        },
+        # 拥挤度について分かっていることと、その限界。API 自身が名乗る。
+        "evidence": EVIDENCE,
+        # レーダーの並び順には一切影響しない（表示と絞り込みのみ）。
+        "radar_link": _radar_link_view(),
         "api_version": SHORT_MONITOR_API_VERSION,
+    }
+
+
+def _crowding_counts(coverage: dict[str, Any]) -> dict[str, int]:
+    """段ごとの件数。リポジトリは「その段以上」の累積で返すので差を取る。"""
+
+    cumulative = dict(zip(
+        [level for level, _count, _ratio in CROWDING_RULES], coverage.get("crowding_at_least") or [],
+    ))
+    high = int(cumulative.get(CROWDING_HIGH, 0))
+    mid_or_more = int(cumulative.get(CROWDING_MID, 0))
+    with_visible = int(coverage.get("with_visible_short") or 0)
+    return {
+        "high": high,
+        "mid": max(0, mid_or_more - high),
+        "low": max(0, with_visible - mid_or_more),
+    }
+
+
+def _radar_link_view() -> dict[str, Any]:
+    return {
+        "enabled": PRIORITY_LINK_ENABLED,
+        "crowding_enabled": CROWDING_LINK_ENABLED,
+        "crowding_validation": CROWDING_VALIDATION,
     }
 
 
@@ -265,7 +295,7 @@ def overview(request: Request, response: Response, date: str | None = Query(defa
 def rankings(
     request: Request,
     response: Response,
-    view: str = Query(default="all"),
+    view: str = Query(default="crowded"),
     date: str | None = Query(default=None),
     states: str | None = Query(default=None),
     flags: str | None = Query(default=None),
@@ -275,8 +305,10 @@ def rankings(
     institutions: str | None = Query(default=None),
     min_confidence: float | None = Query(default=None, ge=0.0, le=1.0),
     min_turnover: float | None = Query(default=None, ge=0.0),
-    min_score: float | None = Query(default=None, ge=0.0, le=100.0),
+    min_crowding: int | None = Query(default=None, ge=0, le=CROWDING_HIGH),
+    include_funds: bool = Query(default=False),
     order_by: str | None = Query(default=None),
+    order_dir: str | None = Query(default=None, pattern="^(asc|desc)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> dict:
@@ -289,13 +321,14 @@ def rankings(
 
     preset = VIEWS[view]
     state_filter = _csv(states) or preset.get("states")
-    flag_filter = _csv(flags) or preset.get("flags") or []
-    order = order_by or preset.get("order_by") or "monitor_priority"
+    order = order_by if order_by in ORDER_COLUMNS else preset["order_by"]
+    descending = (order_dir == "desc") if order_dir else bool(preset["descending"])
+    crowding = int(min_crowding or 0)
 
     etag = _etag(
         "rankings", as_of, view, states, flags, markets, sectors, codes, institutions,
-        min_confidence, min_turnover, min_score, order, limit, offset,
-        _run_token(repository, as_of), SNAPSHOT_VERSION,
+        min_confidence, min_turnover, crowding, include_funds, order, descending, limit, offset,
+        _run_token(repository, as_of), SNAPSHOT_VERSION, SHORT_MONITOR_API_VERSION,
     )
     if _maybe_304(request, response, etag):
         response.status_code = 304
@@ -304,15 +337,19 @@ def rankings(
     rows, total = repository.short_behavior_rankings(
         as_of,
         states=state_filter,
-        flags=flag_filter,
+        flags=_csv(flags) or None,
+        any_flags=preset.get("any_flags"),
         markets=_csv(markets) or None,
         sectors=_csv(sectors) or None,
         codes=[normalize_input_code(c) or c for c in _csv(codes)] or None,
         institutions=_csv(institutions) or None,
         min_confidence=min_confidence,
         min_turnover=min_turnover,
-        min_score=min_score,
+        visible_only=bool(preset.get("visible_only")) or crowding >= CROWDING_LOW,
+        crowding_floor=_CROWDING_FLOORS.get(crowding),
+        include_funds=include_funds,
         order_by=order,
+        descending=descending,
         limit=limit,
         offset=offset,
     )
@@ -320,6 +357,7 @@ def rankings(
         "as_of_date": as_of,
         "view": view,
         "order_by": order,
+        "order_dir": "desc" if descending else "asc",
         "total": total,
         "limit": limit,
         "offset": offset,
@@ -345,7 +383,10 @@ def stock_detail(
     if snapshot is None:
         raise HTTPException(status_code=404, detail={"code": "no_snapshot", "as_of_date": as_of})
 
-    etag = _etag("stock", canonical, as_of, _run_token(repository, as_of), SNAPSHOT_VERSION)
+    etag = _etag(
+        "stock", canonical, as_of, _run_token(repository, as_of), SNAPSHOT_VERSION,
+        SHORT_MONITOR_API_VERSION,
+    )
     if _maybe_304(request, response, etag):
         response.status_code = 304
         return {}
@@ -360,6 +401,7 @@ def stock_detail(
         "market_name": security.get("market_name"),
         "sector33_code": security.get("sector33_code"),
         "sector33_name": security.get("sector33_name"),
+        "product_category": security.get("product_category"),
     }})
     try:
         components = json.loads(snapshot.get("components_json") or "{}")
@@ -479,14 +521,10 @@ def status() -> dict:
         "rows_total": state.get("rows_total"),
         "source_through": positions.get("data_through"),
         "algorithm_version": SNAPSHOT_VERSION,
-        "score_version": SCORE_VERSION,
-        "validated": {"gates": GATES_VALIDATED, "score": SCORE_VALIDATED},
-        "validation": VALIDATION,
-        "radar_link": {
-            "enabled": PRIORITY_LINK_ENABLED, "max_shift": MAX_PRIORITY_SHIFT,
-            "crowding_enabled": CROWDING_LINK_ENABLED, "crowding_validation": CROWDING_VALIDATION,
-        },
+        "evidence": EVIDENCE,
+        "radar_link": _radar_link_view(),
         "note": DISCLOSURE_NOTE,
+        "api_version": SHORT_MONITOR_API_VERSION,
     }
 
 

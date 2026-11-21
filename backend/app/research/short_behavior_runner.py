@@ -443,11 +443,8 @@ def replay(
 
         market = snap.MarketInputs(
             as_of_date=day, trading_days=window, topix_closes=topix_closes,
-            # 過去に遡って同じ密度のニュースは取れない。無いものは無いと扱う。
-            has_news_feed=False,
             # 業種中位は全市場から。評価プールの部分集合から取ると本番と
             # 別の業種基準になる（監査指摘）。
-            sector_median_5d=_sector_median_map(close_index, sectors, day, 5),
             sector_median_20d=_sector_median_map(close_index, sectors, day, 20),
         )
         rows = snap.build_snapshots(stocks, market)
@@ -481,6 +478,7 @@ def replay(
                 "previous_state": previous,
                 "behavior_score": row.get("behavior_score"),
                 "monitor_priority": row.get("monitor_priority"),
+                "crowding_level": components.get("crowding_level") if isinstance(components, dict) else None,
                 "informed_institution_count": informed.get("institution_count"),
                 "pressure_informed_adv20_20d": informed_pressure_20,
                 "parked_below_count": components.get("parked_below_count") if isinstance(components, dict) else None,

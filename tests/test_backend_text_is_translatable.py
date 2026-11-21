@@ -35,7 +35,6 @@ from app.services.earnings_service import UPCOMING_COVERAGE_NOTE
 from app.services.news.classify import CATEGORY_WEIGHTS
 from app.services.radar.price_action import _PATTERN_LABELS, _STRUCTURE_LABELS
 from app.services.short_monitor import explain
-from app.services.short_monitor.scoring import VALIDATION
 from app.services.short_monitor.states import ORDERED_STATES
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -159,7 +158,6 @@ def _label_constants() -> dict[str, str]:
         "research/replay.POINT_IN_TIME_LIMITS": list(POINT_IN_TIME_LIMITS),
         "earnings_service.UPCOMING_COVERAGE_NOTE": [UPCOMING_COVERAGE_NOTE],
         "short_monitor/explain.STATE_LABELS": list(explain.STATE_LABELS.values()),
-        "short_monitor/scoring.VALIDATION": [VALIDATION["summary"]],
     }
     return {text: origin for origin, texts in groups.items() for text in texts}
 
@@ -194,19 +192,24 @@ def _every_template() -> set[str]:
         + [{"visibility_status": "unknown"}]
     )
     snapshots = [
-        # 全部載せ（在册合計あり）
+        # 全部載せ（在册合計あり）/ 拥挤度 高 / 純増（出来高比つき）
         {
             "visible_short_ratio": 0.0523, "reported_in_scope_ratio": 0.0912,
-            "pressure_adv20_20d": 0.07, "rel_topix_20d": 0.19, "rel_sector_20d": 0.15,
+            "visible_institution_count": 5,
+            "ratio_change_20d": 0.0031, "pressure_adv20_20d": 0.07,
+            "rel_topix_20d": 0.19, "rel_sector_20d": 0.15,
             "visible_days_to_cover": 2.78, "entry_count_20d": 2, "reentry_count_20d": 1,
             "reduction_count_20d": 15, "threshold_exit_count_20d": 1,
-            "data_confidence": 0.75,
         },
-        # 在册合計が出せない / 空売りは減少 / 可視ゼロ
+        # 在册合計が出せない / 可視ゼロ / 純減（出来高比つき）
         {
             "visible_short_ratio": None, "reported_in_scope_ratio": None,
-            "pressure_adv20_20d": -0.30, "data_confidence": 0.4,
+            "ratio_change_20d": -0.0042, "pressure_adv20_20d": -0.30,
         },
+        # 拥挤度 中 / 純増（出来高比なし）
+        {"visible_short_ratio": 0.012, "visible_institution_count": 2, "ratio_change_20d": 0.0012},
+        # 拥挤度 低 / 純減（出来高比なし）
+        {"visible_short_ratio": 0.006, "visible_institution_count": 1, "ratio_change_20d": -0.0012},
     ]
     templates: set[str] = set()
     for state in ORDERED_STATES:

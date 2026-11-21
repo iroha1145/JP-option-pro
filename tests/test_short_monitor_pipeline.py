@@ -127,6 +127,41 @@ def test_last_known_keeps_below_threshold_visible(tmp_path):
     assert known[0]["last_reported_ratio"] == pytest.approx(0.004)
 
 
+def test_a_chain_started_without_an_address_continues_after_the_address_appears(tmp_path):
+    """一括配信（住所欄なし）の後に、同じ機関が住所つきで報告してきても 1 実体のまま。
+
+    本番では住所なしの連鎖が別実体になり、古い値が「報告義務中」として合計に
+    残った。再構築の後も、最終既知状態は 1 件、見える機関数は 1 でなければならない。
+    """
+
+    core = _core(tmp_path)
+    _seed_prices(core, CODES)
+    _seed_reports(core, [
+        _report("10000", "Goldman Sachs International", "2026-07-01", 0.0607, shares=3_035_000),
+    ])
+    pipeline.rebuild_events(core)
+
+    _seed_reports(core, [
+        {
+            **_report("10000", "Goldman Sachs International", "2026-07-28", 0.0550,
+                      prev=0.0607, shares=2_750_000),
+            "holder_address": "Plumtree Court, 25 Shoe Lane, London",
+        },
+    ])
+    pipeline.rebuild_events(core)
+    pipeline.refresh_snapshots(core, as_of_date=AS_OF)
+
+    known = core.short_position_last_known_for_code("10000")
+    assert len({row["legal_id"] for row in known}) == 1
+    assert len(known) == 1
+    assert known[0]["visibility_status"] == "reporting"
+    assert known[0]["last_reported_ratio"] == pytest.approx(0.0550)
+
+    row = core.short_behavior_snapshot("10000", AS_OF)
+    assert row["visible_institution_count"] == 1
+    assert row["visible_short_ratio"] == pytest.approx(0.0550)     # 0.0607 + 0.0550 ではない
+
+
 def test_report_age_is_counted_up_to_today_not_the_end_of_the_calendar(tmp_path):
     """取引カレンダーは 1 年先まで入っている。
 
@@ -404,8 +439,10 @@ def test_earnings_distance_counts_announcements_after_as_of(tmp_path):
     assert row is not None
     flags = json.loads(row["flags_json"] or "[]")
     assert "earnings_near" in flags
-    assert row["catalyst_score"] is not None
-    assert row["catalyst_score"] > 0
+    # 催化の点数は無い（v4）。決算までの営業日数は事実として components に残る。
+    assert row["catalyst_score"] is None
+    components = json.loads(row["components_json"])
+    assert components["trading_days_to_earnings"] == distance["10000"]
 
 
 # -- スキーマ移行 --------------------------------------------------------------

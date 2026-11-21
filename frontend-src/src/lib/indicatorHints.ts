@@ -269,76 +269,35 @@ export const NEWS_HINTS: Record<string, ScoreHint> = {
   },
 };
 
-export const SHORT_HINTS: Record<string, ScoreHint> = {
-  behavior: {
-    title: t('行为分'),
-    body: t('研究用排序分：卖压吸收 30% + 回补 22% + 低位 18% + 空头压力 15% + 机构轮换 8% + 催化 7%。缺项连同权重一起剔除。'),
-    note: t('不是上涨概率；首次走步验证未通过，只能当描述性分类。'),
+export const SHORT_HINTS = {
+  crowding: {
+    title: t('拥挤度'),
+    body: t('按公开做空的机构数和公开持仓比例分三档：近期机构不少于 4 家，或公开持仓不低于 4%，为高；不少于 2 家，或不低于 2%，为中；其余有公开持仓的为低。'),
+    note: t('历史统计上，公开做空的机构越多、持仓比例越高，这只股票之后 20 日往往弱于同板块。这是统计关系，不是买卖建议。'),
+  },
+  state: {
+    title: t('20日动向'),
+    body: t('按公开持仓比例的净变化分类，门槛是 0.10 个百分点，也就是法定的再报告步长。20 日净增达到门槛、且近 5 日没有反向达到门槛，为增加中；净减同理，为减少中；20 日与 5 日方向相反，或 20 日不足门槛而 5 日超过门槛，为方向反复；变化都不足门槛，为持平。'),
+    note: t('这是按公开报告做的规则分类，不代表机构意图。'),
+  },
+  visibleShort: {
+    title: t('公开持仓比例'),
+    body: t('最后报告达到 0.5% 披露门槛、且近 125 个交易日内有更新的机构，持仓比例之和。门槛以下的仓位看不到。'),
+  },
+  institutions: {
+    title: t('近期机构数'),
+    body: t('仅统计最后报告达到 0.5% 披露门槛，且近 125 个交易日内有更新的机构。久未更新的机构仍保留在册合计。'),
   },
   inScope: {
     title: t('在册合计'),
     body: t('最后报告仍在公开范围内的全部机构之和，含报告已长期停更者。官方规则没有失效期限。'),
   },
-  visibleShort: {
-    title: t('公开可见空头'),
-    body: t('近125个交易日有更新的报告义务中机构之和'),
-  },
   daysToCover: {
-    title: t('公开可见回补天数'),
-    body: t('仅按可见部分计算，不是市场总空头回补天数'),
+    title: t('回补天数'),
+    body: t('公开持仓股数除以 20 日平均成交量。只按看得见的部分计算，不是全市场空头的回补天数。'),
   },
-  low_position: {
-    title: t('低位'),
-    body: t('股价相对自身中长期区间是否处在偏低位置。分项是「量」不是「品质」，不用涨跌色。'),
-  },
-  short_pressure: {
-    title: t('空头压力'),
-    body: t('公开可见空头变化相对 20 日均量的压力。分项是「量」不是「品质」，不用涨跌色。'),
-  },
-  absorption: {
-    title: t('卖压吸收'),
-    body: t('空头压力较高而单位压力造成的价格损害较低。权重最高，但走步验证里表现最差，不当看好信号。'),
-  },
-  price_damage: {
-    title: t('价格损害'),
-    body: t('同样公开空头压力下，股价相对 TOPIX / 业种跌了多少。'),
-  },
-  covering: {
-    title: t('回补强度'),
-    body: t('多家机构减仓、公开空头快速下降的程度。'),
-  },
-  rotation: {
-    title: t('机构轮换'),
-    body: t('一批退出、另一批进入。本身不是利好或利空。'),
-  },
-  catalyst: {
-    title: t('催化'),
-    body: t('近期决算或已接入新闻是否构成事件窗口。只占行为分 7%。'),
-  },
-  risk: {
-    title: t('风险减分'),
-    body: t('低流动性、信用拥挤、数据过期等会从行为分里最多扣 25 分，并且影响排序。'),
-  },
-  confidence: {
-    title: t('数据置信度'),
-    body: t('公开报告覆盖是否足够。监视优先级 = 行为分 × (0.35 + 0.65 × 置信度)。'),
-  },
-};
+} satisfies Record<string, ScoreHint>;
 
 export function familyHint(key: string): ScoreHint | undefined {
   return FAMILY_HINTS[key];
-}
-
-export function shortScoreHint(label: string): ScoreHint | undefined {
-  const map: Record<string, ScoreHint> = {
-    低位: SHORT_HINTS.low_position,
-    空头压力: SHORT_HINTS.short_pressure,
-    卖压吸收: SHORT_HINTS.absorption,
-    价格损害: SHORT_HINTS.price_damage,
-    回补强度: SHORT_HINTS.covering,
-    机构轮换: SHORT_HINTS.rotation,
-    催化: SHORT_HINTS.catalyst,
-    风险减分: SHORT_HINTS.risk,
-  };
-  return map[label];
 }

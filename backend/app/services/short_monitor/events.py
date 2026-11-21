@@ -33,12 +33,18 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from app.services.short_interest import REPORTING_THRESHOLD
 
-from .institutions import InstitutionResolver
+from .institutions import InstitutionResolver, normalize_address, normalize_name
 
 #: イベント導出の版。分類規則を変えたら上げる。
 #: v3: 効力日を厳密に公開日の翌営業日へ / (legal, fund) 連鎖 / unknown 可視性 /
 #:     訂正の 2 段選択 / 逐機関の窓内差分。
-EVENT_VERSION = "evt-v3"
+#: v4: (a) 実体を住所で分けない（inst-v4）。分けるのは、この銘柄の中で同じ
+#:     仓位日に住所違いで **違う値** が出た組だけ。(b) 同じ連鎖・同じ仓位日・
+#:     同じ公開日・同じ値の行は 1 件に畳む（住所欄つき / 無しで二重に取り込ま
+#:     れた 2026-07 の配信）。(c) 窓内変化の起点: 連鎖が窓の前に公開範囲に
+#:     居なかった場合、「0 から全量」ではなく報告自身の前回値（PrevRptRatio）
+#:     を起点にする。
+EVENT_VERSION = "evt-v4"
 
 #: 「まだ報告義務中」の最終報告が、これより古ければ現在の建玉の証拠にならない。
 #:
@@ -188,12 +194,18 @@ def build_events(
         )
         disclosure_count.setdefault(key, []).append(str(row.get("disclosed_date") or ""))
 
+    parallel = _parallel_entities(ordered)
+
     # Keyed by the reporting *chain* (legal_id, fund), not the institution alone:
     # otherwise the first-ever disclosure of a second fund of the same institution
     # is misclassified as `reentry` instead of `new`.
     seen_reporting: set[tuple[str, str]] = set()
+    # 同じ報告が住所欄つき / 無しで二重に入っていることがある（2026-07 の
+    # 一括配信と日次配信の重なり）。同じ連鎖・仓位日・公開日・値なら 1 件。
+    # 住所のある行を残したいので、住所つきを先に見る。
+    emitted: set[tuple[str, str, str, str, float | None, float | None]] = set()
     events: list[dict[str, Any]] = []
-    for row in ordered:
+    for row in sorted(ordered, key=_dedupe_order):
         raw_name = str(row.get("holder_name") or "").strip()
         if not raw_name:
             continue
@@ -209,12 +221,20 @@ def build_events(
         if fund in ("-", "－"):
             fund = ""
 
-        mapping = resolver.resolve(raw_name, address=address)
+        mapping = resolver.resolve(
+            raw_name, address=address,
+            split_by_address=(normalize_name(raw_name), fund) in parallel,
+        )
         ratio = _finite(row.get("short_position_ratio"))
         shares = _finite(row.get("short_position_shares"))
         previous = _finite(row.get("previous_ratio"))
         legal_id = mapping.legal_id
         chain = (legal_id, fund)
+
+        duplicate_key = (legal_id, fund, position_date, published_date, ratio, shares)
+        if duplicate_key in emitted:
+            continue
+        emitted.add(duplicate_key)
 
         event_type = _classify(previous, ratio, seen_before=chain in seen_reporting)
         if visibility_of(ratio) == VISIBLE_REPORTING:
@@ -254,6 +274,53 @@ def build_events(
             "algorithm_version": algorithm_version,
         })
     return events
+
+
+def _dedupe_order(row: Mapping[str, Any]) -> tuple[str, str, str, str, int]:
+    """公開日順のまま、同じ報告の中では住所のある行を先に置く。"""
+
+    return (
+        str(row.get("disclosed_date") or ""),
+        str(row.get("calculated_date") or ""),
+        str(row.get("holder_name") or ""),
+        str(row.get("investment_fund_name") or ""),
+        0 if str(row.get("holder_address") or "").strip() else 1,
+    )
+
+
+def _parallel_entities(rows: Sequence[Mapping[str, Any]]) -> set[tuple[str, str]]:
+    """この銘柄の中で「同名だが本当に別法人」と言える (正規化名, ファンド) の組。
+
+    証拠は 1 つだけ: **同じ仓位日・同じ公開日に、違う住所から、違う値** が
+    報告されていること。住所が違うだけ（表記揺れ・移転・住所欄の空白）では
+    分けない —— 本番 10 年分で、住所違いの 17,024 組のうち該当は 1 組だった。
+    公開日も揃えるのは、後日の訂正（同じ仓位日・別の値）を「並行」と読まない
+    ため。
+    """
+
+    seen: dict[tuple[str, str, str, str], dict[str, set[float | None]]] = {}
+    for row in rows:
+        name = normalize_name(str(row.get("holder_name") or "").strip())
+        address = normalize_address(row.get("holder_address"))
+        if not name or not address:
+            continue
+        fund = str(row.get("investment_fund_name") or "").strip()
+        if fund in ("-", "－"):
+            fund = ""
+        key = (
+            name, fund, str(row.get("calculated_date") or ""), str(row.get("disclosed_date") or ""),
+        )
+        seen.setdefault(key, {}).setdefault(address, set()).add(
+            _finite(row.get("short_position_ratio"))
+        )
+    out: set[tuple[str, str]] = set()
+    for (name, fund, _position_date, _published_date), by_address in seen.items():
+        if len(by_address) < 2:
+            continue
+        values = [frozenset(v) for v in by_address.values()]
+        if any(a != b for a in values for b in values):
+            out.add((name, fund))
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -508,13 +575,20 @@ def window_changes(
     """`(from_cutoff, to_cutoff]` の間に公開で分かった建玉変化。
 
     連鎖ごとに「締切時点の現在値」を 2 点取り、差を積み上げる。可視合計の
-    差ではないので、閾値割れは「最終報告の値までの減少」、再参入は
-    「最後に見えていた値からの増加」、初出は「開示された全量」になる。
+    差ではないので、閾値割れは「最終報告の値までの減少」になる。
+
+    **窓の前に公開範囲に居なかった連鎖の起点（v4）。** 初出・再参入の報告には
+    たいてい前回値（`PrevRptRatio`）が入っている（2025-06 以降の初出 8,832 件
+    のうち 7,402 件が 0〜0.5% の値）。0.43% → 0.53% の報告を「0 から 0.53%」と
+    数えると、+0.10 ポイントの変化が 5 倍に化ける。窓の前の状態が「報告義務中」
+    でない連鎖は、窓内の最初の報告が述べる前回値を起点にする。前回値が無ければ
+    従来どおり、最後に見えていた値（無ければ 0）。
     """
 
     events = list(events)
     now = _chain_states(events, published_cutoff=to_cutoff)
     before = _chain_states(events, published_cutoff=from_cutoff)
+    first_in_window = _first_reports_after(events, from_cutoff=from_cutoff, to_cutoff=to_cutoff)
 
     ratio_change = 0.0
     ratio_known = False
@@ -527,15 +601,14 @@ def window_changes(
     for chain, current in now.items():
         prior = before.get(chain)
         ratio_now = _finite(current.get("short_ratio"))
-        ratio_prev = _finite(prior.get("short_ratio")) if prior is not None else 0.0
+        shares_now = _shares_of(current)
+        ratio_prev, shares_prev = _window_baseline(prior, first_in_window.get(chain))
         if ratio_now is None or ratio_prev is None:
             unknown_chains += 1
         else:
             ratio_change += ratio_now - ratio_prev
             ratio_known = True
 
-        shares_now = _shares_of(current)
-        shares_prev = _shares_of(prior) if prior is not None else 0.0
         if shares_now is None or shares_prev is None:
             continue
         delta = shares_now - shares_prev
@@ -553,6 +626,59 @@ def window_changes(
         "gross_reduction_shares": gross_reduction if shares_known else None,
         "unknown_chains": unknown_chains,
     }
+
+
+def _first_reports_after(
+    events: Iterable[Mapping[str, Any]], *, from_cutoff: str, to_cutoff: str
+) -> dict[str, Mapping[str, Any]]:
+    """連鎖ごとの、窓内で最初に公開された報告（訂正は除く）。"""
+
+    out: dict[str, Mapping[str, Any]] = {}
+    for event in events:
+        published = str(event.get("published_date") or "")
+        if not published or published <= from_cutoff or published > to_cutoff:
+            continue
+        if event.get("correction_status") == CORRECTION_REVISED:
+            continue
+        if not str(event.get("legal_id") or ""):
+            continue
+        chain = chain_key_of(event)
+        order = (published, str(event.get("position_date") or ""))
+        current = out.get(chain)
+        if current is None or order < (
+            str(current.get("published_date") or ""), str(current.get("position_date") or ""),
+        ):
+            out[chain] = event
+    return out
+
+
+def _window_baseline(
+    prior: Mapping[str, Any] | None, first: Mapping[str, Any] | None
+) -> tuple[float | None, float | None]:
+    """窓の起点の（比率, 株数）。
+
+    窓の前から報告義務中だった連鎖は、その時点の公開値がそのまま起点。
+    そうでない連鎖（初出・閾値割れ後・解消後）は、窓内の最初の報告が述べる
+    前回値を使う。株数の前回値は報告に無いので、同じ報告の「株数 ÷ 比率」
+    （= 発行済株式数）に前回比率を掛けて出す。
+    """
+
+    if prior is not None and prior.get("visibility_status") == VISIBLE_REPORTING:
+        return _finite(prior.get("short_ratio")), _shares_of(prior)
+
+    stated = _finite(first.get("previous_ratio")) if first is not None else None
+    if stated is not None and first is not None:
+        ratio_first = _finite(first.get("short_ratio"))
+        shares_first = _finite(first.get("short_shares"))
+        if stated <= 0.0:
+            return 0.0, 0.0
+        if ratio_first and ratio_first > 0.0 and shares_first is not None:
+            return stated, shares_first * stated / ratio_first
+        return stated, None
+
+    if prior is None:
+        return 0.0, 0.0
+    return _finite(prior.get("short_ratio")), _shares_of(prior)
 
 
 def _shares_of(event: Mapping[str, Any]) -> float | None:

@@ -87,81 +87,34 @@ OLD_DAY = DAYS[-30]
 NEW_DAY = DAYS[-3]
 
 
-def test_shorting_into_a_falling_stock_is_not_called_absorption():
-    """增空且大跌 → 空頭圧力が効いている。吸収とは呼ばない。"""
+def test_the_same_shorting_gets_the_same_state_whatever_the_price_does():
+    """株価の動きは状態に入らない。増空は下げていても耐えていても「增加中」。
 
-    falling = _stock(
-        "1000",
-        bars=_bars("1000", drift=-0.004),
-        reports=_shorting_reports("1000", when_old=OLD_DAY, when_new=NEW_DAY,
-                                  old_shares=100_000, new_shares=600_000),
-    )
-    # 横断面を作るための対照群（圧力なし）
-    peers = [_stock(f"90{i:02d}", bars=_bars(f"90{i:02d}", drift=0.001)) for i in range(6)]
-    rows = _by_code(snap.build_snapshots([falling, *peers], _market()))
-
-    row = rows["1000"]
-    assert row["pressure_adv20_20d"] > 0
-    assert row["primary_state"] in (
-        states.STATE_NORMAL_SHORTING, states.STATE_DIVERGENCE_FAILED,
-    )
-    assert row["primary_state"] != states.STATE_ABSORPTION
-
-
-def test_shorting_that_does_not_hurt_the_price_becomes_an_absorption_candidate():
-    """增空但不跌 → 卖压吸收候补。"""
-
-    holding = _stock(
-        "1000",
-        bars=_bars("1000", drift=0.0),
-        reports=_shorting_reports("1000", when_old=OLD_DAY, when_new=NEW_DAY,
-                                  old_shares=100_000, new_shares=600_000),
-    )
-    # 同じ圧力で価格が削られた銘柄を並べて横断面を作る
-    hurt = [
-        _stock(
-            f"20{i:02d}", bars=_bars(f"20{i:02d}", drift=-0.006),
-            reports=_shorting_reports(f"20{i:02d}", when_old=OLD_DAY, when_new=NEW_DAY,
-                                      old_shares=100_000, new_shares=600_000),
-        )
-        for i in range(6)
-    ]
-    rows = _by_code(snap.build_snapshots([holding, *hurt], _market()))
-
-    assert rows["1000"]["absorption_score"] is not None
-    assert rows["1000"]["absorption_score"] > rows["2000"]["absorption_score"]
-    assert rows["1000"]["price_damage_score"] < rows["2000"]["price_damage_score"]
-
-
-def test_absorption_is_cross_sectional_not_an_imported_threshold():
-    """同じ銘柄でも、その日の全体がどうだったかで評価が変わる。
-
-    絶対閾値を輸入していないことの確認。
+    旧版は同じ増空を、株価しだいで「正常做空」「背离失效」「卖压吸收」に
+    振り分けていた。3 回の検証でその振り分けに予測力が無かったので、状態は
+    公開持仓比率の純変化だけで決める。株価は事実として横に並ぶだけ。
     """
 
-    def run(peer_drift):
+    def state_for(drift):
         subject = _stock(
-            "1000", bars=_bars("1000", drift=-0.001),
+            "1000",
+            bars=_bars("1000", drift=drift),
             reports=_shorting_reports("1000", when_old=OLD_DAY, when_new=NEW_DAY,
                                       old_shares=100_000, new_shares=600_000),
         )
-        peers = [
-            _stock(
-                f"20{i:02d}", bars=_bars(f"20{i:02d}", drift=peer_drift),
-                reports=_shorting_reports(f"20{i:02d}", when_old=OLD_DAY, when_new=NEW_DAY,
-                                          old_shares=100_000, new_shares=600_000),
-            )
-            for i in range(8)
-        ]
+        peers = [_stock(f"90{i:02d}", bars=_bars(f"90{i:02d}", drift=0.001)) for i in range(6)]
         return _by_code(snap.build_snapshots([subject, *peers], _market()))["1000"]
 
-    among_survivors = run(+0.004)   # 周りは耐えている → 相対的に弱い
-    among_casualties = run(-0.008)  # 周りは崩れている → 相対的に強い
-    assert among_casualties["absorption_score"] > among_survivors["absorption_score"]
+    falling, flat, rising = state_for(-0.004), state_for(0.0), state_for(0.004)
+    assert falling["pressure_adv20_20d"] > 0
+    assert falling["ratio_change_20d"] >= states.CHANGE_FLOOR_RATIO
+    assert falling["primary_state"] == flat["primary_state"] == rising["primary_state"] == states.STATE_BUILDING
+    # 株価は事実として残る（状態には使わない）
+    assert falling["drawdown_52w"] != rising["drawdown_52w"]
 
 
-def test_covering_with_breakout_reaches_squeeze_confirmed():
-    """减空 + 突破 + 成交额确认 + 相对转强 → 挤空确认。"""
+def test_a_net_reduction_is_covering_and_the_other_holder_still_counts():
+    """純減は「减少中」。残っている建玉は合計に残り、回補日数にも効く。"""
 
     covering = _stock(
         "1000",
@@ -169,35 +122,47 @@ def test_covering_with_breakout_reaches_squeeze_confirmed():
         reports=[
             _report("1000", "Alpha", OLD_DAY, 0.030, shares=3_000_000),
             _report("1000", "Alpha", NEW_DAY, 0.008, prev=0.030, shares=800_000),
-            # なお残っている建玉。全部消えたなら「まだ踏み上げる燃料がある」
-            # とは言えないので、この銘柄は挤空確認に届かないのが正しい。
             _report("1000", "Beta", OLD_DAY, 0.020, shares=2_000_000),
             _report("1000", "Beta", NEW_DAY, 0.009, prev=0.020, shares=900_000),
         ],
-        breakout_confirmed=True,
-        turnover_confirmed=True,
     )
     peers = [_stock(f"90{i:02d}", bars=_bars(f"90{i:02d}")) for i in range(5)]
-    rows = _by_code(snap.build_snapshots([covering, *peers], _market()))
-
-    row = rows["1000"]
+    row = _by_code(snap.build_snapshots([covering, *peers], _market()))["1000"]
+    assert row["primary_state"] == states.STATE_COVERING
+    assert row["ratio_change_20d"] == pytest.approx(0.017 - 0.050)
+    assert row["visible_short_ratio"] == pytest.approx(0.017)
     assert row["visible_days_to_cover"] is not None and row["visible_days_to_cover"] >= 1.0
-    assert row["primary_state"] == states.STATE_SQUEEZE_CONFIRMED
 
 
-def test_the_same_covering_without_a_breakout_stops_at_covering_start():
-    covering = _stock(
-        "1000",
-        bars=_bars("1000", drift=0.004),
-        reports=[
-            _report("1000", "Alpha", OLD_DAY, 0.030, shares=3_000_000),
-            _report("1000", "Alpha", NEW_DAY, 0.008, prev=0.030, shares=800_000),
-        ],
-        breakout_confirmed=False, turnover_confirmed=False,
+def test_every_score_column_is_none():
+    """合成点数は取り消した（v4）。列は表に残るが、値は常に None。"""
+
+    shorting = _stock(
+        "1000", bars=_bars("1000", drift=-0.004),
+        reports=_shorting_reports("1000", when_old=OLD_DAY, when_new=NEW_DAY,
+                                  old_shares=100_000, new_shares=600_000),
     )
-    peers = [_stock(f"90{i:02d}", bars=_bars(f"90{i:02d}")) for i in range(5)]
-    rows = _by_code(snap.build_snapshots([covering, *peers], _market()))
-    assert rows["1000"]["primary_state"] == states.STATE_COVERING_START
+    peers = [_stock(f"90{i:02d}", bars=_bars(f"90{i:02d}", drift=0.001)) for i in range(6)]
+    rows = snap.build_snapshots([shorting, *peers], _market())
+    assert len(rows) == 7
+    score_columns = (
+        "behavior_score", "monitor_priority", "low_position_score", "short_pressure_score",
+        "price_damage_score", "absorption_score", "covering_score", "rotation_score",
+        "catalyst_score", "risk_score",
+    )
+    for row in rows:
+        for column in score_columns:
+            assert row[column] is None, f"{row['canonical_code']}.{column}"
+
+    row = _by_code(rows)["1000"]
+    components = json.loads(row["components_json"])
+    assert components["crowding_level"] == states.CROWDING_LOW     # 1 社 / 約 0.6%
+    assert "days_since_last_report" in components
+    assert isinstance(components["days_since_last_report"], int)
+    assert 0 <= components["days_since_last_report"] <= 3     # 報告は 2 営業日前
+    # 公開持仓の無い銘柄は拥挤度 0
+    quiet = json.loads(_by_code(rows)["9000"]["components_json"])
+    assert quiet["crowding_level"] == states.CROWDING_NONE
 
 
 def test_a_stock_with_no_institutional_activity_gets_no_signal():
@@ -230,7 +195,9 @@ def test_below_threshold_holders_are_counted_but_not_summed():
 def test_snapshot_carries_the_algorithm_version():
     rows = snap.build_snapshots([_stock("1000")], _market())
     assert rows and rows[0]["algorithm_version"] == snap.SNAPSHOT_VERSION
-    assert "inst-" in snap.SNAPSHOT_VERSION and "sbscore-" in snap.SNAPSHOT_VERSION
+    for part in ("inst-v4", "evt-v4", "sbf-v3", "sbs-v4"):
+        assert part in snap.SNAPSHOT_VERSION
+    assert "sbscore-" not in snap.SNAPSHOT_VERSION, "合成点数の版が残っている"
 
 
 def test_signals_are_only_emitted_on_state_change():
@@ -251,10 +218,10 @@ def test_signals_are_only_emitted_on_state_change():
 
 
 def test_signal_ids_are_stable():
-    a = snap.signal_id_for("1000", "2026-08-03", states.STATE_ABSORPTION)
-    b = snap.signal_id_for("1000", "2026-08-03", states.STATE_ABSORPTION)
+    a = snap.signal_id_for("1000", "2026-08-03", states.STATE_BUILDING)
+    b = snap.signal_id_for("1000", "2026-08-03", states.STATE_BUILDING)
     assert a == b
-    assert a != snap.signal_id_for("1000", "2026-08-04", states.STATE_ABSORPTION)
+    assert a != snap.signal_id_for("1000", "2026-08-04", states.STATE_BUILDING)
 
 
 def test_short_price_history_is_skipped_rather_than_guessed():
@@ -279,7 +246,7 @@ def test_signals_record_the_information_cutoff():
 # -- 第十四轮: informed 口径 / 潜伏空頭 ------------------------------------------
 
 def test_aggregate_only_covering_does_not_start_covering():
-    """「個人」名義だけが減らしても informed 口径は空: 回補開始にならない。"""
+    """「個人」名義だけが減らしたときは、informed 口径が空であることを印で示す。"""
 
     individuals = _stock(
         "1000",
@@ -296,7 +263,9 @@ def test_aggregate_only_covering_does_not_start_covering():
     assert components["informed"]["institution_count"] == 0
     assert components["informed"]["pressure_20d"]["pressure_adv20"] is None
     assert components["reporter_classes"] == {"aggregate": 1}
-    assert row["primary_state"] != states.STATE_COVERING_START
+    # 旧版は informed 口径が空なら回補開始にしなかった。v4 は閘門を持たず、
+    # 状態は公開持仓の純変化どおり「减少中」。印だけが付く。
+    assert row["primary_state"] == states.STATE_COVERING
     flags = json.loads(row["flags_json"])
     assert states.FLAG_NO_INFORMED_REPORTER in flags
     # 全鎖口径の圧力そのものは従来どおり出る（どちらか一方を正とはしない）
@@ -320,7 +289,8 @@ def test_domestic_broker_covering_counts_as_informed_after_calibration():
     components = json.loads(row["components_json"])
     assert components["reporter_classes"] == {"domestic_broker": 1}
     assert components["informed"]["institution_count"] == 1
-    assert row["primary_state"] == states.STATE_COVERING_START
+    assert row["primary_state"] == states.STATE_COVERING
+    assert states.FLAG_NO_INFORMED_REPORTER not in json.loads(row["flags_json"])
 
 
 def test_informed_pressure_matches_all_chain_pressure_when_all_reporters_are_informed():
@@ -338,7 +308,7 @@ def test_informed_pressure_matches_all_chain_pressure_when_all_reporters_are_inf
     components = json.loads(row["components_json"])
     assert components["informed"]["institution_count"] == 1
     assert components["informed"]["pressure_20d"]["pressure_adv20"] == pytest.approx(row["pressure_adv20_20d"])
-    assert row["primary_state"] == states.STATE_COVERING_START
+    assert row["primary_state"] == states.STATE_COVERING
     assert components["reporter_classes"] == {"global_pb": 1}
 
 

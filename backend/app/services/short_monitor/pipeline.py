@@ -71,15 +71,6 @@ def rebuild_events(
         return calendar_set[index] if index < len(calendar_set) else None
 
     resolver = InstitutionResolver(curated=repository.institution_alias_map())
-    # 事前パス: 同じ正規化名に複数の住所が観測される名前を確定する。
-    # ここで確定してから resolve するので、実体 ID が走査順に依存しない。
-    for _code, rows in repository.iter_short_positions_by_code():
-        for row in rows:
-            resolver.observe(row.get("holder_name"), row.get("holder_address"))
-    homonyms = resolver.finalize_observations()
-    if progress and homonyms:
-        progress(f"{len(homonyms)} homonym names split by address")
-
     #: 今回のビルド識別子。全行に押して、最後に旧ビルドの行を掃除する。
     #: utc_now_iso() は秒精度なので、同じ秒に 2 回走ると同じ値になり
     #: 掃除が空振りする —— 乱数の尾を付けて一意にする。
@@ -126,8 +117,11 @@ def rebuild_events(
         for event in events:
             raw = str(event["raw_holder_name"])
             mapping = resolver.resolve(raw, address=event.get("holder_address"))
-            entity = entities.setdefault(mapping.legal_id, {
-                "legal_id": mapping.legal_id,
+            # 実体の ID はイベントに載っているものが正（同名別法人が並行している
+            # 稀な組では build_events が住所で分けていて、素の resolve とは違う）。
+            legal_id = str(event["legal_id"])
+            entity = entities.setdefault(legal_id, {
+                "legal_id": legal_id,
                 "display_name": mapping.display_name,
                 "normalized_name": mapping.normalized_name,
                 "group_id": mapping.group_id,
@@ -143,7 +137,7 @@ def rebuild_events(
             if raw not in aliases:
                 source = next((r for r in rows if r.get("holder_name") == raw), {})
                 aliases[raw] = {
-                    "raw_name": raw, "legal_id": mapping.legal_id,
+                    "raw_name": raw, "legal_id": legal_id,
                     "match_kind": mapping.match_kind, "confidence": mapping.confidence,
                     "raw_address": source.get("holder_address"),
                     "manager_name": source.get("manager_name"),
@@ -206,8 +200,6 @@ def refresh_snapshots(
     *,
     as_of_date: str | None = None,
     radar_confirmations: Mapping[str, Mapping[str, bool]] | None = None,
-    news_counts: Mapping[str, int] | None = None,
-    has_news_feed: bool = True,
     progress: Callable[[str], None] | None = None,
 ) -> RefreshResult:
     """全市場のスナップショットを 1 営業日分作る。"""
@@ -235,7 +227,6 @@ def refresh_snapshots(
     regulation = _regulation_map(repository, securities.keys(), as_of=target, calendar=calendar)
     earnings = _earnings_distance(repository, calendar=calendar, as_of=target)
     confirmations = radar_confirmations or {}
-    news = news_counts or {}
 
     stocks: list[snap.StockInputs] = []
     for code, series in bars.items():
@@ -253,7 +244,6 @@ def refresh_snapshots(
             regulation_severity=int((regulation.get(code) or {}).get("severity") or 0),
             regulation_known=bool((regulation.get(code) or {}).get("known", True)),
             trading_days_to_earnings=earnings.get(code),
-            news_count_5d=int(news.get(code) or 0),
             breakout_confirmed=bool(confirm.get("breakout")),
             turnover_confirmed=bool(confirm.get("turnover")),
         ))
@@ -263,7 +253,7 @@ def refresh_snapshots(
 
     market = snap.MarketInputs(
         as_of_date=target, trading_days=list(window),
-        topix_closes=topix, has_news_feed=has_news_feed,
+        topix_closes=topix,
     )
     rows = snap.build_snapshots(stocks, market)
     if not rows:

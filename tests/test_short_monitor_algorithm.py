@@ -1,9 +1,14 @@
-"""因子・状態機・評分。指令書 §十七「算法」の各項目に対応する。"""
+"""因子・状態機。指令書 §十七「算法」のうち、v4（sbf-v3 / sbs-v4）でも残る項目。
+
+v4 で合成分数（吸収・回補・轮換・催化・行動分・監視優先度）と旧 6 状態の閘門は
+廃止した。ここにはそれらのテストは無い。残るのは事実の列（出来高比の圧力・
+回補日数・信用環境）、データ信頼度、5 状態の分類と補助ラベル。
+"""
 
 import pytest
 
 from app.services.short_monitor import factors as f
-from app.services.short_monitor import scoring, states
+from app.services.short_monitor import states
 
 
 # -- 圧力の正規化 -----------------------------------------------------------
@@ -14,11 +19,11 @@ def test_pressure_is_measured_against_liquidity_not_ratio_alone():
     liquid = f.short_pressure(shares_change=100_000, adv20_shares=5_000_000)
     thin = f.short_pressure(shares_change=100_000, adv20_shares=200_000)
     assert thin["pressure_adv20"] > liquid["pressure_adv20"]
-    assert thin["score"] > liquid["score"]
+    assert "score" not in thin, "v4 は合成点数を返さない"
 
 
 def test_pressure_is_unknown_without_liquidity():
-    assert f.short_pressure(shares_change=100_000, adv20_shares=None)["score"] is None
+    assert f.short_pressure(shares_change=100_000, adv20_shares=None)["pressure_adv20"] is None
     assert f.short_pressure(shares_change=100_000, adv20_shares=0)["known"] is False
 
 
@@ -26,65 +31,7 @@ def test_pressure_saturates_instead_of_exploding():
     """1 社の巨大報告がスケール全体を支配しないこと。"""
 
     big = f.short_pressure(shares_change=50_000_000, adv20_shares=100_000)
-    assert big["score"] <= 100.0
     assert abs(big["pressure_adv20"]) <= f.WINSOR_LIMIT
-
-
-# -- 吸収 -------------------------------------------------------------------
-
-def test_no_absorption_verdict_below_the_minimum_pressure():
-    """圧力が小さいときに「吸収された」と言わない（小さい分母で割らない）。"""
-
-    tiny = f.DamageInput(pressure_adv20=0.005, rel_topix=0.02, rel_sector=0.02)
-    assert tiny.raw_damage() is None
-
-
-def test_damage_uses_the_weaker_of_market_and_sector():
-    """都合のいいほうを選ばない。"""
-
-    both = f.DamageInput(pressure_adv20=0.5, rel_topix=0.05, rel_sector=-0.05)
-    assert both.raw_damage() > 0
-
-
-def test_shorting_plus_underperformance_reads_as_effective_pressure():
-    hurt = f.DamageInput(pressure_adv20=0.5, rel_topix=-0.10, rel_sector=-0.08)
-    held = f.DamageInput(pressure_adv20=0.5, rel_topix=0.01, rel_sector=0.01)
-    assert hurt.raw_damage() > held.raw_damage()
-
-
-def test_absorption_is_discounted_while_the_stock_still_makes_new_lows():
-    """安値を更新している間は「吸収」と呼ばない。"""
-
-    holding = f.absorption_from_percentile(0.1, made_new_low=False, consistent=True)
-    falling = f.absorption_from_percentile(0.1, made_new_low=True, consistent=True)
-    assert falling["absorption_score"] < holding["absorption_score"]
-
-
-def test_absorption_is_discounted_when_windows_disagree():
-    consistent = f.absorption_from_percentile(0.1, made_new_low=False, consistent=True)
-    noisy = f.absorption_from_percentile(0.1, made_new_low=False, consistent=False)
-    assert noisy["absorption_score"] < consistent["absorption_score"]
-
-
-# -- 回補 -------------------------------------------------------------------
-
-def test_covering_counts_only_reported_reductions():
-    result = f.covering(shares_change=-500_000, adv20_shares=1_000_000, reducing_institutions=3)
-    assert result["visible_covering_adv20"] == pytest.approx(0.5)
-    assert result["score"] > 0
-
-
-def test_increasing_shorts_produce_no_covering():
-    result = f.covering(shares_change=+500_000, adv20_shares=1_000_000)
-    assert result["visible_covering_adv20"] == 0.0
-
-
-def test_covering_concentrated_in_one_institution_scores_lower():
-    spread = f.covering(shares_change=-500_000, adv20_shares=1_000_000, reducing_institutions=4)
-    single = f.covering(
-        shares_change=-500_000, adv20_shares=1_000_000, reducing_institutions=1, concentrated=True,
-    )
-    assert single["score"] < spread["score"]
 
 
 def test_visible_days_to_cover_is_named_and_bounded():
@@ -93,42 +40,36 @@ def test_visible_days_to_cover_is_named_and_bounded():
     assert f.visible_days_to_cover(1_000_000, 0) is None
 
 
-# -- 機関の入れ替わり -------------------------------------------------------
-
-def test_rotation_requires_both_sides_moving():
-    both = f.rotation(entries=2, reentries=1, exits=3, reductions=3, concentration=0.3)
-    one_sided = f.rotation(entries=3, reentries=0, exits=0, reductions=0, concentration=0.3)
-    assert both["score"] > one_sided["score"]
-    assert both["balanced"] is True
-    assert one_sided["balanced"] is False
-
-
 # -- 信用環境 ---------------------------------------------------------------
 
-def test_crowded_retail_margin_raises_risk():
-    """機関空頭が多く、かつ信用買いも極端に混雑 = 単純な踏み上げ候補ではない。"""
+def test_crowded_retail_margin_is_reported_as_a_fact():
+    """機関空頭が多く、かつ信用買いも極端に混雑 = 単純な踏み上げ候補ではない。
+    v4 は点数にせず、`crowded_long` という事実の印だけを返す。"""
 
     calm = f.margin_environment(
-        margin_long=1_000_000, margin_short=500_000, margin_long_change=0,
-        adv20_shares=2_000_000,
+        margin_long=1_000_000, margin_short=500_000, adv20_shares=2_000_000,
     )
     crowded = f.margin_environment(
-        margin_long=20_000_000, margin_short=500_000, margin_long_change=3_000_000,
-        adv20_shares=2_000_000,
+        margin_long=20_000_000, margin_short=500_000, adv20_shares=2_000_000,
     )
-    assert crowded["score"] > calm["score"]
+    assert crowded["long_crowding_adv20"] > calm["long_crowding_adv20"]
     assert crowded["crowded_long"] is True
+    assert calm["crowded_long"] is False
+    assert "score" not in crowded
 
 
-def test_regulation_adds_risk():
+def test_regulation_is_carried_as_a_fact_and_labelled():
     plain = f.margin_environment(
-        margin_long=1_000_000, margin_short=500_000, margin_long_change=0, adv20_shares=2_000_000,
+        margin_long=1_000_000, margin_short=500_000, adv20_shares=2_000_000,
     )
     regulated = f.margin_environment(
-        margin_long=1_000_000, margin_short=500_000, margin_long_change=0,
-        adv20_shares=2_000_000, regulation_severity=4,
+        margin_long=1_000_000, margin_short=500_000, adv20_shares=2_000_000,
+        regulation_severity=4,
     )
-    assert regulated["score"] > plain["score"]
+    assert plain["regulation_severity"] == 0
+    assert regulated["regulation_severity"] == 4
+    assert states.FLAG_REGULATED in states.classify({"regulation_severity": 4})["flags"]
+    assert states.FLAG_REGULATED not in states.classify({"regulation_severity": 0})["flags"]
 
 
 # -- 信頼度 -----------------------------------------------------------------
@@ -156,227 +97,67 @@ def test_no_visible_institution_is_not_treated_as_safe():
     assert "no_visible_institution" in result["reasons"]
 
 
-# -- 催化剂 -----------------------------------------------------------------
-
-def test_missing_catalyst_is_absent_not_neutral():
-    """ニュースが無いことを「中立の催化剂」として点にしない。"""
-
-    none = f.catalyst(trading_days_to_earnings=None, news_count_5d=0)
-    assert none["score"] is None
-    near = f.catalyst(trading_days_to_earnings=2, news_count_5d=1)
-    assert near["score"] > 0
-
-
-# -- 状態機 -----------------------------------------------------------------
+# -- 状態と補助ラベル -------------------------------------------------------
 
 def _evidence(**overrides):
     base = {
-        "pressure_adv20_20d": 0.0, "pressure_adv20_5d": 0.0,
-        "absorption_score": None, "covering_score": None, "low_position_score": 20.0,
-        "rotation_score": 0.0, "visible_days_to_cover": None,
-        "rel_topix_20d": 0.0, "rel_sector_20d": 0.0,
-        "breakout_confirmed": False, "turnover_confirmed": False,
-        "made_new_low": False, "broke_long_support": False,
-        "data_confidence": 0.9, "visible_institution_count": 3,
+        "ratio_change_20d": 0.0, "ratio_change_5d": 0.0,
+        "visible_institution_count": 3, "visible_short_ratio": 0.012,
     }
     base.update(overrides)
     return base
 
 
-def test_shorting_into_a_falling_stock_is_normal_shorting():
-    result = states.classify(_evidence(
-        pressure_adv20_20d=0.30, pressure_adv20_5d=0.20,
-        rel_topix_20d=-0.09, rel_sector_20d=-0.08, absorption_score=20.0,
-    ))
-    assert result["primary_state"] == states.STATE_NORMAL_SHORTING
+def test_deep_low_without_short_activity_is_steady_not_a_signal():
+    """価格が深い安値でも、空頭に動きが無ければ状態は動かない（価格は状態に入らない）。"""
 
-
-def test_shorting_that_does_not_move_the_price_is_absorption():
-    result = states.classify(_evidence(
-        pressure_adv20_20d=0.30, pressure_adv20_5d=0.20,
-        rel_topix_20d=0.01, rel_sector_20d=0.01, absorption_score=78.0,
-    ))
-    assert result["primary_state"] == states.STATE_ABSORPTION
-
-
-def test_absorption_is_not_claimed_while_making_new_lows():
-    result = states.classify(_evidence(
-        pressure_adv20_20d=0.30, pressure_adv20_5d=0.20,
-        rel_topix_20d=-0.02, rel_sector_20d=-0.02, absorption_score=78.0,
-        made_new_low=True,
-    ))
-    assert result["primary_state"] != states.STATE_ABSORPTION
-
-
-def test_covering_while_the_price_still_falls_is_not_covering_start():
-    """减空但股价继续下跌 —— 回補確認とは呼べない。"""
-
-    result = states.classify(_evidence(
-        pressure_adv20_20d=-0.30, pressure_adv20_5d=-0.20,
-        covering_score=70.0, rel_topix_20d=-0.06, rel_sector_20d=-0.05,
-    ))
-    assert result["primary_state"] not in (
-        states.STATE_COVERING_START, states.STATE_SQUEEZE_CONFIRMED,
-    )
-
-
-def test_covering_with_strength_is_covering_start_without_requiring_a_breakout():
-    result = states.classify(_evidence(
-        pressure_adv20_20d=-0.30, pressure_adv20_5d=-0.20,
-        covering_score=70.0, rel_topix_20d=0.04, rel_sector_20d=0.03,
-    ))
-    assert result["primary_state"] == states.STATE_COVERING_START
-
-
-def test_squeeze_requires_every_condition_at_once():
-    strict = dict(
-        pressure_adv20_20d=-0.40, pressure_adv20_5d=-0.30, covering_score=80.0,
-        visible_days_to_cover=2.5, breakout_confirmed=True, turnover_confirmed=True,
-        rel_topix_20d=0.06, rel_sector_20d=0.05,
-    )
-    assert states.classify(_evidence(**strict))["primary_state"] == states.STATE_SQUEEZE_CONFIRMED
-
-    for missing in ("breakout_confirmed", "turnover_confirmed"):
-        weakened = dict(strict)
-        weakened[missing] = False
-        assert states.classify(_evidence(**weakened))["primary_state"] != states.STATE_SQUEEZE_CONFIRMED
-
-    thin = dict(strict)
-    thin["visible_days_to_cover"] = 0.2
-    assert states.classify(_evidence(**thin))["primary_state"] != states.STATE_SQUEEZE_CONFIRMED
-
-
-def test_squeeze_needs_both_windows_decreasing_not_either():
-    """交付文書は最初から「5 日と 20 日の両方」。コードが min() で片側を
-    通していた（監査指摘）。片側だけの減少は 1 本の窓のノイズかもしれない。"""
-
-    one_sided = dict(
-        pressure_adv20_20d=-0.40, pressure_adv20_5d=+0.05, covering_score=80.0,
-        visible_days_to_cover=2.5, breakout_confirmed=True, turnover_confirmed=True,
-        rel_topix_20d=0.06, rel_sector_20d=0.05,
-    )
-    result = states.classify(_evidence(**one_sided))
-    assert result["primary_state"] != states.STATE_SQUEEZE_CONFIRMED
-    # 片側減少でも回補開始には落ちてよい（そちらは either で設計どおり）
-    assert result["primary_state"] == states.STATE_COVERING_START
-
-
-def test_squeeze_needs_both_relative_series_present():
-    """「市場対比・業種対比の双方で転強」は、片方のデータが無いままでは言えない。"""
-
-    missing_sector = dict(
-        pressure_adv20_20d=-0.40, pressure_adv20_5d=-0.30, covering_score=80.0,
-        visible_days_to_cover=2.5, breakout_confirmed=True, turnover_confirmed=True,
-        rel_topix_20d=0.06, rel_sector_20d=None,
-    )
-    assert states.classify(_evidence(**missing_sector))["primary_state"] != (
-        states.STATE_SQUEEZE_CONFIRMED
-    )
-
-
-def test_shorting_into_a_breakdown_is_divergence_failed():
-    result = states.classify(_evidence(
-        pressure_adv20_20d=0.30, pressure_adv20_5d=0.25,
-        broke_long_support=True, rel_topix_20d=-0.12, rel_sector_20d=-0.10,
-    ))
-    assert result["primary_state"] == states.STATE_DIVERGENCE_FAILED
-
-
-def test_deep_low_without_short_activity_produces_no_signal():
-    """深度低位だが空頭に動きが無い → 機関空売りの信号は出さない。"""
-
-    result = states.classify(_evidence(
-        low_position_score=85.0, pressure_adv20_20d=0.0, pressure_adv20_5d=0.0,
-        entry_count_20d=0, reentry_count_20d=0,
-    ))
-    assert result["primary_state"] == states.STATE_NO_SIGNAL
-
-
-def test_deep_low_with_new_entries_is_low_conflict():
-    result = states.classify(_evidence(
-        low_position_score=85.0, pressure_adv20_20d=0.01, pressure_adv20_5d=0.01,
-        entry_count_20d=1, reentry_count_20d=1,
-    ))
-    assert result["primary_state"] == states.STATE_LOW_CONFLICT
+    result = states.classify(_evidence(drawdown_52w=-0.45, price_percentile_252=0.02))
+    assert result["primary_state"] == states.STATE_STEADY
 
 
 def test_tiny_short_changes_do_not_trigger_a_state():
-    result = states.classify(_evidence(pressure_adv20_20d=0.005, pressure_adv20_5d=0.004))
-    assert result["primary_state"] == states.STATE_NO_SIGNAL
+    result = states.classify(_evidence(ratio_change_20d=0.0004, ratio_change_5d=0.0003))
+    assert result["primary_state"] == states.STATE_STEADY
 
 
-def test_low_confidence_downgrades_strong_claims_but_keeps_the_labels():
+def test_labels_survive_whatever_the_state_is():
+    """低信頼・古い報告・閾値割れは、状態とは別に補助ラベルで残る。"""
+
     result = states.classify(_evidence(
-        pressure_adv20_20d=-0.40, pressure_adv20_5d=-0.30, covering_score=80.0,
-        visible_days_to_cover=2.5, breakout_confirmed=True, turnover_confirmed=True,
-        rel_topix_20d=0.06, rel_sector_20d=0.05, data_confidence=0.2,
-        threshold_exit_count_20d=2,
+        ratio_change_20d=0.0030, visible_institution_count=2,
+        threshold_exit_count_20d=2, days_since_last_report=30, data_confidence=0.2,
     ))
-    assert result["primary_state"] != states.STATE_SQUEEZE_CONFIRMED
+    assert result["primary_state"] == states.STATE_BUILDING
     assert states.FLAG_BELOW_THRESHOLD in result["flags"]
     assert states.FLAG_STALE_DATA in result["flags"]
 
 
-def test_rotation_is_a_label_not_a_state():
-    result = states.classify(_evidence(
-        pressure_adv20_20d=0.30, pressure_adv20_5d=0.20, absorption_score=78.0,
-        rel_topix_20d=0.01, rotation_score=70.0, entry_count_20d=2,
-    ))
-    assert result["primary_state"] == states.STATE_ABSORPTION
-    assert states.FLAG_ROTATION in result["flags"]
-    assert states.FLAG_NEW_ENTRY in result["flags"]
+def test_stale_data_needs_a_visible_institution():
+    """見えている機関が無いのに「報告が古い」とは言わない（v4 の修正）。"""
+
+    nobody = states.classify(_evidence(visible_institution_count=0, days_since_last_report=90))
+    assert states.FLAG_STALE_DATA not in nobody["flags"]
+    assert states.FLAG_NOT_VISIBLE in nobody["flags"]
 
 
-def test_gates_are_marked_unvalidated():
-    assert states.GATES_VALIDATED is False
-    assert scoring.SCORE_VALIDATED is False
+def test_concentrated_needs_at_least_two_visible_institutions():
+    """1 社だけなら集中度は定義上 1.0。それは single_institution が言う（v4 の修正）。"""
+
+    single = states.classify(_evidence(visible_institution_count=1, concentration=1.0))
+    assert states.FLAG_CONCENTRATED not in single["flags"]
+    assert states.FLAG_SINGLE_INSTITUTION in single["flags"]
+    pair = states.classify(_evidence(visible_institution_count=2, concentration=0.8))
+    assert states.FLAG_CONCENTRATED in pair["flags"]
 
 
-# -- 評分 -------------------------------------------------------------------
+def test_removed_labels_are_gone():
+    """轮換・催化・自発/強制回補は解釈であって事実ではないので、ラベルごと無くした。"""
 
-def test_missing_components_are_dropped_not_zeroed():
-    """欠測を 0 で埋めると「データが無い」が「悪い」に化ける。"""
-
-    partial = scoring.behavior_score({"absorption": 80.0, "low_position": 70.0})
-    zeroed = scoring.behavior_score({
-        "absorption": 80.0, "low_position": 70.0, "covering": 0.0,
-        "short_pressure": 0.0, "rotation": 0.0, "catalyst": 0.0,
-    })
-    assert partial["raw_score"] > zeroed["raw_score"]
-    assert partial["coverage"] < 1.0
-
-
-def test_risk_penalty_moves_the_final_score():
-    """減点が順位に効くこと（表示だけの飾りにしない）。"""
-
-    clean = scoring.behavior_score({"absorption": 80.0, "covering": 70.0, "risk": 0.0})
-    risky = scoring.behavior_score({"absorption": 80.0, "covering": 70.0, "risk": 100.0})
-    assert risky["score"] < clean["score"]
-    assert risky["raw_score"] == clean["raw_score"]
-    assert risky["risk_penalty"] == pytest.approx(scoring.MAX_RISK_PENALTY)
-
-
-def test_priority_discounts_low_confidence():
-    trusted = scoring.monitor_priority(80.0, 1.0)
-    doubtful = scoring.monitor_priority(80.0, 0.2)
-    assert doubtful < trusted
-    assert doubtful > 0.0, "存在は見えるが上には来ない、という扱いにする"
-
-
-def test_score_is_none_when_nothing_is_known():
-    assert scoring.behavior_score({})["score"] is None
+    for name in ("FLAG_ROTATION", "FLAG_NEWS_CATALYST", "FLAG_VOLUNTARY_COVERING", "FLAG_FORCED_COVERING"):
+        assert not hasattr(states, name)
 
 
 # -- 第十四轮: 潜伏空頭 / 回補の広がり / informed 口径 -----------------------------
-
-def test_threshold_exits_no_longer_count_as_covering_breadth():
-    """閾値割れの最終報告の 79% は 0.45〜0.50% に止まる —— 回補ではない。"""
-
-    with_exits = f.covering(shares_change=-500_000, adv20_shares=1_000_000, reducing_institutions=1, threshold_exits=3)
-    without = f.covering(shares_change=-500_000, adv20_shares=1_000_000, reducing_institutions=1, threshold_exits=0)
-    assert with_exits["score"] == without["score"]
-    assert with_exits["threshold_exits"] == 3
-
 
 def test_parked_below_counts_recent_holders_just_under_the_line():
     states_by_holder = {
@@ -396,48 +177,22 @@ def test_combined_days_to_cover_requires_both_legs():
     assert f.combined_visible_days_to_cover(None, 500_000, 1_000_000) is None
 
 
-def _covering_evidence(**extra):
-    base = {
-        "pressure_adv20_20d": -0.30, "pressure_adv20_5d": -0.10,
-        "covering_score": 70.0, "rel_topix_20d": 0.03, "rel_sector_20d": 0.02,
-        "data_confidence": 0.9, "visible_institution_count": 2,
-    }
-    base.update(extra)
-    return base
+def test_informed_label_marks_domestic_only_reporters():
+    """国内証券・集合名義だけの報告（informed 口径が 0 社）には印が付く。
+    旧版はこれを回補開始の閘門にしていたが、v4 は閘門を持たない —— 印だけが残る。"""
 
+    all_chains = states.classify(_evidence(ratio_change_20d=-0.0030))
+    assert states.FLAG_NO_INFORMED_REPORTER not in all_chains["flags"]   # キー無し = 判定しない
 
-def test_covering_start_requires_informed_covering_when_the_key_is_present():
-    """国内証券名義だけの減少（informed 口径 None）は回補開始にならない。"""
-
-    all_chains = states.classify(_covering_evidence())
-    assert all_chains["primary_state"] == states.STATE_COVERING_START
-
-    domestic_only = states.classify(_covering_evidence(
-        pressure_informed_adv20_20d=None, pressure_informed_adv20_5d=None, informed_institution_count=0,
-    ))
-    assert domestic_only["primary_state"] != states.STATE_COVERING_START
+    domestic_only = states.classify(_evidence(ratio_change_20d=-0.0030, informed_institution_count=0))
     assert states.FLAG_NO_INFORMED_REPORTER in domestic_only["flags"]
+    assert domestic_only["primary_state"] == states.STATE_COVERING        # 状態は変えない
 
-    informed = states.classify(_covering_evidence(
-        pressure_informed_adv20_20d=-0.25, pressure_informed_adv20_5d=-0.08, informed_institution_count=1,
-    ))
-    assert informed["primary_state"] == states.STATE_COVERING_START
-
-
-def test_covering_is_labelled_voluntary_or_forced_by_the_prior_10_days():
-    voluntary = states.classify(_covering_evidence(
-        pressure_informed_adv20_20d=-0.25, pressure_informed_adv20_5d=-0.08, rel_topix_10d=-0.01,
-    ))
-    forced = states.classify(_covering_evidence(
-        pressure_informed_adv20_20d=-0.25, pressure_informed_adv20_5d=-0.08, rel_topix_10d=+0.04,
-    ))
-    assert states.FLAG_VOLUNTARY_COVERING in voluntary["flags"]
-    assert states.FLAG_FORCED_COVERING not in voluntary["flags"]
-    assert states.FLAG_FORCED_COVERING in forced["flags"]
-    assert states.FLAG_VOLUNTARY_COVERING not in forced["flags"]
+    informed = states.classify(_evidence(ratio_change_20d=-0.0030, informed_institution_count=1))
+    assert states.FLAG_NO_INFORMED_REPORTER not in informed["flags"]
 
 
 def test_parked_below_is_a_label():
-    verdict = states.classify({"pressure_adv20_20d": 0.0, "pressure_adv20_5d": 0.0, "parked_below_count": 2})
+    verdict = states.classify({"parked_below_count": 2})
     assert states.FLAG_PARKED_BELOW in verdict["flags"]
     assert verdict["primary_state"] == states.STATE_NO_SIGNAL

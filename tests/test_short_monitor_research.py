@@ -111,23 +111,23 @@ def test_group_summary_marks_small_groups_as_unreliable():
 
 def test_comparison_says_insufficient_data_rather_than_guessing():
     records = [
-        {"primary_state": states.STATE_ABSORPTION, "return_20d": 0.02,
+        {"primary_state": states.STATE_BUILDING, "return_20d": 0.02,
          "excess_topix_20d": 0.02, "flags": []},
-        {"primary_state": states.STATE_LOW_CONFLICT, "return_20d": -0.01,
+        {"primary_state": states.STATE_COVERING, "return_20d": -0.01,
          "excess_topix_20d": -0.01, "flags": []},
     ]
     result = sb.compare_states(records)
-    assert result["questions"]["absorption_vs_low_conflict"]["verdict"] == "insufficient_data"
+    assert result["questions"]["building_vs_covering"]["verdict"] == "insufficient_data"
 
 
 def test_comparison_reports_no_difference_when_there_is_none():
     records = (
-        [{"primary_state": states.STATE_ABSORPTION, "return_20d": 0.01,
+        [{"primary_state": states.STATE_BUILDING, "return_20d": 0.01,
           "excess_topix_20d": 0.01, "flags": []} for _ in range(40)]
-        + [{"primary_state": states.STATE_LOW_CONFLICT, "return_20d": 0.01,
+        + [{"primary_state": states.STATE_COVERING, "return_20d": 0.01,
             "excess_topix_20d": 0.01, "flags": []} for _ in range(40)]
     )
-    verdict = sb.compare_states(records)["questions"]["absorption_vs_low_conflict"]
+    verdict = sb.compare_states(records)["questions"]["building_vs_covering"]
     assert verdict["verdict"] == "no_difference"
     assert verdict["difference"] == pytest.approx(0.0)
 
@@ -135,9 +135,9 @@ def test_comparison_reports_no_difference_when_there_is_none():
 def test_flag_comparison_can_conclude_not_predictive():
     records = (
         [{"flags": ["reentry"], "return_20d": 0.0, "excess_topix_20d": 0.0,
-          "primary_state": states.STATE_LOW_CONFLICT} for _ in range(40)]
+          "primary_state": states.STATE_BUILDING} for _ in range(40)]
         + [{"flags": [], "return_20d": 0.02, "excess_topix_20d": 0.02,
-            "primary_state": states.STATE_LOW_CONFLICT} for _ in range(40)]
+            "primary_state": states.STATE_BUILDING} for _ in range(40)]
     )
     result = sb.compare_flags(records, ["reentry"])
     assert result["reentry"]["verdict"] == "not_predictive"
@@ -212,25 +212,25 @@ def test_the_baseline_is_a_group_that_actually_exists():
     """
 
     records = (
-        [{"primary_state": states.STATE_COVERING_START, "return_20d": 0.03,
+        [{"primary_state": states.STATE_COVERING, "return_20d": 0.03,
           "excess_topix_20d": 0.03, "flags": []} for _ in range(40)]
-        + [{"primary_state": states.STATE_NORMAL_SHORTING, "return_20d": -0.02,
+        + [{"primary_state": states.STATE_BUILDING, "return_20d": -0.02,
             "excess_topix_20d": -0.02, "flags": []} for _ in range(40)]
     )
     result = sb.compare_states(records)
     assert "(all signals)" in result["by_state"]
     assert result["by_state"]["(all signals)"]["samples"] == 80
 
-    verdict = result["questions"]["covering_start_vs_all"]
+    verdict = result["questions"]["covering_vs_all"]
     assert verdict["verdict"] == "left_better"
 
 
 def test_a_state_that_never_fires_is_reported_as_insufficient_not_as_equal():
     records = [
-        {"primary_state": states.STATE_COVERING_START, "return_20d": 0.01,
+        {"primary_state": states.STATE_BUILDING, "return_20d": 0.01,
          "excess_topix_20d": 0.01, "flags": []} for _ in range(40)
     ]
-    verdict = sb.compare_states(records)["questions"]["squeeze_vs_covering_start"]
+    verdict = sb.compare_states(records)["questions"]["covering_vs_all"]
     assert verdict["left_samples"] == 0
     assert verdict["verdict"] == "insufficient_data"
 

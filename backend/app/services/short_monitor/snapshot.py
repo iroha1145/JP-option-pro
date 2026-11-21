@@ -1,14 +1,8 @@
-"""銘柄 × 営業日の行動スナップショットを全市場ぶん組み立てる。
+"""銘柄 × 営業日のスナップショットを全市場ぶん組み立てる。
 
-順序が大事:
-
-1. 銘柄ごとに **生の比** まで作る（吸収の分位はまだ出せない）
-2. その日の横断面で分位を取る
-3. 分位を吸収スコアに直し、状態と点数を決める
-
-2 を挟まずに絶対閾値で吸収を決めると、日本株で検証していない米国由来の
-数字を持ち込むことになる。「この日の全銘柄の中でどのくらいか」なら、
-少なくとも意味の分かる基準になる。
+載せるのは事実量（公開持仓・窓内の純変化・出来高比・価格の位置・信用環境）と、
+そこから固定の規則で決まる 2 つの分類（近 20 日の動向・拥挤度）だけ。点数の
+合成はしない（`states.py` の冒頭を参照）。
 """
 
 from __future__ import annotations
@@ -23,13 +17,13 @@ from app.services.radar.adjustment import adjust_series
 from . import events as ev
 from . import factors as fac
 from . import reporters
-from . import scoring, states
+from . import states
 from .institutions import INSTITUTION_VERSION, InstitutionResolver
 
 #: スナップショット全体の版。どれか 1 つでも変わったら作り直す対象になる。
 SNAPSHOT_VERSION = "+".join((
     INSTITUTION_VERSION, ev.EVENT_VERSION, reporters.REPORTER_VERSION, fac.FACTOR_VERSION,
-    states.STATE_VERSION, scoring.SCORE_VERSION,
+    states.STATE_VERSION,
 ))
 
 LOOKBACK_TRADING_DAYS = 20
@@ -66,7 +60,6 @@ class StockInputs:
     regulation_severity: int = 0
     regulation_known: bool = True
     trading_days_to_earnings: int | None = None
-    news_count_5d: int = 0
     breakout_confirmed: bool = False
     turnover_confirmed: bool = False
 
@@ -76,12 +69,10 @@ class MarketInputs:
     as_of_date: str
     trading_days: list[str]              # 昇順、as_of を含む
     topix_closes: Mapping[str, float]    # trade_date → 終値
-    has_news_feed: bool = True
     # 業種中位リターンの外部注入（再生用）。本番は渡さない —— 全市場を渡して
     # いるので構成銘柄から計算した値と同じ。再生は評価対象を「直近に公開
     # イベントがある銘柄」に絞るため、その部分集合から中位を取ると本番と
     # 別の業種基準になる（audit 指摘）。全市場から事前計算した値を渡す。
-    sector_median_5d: Mapping[str, float] | None = None
     sector_median_20d: Mapping[str, float] | None = None
 
 
@@ -301,90 +292,14 @@ def _sector_medians(rows: Sequence[Mapping[str, Any]], key: str) -> dict[str, fl
 def build_snapshots(
     stocks: Sequence[StockInputs], market: MarketInputs
 ) -> list[dict[str, Any]]:
-    """全市場のスナップショット行。横断面の分位はこの中で取る。"""
+    """全市場のスナップショット行。"""
 
     raw = build_raw_rows(stocks, market)
     if not raw:
         return []
 
     median_20 = market.sector_median_20d or _sector_medians(raw, "return_20d")
-    median_5 = market.sector_median_5d or _sector_medians(raw, "return_5d")
-
-    # -- 第 1 段: 生の比まで ------------------------------------------------
-    prepared: list[dict[str, Any]] = []
-    for row in raw:
-        price = row["price"]
-        stock: StockInputs = row["stock"]
-        adv_shares = price.get("adv20_shares")
-
-        rel_topix_20 = _rel(price.get("return_20d"), row["benchmarks"].get("topix_20d"))
-        rel_topix_10 = _rel(price.get("return_10d"), row["benchmarks"].get("topix_10d"))
-        rel_topix_5 = _rel(price.get("return_5d"), row["benchmarks"].get("topix_5d"))
-        rel_sector_20 = _rel(price.get("return_20d"), median_20.get(row.get("sector33_code") or ""))
-        rel_sector_5 = _rel(price.get("return_5d"), median_5.get(row.get("sector33_code") or ""))
-
-        changes_5 = row["changes_5"] or {}
-        changes_20 = row["changes_20"] or {}
-        shares_delta_5 = changes_5.get("shares_change")
-        shares_delta_20 = changes_20.get("shares_change")
-        ratio_delta_5 = changes_5.get("ratio_change")
-        ratio_delta_20 = changes_20.get("ratio_change")
-
-        pressure_5 = fac.short_pressure(
-            shares_change=shares_delta_5, adv20_shares=adv_shares,
-            # 5 日圧力に 20 日の参入件数を混ぜない（15 日前の再参入が 5 日分に
-            # 化けていた —— audit 指摘）。
-            entries=row["counts_5"]["entry"], reentries=row["counts_5"]["reentry"],
-        )
-        pressure_20 = fac.short_pressure(
-            shares_change=shares_delta_20, adv20_shares=adv_shares,
-            entries=row["counts"]["entry"], reentries=row["counts"]["reentry"],
-        )
-        damage_5 = fac.DamageInput(
-            pressure_adv20=pressure_5.get("pressure_adv20"),
-            rel_topix=rel_topix_5, rel_sector=rel_sector_5,
-        ).raw_damage()
-        damage_20 = fac.DamageInput(
-            pressure_adv20=pressure_20.get("pressure_adv20"),
-            rel_topix=rel_topix_20, rel_sector=rel_sector_20,
-        ).raw_damage()
-
-        # informed 口径の圧力。informed 鎖が 1 本も無ければ None（0 ではない）。
-        informed_5 = row.get("informed_changes_5") or {}
-        informed_20 = row.get("informed_changes_20") or {}
-        pressure_informed_5 = (
-            fac.short_pressure(
-                shares_change=informed_5.get("shares_change"), adv20_shares=adv_shares,
-                entries=row["informed_counts_5"]["entry"], reentries=row["informed_counts_5"]["reentry"],
-            ) if row.get("informed_changes_5") else {"score": None, "pressure_adv20": None, "known": False}
-        )
-        pressure_informed_20 = (
-            fac.short_pressure(
-                shares_change=informed_20.get("shares_change"), adv20_shares=adv_shares,
-                entries=row["informed_counts"]["entry"], reentries=row["informed_counts"]["reentry"],
-            ) if row.get("informed_changes_20") else {"score": None, "pressure_adv20": None, "known": False}
-        )
-
-        prepared.append({
-            **row,
-            "rel_topix_10d": rel_topix_10,
-            "pressure_informed_5": pressure_informed_5, "pressure_informed_20": pressure_informed_20,
-            "rel_topix_20d": rel_topix_20, "rel_topix_5d": rel_topix_5,
-            "rel_sector_20d": rel_sector_20, "rel_sector_5d": rel_sector_5,
-            "shares_delta_5": shares_delta_5, "shares_delta_20": shares_delta_20,
-            "ratio_delta_5": ratio_delta_5, "ratio_delta_20": ratio_delta_20,
-            "pressure_5": pressure_5, "pressure_20": pressure_20,
-            "damage_5": damage_5, "damage_20": damage_20,
-        })
-
-    # -- 第 2 段: その日の横断面で分位 -------------------------------------
-    damage_population = [row["damage_20"] for row in prepared if row["damage_20"] is not None]
-
-    # -- 第 3 段: 吸収・状態・点数 -----------------------------------------
-    out: list[dict[str, Any]] = []
-    for row in prepared:
-        out.append(_finalize(row, market, damage_population))
-    return out
+    return [_finalize(row, market, median_20) for row in raw]
 
 
 def _rel(value: float | None, benchmark: float | None) -> float | None:
@@ -394,8 +309,17 @@ def _rel(value: float | None, benchmark: float | None) -> float | None:
     return a - b
 
 
+def _pressure(changes: Mapping[str, Any] | None, counts: Mapping[str, int], adv_shares: Any) -> dict[str, Any]:
+    if not changes:
+        return {"pressure_adv20": None, "known": False}
+    return fac.short_pressure(
+        shares_change=changes.get("shares_change"), adv20_shares=adv_shares,
+        entries=counts["entry"], reentries=counts["reentry"],
+    )
+
+
 def _finalize(
-    row: Mapping[str, Any], market: MarketInputs, damage_population: Sequence[float]
+    row: Mapping[str, Any], market: MarketInputs, sector_median_20d: Mapping[str, float]
 ) -> dict[str, Any]:
     price = row["price"]
     stock: StockInputs = row["stock"]
@@ -403,43 +327,28 @@ def _finalize(
     counts = row["counts"]
     adv_shares = price.get("adv20_shares")
 
-    percentile = (
-        fac.percentile_rank(damage_population, row["damage_20"])
-        if row["damage_20"] is not None else None
-    )
-    consistent = (
-        row["damage_5"] is not None and row["damage_20"] is not None
-        and (row["damage_5"] >= 0) == (row["damage_20"] >= 0)
-    )
-    absorption = fac.absorption_from_percentile(
-        percentile, made_new_low=bool(price.get("made_new_low")), consistent=consistent,
-    )
+    rel_topix_20 = _rel(price.get("return_20d"), row["benchmarks"].get("topix_20d"))
+    rel_topix_10 = _rel(price.get("return_10d"), row["benchmarks"].get("topix_10d"))
+    rel_sector_20 = _rel(price.get("return_20d"), sector_median_20d.get(row.get("sector33_code") or ""))
+
+    changes_5 = row["changes_5"] or {}
+    changes_20 = row["changes_20"] or {}
+    # 5 日の変化に 20 日の参入件数を混ぜない（15 日前の再参入が 5 日分に化ける）。
+    pressure_5 = _pressure(row["changes_5"], row["counts_5"], adv_shares)
+    pressure_20 = _pressure(row["changes_20"], counts, adv_shares)
+    # informed 口径（集合名義を除く）。鎖が 1 本も無ければ None（0 ではない）。
+    pressure_informed_5 = _pressure(row.get("informed_changes_5"), row["informed_counts_5"], adv_shares)
+    pressure_informed_20 = _pressure(row.get("informed_changes_20"), row["informed_counts"], adv_shares)
 
     low = fac.low_position(
         close=price.get("close"), high_52w=price.get("high_52w"),
         closes_252=price.get("closes_252") or [], ma200=price.get("ma200"),
     )
-    cover = fac.covering(
-        shares_change=row["shares_delta_20"], adv20_shares=adv_shares,
-        reducing_institutions=counts["reduction"], threshold_exits=counts["threshold_exit"],
-        rel_topix=row["rel_topix_20d"],
-        concentrated=bool((now.get("concentration") or 0.0) >= 0.6),
-    )
-    rot = fac.rotation(
-        entries=counts["entry"], reentries=counts["reentry"],
-        exits=counts["threshold_exit"] + counts["closed"], reductions=counts["reduction"],
-        concentration=now.get("concentration"),
-    )
     margin = fac.margin_environment(
         margin_long=(stock.margin or {}).get("long_total"),
         margin_short=(stock.margin or {}).get("short_total"),
-        margin_long_change=(stock.margin or {}).get("long_change"),
         adv20_shares=adv_shares,
         regulation_severity=stock.regulation_severity,
-    )
-    cat = fac.catalyst(
-        trading_days_to_earnings=stock.trading_days_to_earnings,
-        news_count_5d=stock.news_count_5d, has_news_feed=market.has_news_feed,
     )
     days_to_cover = fac.visible_days_to_cover(now.get("visible_short_shares"), adv_shares)
     combined_days_to_cover = fac.combined_visible_days_to_cover(
@@ -448,16 +357,16 @@ def _finalize(
     informed_now = row.get("informed_now") or {}
     informed_count = int(informed_now.get("visible_institution_count") or 0)
     classes = row.get("classes") or {}
+    visible_count = int(now.get("visible_institution_count") or 0)
 
     last_report = _last_report_age(stock.events, market.trading_days)
     confidence = fac.data_confidence(
-        # 全歴史の最小値ではなく「今の判定に効く範囲」の最小値。5 年前に 1 度
-        # 曖昧な表記があっただけで、以後の全スナップショットの信頼度が永久に
-        # 下がっていた（audit 指摘）。
+        # 全歴史の最小値ではなく「今の判定に効く範囲」の最小値。
         mapping_confidence=_current_mapping_confidence(
-            row.get("known_now") or {}, stock.events, since=_window_date(market.trading_days, LONG_WINDOW) or market.trading_days[0],
+            row.get("known_now") or {}, stock.events,
+            since=_window_date(market.trading_days, LONG_WINDOW) or market.trading_days[0],
         ),
-        visible_institution_count=int(now.get("visible_institution_count") or 0),
+        visible_institution_count=visible_count,
         days_since_last_report=last_report,
         bars_available=int(price.get("bars_available") or 0),
         below_threshold_count=int(now.get("below_threshold_count") or 0),
@@ -467,30 +376,13 @@ def _finalize(
         regulation_unknown=not stock.regulation_known,
     )
 
-    evidence = {
-        "pressure_adv20_20d": row["pressure_20"].get("pressure_adv20"),
-        "pressure_adv20_5d": row["pressure_5"].get("pressure_adv20"),
-        # informed 口径（国内証券・集合名義を除く）。鎖が無ければ None。
-        "pressure_informed_adv20_20d": row["pressure_informed_20"].get("pressure_adv20"),
-        "pressure_informed_adv20_5d": row["pressure_informed_5"].get("pressure_adv20"),
+    verdict = states.classify({
+        "ratio_change_20d": changes_20.get("ratio_change"),
+        "ratio_change_5d": changes_5.get("ratio_change"),
+        "visible_institution_count": visible_count,
+        "visible_short_ratio": now.get("visible_short_ratio"),
         "informed_institution_count": informed_count,
         "parked_below_count": int(row.get("parked_below_count") or 0),
-        "rel_topix_10d": row.get("rel_topix_10d"),
-        "absorption_score": absorption.get("absorption_score"),
-        "covering_score": cover.get("score"),
-        "low_position_score": low.get("score"),
-        "rotation_score": rot.get("score"),
-        "visible_days_to_cover": days_to_cover,
-        "rel_topix_20d": row["rel_topix_20d"],
-        "rel_sector_20d": row["rel_sector_20d"],
-        "breakout_confirmed": stock.breakout_confirmed,
-        "turnover_confirmed": stock.turnover_confirmed,
-        "made_new_low": price.get("made_new_low"),
-        "broke_long_support": price.get("broke_long_support"),
-        "data_confidence": confidence["confidence"],
-        "visible_institution_count": now.get("visible_institution_count"),
-        "below_threshold_count": now.get("below_threshold_count"),
-        "stale_reporting_count": now.get("stale_reporting_count"),
         "hedge_institution_count": now.get("hedge_institution_count"),
         "concentration": now.get("concentration"),
         "entry_count_20d": counts["entry"],
@@ -502,38 +394,27 @@ def _finalize(
         "earnings_near": bool(
             stock.trading_days_to_earnings is not None and stock.trading_days_to_earnings <= 5
         ),
-        "news_catalyst": stock.news_count_5d > 0,
         "thin_liquidity": "thin_liquidity" in confidence["reasons"],
         "days_since_last_report": last_report,
-    }
-    verdict = states.classify(evidence)
-    score = scoring.behavior_score({
-        "absorption": absorption.get("absorption_score"),
-        "covering": cover.get("score"),
-        "low_position": low.get("score"),
-        "short_pressure": row["pressure_20"].get("score"),
-        "rotation": rot.get("score"),
-        "catalyst": cat.get("score"),
-        "risk": margin.get("score"),
     })
 
     components = {
-        "low_position": low, "pressure_5d": row["pressure_5"], "pressure_20d": row["pressure_20"],
-        "absorption": absorption, "covering": cover, "rotation": rot,
-        "margin": margin, "catalyst": cat, "confidence": confidence, "score": score,
-        "damage_percentile_20d": percentile, "windows_consistent": consistent,
+        "crowding_level": verdict["crowding_level"],
+        "days_since_last_report": last_report,
+        "low_position": low, "pressure_5d": pressure_5, "pressure_20d": pressure_20,
+        "margin": margin, "confidence": confidence,
         # 逐連鎖の報告差の内訳（純増減のほかに粗い増分・減分も残す）
         "window_changes_5d": row.get("changes_5"),
         "window_changes_20d": row.get("changes_20"),
-        # informed 口径（国内証券・集合名義を除いた報告主体）。全鎖口径と並べて
-        # 持ち、検証では別々に測る。DB 列は増やさず components に載せる。
+        # informed 口径（集合名義を除いた報告主体）。全鎖口径と並べて持つ。
+        # DB 列は増やさず components に載せる。
         "informed": {
             "reporter_version": reporters.REPORTER_VERSION,
             "institution_count": informed_count,
             "visible_short_ratio": informed_now.get("visible_short_ratio"),
             "visible_short_shares": informed_now.get("visible_short_shares"),
-            "pressure_5d": row["pressure_informed_5"],
-            "pressure_20d": row["pressure_informed_20"],
+            "pressure_5d": pressure_informed_5,
+            "pressure_20d": pressure_informed_20,
             "window_changes_5d": row.get("informed_changes_5"),
             "window_changes_20d": row.get("informed_changes_20"),
             "entry_count_20d": row["informed_counts"]["entry"],
@@ -543,7 +424,11 @@ def _finalize(
         "reporter_classes": reporters.class_counts(classes, (row.get("known_now") or {}).keys()),
         "parked_below_count": int(row.get("parked_below_count") or 0),
         "combined_visible_days_to_cover": combined_days_to_cover,
-        "rel_topix_10d": row.get("rel_topix_10d"),
+        "rel_topix_10d": rel_topix_10,
+        # 突破・出来高の確認はレーダーが決める事実。ここでは読みを付けずに残す。
+        "breakout_confirmed": bool(stock.breakout_confirmed),
+        "turnover_confirmed": bool(stock.turnover_confirmed),
+        "trading_days_to_earnings": stock.trading_days_to_earnings,
     }
 
     return {
@@ -554,8 +439,8 @@ def _finalize(
         "adv20_value": price.get("adv20_value"),
         "drawdown_52w": low.get("drawdown_52w"),
         "price_percentile_252": low.get("price_percentile_252"),
-        "rel_topix_20d": row["rel_topix_20d"],
-        "rel_sector_20d": row["rel_sector_20d"],
+        "rel_topix_20d": rel_topix_20,
+        "rel_sector_20d": rel_sector_20,
         "visible_short_shares": now.get("visible_short_shares"),
         "visible_short_ratio": now.get("visible_short_ratio"),
         # 公式ルール上「まだ報告義務中」の全機関の和（125 日の新鮮さ条件なし）。
@@ -563,7 +448,7 @@ def _finalize(
         "reported_in_scope_ratio": now.get("reported_in_scope_ratio"),
         "reported_in_scope_shares": now.get("reported_in_scope_shares"),
         "unknown_institution_count": int(now.get("unknown_count") or 0),
-        "visible_institution_count": int(now.get("visible_institution_count") or 0),
+        "visible_institution_count": visible_count,
         "below_threshold_count": int(now.get("below_threshold_count") or 0),
         # 報告義務中の表示のまま古くなったもの。合計には入れないが、
         # 「閾値を割った」とは別の事象なので列を分ける。
@@ -571,28 +456,29 @@ def _finalize(
         "largest_institution_ratio": now.get("largest_institution_ratio"),
         "concentration": now.get("concentration"),
         "ratio_change_1d": None,
-        "ratio_change_5d": row["ratio_delta_5"],
-        "ratio_change_20d": row["ratio_delta_20"],
-        "shares_change_5d": row["shares_delta_5"],
-        "shares_change_20d": row["shares_delta_20"],
-        "pressure_adv20_5d": row["pressure_5"].get("pressure_adv20"),
-        "pressure_adv20_20d": row["pressure_20"].get("pressure_adv20"),
+        "ratio_change_5d": changes_5.get("ratio_change"),
+        "ratio_change_20d": changes_20.get("ratio_change"),
+        "shares_change_5d": changes_5.get("shares_change"),
+        "shares_change_20d": changes_20.get("shares_change"),
+        "pressure_adv20_5d": pressure_5.get("pressure_adv20"),
+        "pressure_adv20_20d": pressure_20.get("pressure_adv20"),
         "visible_days_to_cover": days_to_cover,
         "entry_count_20d": counts["entry"],
         "reentry_count_20d": counts["reentry"],
         "reduction_count_20d": counts["reduction"],
         "threshold_exit_count_20d": counts["threshold_exit"],
-        "low_position_score": low.get("score"),
-        "short_pressure_score": row["pressure_20"].get("score"),
-        "price_damage_score": absorption.get("price_damage_score"),
-        "absorption_score": absorption.get("absorption_score"),
-        "covering_score": cover.get("score"),
-        "rotation_score": rot.get("score"),
-        "catalyst_score": cat.get("score"),
-        "risk_score": margin.get("score"),
+        # 点数の列は v4（sbs-v4 / sbf-v3）で廃止。列は残るが常に NULL。
+        "low_position_score": None,
+        "short_pressure_score": None,
+        "price_damage_score": None,
+        "absorption_score": None,
+        "covering_score": None,
+        "rotation_score": None,
+        "catalyst_score": None,
+        "risk_score": None,
+        "behavior_score": None,
+        "monitor_priority": None,
         "data_confidence": confidence["confidence"],
-        "behavior_score": score.get("score"),
-        "monitor_priority": scoring.monitor_priority(score.get("score"), confidence["confidence"]),
         "primary_state": verdict["primary_state"],
         "flags_json": json.dumps(verdict["flags"], ensure_ascii=False),
         "components_json": json.dumps(components, ensure_ascii=False, default=str),
@@ -665,9 +551,10 @@ def build_signals(
             "signal_date": snapshot["as_of_date"],
             "primary_state": state,
             "previous_state": previous,
-            "behavior_score": snapshot.get("behavior_score"),
+            "behavior_score": None,
             "components_json": snapshot.get("components_json") or "{}",
             "evidence_json": json.dumps({
+                "ratio_change_20d": snapshot.get("ratio_change_20d"),
                 "pressure_adv20_20d": snapshot.get("pressure_adv20_20d"),
                 "visible_short_ratio": snapshot.get("visible_short_ratio"),
                 "visible_institution_count": snapshot.get("visible_institution_count"),
