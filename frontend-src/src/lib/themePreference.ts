@@ -16,19 +16,14 @@ let currentAppearance: Appearance = 'light';
 let hydrated = false;
 let storageBound = false;
 let mediaBound = false;
-let mediaQuery: MediaQueryList | null = null;
 
 function isPreference(value: unknown): value is ThemePreference {
   return typeof value === 'string' && (THEME_PREFERENCES as readonly string[]).includes(value);
 }
 
 function systemAppearance(): Appearance {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 'light';
-  try {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  } catch {
-    return 'light';
-  }
+  if (typeof window === 'undefined') return 'light';
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 function readStoredPreference(): ThemePreference {
@@ -118,19 +113,9 @@ function ensureStorageListener(): void {
 }
 
 function ensureMediaListener(): void {
-  if (mediaBound || typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+  if (mediaBound || typeof window === 'undefined') return;
   mediaBound = true;
-  try {
-    mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    if (typeof mediaQuery.addEventListener === 'function') {
-      mediaQuery.addEventListener('change', onMediaChange);
-    } else {
-      mediaQuery.addListener(onMediaChange);
-    }
-  } catch {
-    mediaBound = false;
-    mediaQuery = null;
-  }
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', onMediaChange);
 }
 
 function hydrate(): void {

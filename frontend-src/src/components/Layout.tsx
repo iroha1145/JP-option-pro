@@ -1,7 +1,7 @@
 /**
  * Layout：sticky Header + IndexTape + 内容槽 + Footer + Dock + ⌘K。
  */
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Outlet, useLocation, useNavigate, useNavigationType } from 'react-router';
 import Navbar from '@/components/Navbar';
 import IndexTape from '@/components/IndexTape';
@@ -9,7 +9,7 @@ import Footer from '@/components/Footer';
 import RouteErrorBoundary from '@/components/shared/RouteErrorBoundary';
 import PageFallback from '@/components/shared/PageFallback';
 import MobileDock from '@/components/MobileDock';
-import CommandPalette from '@/components/CommandPalette';
+const CommandPalette = lazy(() => import('@/components/CommandPalette'));
 import { pushRecent } from '@/lib/recentTickers';
 import { ShellContext } from '@/hooks/useShell';
 import { t } from '@/i18n/core';
@@ -23,6 +23,8 @@ export default function Layout() {
   const navigationType = useNavigationType();
   const previousPathname = useRef(location.pathname);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteMounted, setPaletteMounted] = useState(false);
+  if (paletteOpen && !paletteMounted) setPaletteMounted(true);
   const [dockHeight, setDockHeight] = useState(64);
 
   const openPalette = useCallback(() => setPaletteOpen(true), []);
@@ -42,6 +44,8 @@ export default function Layout() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.isComposing || e.keyCode === 229 || e.altKey || e.shiftKey) return;
+      // The first chunk may still be pending, so its own key handler does not exist yet.
+      if (e.key === 'Escape') { setPaletteOpen(false); return; }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         if (!e.repeat) setPaletteOpen((v) => !v);
@@ -58,11 +62,11 @@ export default function Layout() {
       {/* overflow-x-clip：绝对定位的解释浮层即使处于 opacity-0 也占布局盒，
           窄屏时会把文档撑出横向滚动条。clip 只裁剪绘制，不建立滚动容器；
           InfoHint / PointerTooltip 的可见浮层是 position:fixed，不会被这里裁到。 */}
-      <div className="flex min-h-[100dvh] flex-col overflow-x-clip [&>footer]:pb-[calc(var(--mobile-dock-height)+2rem+env(safe-area-inset-bottom))] xl:[&>footer]:pb-10" style={{ '--mobile-dock-height': `${dockHeight}px` } as CSSProperties}>
+      <div className="app-shell overflow-x-clip" style={{ '--mobile-dock-height': `${dockHeight}px` } as CSSProperties}>
         <a className="skip-link" href="#main-content">{t('跳到主要内容')}</a>
         <Navbar onOpenPalette={openPalette} />
         <IndexTape />
-        <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-shell min-h-[100dvh] flex-1 scroll-mt-24 px-4 pt-6 md:px-8 md:pt-8">
+        <main id="main-content" tabIndex={-1} className="app-main">
           <div key={pageKey}>
             <RouteErrorBoundary>
               <Suspense fallback={<PageFallback />}>
@@ -75,12 +79,12 @@ export default function Layout() {
         <MobileDock onHeightChange={setDockHeight} />
       </div>
 
-      <CommandPalette
+      {paletteMounted && <Suspense fallback={null}><CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
         onOpenTicker={openTicker}
         onForceRefresh={() => navigate('/watchlist?force=1')}
-      />
+      /></Suspense>}
     </ShellContext.Provider>
   );
 }

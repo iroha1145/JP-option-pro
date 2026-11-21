@@ -87,7 +87,7 @@ export default class AppErrorBoundary extends Component<Props, State> {
               boxShadow: 'inset 0 1px 0 rgba(255,255,255,.16), 0 1px 2px rgba(16,24,40,.18), 0 4px 12px -4px rgba(16,24,40,.34)',
             }}
           >
-            {t('重新加载')}
+            {t('刷新页面')}
           </button>
           <button
             type="button"

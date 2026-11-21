@@ -20,7 +20,7 @@ export const LAYERS: LayerDef[] = [
   { id: 'ma20', group: 'price', kind: 'ma', label: t('MA20') },
   { id: 'ma50', group: 'price', kind: 'ma', label: t('MA50') },
   { id: 'ma200', group: 'price', kind: 'ma', label: t('MA200') },
-  { id: 'swings', group: 'price', kind: 'swing', label: t('摆动点') },
+  { id: 'swings', group: 'price', kind: 'swing', label: t('波段高低点') },
   { id: 'support_resistance', group: 'price', kind: 'level', label: t('支撑阻力') },
   { id: 'bases', group: 'price', kind: 'box', label: t('整理区') },
   { id: 'gaps', group: 'price', kind: 'gap', label: t('价格缺口（日线）') },

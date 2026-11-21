@@ -9,8 +9,6 @@
 
 @layer base {
   :root {
-    /* 2026-10-09 Arc 改版：表面与文字改成纯灰（参照 uiarc.dev 的语义令牌）。
-       页面底近白、卡片纯白，分层只靠一圈细线；颜色只留给涨跌、状态和选中以外的强调。 */
     /* §1.1 表面：页面底 · 弱填充（悬停、凹槽）· 卡片 */
     --paper: #FAFAFA;
     --paper-2: #F5F5F5;
@@ -67,14 +65,8 @@
     --action: #111111;
     --action-hover: #333333;
     --on-action: #FFFFFF;
-    /* v8.1：AI 语义色弃紫。「紫 + AI」是 2024–26 最烂大街的生成式设计签名；
-       换青瓷 teal（Open Color cyan-8）——纸面印刷的传统第二油墨色，冷调与群青
-       同族但相距 60°+，与涨绿（hue 157°）差 36° 不会误读为行情方向。 */
     --ai-600: #0B7285;
     --ai-50: #E7F3F6;
-    /* 2026-10-09 分类色（用户要求「选项用更多配色」）：给类别用，不表示好坏、不表示涨跌。
-       现用于经济事件重要度（高橙、中琥珀）与风险偏好（稳健天蓝、进取橙）；避开涨跌的红绿与 AI 的青瓷。
-       技术事件标签试过按类着色，用户看过后改回灰色（见 SignalChip）。50 底色 · 600 圆点与细线 · 700 文字。 */
     --cat-sky-50: #E9F4FC;
     --cat-sky-600: #2786D4;
     --cat-sky-700: #155F9E;
@@ -86,41 +78,37 @@
     --cat-orange-700: #B04712;
     /* §4.1 缓动 */
     --ease-paper: cubic-bezier(.16, 1, .3, 1);
-    /* 圆角（docs/UI_DESIGN_SYSTEM.md §3，2026-10-06 第二轮整体上调一档，参照 uiarc.dev）：
-       组内小件 6、普通控件 8、控件组与浮层 10；卡片 16、抽屉 20 走 Tailwind 的 rounded-lg / rounded-xl。 */
-    /* 2026-10-09 Arc 改版：按钮、分段、筛选块、徽章用胶囊（--r-pill）；输入与下拉触发 10；
-       浮层（菜单、提示、弹出面板）14；卡片 18 走 .card-surface 与 rounded-lg。 */
     --r-chip: 999px;
-    --r-control: 10px;
-    --r-group: 14px;
+    --r-control: 12px;
+    --r-group: 16px;
     --r-pill: 999px;
+    /* TypeUI concentric-radius (r_inner = max(0, r_outer - padding)) */
+    --r-dropdown-item: 8px;
+    --r-select-item: 10px;
+    --r-palette-item: 12px;
+    --r-dock-item: 14px;
     --ease-snap: cubic-bezier(.22, 1, .36, 1);
     /* v8 阴影三层制：更柔更大（rgba(16,24,40,*)），内高光 .7 保持 */
     --shadow-sh-1: 0 1px 2px rgba(0, 0, 0, .035);
     --shadow-sh-2: 0 1px 2px rgba(0, 0, 0, .06), 0 12px 32px -14px rgba(0, 0, 0, .14);
     --shadow-sh-3: 0 1px 2px rgba(0, 0, 0, .08), 0 24px 56px -16px rgba(0, 0, 0, .22);
     /* 按钮/控件立体阴影（暗色模式下内高光转为极微弱暗部高光或去除，避免白边） */
-    /* 2026-10-06 平面化：卡片、按钮静止时不投影，只靠发丝边分层；选中的分段滑块
-       与芯片留一圈淡描边。真正浮起的下拉、抽屉、对话框、提示仍有阴影。 */
     --btn-shadow: none;
     --btn-hi-shadow: none;
     --chip-shadow: 0 0 0 1px rgba(0, 0, 0, .05), 0 1px 2px rgba(0, 0, 0, .06);
-    --card-hover-shadow: none;
+    --card-hover-shadow: inset 0 1px 0 rgb(255 255 255 / .9), 0 3px 6px -3px rgb(17 17 17 / .12), 0 18px 32px -20px rgb(17 17 17 / .2);
     --inset-hi-shadow: none;
     --zone-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 1px 2px rgba(0, 0, 0, .08);
     --btn-primary-highlight: 0 0 0 transparent;
     --insight-frame-shadow: none;
     /* Cloud Monitor 的细节层次，保留 Optix 的纸面与群青。 */
     --control-track: #F2F2F2;
-    /* 财报时段图标（2026-10-06 用户要求按类别着色）：盘前太阳黄、盘后月亮蓝、时间待定闹钟橙。
-       浅底上取够深的色，图形对比度约 3:1。 */
     --timing-bmo: #C98A00;
     --timing-amc: #2F7AE5;
     --timing-tbd: #E0670B;
     --control-selected-shadow: 0 0 0 1px rgba(0, 0, 0, .05), 0 1px 2px rgba(0, 0, 0, .06);
-    /* 手机分段与筛选的选中块：2026-10-06 用户要求改回原版——只有柔和投影、不加描边。 */
     --control-selected-shadow-raised: 0 2px 4px rgba(0, 0, 0, .05), 0 5px 12px -4px rgba(0, 0, 0, .10);
-    --card-shadow: none;
+    --card-shadow: inset 0 1px 0 rgb(255 255 255 / .9), 0 2px 4px -2px rgb(17 17 17 / .10), 0 12px 26px -18px rgb(17 17 17 / .16);
     /* 阴影只给浮起的层（Arc 的 --shadow-floating）：贴身一道 + 下方一团柔影。 */
     --popover-shadow: 0 1px 2px rgba(0, 0, 0, .08), 0 12px 28px -12px rgba(0, 0, 0, .26);
     --knob-shadow: 0 1px 3px rgba(0, 0, 0, .16), 0 1px 1px rgba(0, 0, 0, .08);
@@ -129,24 +117,6 @@
     --overlay-shadow: 0 1px 2px rgba(0, 0, 0, .12), 0 24px 56px -16px rgba(0, 0, 0, .32);
     --dock-shadow: 0 1px 2px rgba(0, 0, 0, .08), 0 18px 40px -14px rgba(0, 0, 0, .26);
 
-    /* shadcn/ui 基座变量（亮纸面映射；v8.1 hue 44°→220° 随纸面降温，杜绝冷暖混用） */
-    --background: 0 0% 98%;
-    --foreground: 0 0% 7%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 7%;
-    --primary: 0 0% 7%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 25%;
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 42%;
-    --accent: 0 0% 96%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 359 75% 59%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 92%;
-    --input: 0 0% 84%;
-    --ring: 232 74% 53%;
     /* Catalog paint 重映射只有一份，在 transitions-catalog.css 的适配区——
        这里 @layer base 的副本在层叠里永远输给未分层的 transitions-root.css，
        是死代码还会误导改错地方。 */
@@ -225,7 +195,7 @@
     --timing-tbd: #FB923C;
     --control-selected-shadow: 0 0 0 1px var(--line-strong);
     --control-selected-shadow-raised: 0 2px 4px rgba(0, 0, 0, .28), 0 5px 12px -4px rgba(0, 0, 0, .36);
-    --card-shadow: none;
+    --card-shadow: inset 0 1px 0 rgb(255 255 255 / .025), 0 2px 4px -2px rgb(0 0 0 / .4), 0 12px 26px -18px rgb(0 0 0 / .5);
     --popover-shadow: 0 2px 5px rgba(0, 0, 0, .32), 0 10px 28px -10px rgba(0, 0, 0, .5);
     --knob-shadow: 0 1px 3px rgba(0, 0, 0, .45), 0 1px 1px rgba(0, 0, 0, .28);
     --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, .35);
@@ -239,30 +209,13 @@
     --btn-shadow: none;
     --btn-hi-shadow: none;
     --chip-shadow: 0 0 0 1px var(--line-strong);
-    --card-hover-shadow: none;
+    --card-hover-shadow: inset 0 1px 0 rgb(255 255 255 / .035), 0 3px 6px -3px rgb(0 0 0 / .4), 0 18px 32px -20px rgb(0 0 0 / .6);
     --inset-hi-shadow: none;
     --zone-shadow: 0 1px 2px rgba(0, 0, 0, .3);
     --btn-primary-highlight: 0 0 0 transparent;
     --insight-frame-shadow: none;
     --scrim: rgba(0, 0, 0, .55);
     --scrim-strong: rgba(0, 0, 0, .65);
-    --background: 240 3% 6%;
-    --foreground: 0 0% 95%;
-    --popover: 240 2% 9%;
-    --popover-foreground: 0 0% 95%;
-    --primary: 0 0% 95%;
-    --primary-foreground: 240 3% 6%;
-    --secondary: 240 3% 11%;
-    --secondary-foreground: 0 0% 72%;
-    --muted: 240 3% 11%;
-    --muted-foreground: 0 0% 62%;
-    --accent: 240 3% 13%;
-    --accent-foreground: 0 0% 95%;
-    --destructive: 4 100% 75%;
-    --destructive-foreground: 0 0% 10%;
-    --border: 240 3% 15%;
-    --input: 240 3% 22%;
-    --ring: 232 100% 71%;
   }
 
   html.dark[data-color-mode="asian"] {
@@ -279,19 +232,27 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    scrollbar-gutter: stable;
   }
 
   body {
     @apply bg-paper text-ink-600 font-sans text-body;
     font-feature-settings: "tnum" 1, "cv05" 1;
+    font-variant-ligatures: common-ligatures contextual;
   }
 
-  /* 2026-10-06 第二轮：去掉 §3.5 纸面点阵纹理，页面底色保持纯色（参照 uiarc.dev）。 */
-
-  /* 2026-10-06 正文段落避免末行孤字（手机上「…显著放/大」）：pretty 只调整段落最后几行的断点，
-     单行文字不受影响；不支持的浏览器照常折行。 */
   p, li, dd, blockquote, figcaption {
     text-wrap: pretty;
+  }
+
+  /* TypeUI text-wrap (heading): 多行标题均匀断行，避免尾行只剩一两个孤词。 */
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+
+  /* TypeUI label-selection: 复选框、单选框与开关的标签行禁文本误选中。 */
+  label:has(input[type="checkbox"], input[type="radio"], [role="switch"]) {
+    user-select: none;
   }
 
   /* 大标题词内不断行：日文「ブレイクアウト・レ/ーダー」这类片假名词不从中间断开，改在「・」或空格处换行；
@@ -326,7 +287,7 @@
     transition: none;
   }
 
-  * {
+  html {
     scrollbar-width: thin;
     scrollbar-color: var(--ink-300) transparent;
   }
@@ -369,42 +330,73 @@
     to { opacity: 0; transform: scale(.98); }
   }
 
-  /* §3.4 毛玻璃（禁液态玻璃，仅磨砂分层） */
-  .glass {
+  .glass,
+  .glass-panel {
     background: var(--overlay);
-    backdrop-filter: blur(14px) saturate(1.5);
-    -webkit-backdrop-filter: blur(14px) saturate(1.5);
+    backdrop-filter: blur(12px);
   }
 
-  /* 与手机底栏的 xl 隐藏断点一致，只让上下导航更通透。 */
+  .card-surface,
+  .paper-panel,
+  .glass-panel {
+    min-inline-size: 0;
+    border: 1px solid var(--line);
+    border-radius: 1.5rem;
+    box-shadow: var(--card-shadow);
+  }
+
+  .card-surface,
+  .paper-panel { background: var(--card); }
+
+  .glass-panel { background: color-mix(in srgb, var(--card) 86%, transparent); }
+
   @media (max-width: 1279px) {
+    .mobile-nav-glass { background: var(--mobile-nav-overlay); }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .glass,
+    .glass-panel,
     .mobile-nav-glass {
       background: var(--card);
-    }
-
-    @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-      .mobile-nav-glass {
-        background: var(--mobile-nav-overlay);
-        backdrop-filter: blur(22px) saturate(1.65);
-        -webkit-backdrop-filter: blur(22px) saturate(1.65);
-      }
-    }
-
-    @media (prefers-reduced-transparency: reduce) {
-      .mobile-nav-glass {
-        background: var(--card);
-        backdrop-filter: none;
-        -webkit-backdrop-filter: none;
-      }
+      backdrop-filter: none;
     }
   }
 
-  /* 卡片：白底 + 一圈细线 + 18px 圆角，静止不投影（2026-10-09 Arc 改版，原 16px）。 */
-  .card-surface {
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: 18px;
-    box-shadow: var(--card-shadow);
+  .app-shell { min-block-size: 100dvh; display: flex; flex-direction: column; }
+  .app-main {
+    inline-size: 100%;
+    max-inline-size: 90rem;
+    min-block-size: calc(100svh - 10rem);
+    margin-inline: auto;
+    padding: clamp(1.5rem, 2.5vw, 2.5rem) clamp(1rem, 2.25vw, 2rem) 3rem;
+    flex: 1;
+    scroll-margin-block-start: 5rem;
+  }
+  .app-main > div { min-inline-size: 0; }
+  .app-shell > footer { padding-block-end: calc(var(--mobile-dock-height) + 2rem + env(safe-area-inset-bottom)); }
+  @media (min-width: 1280px) { .app-shell > footer { padding-block-end: 2rem; } }
+
+  .page-stack { display: grid; gap: 1.5rem; min-inline-size: 0; }
+  .page-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
+  .page-grid > * { min-inline-size: 0; }
+  .page-heading { min-inline-size: 0; }
+  .page-heading-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem 1.5rem; }
+  .page-title { min-inline-size: 0; font-size: clamp(1.75rem, 1.25rem + 1.5vw, 2.25rem); line-height: 1.2; letter-spacing: -.035em; font-weight: 500; color: var(--ink-900); text-wrap: balance; }
+  .page-heading-meta { display: flex; flex: 1 1 100%; max-inline-size: 100%; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; }
+  .page-heading-meta-inline { flex: 0 1 auto; }
+  .page-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem; min-inline-size: 0; }
+  .section-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .5rem 1rem; }
+  .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: 1rem; }
+  .watch-stats-grid > * { grid-row: span 3; }
+  .watch-stats-grid > .metric-card { display: grid; grid-template-rows: subgrid; row-gap: 0; }
+  .index-card { min-block-size: 8rem; }
+  @media (min-width: 640px) {
+    .page-heading-meta { flex: 0 1 auto; }
+  }
+  @media (min-width: 1024px) {
+    .page-stack { gap: 2rem; }
+    .page-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); }
   }
 
   /* shadcn Button + beUI spring-press：主操作统一皮。调用点只写 btn-primary，
@@ -513,7 +505,6 @@
     border-radius: 999px;
     background: var(--brand-600);
     pointer-events: none;
-    will-change: transform, width;
     transition:
       transform var(--tabs-dur) var(--tabs-ease),
       width var(--tabs-dur) var(--tabs-ease);
@@ -544,17 +535,15 @@
   }
   /* 悬停抬起（transitions-polish：进场快而直接，fast 档 + smooth-out）。此前两类
      卡片各用 260ms/paper 与 240ms/(.23,1,.32,1)，同一种手势三条曲线。 */
-  /* 2026-10-06：可点卡片悬停时描边加深，不再上浮投影（平面表面没有高度可抬）。 */
   .card-hover,
   .card-lift {
-    transition: border-color var(--duration-fast) var(--ease-smooth-out);
+    transition: border-color 160ms ease-out, box-shadow 160ms ease-out;
   }
-  /* v8.3 触屏 hover 粘滞全局修：:hover 上浮/阴影只在「可悬停的精确指针」
-     （鼠标/触控板）下生效；触屏 tap 后 :hover 会粘住不解除，卡片一直浮着。 */
   @media (hover: hover) and (pointer: fine) {
     .card-hover:hover,
     .card-lift:hover {
       border-color: var(--line-strong);
+      box-shadow: var(--card-hover-shadow);
     }
   }
 
@@ -565,16 +554,11 @@
   }
 
   /* 眉题 Eyebrow（仅拉丁文） */
-  /* 2026-10-06 第二轮：小标签不再全大写、不加字距（uiarc 的区块标签就是普通的灰色小字）。 */
   .eyebrow {
     @apply font-sans text-eyebrow text-ink-400;
     font-weight: 400;
   }
 
-  /* v8 内容节奏：页内区块间距 32→36（作用于 Layout main 内的 mt-8 区块，不改页面结构） */
-  main .mt-8 {
-    margin-top: 36px;
-  }
 
   /* 骨架屏 shimmer 高光 */
   .skeleton-shimmer {
@@ -608,10 +592,6 @@
     pointer-events: none;
   }
 
-  /* v8.3 tick-flash 可中断化：原 keyframes 闪烁（tailwind config 已删）→
-     常驻 base 类做 600ms 回落 transition；闪烁态 transition:none 瞬时上色，
-     再次闪烁可从任意中间色瞬时重上色——天然可中断。
-     reduced-motion 由全局 transition-duration:160ms 覆盖，无需额外处理。 */
   .tick-flash { transition: background-color 600ms cubic-bezier(.22,1,.36,1); }
   .tick-flash-up { background-color: var(--up-50); transition: none; }
   .tick-flash-down { background-color: var(--down-50); transition: none; }
@@ -662,9 +642,7 @@
   align-items: center;
   gap: 2px;
   padding: 3px;
-  /* 2026-10-06 第二轮（参照 uiarc.dev）：底槽只靠浅灰底色，不再描边；边框留透明占位，尺寸不变。 */
   border: 1px solid transparent;
-  /* 2026-10-09 Arc 改版：底槽与组内按钮都是胶囊，选中项白底、近黑字。 */
   border-radius: var(--r-pill);
   background: var(--control-track);
 }
@@ -720,10 +698,6 @@
 @media (pointer: coarse) {
   .control-button, .filter-group .control-button, .t-tabs.selection-group .t-tab { min-height: 44px; }
 }
-/* 选择芯片（2026-10-09 第二版，选股「更多筛选」的行业）：灰底无边，和上面分段控件的
-   灰色底槽同一家族；选中是群青浅底、群青字、一圈淡群青边。第一版照搬 Arc 的白底细边芯片，
-   在白卡片上边界几乎看不出来，用户看过说不好看。只在宽屏生效：手机上这两行仍是可横向滑动的
-   灰色轨道（.mobile-selection-rail）。不设 min-height，粗指针下仍由上面的 44px 规则兜底。 */
 @media (min-width: 768px) {
   .control-button.choice-chip {
     padding-inline: 14px;
@@ -763,8 +737,6 @@
 @media (max-width: 767px), (pointer: coarse) {
   .touch-target { min-height: 44px; min-width: 44px; }
 }
-/* 页内标签（2026-10-09 Arc 改版，Arc page header 的下划线标签）：标题下方的二级页面导航
-   与新闻页栏目共用。当前项近黑字 + 2px 近黑下划线压在底线上，其余中灰；放不下时横向滚动。 */
 .page-tabs {
   display: flex;
   gap: 24px;
@@ -968,7 +940,6 @@
     min-width: 44px;
     padding: 8px 14px;
     border: 0;
-    /* 2026-10-09 Arc 改版：外框与组内按钮都是胶囊（原「≤ 9px 克制圆角」规则作废）。 */
     border-radius: var(--r-pill);
     background: transparent;
     color: var(--ink-600);
@@ -995,6 +966,15 @@
   .mobile-selection-rail .mobile-selection-option:focus-visible {
     outline: 2px solid var(--brand-600);
     outline-offset: 2px;
+  }
+  .selection-wrap:is(.mobile-selection-rail, .t-tabs.selection-group) {
+    inline-size: 100%;
+    max-inline-size: 100%;
+    block-size: auto;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px;
+    border-radius: var(--r-group);
   }
 }
 
@@ -1028,7 +1008,6 @@
 @media (pointer: coarse) {
   .theme-switcher-control { min-height: 44px; min-width: 44px; }
 }
-/* 2026-10-09 Arc 改版：涨跌数字改常规字重，方向只靠颜色与箭头（Arc 的涨跌读数也是常规字重）。 */
 .change-badge { font-family: inherit; font-weight: 400; white-space: nowrap; letter-spacing: -.015em; }
 .strength-track { background: var(--control-track); }
 .strength-fill { opacity: .78; }
@@ -1159,11 +1138,10 @@
   .ft-range::-webkit-slider-thumb, .ft-range::-moz-range-thumb { transition: none; }
 }
 
-/* 雷达卡片定位闪烁：点击历史事件定位到当日卡时，左缘群青竖条 + 外圈光晕闪两次。
-   原先写在 Breakouts.tsx 里的内联 <style>，每次渲染都重建一份样式表。 */
+/* 雷达卡片定位闪烁：点击历史事件定位到当日卡时，整圈群青内描边与外圈光晕闪两次，按界面要求去除单侧彩条。 */
 @keyframes bk-locate-flash {
-  0% { box-shadow: inset 3px 0 0 var(--brand-600), 0 0 0 3px color-mix(in srgb, var(--brand-600) 25%, transparent); }
-  100% { box-shadow: inset 3px 0 0 transparent, 0 0 0 0 transparent; }
+  0% { box-shadow: inset 0 0 0 1.5px var(--brand-600), 0 0 0 3px color-mix(in srgb, var(--brand-600) 25%, transparent); }
+  100% { box-shadow: inset 0 0 0 1.5px transparent, 0 0 0 0 transparent; }
 }
 .bk-locate { animation: bk-locate-flash 900ms var(--ease-smooth-out) 2; }
 @media (prefers-reduced-motion: reduce) { .bk-locate { animation: none; } }
@@ -1253,42 +1231,18 @@
   }
 }
 
-/* 登录页主视觉：K 线描线循环、落点脉冲与整体漂移（此前以内联 <style> 随组件注入）。 */
-.login-kline-loop {
-  stroke-dasharray: 1000;
-  stroke-dashoffset: 1000;
-  animation: login-kline-loop 10s var(--ease-paper) infinite;
+@layer components {
+  .login-page { position: relative; min-block-size: 100dvh; background: var(--paper); }
+  .login-layout { display: grid; align-items: center; gap: 2rem; max-inline-size: 72rem; min-block-size: 100dvh; margin-inline: auto; padding: 5rem 1rem 2rem; }
+  .login-intro { min-inline-size: 0; }
+  @media (min-width: 640px) { .login-layout { max-inline-size: 34rem; padding-inline: 2rem; } }
+  @media (min-width: 1024px) { .login-layout { max-inline-size: 72rem; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 5rem; padding: 5rem 2rem; } }
 }
-@keyframes login-kline-loop {
-  0% { stroke-dashoffset: 1000; opacity: 0; animation-timing-function: cubic-bezier(.16,1,.3,1); }
-  8% { opacity: 1; }
-  60% { stroke-dashoffset: 0; opacity: 1; }
-  88% { stroke-dashoffset: 0; opacity: 1; }
-  100% { stroke-dashoffset: 0; opacity: 0; }
-}
-.login-kline-blip {
-  transform-box: fill-box;
-  transform-origin: center;
-  opacity: 0;
-  animation: login-kline-blip 10s ease-out infinite;
-}
-@keyframes login-kline-blip {
-  0%, 58% { transform: scale(.15); opacity: 0; }
-  63% { opacity: .8; }
-  80% { transform: scale(1); opacity: 0; }
-  100% { transform: scale(1); opacity: 0; }
-}
-.login-drift { animation: login-drift 24s cubic-bezier(.45,0,.15,1) infinite alternate; }
-@keyframes login-drift {
-  from { transform: translate(-8px, -6px); }
-  to { transform: translate(8px, 8px); }
-}
-.login-paused .login-drift,
-.login-paused .login-kline-loop,
-.login-paused .login-kline-blip { animation-play-state: paused; }
-@media (prefers-reduced-motion: reduce) {
-  .login-drift, .login-kline-loop, .login-kline-blip { animation: none !important; }
-  .login-kline-loop { stroke-dashoffset: 0; opacity: 1; }
+
+/* 手机和触屏的局部命中区：使用真实布局盒，避免透明外扩侵入相邻操作。 */
+@media (max-width: 767px), (pointer: coarse) {
+  .mobile-control-target { min-height: 44px; }
+  .mobile-icon-target { min-width: 44px; min-height: 44px; }
 }
 
 /* Japan chart and loading helpers. */
@@ -1332,10 +1286,3 @@
 }
 
 @keyframes dot-pulse { 0%, 100% { opacity: .35; transform: scale(.85); } 50% { opacity: 1; transform: scale(1); } }
-
-/* The six daily indices share one rail on desktop, as on the US overview. */
-@media (min-width: 1280px) {
-  .index-summary-grid { gap: 0; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; background: var(--card); }
-  .index-summary-grid > *, .index-summary-grid .card-surface { border: 0; border-radius: 0; box-shadow: none; }
-  .index-summary-grid > * + * { border-left: 1px solid var(--line); }
-}

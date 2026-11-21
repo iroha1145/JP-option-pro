@@ -5,10 +5,6 @@ const token = (name) =>
 module.exports = {
   darkMode: ["class"],
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
-  /* v8.3 的触屏 hover 粘滞修复此前只覆盖 index.css 里手写的几个类（.card-hover
-     等），250 多处 hover:/group-hover: 工具类照样粘：手机上点一下，按钮保持
-     悬停色、卡片保持上浮。打开后这些变体只在「可悬停的精确指针」下生成，
-     与 index.css 的 @media (hover: hover) and (pointer: fine) 同一口径。 */
   future: {
     hoverOnlyWhenSupported: true,
   },
@@ -16,7 +12,6 @@ module.exports = {
     extend: {
       colors: {
         'on-accent': token('--on-accent'),
-        /* 2026-10-09 Arc 改版：主操作色（主按钮、当前页码）与其上的文字，见 index.css --action。 */
         action: {
           DEFAULT: token('--action'),
           hover: token('--action-hover'),
@@ -86,56 +81,21 @@ module.exports = {
           600: token('--warn-600'),
           50: token('--warn-50'),
         },
-        /* v8.1 弃「AI 紫」：紫+AI 是生成式设计最强签名。青瓷 teal（印刷第二油墨色），
-           与群青相距 60°+、与涨绿差 36°，不误读为行情方向。 */
         ai: {
           600: token('--ai-600'),
           50: token('--ai-50'),
         },
-        /* 2026-10-09 分类色：类别用（经济事件重要度、风险偏好），不表示好坏与涨跌。见 index.css。 */
         'cat-sky': { 50: token('--cat-sky-50'), 600: token('--cat-sky-600'), 700: token('--cat-sky-700') },
         'cat-amber': { 50: token('--cat-amber-50'), 600: token('--cat-amber-600'), 700: token('--cat-amber-700') },
         'cat-orange': { 50: token('--cat-orange-50'), 600: token('--cat-orange-600'), 700: token('--cat-orange-700') },
-        /* ---- shadcn/ui 兼容令牌（ui/ 基座仍可用）---- */
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
-        primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
-        },
-        secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
-        },
-        destructive: {
-          DEFAULT: "hsl(var(--destructive) / <alpha-value>)",
-          foreground: "hsl(var(--destructive-foreground) / <alpha-value>)",
-        },
-        muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
-        },
-        accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
-        },
-        popover: {
-          DEFAULT: "hsl(var(--popover))",
-          foreground: "hsl(var(--popover-foreground))",
-        },
       },
       borderRadius: {
-        /* 2026-10-09 Arc 改版：小件 6 · 控件 8 · 卡片 18（原 16）· 抽屉/模态 22 · 胶囊 999。
-           按钮、分段、徽章改用胶囊；输入与下拉触发 10 走 --r-control。 */
         xs: '4px',
         sm: '6px',
         md: '8px',
-        lg: '18px',
-        xl: '22px',
-        '2xl': '26px',
+        lg: '24px',
+        xl: '28px',
+        '2xl': '32px',
         pill: '999px',
       },
       boxShadow: {
@@ -157,8 +117,6 @@ module.exports = {
         /* 按钮立体三档（与 sh-* 同族墨影）：btn-hi 实心主按钮 > btn 描边次按钮 >
            幽灵/文字按钮平面。chip 给选中态胶囊/页码/分段滑块（介于两者之间）；
            track 是开关轨道的内凹井。按下收拢/禁用摊平的全局规则在 index.css。 */
-        /* v8.2 收小：次按钮/选中胶囊多为 26–36px 小件，2px/6px 晕染层在这个
-           尺度上发飘（用户实测反馈）——btn 只留 1px 贴身影，chip 收到 1px/3px。 */
         btn: 'var(--btn-shadow)',
         'btn-hi': 'var(--btn-hi-shadow)',
         chip: 'var(--chip-shadow)',
@@ -172,31 +130,21 @@ module.exports = {
         mono: ['ui-monospace', 'SFMono-Regular', '"SF Mono"', 'Menlo', 'Consolas', '"Liberation Mono"', 'monospace'],
       },
       fontSize: {
-        /* design.md §2.2 字阶（size/lineHeight，weight 由工具类控制） */
-        /* 2026-10-06 字重只用 400/500：标题与数字中等，其余常规（中文 550 以上会落到
-           苹方「中粗」，整页发重）。display 字阶 tracking -0.02em · lineHeight 1.15。
-           2026-10-06 第二轮（参照 uiarc.dev）：小字整体上调一档——micro 12、caption 13、
-           body-s 14、body 15，行高放到 1.4–1.6；原 11–12px、行高 1.1 的密排读起来挤。
-           eyebrow 不再全大写加字距，只是一行中等字重的灰色小标签。 */
-        /* 2026-10-09 Arc 改版：大标题字距收紧到 -0.03em（Arc 40px 标题 -1.2px），行高 1.1。 */
-        'display-xl': ['56px', { lineHeight: '60px', fontWeight: '500', letterSpacing: '-0.03em' }],
-        'display-l': ['40px', { lineHeight: '44px', fontWeight: '500', letterSpacing: '-0.03em' }],
-        'display-m': ['28px', { lineHeight: '32px', fontWeight: '500', letterSpacing: '-0.03em' }],
-        h2: ['20px', { lineHeight: '26px', fontWeight: '500' }],
-        h3: ['16px', { lineHeight: '24px', fontWeight: '500' }],
-        body: ['15px', { lineHeight: '24px', fontWeight: '400' }],
-        'body-s': ['14px', { lineHeight: '21px', fontWeight: '400' }],
-        caption: ['13px', { lineHeight: '19px', fontWeight: '400' }],
-        /* 2026-10-09 Arc 改版：区块小标签改常规字重、13px（Arc 的标签就是一行灰色小字）。 */
-        eyebrow: ['13px', { lineHeight: '18px', fontWeight: '400' }],
-        'data-xxl': ['40px', { lineHeight: '44px', fontWeight: '500', letterSpacing: '-0.03em' }],
-        'data-xl': ['30px', { lineHeight: '36px', fontWeight: '500', letterSpacing: '-0.02em' }],
-        'data-l': ['22px', { lineHeight: '28px', fontWeight: '500', letterSpacing: '-0.01em' }],
-        'data-m': ['15px', { lineHeight: '22px', fontWeight: '400' }],
-        /* 2026-10-09 Arc 改版：micro 12→13（原先 12px 占全站文字三成多，Arc 只占一成）；
-           真要紧凑的地方（徽章、手机底栏、坐标轴、角标）改用 tag 12px。 */
-        micro: ['13px', { lineHeight: '18px', fontWeight: '400' }],
-        tag: ['12px', { lineHeight: '16px', fontWeight: '400' }],
+        'display-xl': ['3.25rem', { lineHeight: '1.1', fontWeight: '500', letterSpacing: '-0.035em' }],
+        'display-l': ['2.25rem', { lineHeight: '1.2', fontWeight: '500', letterSpacing: '-0.035em' }],
+        'display-m': ['1.75rem', { lineHeight: '1.25', fontWeight: '500', letterSpacing: '-0.025em' }],
+        h2: ['1.375rem', { lineHeight: '1.4', fontWeight: '500' }],
+        h3: ['1.0625rem', { lineHeight: '1.5', fontWeight: '500' }],
+        body: ['1rem', { lineHeight: '1.625', fontWeight: '400' }],
+        'body-s': ['.875rem', { lineHeight: '1.5', fontWeight: '400' }],
+        caption: ['.8125rem', { lineHeight: '1.5', fontWeight: '400' }],
+        eyebrow: ['.8125rem', { lineHeight: '1.5', fontWeight: '500' }],
+        'data-xxl': ['2.5rem', { lineHeight: '1.15', fontWeight: '500', letterSpacing: '-0.035em' }],
+        'data-xl': ['1.875rem', { lineHeight: '1.2', fontWeight: '500', letterSpacing: '-0.025em' }],
+        'data-l': ['1.375rem', { lineHeight: '1.3', fontWeight: '500', letterSpacing: '-0.015em' }],
+        'data-m': ['1rem', { lineHeight: '1.4', fontWeight: '400' }],
+        micro: ['.8125rem', { lineHeight: '1.4', fontWeight: '400' }],
+        tag: ['.75rem', { lineHeight: '1.35', fontWeight: '400' }],
       },
       maxWidth: {
         shell: '1440px',
@@ -217,8 +165,6 @@ module.exports = {
         section: '560ms',
       },
       keyframes: {
-        /* v8.3 tick-flash keyframes 退役：keyframes 一旦触发必须跑完、无法中断，
-           改为 index.css 的 .tick-flash*（常驻 600ms 回落 transition + 瞬时上色态）。 */
         'led-pulse': {
           '0%': { boxShadow: '0 0 0 0 color-mix(in srgb, var(--ok-600) 55%, transparent)' },
           '70%': { boxShadow: '0 0 0 6px color-mix(in srgb, var(--ok-600) 0%, transparent)' },

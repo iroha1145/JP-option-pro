@@ -56,7 +56,7 @@ export function useProgressiveList<T>(
   const sentinelRef = useCallback(
     (node: HTMLElement | null) => {
       observerRef.current?.disconnect();
-      if (!node || typeof IntersectionObserver === 'undefined') return;
+      if (!node) return;
       const observer = new IntersectionObserver(
         (entries) => {
           if (entries.some((entry) => entry.isIntersecting)) loadMore();

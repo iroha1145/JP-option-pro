@@ -1,9 +1,7 @@
 /** DataTable：发丝线行、r-lg 容器、表头 Eyebrow 化、行 hover paper-2 底、可排序 */
 import { useMemo, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
-import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import Icon from '@/components/icons';
-import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 
 export interface Column<T> {
   key: string;
@@ -53,7 +51,6 @@ export default function DataTable<T>({
   rowClassName,
   preSorted = false,
 }: DataTableProps<T>) {
-  const reducedMotion = usePrefersReducedMotion();
   const [innerSort, setInnerSort] = useState(defaultSort);
   const sort = sortProp !== undefined ? sortProp : innerSort;
   const setSort = (s: SortState | null) => {
@@ -86,7 +83,7 @@ export default function DataTable<T>({
   };
 
   return (
-    <div className={cn('card-surface overflow-x-auto overscroll-x-contain', className)}>
+    <div tabIndex={0} className={cn('card-surface overflow-x-auto overscroll-x-contain', className)}>
       <table className="w-full border-collapse">
         <thead>
           <tr className="bg-card-warm">
@@ -129,10 +126,8 @@ export default function DataTable<T>({
           {sorted.map((row, i) => {
             const key = rowKey(row);
             return (
-              <motion.tr
+              <tr
                 key={key}
-                layout={reducedMotion ? false : 'position'}
-                transition={{ duration: reducedMotion ? 0 : 0.24, ease: [0.16, 1, 0.3, 1] }}
                 onClick={
                   onRowClick
                     ? (event: ReactMouseEvent<HTMLTableRowElement>) => {
@@ -180,7 +175,7 @@ export default function DataTable<T>({
                     {c.render(row, i)}
                   </td>
                 ))}
-              </motion.tr>
+              </tr>
             );
           })}
         </tbody>

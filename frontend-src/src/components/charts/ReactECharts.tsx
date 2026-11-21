@@ -2,6 +2,7 @@
 import { useEffect, useRef } from 'react';
 import { CH, echarts, type ChartOption, type EChartsInstance } from '@/lib/chart';
 import { useAppearance } from '@/hooks/useAppearance';
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 
 interface ReactEChartsProps {
   option: ChartOption;
@@ -20,6 +21,7 @@ interface ReactEChartsProps {
 export default function ReactECharts({ option, className, style, onClick, onInit, prepareOption, onOptionApplied, ariaLabel }: ReactEChartsProps) {
   const appearance = useAppearance();
   const ref = useRef<HTMLDivElement>(null);
+  const reducedMotion = usePrefersReducedMotion();
   const chartRef = useRef<EChartsInstance | null>(null);
   const onInitRef = useRef(onInit);
   onInitRef.current = onInit;
@@ -46,14 +48,15 @@ export default function ReactECharts({ option, className, style, onClick, onInit
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart) return;
+    // 系统开启「减少动态效果」时关闭图表入场与更新动画
     chart.setOption({ backgroundColor: 'transparent', textStyle: { color: CH.tooltipFg },
-      ...(prepareOption ? prepareOption(option) : option) }, { notMerge: true });
+      ...(prepareOption ? prepareOption(option) : option), ...(reducedMotion ? { animation: false } : null) }, { notMerge: true });
     onOptionAppliedRef.current?.(chart);
     // Always detach first so a transition to onClick=undefined removes the stale
     // handler (previously the off() lived inside the if and leaked the old binding).
     chart.off('click');
     if (onClick) chart.on('click', onClick);
-  }, [option, onClick, prepareOption, appearance]);
+  }, [option, onClick, prepareOption, appearance, reducedMotion]);
 
   return (
     /* 尺寸只认 className（内联 height:100% 会压过 h-*，而父级是 auto 高时

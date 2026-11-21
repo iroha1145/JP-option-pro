@@ -110,6 +110,9 @@ function SignalListSkeleton({ rows }: { rows: number }) {
   return <div className="mt-3 border-t border-line"><SkeletonRows rows={rows} /></div>;
 }
 
+/* 指数卡网格与美国站同一写法：手机两列、平板三列、桌面按 170px 自动铺满。 */
+const INDEX_GRID = 'grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:grid-cols-3 sm:gap-4 xl:[grid-template-columns:repeat(auto-fit,minmax(170px,1fr))]';
+
 export default function Home() {
   const { canManageWatchlist, principalKey } = useAccess();
   const market = usePolling(() => marketApi.overview(), 120_000);
@@ -159,7 +162,7 @@ export default function Home() {
   const moverFlashes = useTickFlash(movers, (row) => row.canonical_code, (row) => row.quote?.close ?? null);
 
   return (
-    <div>
+    <div className="page-stack">
       <PageHeader
         title={t('首页')}
         meta={
@@ -175,13 +178,13 @@ export default function Home() {
         }
       />
 
-      <section className="mt-8" aria-label={t('指数概览')}>
+      <section className="min-w-0" aria-label={t('指数概览')}>
         <SkeletonReveal
           loading={market.loading && !market.data}
           skeleton={
-            <div className="index-summary-grid grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+            <div className={INDEX_GRID}>
               {Array.from({ length: 6 }).map((_, index) => (
-                <SkeletonCard key={index} className="h-24" />
+                <SkeletonCard key={index} className="index-card" />
               ))}
             </div>
           }
@@ -202,7 +205,7 @@ export default function Home() {
                 <StaleStrip onRetry={refreshMarket} refreshing={market.refreshing} className="mb-3" />
               )}
               {indices.length === 0 && <div className="card-surface"><EmptyState image="/empty-chart.svg" title={t('暂无数据')} /></div>}
-              <div className="index-summary-grid grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+              <div className={INDEX_GRID}>
                 {indices.map((index, cardIndex) => (
                   <IndexInsightCard
                     key={index.index_code}
@@ -217,8 +220,8 @@ export default function Home() {
         </SkeletonReveal>
       </section>
 
-      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <SectionCard title={t('市场广度')} to="/market" className="lg:col-span-1">
+      <div className="page-grid items-start">
+        <SectionCard title={t('市场广度')} to="/market" className="lg:col-span-4">
           <ListBody
             loading={market.loading && !market.data}
             error={market.error}
@@ -230,7 +233,7 @@ export default function Home() {
             rows={6}
           >
             {market.data && (
-              <div className="space-y-3 px-4 pb-4 md:px-5">
+              <div className="space-y-3 px-5 pb-5 sm:px-6">
                 <AdvanceDeclineBar
                   advancers={market.data.breadth.advancers}
                   decliners={market.data.breadth.decliners}
@@ -261,7 +264,7 @@ export default function Home() {
           </ListBody>
         </SectionCard>
 
-        <SectionCard title={t('雷达信号')} to="/radar" className="order-first lg:order-none lg:col-span-2">
+        <SectionCard title={t('雷达信号')} to="/radar" className="order-first lg:order-none lg:col-span-8">
           <ListBody
             loading={radar.loading && !radar.data}
             error={radar.error}
@@ -283,8 +286,8 @@ export default function Home() {
         </SectionCard>
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <SectionCard title={t('近期财报')} to="/earnings">
+      <div className="page-grid items-start">
+        <SectionCard title={t('近期财报')} to="/earnings" className="lg:col-span-4">
           <ListBody
             loading={earnings.loading && !earnings.data}
             error={earnings.error}
@@ -302,7 +305,7 @@ export default function Home() {
           </ListBody>
         </SectionCard>
 
-        <SectionCard title={t('关注动态')} to="/watchlist" className="lg:col-span-2">
+        <SectionCard title={t('关注动态')} to="/watchlist" className="lg:col-span-8">
           {!canManageWatchlist ? (
             <EmptyState
               image="/empty-watchlist.svg"
@@ -358,14 +361,14 @@ function IndexInsightCard({
     >
       <Link
         to={`/market?index=${encodeURIComponent(index.index_code)}`}
-        className="card-surface card-hover card-glare flex flex-col gap-1 rounded-lg p-3"
+        className="card-surface card-hover card-glare index-card flex h-full w-full flex-col gap-2 p-3.5 text-left sm:p-4"
         aria-label={`${index.name} ${t('趋势快照')}`}
       >
         <span className="truncate text-caption text-ink-500">{index.name}</span>
         <TickPrice flash={flash} className="metric-value text-data-l text-ink-900 tnum">
           {fmtPrice(index.close)}
         </TickPrice>
-        <span className="flex items-end justify-between gap-2">
+        <span className="mt-auto flex items-end justify-between gap-2">
           <ChangeBadge value={index.change_pct} size="sm" />
           {spark.length > 1 && <Sparkline data={spark} width={64} height={20} change={change} />}
         </span>
@@ -384,7 +387,7 @@ function RadarSignalCard({ event, index }: { event: RadarEvent; index: number })
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22, ease: EASE_PAPER, delay: staggerDelay(index) }}
     >
-      <Link to={`/stock/${event.display_code}`} className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors duration-150 hover:bg-paper-2/70 focus-visible:bg-paper-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400/60 md:px-5">
+      <Link to={`/stock/${event.display_code}`} className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 transition-colors duration-150 hover:bg-paper-2/70 focus-visible:bg-paper-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400/60 sm:px-6">
         <div className="flex min-w-0 flex-1 basis-40 items-center gap-2">
           <CodeMark code={event.display_code} size={28} />
           <div className="min-w-0">
@@ -418,7 +421,7 @@ function EarningsAnchorRow({ item, todayKey }: { item: EarningsRecentItem; today
   return (
     <Link
       to={`/stock/${item.display_code}`}
-      className="flex items-center gap-3 px-4 py-2.5 transition-colors duration-fast hover:bg-paper-2/70 focus-visible:bg-paper-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400/60 md:px-5"
+      className="flex items-center gap-3 px-5 py-2.5 transition-colors duration-fast hover:bg-paper-2/70 focus-visible:bg-paper-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400/60 sm:px-6"
     >
       <span
         className={cn(
@@ -452,7 +455,7 @@ function WatchlistMoverCard({
   return (
     <motion.div initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22, ease: EASE_PAPER, delay: staggerDelay(index) }}>
-      <Link to={`/stock/${item.display_code}`} className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors duration-150 hover:bg-paper-2/70 focus-visible:bg-paper-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400/60 md:px-5">
+      <Link to={`/stock/${item.display_code}`} className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 transition-colors duration-150 hover:bg-paper-2/70 focus-visible:bg-paper-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400/60 sm:px-6">
         <CodeMark code={item.display_code} size={28} />
         <div className="min-w-0 flex-1 basis-20">
           <span className="text-body-s font-semibold text-ink-900 tnum">{item.display_code}</span>

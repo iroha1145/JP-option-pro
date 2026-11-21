@@ -41,13 +41,13 @@ export default function HorizontalScroller({
     if (!node) return;
     measure();
     node.addEventListener('scroll', measure, { passive: true });
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
-    observer?.observe(node);
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
     const track = node.firstElementChild;
-    if (track) observer?.observe(track);
+    if (track) observer.observe(track);
     return () => {
       node.removeEventListener('scroll', measure);
-      observer?.disconnect();
+      observer.disconnect();
     };
   }, [measure]);
 

@@ -12,7 +12,7 @@ import { placeGlide } from '@/lib/transitions';
 import { tokyoSession, tokyoSessionLabel } from '@/lib/tokyoSession';
 import Icon from '@/components/icons';
 import { SessionDot } from '@/components/shared/SessionLED';
-import SettingsMenu from '@/components/SettingsMenu';
+import SettingsMenu from '@/components/LazySettingsMenu';
 import { NAV_GROUPS, isNavGroupActive, navAriaCurrent } from '@/lib/navigation';
 import { t } from '@/i18n/core';
 
