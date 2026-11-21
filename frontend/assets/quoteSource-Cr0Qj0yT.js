@@ -1,1 +1,0 @@
-import{t as e}from"./i18n-DJzC6_t7.js";function o(t){const n=t?.delayed_minutes??15,r=t?.is_realtime??t?.delay_class==="realtime",i=t?.is_official??!1;return r&&i?{text:e("实时行情"),tone:"ok"}:r?{text:e("实时行情"),tone:"warn"}:i?{text:e("延迟 {n} 分钟",{n}),tone:"warn"}:{text:e("延迟 {n} 分钟",{n}),tone:"warn"}}export{o as q};

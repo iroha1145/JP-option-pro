@@ -1,0 +1,1 @@
+import{r as a}from"./react-runtime-C6sZTaV_.js";import{O as n,P as e,z as r}from"./index-De425zsX.js";function c(){return a.useSyncExternalStore(n,r,r)}function o(){return a.useSyncExternalStore(n,e,e)}export{o as a,c as u};
