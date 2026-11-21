@@ -252,14 +252,12 @@ def compare_states(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     return {
         "by_state": by_state,
         "questions": {
-            # 卖压吸收候选 は 普通の低位株 より良いか
-            "absorption_vs_low_conflict": compare("absorption", "low_conflict"),
-            # 回补启动 は 機関空売りが動いた銘柄全体より良いか
-            "covering_start_vs_all": compare("covering_start", "(all signals)"),
-            # 挤空确认 は 回补启动 より良いか（突破確認を足した意味があるか）
-            "squeeze_vs_covering_start": compare("squeeze_confirmed", "covering_start"),
-            # 背离失效 が実際に悪いか
-            "divergence_failed_vs_all": compare("divergence_failed", "(all signals)"),
+            # 増加中 は 機関空売りが動いた銘柄全体より悪いか
+            "building_vs_all": compare("building", "(all signals)"),
+            # 減少中 は 全体より良いか（回補に意味があるか）
+            "covering_vs_all": compare("covering", "(all signals)"),
+            # 増加中 と 減少中 に差があるか
+            "building_vs_covering": compare("building", "covering"),
         },
     }
 
@@ -488,8 +486,7 @@ def evaluate_signals(
 
     report.states = compare_states(usable)
     report.flags = compare_flags(usable, [
-        "reentry", "rotation", "new_entry", "crowded_margin",
-        "parked_below", "voluntary_covering", "forced_covering", "no_informed_reporter",
+        "reentry", "new_entry", "crowded_margin", "parked_below", "no_informed_reporter",
     ])
 
     liquidity_edges = quantile_edges([r.get("adv20_value") for r in usable if r.get("adv20_value")])

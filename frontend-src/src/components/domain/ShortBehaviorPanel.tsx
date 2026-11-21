@@ -1,6 +1,6 @@
 /* 个股页的「机构空卖行为」区块。
  *
- * 三层：行为指标 → 机构公开空头 → 事件时间线，最后是确定性解释卡片。
+ * 三层：事实指标 → 机构公开空头 → 事件时间线，最后是确定性解释卡片。
  *
  * 最重要的一条：跌破公开门槛之后不要把线画到 0。这里用「实线 = 精确公开
  * 报告状态 / 虚线 = 最后已知但当前不可见」来表示，并在每条上写明。 */
@@ -97,27 +97,39 @@ export default function ShortBehaviorPanel({ code }: { code: string }) {
         {t('跌破公开披露门槛不代表实际空头仓位归零，后续精确仓位不可见。')}
       </p>
 
-      {/* 下层：行为指标 */}
+      {/* 下层：事实指标。只陈述数到的东西，不打分。 */}
       <dl className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-        <Metric label="行为分" value={detail.behavior_score?.toFixed(0) ?? '—'} hint={SHORT_HINTS.behavior} />
-        <Metric label="数据置信度" value={detail.data_confidence?.toFixed(2) ?? '—'} hint={SHORT_HINTS.confidence} />
         <Metric
-          label="公开可见空头"
+          label="拥挤度"
+          value={t(CROWDING_LABELS[detail.crowding_level] ?? '无')}
+          hint={SHORT_HINTS.crowding}
+        />
+        <Metric
+          label="公开持仓比例"
           value={fmtPctLevel(detail.visible_short_ratio)}
           hint={SHORT_HINTS.visibleShort}
+        />
+        <Metric
+          label="近期机构数"
+          value={String(detail.visible_institution_count)}
+          hint={SHORT_HINTS.institutions}
+        />
+        <Metric
+          label="20日变化"
+          value={fmtPct(detail.ratio_change_20d)}
+          // 空头增加用跌色、减少用涨色：按对股价的方向，不按数字符号。
+          tone={shortDeltaTone(detail.ratio_change_20d)}
+        />
+        <Metric
+          label="回补天数"
+          value={detail.visible_days_to_cover?.toFixed(1) ?? '—'}
+          hint={SHORT_HINTS.daysToCover}
         />
         <Metric
           label="在册合计（官方口径）"
           value={fmtPctLevel(detail.reported_in_scope_ratio)}
           hint={SHORT_HINTS.inScope}
         />
-        <Metric
-          label="公开可见回补天数"
-          value={detail.visible_days_to_cover?.toFixed(2) ?? '—'}
-          hint={SHORT_HINTS.daysToCover}
-        />
-        <Metric label="卖压吸收" value={detail.scores.absorption?.toFixed(0) ?? '—'} hint={SHORT_HINTS.absorption} />
-        <Metric label="回补强度" value={detail.scores.covering?.toFixed(0) ?? '—'} hint={SHORT_HINTS.covering} />
         <Metric label="相对TOPIX（20日）" value={fmtPct(detail.rel_topix_20d)} />
         <Metric label="相对行业（20日）" value={fmtPct(detail.rel_sector_20d)} />
       </dl>
@@ -185,14 +197,21 @@ export default function ShortBehaviorPanel({ code }: { code: string }) {
   );
 }
 
-function Metric({ label, value, hint }: { label: string; value: string; hint?: ScoreHint }) {
+const CROWDING_LABELS: Record<number, string> = { 0: '无', 1: '低', 2: '中', 3: '高' };
+
+function shortDeltaTone(value: number | null): string | undefined {
+  if (value == null || value === 0) return undefined;
+  return value > 0 ? 'text-down-600' : 'text-up-600';
+}
+
+function Metric({ label, value, hint, tone }: { label: string; value: string; hint?: ScoreHint; tone?: string }) {
   return (
     <div className="rounded-md bg-paper-2 px-2 py-1.5">
       <div className="flex items-center gap-0.5 text-micro text-ink-400">
         <span className="truncate">{t(label)}</span>
         {hint && <InfoHint hint={hint} size={11} side="bottom" />}
       </div>
-      <div className="tnum text-data-s text-ink-900">{value}</div>
+      <div className={`tnum text-data-s ${tone ?? 'text-ink-900'}`}>{value}</div>
     </div>
   );
 }

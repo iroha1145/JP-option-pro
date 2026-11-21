@@ -158,24 +158,29 @@ def test_japanese_majors_sharing_a_latin_token_stay_apart():
     assert resolver.resolve("XYZ Asset").legal_id == "xyz-asset"
 
 
-def test_homonym_names_split_by_observed_address():
-    """同じ正規化名に複数の住所が観測されたときだけ、住所で実体を分ける。"""
+def test_homonym_names_are_not_split_by_address_alone():
+    """同じ名前は、住所が違うというだけでは分けない（evt-v4 / inst-v4 で語義が逆転）。
+
+    旧版は同じ正規化名に複数の住所が観測されると実体を住所で分けていた
+    （`observe` / `finalize_observations`）。本番では同じ機関の住所表記の違い
+    （一括配信は住所欄なし、日次配信は住所つき）が別実体を生み、古い連鎖が
+    停止したまま合計に残った。分けるのは、同じ銘柄・同じ仓位日に住所違いで
+    **違う値** が出たとき（`build_events` の側）だけ。resolver が住所で分けるのは
+    呼び出し側が `split_by_address=True` と明示したときに限る。
+    """
 
     resolver = InstitutionResolver()
-    resolver.observe("ABC Asset", "1-1 Marunouchi, Tokyo")
-    resolver.observe("ABC Asset", "2 King Street, London")
-    resolver.finalize_observations()
+    assert not hasattr(resolver, "observe") and not hasattr(resolver, "finalize_observations")
 
     tokyo = resolver.resolve("ABC Asset", address="1-1 Marunouchi, Tokyo")
     london = resolver.resolve("ABC Asset", address="2 King Street, London")
-    assert tokyo.legal_id != london.legal_id
+    bare = resolver.resolve("ABC Asset")
+    assert tokyo.legal_id == london.legal_id == bare.legal_id == "abc-asset"
 
-    # 住所が 1 つしか観測されない名前は何も変わらない
-    resolver2 = InstitutionResolver()
-    resolver2.observe("XYZ Asset", "1-1 Marunouchi, Tokyo")
-    resolver2.finalize_observations()
-    plain = resolver2.resolve("XYZ Asset", address="1-1 Marunouchi, Tokyo")
-    assert plain.legal_id == "xyz-asset"
+    # 明示したときだけ、住所の違いが実体を分ける（証拠があった組のための道具）
+    split_tokyo = resolver.resolve("ABC Asset", address="1-1 Marunouchi, Tokyo", split_by_address=True)
+    split_london = resolver.resolve("ABC Asset", address="2 King Street, London", split_by_address=True)
+    assert split_tokyo.legal_id != split_london.legal_id
 
 
 # -- イベント種別 -----------------------------------------------------------

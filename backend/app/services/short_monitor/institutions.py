@@ -45,7 +45,9 @@ from dataclasses import dataclass
 #: v3: slug が ASCII 以外を捨てていたため、三菱UFJ信託 / 三菱UFJ証券 /
 #:     SBI証券 / SBIホールディングス などが同一 legal_id に潰れ、
 #:     last_known の合算が大手を二重計上していた。Unicode の語を残す。
-INSTITUTION_VERSION = "inst-v3"
+#: v4: 住所の指紋で実体を分けるのをやめる（`InstitutionResolver` の説明を参照）。
+#:     分けるのは、同じ銘柄・同じ仓位日に住所違いで違う値が出た組だけ。
+INSTITUTION_VERSION = "inst-v4"
 
 MATCH_EXACT = "exact"          # この実体に属する生表記が 1 つだけ（統合していない）
 MATCH_NORMALIZED = "normalized"  # 正規化で別の生表記と一致した
@@ -213,48 +215,36 @@ class InstitutionResolver:
     同じ正規化名に複数の生表記が集まったときだけ「統合した」ことになるので、
     そのときに限って信頼度を下げる（統合が誤りうるのはその場合だけ）。
 
-    住所は **同名別法人の切り分け** に使う: 事前に `observe()` で全行を
-    流すと、同じ正規化名に複数の異なる住所が観測された名前が分かる。その
-    名前に限って `legal_id` に住所の指紋を足す —— 分けるのは安全側の誤り
-    （§五: 名前が似ているだけで統合しない）で、住所が 1 つしか無い名前は
-    何も変わらない。観測順に依存しないので、再構築のたびに ID が揺れない。
+    **住所では実体を分けない（v4）。** v3 は「同じ正規化名に複数の住所が
+    観測された名前」を住所の指紋で別実体にしていたが、本番 10 年分の実測では
+    その 87 名・17,024 組（銘柄 × 名前 × ファンド）のうち、同じ仓位日に
+    **違う値** を報告していた（= 本当に別法人が並行していた）のは 1 組 1 日
+    だけで、同値の重複は 11,491 日あった —— 住所の違いはほぼ全部が表記揺れ・
+    移転・「住所欄が空の配信」だった。分けた結果、住所欄の無い期間
+    （2025-06〜2026-07 の一括配信）の連鎖が `-noaddr` という別実体になり、
+    住所つき配信に切り替わった後も 7 月末の値のまま「報告義務中」として合計に
+    残り続けた（2026-11-20 時点で 1,133 銘柄の合計が誤り、全体の約 4 割が
+    重複または既に閾値を割った建玉）。
+
+    本当に並行している同名別法人は、**その銘柄の中で証拠があるときだけ**
+    分ける: `events.build_events` が「同じ仓位日に住所違いで違う値」を
+    見つけた組に限って `split_by_address=True` で呼ぶ。
     """
 
     #: 正規化で統合が起きたときの信頼度。統合していなければ 1.0。
     MERGED_CONFIDENCE = 0.75
     #: 法人ではなく集合（個人 など）。1 つの実体として数えてはいけない。
     AGGREGATE_CONFIDENCE = 0.35
-    #: 同名複数住所の名前で、住所が空の行。どの実体か決められない。
-    HOMONYM_NO_ADDRESS_CONFIDENCE = 0.5
 
     def __init__(self, curated: dict[str, str] | None = None) -> None:
         # raw_name → legal_id の人手マッピング（DB の institution_aliases 由来）
         self._curated = dict(curated or {})
         self._raw_by_legal: dict[str, set[str]] = {}
         self._display_by_legal: dict[str, str] = {}
-        # normalized_name → 観測された正規化済み住所の集合（observe で埋める）
-        self._addresses_by_name: dict[str, set[str]] = {}
-        self._homonyms: frozenset[str] = frozenset()
 
-    def observe(self, raw_name: str | None, address: str | None = None) -> None:
-        """事前パス: 名前ごとの住所の観測。resolve の前に全行を流す。"""
-
-        normalized = normalize_name((raw_name or "").strip())
-        if not normalized or normalized in _AGGREGATE_NAMES:
-            return
-        cleaned = normalize_address(address)
-        if cleaned:
-            self._addresses_by_name.setdefault(normalized, set()).add(cleaned)
-
-    def finalize_observations(self) -> frozenset[str]:
-        """複数住所が観測された名前を確定する。以後の resolve に効く。"""
-
-        self._homonyms = frozenset(
-            name for name, addresses in self._addresses_by_name.items() if len(addresses) > 1
-        )
-        return self._homonyms
-
-    def resolve(self, raw_name: str | None, address: str | None = None) -> InstitutionMapping:
+    def resolve(
+        self, raw_name: str | None, address: str | None = None, *, split_by_address: bool = False,
+    ) -> InstitutionMapping:
         raw = (raw_name or "").strip()
         normalized = normalize_name(raw)
         if not normalized:
@@ -274,26 +264,19 @@ class InstitutionResolver:
             )
 
         curated_id = self._curated.get(raw)
-        homonym_penalty = False
         legal_id = curated_id or _slug(normalized)
-        if not curated_id and normalized in self._homonyms:
+        if not curated_id and split_by_address:
             cleaned = normalize_address(address)
             if cleaned:
                 import hashlib
 
                 legal_id = f"{legal_id}-a{hashlib.sha1(cleaned.encode('utf-8')).hexdigest()[:8]}"
-            else:
-                # 同名複数住所の名前なのに住所が無い行。どの法人か決められない。
-                legal_id = f"{legal_id}-noaddr"
-                homonym_penalty = True
         group_id, group_name = _group_for(normalized)
         self._remember(legal_id, raw)
 
         merged = len(self._raw_by_legal.get(legal_id, ())) > 1
         if curated_id:
             kind, confidence = MATCH_CURATED, 1.0
-        elif homonym_penalty:
-            kind, confidence = MATCH_NORMALIZED, self.HOMONYM_NO_ADDRESS_CONFIDENCE
         elif merged:
             kind, confidence = MATCH_NORMALIZED, self.MERGED_CONFIDENCE
         else:

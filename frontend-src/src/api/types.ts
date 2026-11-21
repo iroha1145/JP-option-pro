@@ -988,17 +988,6 @@ export interface ResearchReport {
    命名规则与后端一致：只有 `visible` / `reported`，没有 total_short_*。
    J-Quants 的机构空卖报告只覆盖达到公开披露条件的部分。 */
 
-export interface ShortMonitorScores {
-  low_position: number | null;
-  short_pressure: number | null;
-  price_damage: number | null;
-  absorption: number | null;
-  covering: number | null;
-  rotation: number | null;
-  catalyst: number | null;
-  risk: number | null;
-}
-
 export interface ShortMonitorRow {
   canonical_code: string;
   display_code: string;
@@ -1031,54 +1020,62 @@ export interface ShortMonitorRow {
   pressure_adv20_5d: number | null;
   pressure_adv20_20d: number | null;
   visible_days_to_cover: number | null;
+  /** 口径未在契约里写明，界面暂不展示。 */
+  combined_visible_days_to_cover?: number | null;
   rel_topix_20d: number | null;
   rel_sector_20d: number | null;
   entry_count_20d: number;
   reentry_count_20d: number;
   reduction_count_20d: number;
   threshold_exit_count_20d: number;
-  scores: ShortMonitorScores;
-  behavior_score: number | null;
-  monitor_priority: number | null;
   data_confidence: number | null;
-  primary_state: string;
+  /** 按公开持仓比例净变化的规则分类（门槛 0.10 个百分点）。 */
+  primary_state: ShortMonitorState;
   flags: string[];
+  /** 停在披露门槛下方的机构数。 */
+  parked_below_count?: number | null;
+  /** 以下两个字段契约未给出形状，界面暂不展示。 */
+  reporter_classes?: unknown;
+  informed?: unknown;
+  /** fund 指 ETF 与 ETN；排行默认不含 fund。 */
+  security_kind: 'stock' | 'reit' | 'fund';
+  /** 0 无公开持仓，1 低，2 中，3 高。 */
+  crowding_level: ShortCrowdingLevel;
+  /** 最近一次公开报告生效日距数据日的交易日数。 */
+  last_report_age_days: number | null;
+  confidence_reasons: string[];
   algorithm_version: string | null;
 }
+
+export type ShortMonitorState = 'building' | 'covering' | 'mixed' | 'steady' | 'no_signal';
+export type ShortCrowdingLevel = 0 | 1 | 2 | 3;
+export type ShortMonitorView = 'crowded' | 'building' | 'covering' | 'entries' | 'days_to_cover' | 'all';
 
 export interface ShortMonitorOverview {
   as_of_date: string | null;
   synced_at?: string | null;
+  /** 计数都不含 fund。 */
   coverage: { covered: number; with_visible_short: number; low_confidence: number } | null;
-  states: Record<string, number>;
+  states: Partial<Record<ShortMonitorState, number>>;
+  crowding: { high: number; mid: number; low: number } | null;
   note: string;
   algorithm_version?: string;
-  score_version?: string;
-  /** 门槛与权重是否已通过历史验证。未验证时界面必须说出来。 */
-  validated?: { gates: boolean; score: boolean };
-  /** 验证的**结果**。「还没验证」和「验证过但没通过」是两回事。 */
-  validation?: {
-    status: string;
-    run?: string;
-    signals?: number;
-    windows?: number;
-    summary: string;
-    document?: string;
-    caveats?: string[];
-  };
-  /** 雷达优先级联动的实际状态。验证未通过时 enabled=false，调整量恒为 0。 */
-  radar_link?: { enabled: boolean; max_shift: number };
+  api_version?: string;
+  /** 雷达联动状态。`crowding_validation` 的形状契约未写明，界面不读。 */
+  radar_link?: { enabled: boolean; crowding_enabled?: boolean; crowding_validation?: unknown };
 }
 
 export interface ShortMonitorRankings {
   as_of_date: string | null;
   view: string;
   order_by: string;
+  order_dir?: 'asc' | 'desc';
   total: number;
   limit: number;
   offset: number;
   rows: ShortMonitorRow[];
   note: string;
+  api_version?: string;
 }
 
 export interface ShortMonitorHolder {
@@ -1107,8 +1104,8 @@ export interface ShortMonitorHistoryPoint {
   visible_short_shares: number | null;
   visible_institution_count: number;
   below_threshold_count: number;
-  behavior_score: number | null;
   primary_state: string;
+  algorithm_version?: string | null;
 }
 
 export interface ShortMonitorExplanation {
@@ -1127,6 +1124,7 @@ export interface ShortMonitorDetail extends ShortMonitorRow {
   history: ShortMonitorHistoryPoint[];
   explanation: ShortMonitorExplanation;
   note: string;
+  api_version?: string;
 }
 
 export interface ShortMonitorEvent {

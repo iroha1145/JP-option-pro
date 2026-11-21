@@ -335,22 +335,9 @@ def build_fixture(data_dir: str | None = None, *, days: int = 320, end_date: dat
         rows_total=len(ratio_rows), data_through=target,
     )
 
-    # 空売り残高報告
-    position_rows = []
-    for display in ("9984", "4385", "8035"):
-        code = _canonical(display)
-        for report in range(3):
-            calc = (date.fromisoformat(target) - timedelta(days=5 * report)).isoformat()
-            position_rows.append(
-                {
-                    "canonical_code": code,
-                    "disclosed_date": calc,
-                    "calculated_date": calc,
-                    "holder_name": f"モルガン・スタンレーMUFG証券{report + 1}",
-                    "short_position_ratio": round(0.005 + 0.002 * report, 4),
-                    "short_position_shares": 1_000_000 + 50_000 * report,
-                }
-            )
+    # 空売り残高報告。画面の各状態（増加中 / 減少中 / 方向反复 / 持平 / 新規 /
+    # 再参入 / 閾値割れ / 住所欄なし→ありの連続）が 1 つずつ出るように並べる。
+    position_rows = _short_position_rows(days_list)
     repository.upsert_short_positions(position_rows)
     repository.record_sync_success(
         DATASET_SHORT_POSITIONS, checkpoint={"last_synced_date": target},
@@ -379,6 +366,15 @@ def build_fixture(data_dir: str | None = None, *, days: int = 320, end_date: dat
     )
     repository.replace_screener_rows(screener_rows)
     repository.record_sync_success("radar_scan", rows_total=summary.get("events_written"), data_through=target)
+
+    # 機関空売りモニター（本番の post_close と同じくレーダーの後ろ）
+    from app.services.short_monitor import pipeline as short_monitor
+
+    short_rebuilt = short_monitor.rebuild_events(repository)
+    short_refreshed = short_monitor.refresh_snapshots(repository, as_of_date=target)
+    repository.record_sync_success(
+        "short_behavior", rows_total=short_refreshed.snapshots, data_through=short_refreshed.as_of_date,
+    )
     repository.record_sync_success("screener_snapshot", rows_total=len(screener_rows), data_through=target)
 
     # 強度スキャン断面（本番の post_close と同じ流れ）
@@ -427,7 +423,71 @@ def build_fixture(data_dir: str | None = None, *, days: int = 320, end_date: dat
         "screener_rows": len(screener_rows),
         "strength_rows": publication.rows_written or len(strength_rows),
         "publication": publication.as_dict(),
+        "short_monitor": {
+            "events": short_rebuilt.events, "snapshots": short_refreshed.snapshots,
+        },
     }
+
+
+#: フィクスチャ用の報告主体（実在の表記。住所は連続性の確認に使うだけ）。
+_SHORT_HOLDERS: tuple[tuple[str, str], ...] = (
+    ("Goldman Sachs International", "Plumtree Court, 25 Shoe Lane, London"),
+    ("モルガン・スタンレーMUFG証券株式会社", "東京都千代田区大手町1-9-7"),
+    ("Barclays Capital Securities Ltd", "1 Churchill Place, London"),
+    ("JPM Securities Japan Co Ltd.", "TOKYO BUILDING, 7-3, MARUNOUCHI 2-CHOME, TOKYO"),
+    ("Nomura International plc", "1 Angel Lane, London"),
+    ("Merrill Lynch International", "2 King Edward Street, London"),
+)
+
+#: 発行済株式数の代わり（比率 → 株数の換算にだけ使う）。
+_SHORT_SHARES_OUTSTANDING = 200_000_000
+
+
+def _short_position_rows(days_list: list[str]) -> list[dict[str, object]]:
+    """銘柄ごとに (機関番号, 何営業日前, 比率, 前回比率, 住所を付けるか) の列を報告に直す。"""
+
+    scenarios: dict[str, list[tuple[int, int, float, float | None, bool]]] = {
+        # 拥挤度 高・増加中（5 社が積み増し）
+        "9984": [(i, back, 0.006 + 0.002 * i + 0.0012 * step, None if step == 0 else 0.006 + 0.002 * i + 0.0012 * (step - 1), True)
+                 for i in range(5) for step, back in enumerate((30, 14, 3))],
+        # 拥挤度 高・減少中（4 社が縮小、うち 1 社は閾値割れ）
+        "7203": [(i, back, ratio, prev, True) for i in range(3)
+                 for back, ratio, prev in ((28, 0.016, None), (9, 0.012, 0.016), (2, 0.009, 0.012))]
+                + [(3, 28, 0.007, None, True), (3, 6, 0.0046, 0.007, True)],
+        # 新規（0.43% → 0.55% の初出。純増は +0.12 ポイント）
+        "4385": [(0, 4, 0.0055, 0.0043, True)],
+        # 再参入（閾値割れ → 戻り）
+        "8035": [(1, 60, 0.008, None, True), (1, 40, 0.0047, 0.008, True), (1, 5, 0.0061, 0.0038, True),
+                 (2, 35, 0.011, None, True)],
+        # 持平（2 社、窓内に動き無し）
+        "6758": [(0, 45, 0.013, None, True), (4, 38, 0.009, None, True)],
+        # 方向反复（20 日では増、直近 5 日は減）
+        "8306": [(0, 30, 0.010, None, True), (0, 12, 0.016, 0.010, True), (0, 2, 0.0135, 0.016, True),
+                 (5, 30, 0.007, None, True)],
+        # 住所欄なしの配信 → 住所つきの配信（同じ連鎖として続く）
+        "6861": [(2, 26, 0.021, None, False), (2, 8, 0.024, 0.021, True), (3, 26, 0.006, None, False)],
+    }
+    known = {display for display, *_rest in FIXTURE_SECURITIES}
+    rows: list[dict[str, object]] = []
+    for display, reports in scenarios.items():
+        if display not in known:
+            continue
+        for holder, back, ratio, previous, with_address in reports:
+            if back >= len(days_list):
+                continue
+            calc = days_list[-1 - back]
+            name, address = _SHORT_HOLDERS[holder]
+            rows.append({
+                "canonical_code": _canonical(display),
+                "disclosed_date": calc,
+                "calculated_date": calc,
+                "holder_name": name,
+                "holder_address": address if with_address else "",
+                "short_position_ratio": round(ratio, 4),
+                "short_position_shares": round(ratio * _SHORT_SHARES_OUTSTANDING),
+                "previous_ratio": round(previous, 4) if previous is not None else None,
+            })
+    return rows
 
 
 def main() -> int:

@@ -78,7 +78,7 @@ def _short_behavior_map(repository, codes: list[str]) -> dict[str, dict]:
     import json as _json
 
     rows, _total = repository.short_behavior_rankings(
-        as_of, codes=sorted(set(codes)), limit=len(set(codes)),
+        as_of, codes=sorted(set(codes)), limit=len(set(codes)), include_funds=True,
     )
     out: dict[str, dict] = {}
     for row in rows:

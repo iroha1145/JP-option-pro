@@ -1,38 +1,23 @@
 """レーダーとの連動。**触ってよいのは `alert_priority` だけ。**
 
-歴史検証を通るまで、空売り行動分を正式な技術品質（`base_quality` /
-`breakout_confirmation` / `intrinsic_strength`）に書き込まない。技術的に
-弱い銘柄が「機関が空売りを増やしたから」という理由で高品質の突破候補に
-化けるのが、この種の連動で一番起きやすい事故なので、書き込み先を
-物理的に 1 か所に限る。
+空売りの情報を正式な技術品質（`base_quality` / `breakout_confirmation` /
+`intrinsic_strength`）に書き込まない。書き込み先を物理的に 1 か所に限る。
 
-優先度の調整も **有界**。最大でも ±`MAX_PRIORITY_SHIFT` 点しか動かない。
-
-そして **検証を通るまで調整は 0**。走步検証の初回結論は否定 —— 全状態が
-全保有期間で TOPIX を下回り、しかも設計上の強気（absorption）と弱気
-（divergence_failed）の実測順位が逆だった。方向が逆だと自分のデータで
-分かっているモデルに本番の並び順を動かさせるわけにはいかない。仮の
-調整量は `hypothetical_priority_shift` として表示だけする。
+v4 で **状態由来の ± 調整を廃止した**。旧版は「挤空确认 +8 / 回补启动 +5 /
+卖压吸收 +4 / 背离失效 −6」を（スイッチを切ったまま）持っていたが、その状態は
+3 回の検証でどれも方向が逆か無関係だったので、状態ごと無くなった。残るのは
+拥挤度の「只減不加」だけで、これも **スイッチは切ったまま** —— 空売りは参考
+情報という位置づけで、レーダーの並び順は技術系スコアのまま。
 """
 
 from __future__ import annotations
 
 from typing import Any, Iterable, Mapping, Sequence
 
-from .scoring import SCORE_VALIDATED
-from .states import (
-    FLAG_CROWDED_MARGIN,
-    GATES_VALIDATED,
-    STATE_ABSORPTION,
-    STATE_COVERING_START,
-    STATE_DIVERGENCE_FAILED,
-    STATE_SQUEEZE_CONFIRMED,
-)
+from .states import crowding_level
 
-#: 優先度連動の総合スイッチ。**両方の検証を通るまで False。**
-#: これが False の間、`priority_shift()` は常に 0 を返し、レーダーの並び順は
-#: 技術系スコアのまま —— 空売り行動は表示・絞り込み・影子分に限られる。
-PRIORITY_LINK_ENABLED = bool(SCORE_VALIDATED and GATES_VALIDATED)
+#: 状態由来の優先度連動。v4 で廃止（常に False、後方互換のために名前だけ残す）。
+PRIORITY_LINK_ENABLED = False
 
 #: 優先度をずらせる最大幅（100 点満点に対して）。
 MAX_PRIORITY_SHIFT = 8.0
@@ -42,20 +27,19 @@ MAX_PRIORITY_SHIFT = 8.0
 #: 関係（可見機構数 0/1/2–3/4+ → 20 日超過 −1.10/−1.42/−1.98/−2.85%）を、
 #: 上げる方向には一切使わず、リスク側だけに使う。
 #:
-#: それでも **窓別の安定性を確認するまで False**。判定は
-#: `python -m app.research.short_behavior_runner` の `crowding` セクション
-#: （16 窓中 ≥13 窓で負、かつ 2025-07 以降の留出期でも負）で行い、通ったら
-#: `CROWDING_VALIDATION` に結果を書いてこのスイッチを True にする。
+#: **スイッチは切ったまま。** 空売りは参考情報という位置づけ（2026-09-02 の
+#: 利用者判断）で、本番で走步検証を回す予定も無い。並び順を動かすのは
+#: 利用者が明示的に求めたときだけ。仮の値は `hypothetical_crowding_shift`。
 CROWDING_LINK_ENABLED = False
 
-#: 拥挤度検証の状態。「まだ検証していない」と「検証したが通らなかった」は別。
+#: 拥挤度と後続リターンの関係について分かっていること（`states.EVIDENCE` と同じ向き）。
 CROWDING_VALIDATION: dict[str, Any] = {
-    "status": "pending",
+    "status": "not_applied",
     "summary": (
-        "第十二轮验证里可见机构数越多后续越差（0→4+：−1.10%→−2.85%）是全样本单调，"
-        "但逐窗稳定性与留出期尚未按 informed 口径复核。复核通过前叠加为 0。"
+        "可见机构数越多、公开持仓越高，之后越弱——第十二轮走步、2026-09 事件研究与"
+        "2026-08 至 11 月的线上快照三次方向一致。空卖定位为参考信息，叠加保持关闭，"
+        "雷达排序不受影响。"
     ),
-    "gate": "walk-forward windows negative >= 13/16 and holdout (2025-07..) negative",
 }
 
 #: 可視機関数（informed 口径を優先、無ければ全鎖口径）に応じた素の引き下げ。
@@ -64,18 +48,6 @@ CROWDING_SHIFT_BY_COUNT: tuple[tuple[int, float], ...] = (
     (4, -4.0),
     (2, -2.0),
 )
-
-#: 状態ごとの素の調整量。信頼度を掛けてから使う。
-STATE_SHIFT: dict[str, float] = {
-    STATE_SQUEEZE_CONFIRMED: +8.0,
-    STATE_COVERING_START: +5.0,
-    STATE_ABSORPTION: +4.0,
-    STATE_DIVERGENCE_FAILED: -6.0,
-}
-
-#: 信用買いが極端に混雑しているときの引き下げ。踏み上げ期待の裏で
-#: 玉の構造が危ういことがあるので、上げっぱなしにしない。
-CROWDED_MARGIN_SHIFT = -3.0
 
 
 def _num(value: Any) -> float | None:
@@ -139,32 +111,10 @@ def crowding_shift(snapshot: Mapping[str, Any] | None) -> float:
     return hypothetical_crowding_shift(snapshot)
 
 
-def hypothetical_priority_shift(snapshot: Mapping[str, Any] | None) -> float:
-    """もし連動が有効だったら適用される調整量（有界・表示専用）。"""
-
-    if not snapshot:
-        return 0.0
-    confidence = _num(snapshot.get("data_confidence"))
-    confidence = 0.0 if confidence is None else max(0.0, min(1.0, confidence))
-    shift = STATE_SHIFT.get(str(snapshot.get("primary_state") or ""), 0.0) * confidence
-    flags = snapshot.get("flags") or []
-    if FLAG_CROWDED_MARGIN in flags:
-        shift += CROWDED_MARGIN_SHIFT * confidence
-    return max(-MAX_PRIORITY_SHIFT, min(MAX_PRIORITY_SHIFT, round(shift, 2)))
-
-
 def priority_shift(snapshot: Mapping[str, Any] | None) -> float:
-    """実際に適用する調整量。**それぞれの検証を通るまで常に 0。**
+    """実際に適用する調整量。拥挤度のスイッチが切れている間は常に 0。"""
 
-    状態機由来の ±（PRIORITY_LINK_ENABLED）と、拥挤度由来の −
-    （CROWDING_LINK_ENABLED）は別々のスイッチ。合計は ±MAX_PRIORITY_SHIFT に収める。
-    """
-
-    total = 0.0
-    if PRIORITY_LINK_ENABLED:
-        total += hypothetical_priority_shift(snapshot)
-    total += crowding_shift(snapshot)
-    return max(-MAX_PRIORITY_SHIFT, min(MAX_PRIORITY_SHIFT, round(total, 2)))
+    return max(-MAX_PRIORITY_SHIFT, min(0.0, round(crowding_shift(snapshot), 2)))
 
 
 def overlay(
@@ -189,13 +139,11 @@ def overlay(
         merged["short_behavior"] = (
             {
                 "state": snapshot.get("primary_state"),
-                # 影子分。正式な技術品質には一切入っていない。
-                "shadow_score": snapshot.get("behavior_score"),
-                # 連動が有効なら適用されたはずの量（表示専用）と、実際に
-                # 適用された量。検証を通るまで後者は 0。
-                "hypothetical_priority_shift": hypothetical_priority_shift(snapshot),
-                "priority_link_enabled": PRIORITY_LINK_ENABLED,
-                # 拥挤度叠加（只減不加）。検証を通るまで適用量は 0、仮の値だけ出す。
+                "crowding_level": crowding_level(
+                    snapshot.get("visible_institution_count"), snapshot.get("visible_short_ratio"),
+                ),
+                # 拥挤度叠加（只減不加）。スイッチが切れている間、適用量は 0 で、
+                # 仮の値だけ出す。
                 "hypothetical_crowding_shift": hypothetical_crowding_shift(snapshot),
                 "crowding_link_enabled": CROWDING_LINK_ENABLED,
                 "informed_institution_count": informed_institution_count(snapshot),
@@ -248,16 +196,13 @@ def matches(
 
 
 __all__ = [
-    "CROWDED_MARGIN_SHIFT",
     "CROWDING_LINK_ENABLED",
     "CROWDING_SHIFT_BY_COUNT",
     "CROWDING_VALIDATION",
     "MAX_PRIORITY_SHIFT",
     "PRIORITY_LINK_ENABLED",
-    "STATE_SHIFT",
     "crowding_shift",
     "hypothetical_crowding_shift",
-    "hypothetical_priority_shift",
     "informed_institution_count",
     "matches",
     "overlay",

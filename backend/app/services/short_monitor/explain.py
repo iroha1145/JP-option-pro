@@ -15,34 +15,37 @@ from __future__ import annotations
 from typing import Any, Mapping, Sequence
 
 from .states import (
-    STATE_ABSORPTION,
-    STATE_COVERING_START,
-    STATE_DIVERGENCE_FAILED,
-    STATE_LOW_CONFLICT,
-    STATE_NORMAL_SHORTING,
+    CROWDING_HIGH,
+    CROWDING_LOW,
+    CROWDING_MID,
+    STATE_BUILDING,
+    STATE_COVERING,
+    STATE_MIXED,
     STATE_NO_SIGNAL,
-    STATE_SQUEEZE_CONFIRMED,
+    STATE_STEADY,
+    crowding_level,
 )
 
 STATE_LABELS: dict[str, str] = {
-    STATE_NORMAL_SHORTING: "正常做空",
-    STATE_LOW_CONFLICT: "低位冲突",
-    STATE_ABSORPTION: "卖压吸收",
-    STATE_COVERING_START: "回补启动",
-    STATE_SQUEEZE_CONFIRMED: "挤空确认",
-    STATE_DIVERGENCE_FAILED: "背离失效",
+    STATE_BUILDING: "增加中",
+    STATE_COVERING: "减少中",
+    STATE_MIXED: "方向反复",
+    STATE_STEADY: "持平",
     STATE_NO_SIGNAL: "无公开空头动向",
 }
 
-#: 状態ごとの但し書き。**「挤空确认」には必ず付ける。**
+#: 状態ごとに必ず添える但し書き。
 STATE_CAVEATS: dict[str, str] = {
-    STATE_SQUEEZE_CONFIRMED: (
-        "「挤空确认」是基于公开空头变化和价格行为的规则分类，"
-        "不表示掌握全部市场空头仓位。"
-    ),
-    STATE_ABSORPTION: "承接迹象来自价格对公开空头压力的反应，不代表机构正在吸筹。",
-    STATE_LOW_CONFLICT: "深度低位只表示处于较低价格区域，不表示一定见底。",
-    STATE_COVERING_START: "公开空头减少只说明报告义务范围内的仓位下降，剩余仓位未知。",
+    STATE_BUILDING: "公开空头增加只说明达到披露门槛的仓位在上升，门槛以下的仓位看不到。",
+    STATE_COVERING: "公开空头减少只说明报告义务范围内的仓位下降，剩余仓位未知。",
+    STATE_MIXED: "20 日与 5 日的方向不一致，净变化可能只是机构之间的换手。",
+}
+
+#: 拥挤度の段 → 説明文（段の規則をそのまま書く。`states.CROWDING_RULES` と揃える）。
+CROWDING_LINES: dict[int, str] = {
+    CROWDING_HIGH: "公开空头拥挤度：高（近期机构不少于 4 家，或公开持仓不低于 4%）。",
+    CROWDING_MID: "公开空头拥挤度：中（近期机构不少于 2 家，或公开持仓不低于 2%）。",
+    CROWDING_LOW: "公开空头拥挤度：低（仅 1 家近期机构，且公开持仓低于 2%）。",
 }
 
 
@@ -114,14 +117,32 @@ def describe(
     if unknown:
         say("另有 {n} 家的最新报告缺少可读的比例数值，状态未知，未计入任何合计。", n=len(unknown))
 
-    pressure = snapshot.get("pressure_adv20_20d")
-    pressure_text = _num(pressure)
-    if pressure_text is not None and abs(float(pressure)) >= 0.01:
-        size = f"{abs(float(pressure)):.2f}"
-        if float(pressure) > 0:
-            say("过去 20 个交易日公开空头增加，规模相当于约 {size} 个20 日平均成交量。", size=size)
+    level = crowding_level(
+        snapshot.get("visible_institution_count"), snapshot.get("visible_short_ratio"),
+    )
+    if level in CROWDING_LINES:
+        say(CROWDING_LINES[level])
+
+    # 純変化は発行済株式数に対する比率（報告と同じ単位）で言う。出来高比は
+    # 「その銘柄にとってどれだけ大きいか」の補足。
+    change = snapshot.get("ratio_change_20d")
+    change_text = _pct(abs(float(change))) if _num(change) is not None else None
+    if change_text is not None and abs(float(change)) >= 0.0001:
+        pressure = snapshot.get("pressure_adv20_20d")
+        size = f"{abs(float(pressure)):.2f}" if _num(pressure) is not None else None
+        rising = float(change) > 0
+        if size is not None and abs(float(pressure)) >= 0.01:
+            say(
+                "过去 20 个交易日公开空头净增加 {delta}，相当于约 {size} 个20 日平均成交量。" if rising
+                else "过去 20 个交易日公开空头净减少 {delta}，相当于约 {size} 个20 日平均成交量。",
+                delta=change_text, size=size,
+            )
         else:
-            say("过去 20 个交易日公开空头减少，规模相当于约 {size} 个20 日平均成交量。", size=size)
+            say(
+                "过去 20 个交易日公开空头净增加 {delta}。" if rising
+                else "过去 20 个交易日公开空头净减少 {delta}。",
+                delta=change_text,
+            )
 
     rel_topix = _pct(snapshot.get("rel_topix_20d"))
     rel_sector = _pct(snapshot.get("rel_sector_20d"))
@@ -155,9 +176,8 @@ def describe(
 
     state = str(snapshot.get("primary_state") or STATE_NO_SIGNAL)
     label = STATE_LABELS.get(state, state)
-    confidence = snapshot.get("data_confidence")
-    say("当前被分类为「{label}」，数据置信度 {confidence}。该结果是规则分类，不代表机构意图。",
-        label=label, confidence=_num(confidence, 2) or "—")
+    say("近 20 日动向归为「{label}」。这是按公开报告的净变化做的规则分类，不代表机构意图。",
+        label=label)
 
     return {
         "state": state,
@@ -170,4 +190,4 @@ def describe(
     }
 
 
-__all__ = ["STATE_CAVEATS", "STATE_LABELS", "describe"]
+__all__ = ["CROWDING_LINES", "STATE_CAVEATS", "STATE_LABELS", "describe"]

@@ -29,6 +29,7 @@ import type {
   ShortMonitorEvents,
   ShortMonitorOverview,
   ShortMonitorRankings,
+  ShortMonitorView,
   SearchResult,
   SettingsView,
   StockBar,
@@ -174,17 +175,22 @@ export const shortMonitorApi = {
     return get(date ? `/short-monitor/overview?${toQuery({ date })}` : '/short-monitor/overview');
   },
   rankings(params: {
-    view?: string;
+    view?: ShortMonitorView;
     date?: string;
     states?: string;
     flags?: string;
     markets?: string;
     sectors?: string;
     codes?: string;
+    institutions?: string;
     min_confidence?: number;
     min_turnover?: number;
-    min_score?: number;
+    /** 0..3：0 不限，2 中及以上，3 仅高。 */
+    min_crowding?: number;
+    /** 默认 false：排行不含 ETF 与 ETN。 */
+    include_funds?: boolean;
     order_by?: string;
+    order_dir?: 'asc' | 'desc';
     limit?: number;
     offset?: number;
   } = {}): Promise<ShortMonitorRankings> {

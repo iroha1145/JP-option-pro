@@ -39,6 +39,16 @@ def _upsert_sql(table: str, columns: Sequence[str], conflict: Sequence[str]) -> 
     )
 
 
+#: J-Quants の `ProdCat`。014 = ETF、023 = ETN・外国 ETF（実データで確認:
+#: 014 は「Ｏｎｅ ＥＴＦ トピックス」〜「ＶＩＸ短期先物指数ＥＴＦ」の 430 本、
+#: 023 は外国 ETF と各種 ETN の 58 本、013 は REIT 63 本）。
+#: 空売りの排行と件数からは既定で外す —— 指数連動・反向連動の受益証券への
+#: 空売りは裁定・ヘッジで、個別企業への見方ではない。
+FUND_PRODUCT_CATEGORIES = ("014", "023")
+REIT_PRODUCT_CATEGORY = "013"
+_NOT_FUND_SQL = "COALESCE(sec.product_category, '') NOT IN ('014', '023')"
+
+
 class CoreRepository(SQLiteRepository):
     SCHEMA_NAME = "jp_core"
     SCHEMA_VERSION = CORE_SCHEMA_VERSION
@@ -1113,7 +1123,8 @@ class CoreRepository(SQLiteRepository):
         with self.read() as connection:
             rows = connection.execute(
                 "SELECT as_of_date, visible_short_ratio, visible_short_shares, "
-                "visible_institution_count, below_threshold_count, behavior_score, primary_state "
+                "visible_institution_count, below_threshold_count, primary_state, "
+                "algorithm_version "
                 "FROM short_behavior_snapshots WHERE canonical_code = ? "
                 "ORDER BY as_of_date DESC LIMIT ?",
                 (canonical_code, int(limit)),
@@ -1163,35 +1174,45 @@ class CoreRepository(SQLiteRepository):
         *,
         states: Sequence[str] | None = None,
         flags: Sequence[str] | None = None,
+        any_flags: Sequence[str] | None = None,
         markets: Sequence[str] | None = None,
         sectors: Sequence[str] | None = None,
         codes: Sequence[str] | None = None,
         institutions: Sequence[str] | None = None,
         min_confidence: float | None = None,
         min_turnover: float | None = None,
-        min_score: float | None = None,
-        order_by: str = "monitor_priority",
+        visible_only: bool = False,
+        crowding_floor: tuple[int, float] | None = None,
+        include_funds: bool = False,
+        order_by: str = "visible_short_ratio",
+        descending: bool = True,
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[list[dict[str, Any]], int]:
-        """ランキングは **スナップショット表だけ** を読む（再計算しない）。"""
+        """ランキングは **スナップショット表だけ** を読む（再計算しない）。
+
+        並び順はどれも報告・日足と突き合わせて確かめられる事実の列。合成した
+        点数では並べない。`crowding_floor = (機関数の下限, 比率の下限)` は
+        「どちらかを満たす」条件（拥挤度の段の規則そのまま）。
+        """
 
         allowed_order = {
-            "monitor_priority": "s.monitor_priority",
-            "behavior_score": "s.behavior_score",
-            "absorption_score": "s.absorption_score",
-            "covering_score": "s.covering_score",
-            "low_position_score": "s.low_position_score",
+            "visible_short_ratio": "s.visible_short_ratio",
+            "visible_institution_count": "s.visible_institution_count",
+            "ratio_change_20d": "s.ratio_change_20d",
+            "ratio_change_5d": "s.ratio_change_5d",
             "pressure_adv20_20d": "s.pressure_adv20_20d",
             "visible_days_to_cover": "s.visible_days_to_cover",
             "drawdown_52w": "s.drawdown_52w",
-            "ratio_change_5d": "s.ratio_change_5d",
-            "rotation_score": "s.rotation_score",
+            "rel_topix_20d": "s.rel_topix_20d",
         }
-        order_column = allowed_order.get(order_by, allowed_order["monitor_priority"])
+        order_column = allowed_order.get(order_by, allowed_order["visible_short_ratio"])
+        direction = "DESC" if descending else "ASC"
 
         clauses = ["s.as_of_date = ?"]
         params: list[Any] = [as_of_date]
+        if not include_funds:
+            clauses.append(_NOT_FUND_SQL)
         if states:
             clauses.append(f"s.primary_state IN ({', '.join('?' for _ in states)})")
             params.extend(states)
@@ -1220,13 +1241,18 @@ class CoreRepository(SQLiteRepository):
         if min_turnover is not None:
             clauses.append("s.adv20_value >= ?")
             params.append(float(min_turnover))
-        if min_score is not None:
-            clauses.append("s.behavior_score >= ?")
-            params.append(float(min_score))
+        if visible_only or crowding_floor is not None:
+            clauses.append("s.visible_institution_count > 0")
+        if crowding_floor is not None:
+            clauses.append("(s.visible_institution_count >= ? OR s.visible_short_ratio >= ?)")
+            params.extend([int(crowding_floor[0]), float(crowding_floor[1])])
         for flag in flags or ():
             # flags_json は短い JSON 配列。件数が小さいので LIKE で足りる。
             clauses.append("s.flags_json LIKE ?")
             params.append(f'%"{flag}"%')
+        if any_flags:
+            clauses.append("(" + " OR ".join("s.flags_json LIKE ?" for _ in any_flags) + ")")
+            params.extend(f'%"{flag}"%' for flag in any_flags)
 
         where = " AND ".join(clauses)
         with self.read() as connection:
@@ -1237,10 +1263,10 @@ class CoreRepository(SQLiteRepository):
             ).fetchone()[0]
             rows = connection.execute(
                 f"SELECT s.*, sec.display_code, sec.name_ja, sec.market_code, sec.market_name, "
-                f"sec.sector33_code, sec.sector33_name "
+                f"sec.sector33_code, sec.sector33_name, sec.product_category "
                 f"FROM short_behavior_snapshots s "
                 f"LEFT JOIN securities sec ON sec.canonical_code = s.canonical_code "
-                f"WHERE {where} ORDER BY {order_column} IS NULL, {order_column} DESC, "
+                f"WHERE {where} ORDER BY {order_column} IS NULL, {order_column} {direction}, "
                 f"s.canonical_code LIMIT ? OFFSET ?",
                 [*params, int(limit), int(offset)],
             ).fetchall()
@@ -1249,25 +1275,49 @@ class CoreRepository(SQLiteRepository):
     def short_behavior_state_counts(self, as_of_date: str) -> dict[str, int]:
         with self.read() as connection:
             rows = connection.execute(
-                "SELECT primary_state, COUNT(*) FROM short_behavior_snapshots "
-                "WHERE as_of_date = ? GROUP BY primary_state",
+                "SELECT s.primary_state, COUNT(*) FROM short_behavior_snapshots s "
+                "LEFT JOIN securities sec ON sec.canonical_code = s.canonical_code "
+                f"WHERE s.as_of_date = ? AND {_NOT_FUND_SQL} GROUP BY s.primary_state",
                 (as_of_date,),
             ).fetchall()
         return {row[0]: int(row[1]) for row in rows}
 
-    def short_behavior_coverage(self, as_of_date: str) -> dict[str, Any]:
+    def short_behavior_coverage(
+        self, as_of_date: str, *, crowding_rules: Sequence[tuple[int, float]] = (),
+    ) -> dict[str, Any]:
+        """覆盖の件数と拥挤度の内訳（ETF・ETN は数えない）。
+
+        `crowding_rules` は上の段から順の (機関数の下限, 比率の下限)。規則の
+        数字は `short_monitor.states.CROWDING_RULES` が持つ —— ここに写さない。
+        `low_confidence` は **公開空頭のある銘柄のうち** 信頼度 0.5 未満の数。
+        """
+
+        tiers = [
+            f"(s.visible_institution_count >= {int(count)} OR s.visible_short_ratio >= {float(ratio)})"
+            for count, ratio in crowding_rules
+        ]
+        tier_sql = "".join(
+            f", SUM(s.visible_institution_count > 0 AND {tier}) " for tier in tiers
+        )
         with self.read() as connection:
             row = connection.execute(
                 "SELECT COUNT(*) total, "
-                "SUM(visible_institution_count > 0) with_visible, "
-                "SUM(data_confidence < 0.35) low_confidence "
-                "FROM short_behavior_snapshots WHERE as_of_date = ?",
+                "SUM(s.visible_institution_count > 0) with_visible, "
+                "SUM(s.visible_institution_count > 0 AND s.data_confidence < 0.5) low_confidence"
+                f"{tier_sql} "
+                "FROM short_behavior_snapshots s "
+                "LEFT JOIN securities sec ON sec.canonical_code = s.canonical_code "
+                f"WHERE s.as_of_date = ? AND {_NOT_FUND_SQL}",
                 (as_of_date,),
             ).fetchone()
+        values = [int((value if row else 0) or 0) for value in (row or [0, 0, 0])]
+        # 段は累積（「高」は「中以上」に含まれる）で数えてあるので、差で各段にする。
+        cumulative = values[3:]
         return {
-            "covered": int((row[0] if row else 0) or 0),
-            "with_visible_short": int((row[1] if row else 0) or 0),
-            "low_confidence": int((row[2] if row else 0) or 0),
+            "covered": values[0],
+            "with_visible_short": values[1],
+            "low_confidence": values[2],
+            "crowding_at_least": cumulative,
         }
 
     # ------------------------------------------------------------------
