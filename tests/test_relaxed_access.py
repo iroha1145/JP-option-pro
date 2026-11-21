@@ -13,7 +13,9 @@ def client(monkeypatch):
     from app.access import OwnerAccessRuntime
     from app.personal_config import AccessConfig
     runtime = OwnerAccessRuntime(AccessConfig(mode="password"), password_hash="")
-    monkeypatch.setattr(main.app.state, "access_runtime", runtime)
+    # Starlette keeps app.state values in its own mapping, not the instance __dict__.
+    # Patch the mapping so undo restores the original runtime instead of deleting it.
+    monkeypatch.setitem(main.app.state._state, "access_runtime", runtime)
     monkeypatch.setattr(screener, "core_repository", lambda: SimpleNamespace(exists=lambda: True))
     monkeypatch.setattr(screener, "run_screener", lambda repo, filters: {"codes": filters.watchlist_codes, "can_refresh": current_request_can_refresh_public_data()})
     monkeypatch.setattr(watchlist, "current_account", lambda request: SimpleNamespace(user_id=request.headers['x-test-user']) if 'x-test-user' in request.headers else None)
