@@ -120,7 +120,7 @@ export default function TickAnalyticsPanel({ analytics }: { analytics: TickAnaly
                 && profile.poc <= bucket.price_high;
               return (
                 <div key={bucket.price_low} className="flex items-center gap-1.5">
-                  <span className="w-14 shrink-0 text-right tnum text-[10px] text-ink-400">
+                  <span className="w-14 shrink-0 text-right tnum text-tag text-ink-400">
                     {Math.round(bucket.price_low).toLocaleString()}
                   </span>
                   <span className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-[2px] bg-line/60">

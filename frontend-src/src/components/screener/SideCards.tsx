@@ -165,7 +165,7 @@ export function TierHistogram({
                 !selectable && 'cursor-default opacity-70',
               )}
             >
-              <span className="metric-value text-[11px] leading-none text-ink-500 tnum">{hit}</span>
+              <span className="metric-value text-tag leading-none text-ink-500 tnum">{hit}</span>
               {ref !== null && (
                 <span
                   className="w-full max-w-[26px] rounded-t-[3px] border border-ink-300/30"
@@ -187,7 +187,7 @@ export function TierHistogram({
       </div>
       <div className="mt-1.5 flex gap-2.5">
         {TIERS.map((tier) => (
-          <span key={tier} className={cn('flex-1 text-center tnum text-[10px] tnum', activeTier === tier ? 'text-brand-600' : 'text-ink-400')}>
+          <span key={tier} className={cn('flex-1 text-center tnum text-tag tnum', activeTier === tier ? 'text-brand-600' : 'text-ink-400')}>
             {tier}
           </span>
         ))}

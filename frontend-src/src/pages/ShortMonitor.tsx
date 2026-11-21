@@ -652,7 +652,7 @@ function EventLine({ event }: { event: ShortMonitorEvent }) {
   return (
     <li className="flex min-h-[60px] items-center gap-3 px-1 py-[14px] transition-colors duration-fast hover:bg-paper-2/70">
       <div className="flex w-11 shrink-0 flex-col items-center pt-0.5">
-        <span className="tnum text-[11px] leading-[14px] text-ink-400">
+        <span className="tnum text-tag leading-[14px] text-ink-400">
           {fmtDateShort(event.effective_trade_date)}
         </span>
         <span className="mt-1.5 hidden w-[2px] flex-1 rounded-full bg-line sm:block" aria-hidden="true" />

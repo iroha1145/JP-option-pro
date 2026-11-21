@@ -94,11 +94,15 @@ test('排版基础：标题均匀断行、标签不被误选中、字重只用�
   }
 });
 
-test('排版：说明文字用字阶自带行高，表头不做全大写加字距，新闻标题限制行宽', async () => {
+test('字阶：最小字号 12 像素，说明文字用字阶自带行高，表头不做全大写加字距', async () => {
   for (const file of await walk(src)) {
     if (!/\.tsx?$/.test(file)) continue;
     const text = codeOf(await readFile(file, 'utf8'));
     const rel = path.relative(src, file);
+    // 任意值字号里不得出现小于 12px 的档位。
+    for (const match of text.matchAll(/\btext-\[(\d+(?:\.\d+)?)px\]/g)) {
+      assert.ok(Number(match[1]) >= 12, `${rel}: ${match[0]}`);
+    }
     // 13px 的多行说明不压成 16px 行高（约 1.23 倍，低于 1.4 到 1.6 的可读范围）。
     assert.doesNotMatch(text, /text-micro\s+leading-\[16px\]/, rel);
     assert.doesNotMatch(text, /\buppercase\b[^'"`]*tracking-\[/, rel);
@@ -106,6 +110,7 @@ test('排版：说明文字用字阶自带行高，表头不做全大写加字�
   const tailwind = await readFile(path.resolve(src, '..', 'tailwind.config.js'), 'utf8');
   assert.match(tailwind, /body:\s*\['1rem',\s*\{\s*lineHeight:\s*'1\.625'/);
   assert.match(tailwind, /micro:\s*\['\.8125rem',\s*\{\s*lineHeight:\s*'1\.4'/);
+  assert.match(tailwind, /tag:\s*\['\.75rem'/);
   assert.match(await code('pages/News.tsx'), /<h3 className="mt-2 max-w-prose /);
 });
 

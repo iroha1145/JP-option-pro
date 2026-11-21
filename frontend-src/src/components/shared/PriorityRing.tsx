@@ -52,7 +52,7 @@ export default function PriorityRing({
           </span>
         </div>
       </div>
-      <span className="mt-0.5 whitespace-nowrap text-[11px] leading-[15px] text-ink-400">
+      <span className="mt-0.5 whitespace-nowrap text-tag leading-[15px] text-ink-400">
         {label}
         {hint && <InfoHint hint={hint} side="top" align="end" size={11} className="ml-0.5" />}
       </span>

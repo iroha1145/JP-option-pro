@@ -155,7 +155,7 @@ export default function Navbar({ onOpenPalette }: { onOpenPalette: () => void })
           >
             <Icon motion name="search" size={14} />
             <span className="flex-1 truncate text-left">{t('搜索代码或功能…')}</span>
-            <kbd className="flex items-center gap-0.5 tnum text-[10px] text-ink-400">
+            <kbd className="flex items-center gap-0.5 tnum text-tag text-ink-400">
               <Icon motion name="command" size={11} />K
             </kbd>
           </button>

@@ -262,7 +262,7 @@ export default function HistoryRail({
             {groups.map(([day, items]) => (
               <div key={day}>
                 <div className="radar-history-date flex items-baseline justify-between px-4 py-2">
-                  <p className="text-[12px] font-medium leading-[18px] text-ink-500">{historyDayLabel(day)}</p>
+                  <p className="text-micro leading-[18px] text-ink-500">{historyDayLabel(day)}</p>
                   <span className="tnum text-micro text-ink-400">
                     {items.length} {t('条')}
                   </span>
