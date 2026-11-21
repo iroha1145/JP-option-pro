@@ -230,12 +230,16 @@ test('vertical touch starting on switch still scrolls without toggling',async ({
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   });
   const box = await page.getByRole('switch').boundingBox();
-  const session = await page.context().newCDPSession(page);
-  await session.send('Input.synthesizeScrollGesture', {
-    x: box.x + box.width / 2, y: box.y + box.height / 2,
-    yDistance: -120, speed: 200, gestureSourceType: 'touch',
-  });
-  await expect.poll(()=>page.evaluate(()=>scrollY)).toBeGreaterThan(0);
+  const x = box.x + box.width / 2, y = box.y + box.height / 2;
+  // 逐个触点事件拖动。Input.synthesizeScrollGesture 在 CI 的 Linux 上一次都滚不动，
+  // 本文件其余用触点事件的用例在同一套 CI 上是通过的。
+  const send = await touch(page);
+  await expect(async () => {
+    await send('touchStart', [[1, x, y]]);
+    for (const travel of [20, 40, 60, 80]) await send('touchMove', [[1, x, y - travel]]);
+    await send('touchEnd', []);
+    expect(await page.evaluate(() => scrollY)).toBeGreaterThan(0);
+  }).toPass({ timeout: 8_000 });
   await expect(page.getByRole('switch')).toHaveAttribute('aria-checked','false');
   await expect(page.getByRole('switch')).not.toHaveAttribute('data-feel-drag');
 });

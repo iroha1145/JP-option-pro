@@ -84,15 +84,25 @@ test('phone long explanation scrolls with touch without closing or activating it
   // Keep the gesture in the upper half: macOS headless Chrome's very short
   // native window clips lower compositor input even when the DOM viewport fits.
   const startY = box.y + Math.min(72, box.height / 2);
-  const swipes = await tip.evaluate(el => Math.ceil((el.scrollHeight - el.clientHeight) / 50) + 1);
-  for (let swipe = 0; swipe < swipes; swipe += 1) {
-    await client.send('Input.synthesizeScrollGesture', {
-      x: box.x + box.width / 2, y: startY,
-      yDistance: -50, speed: 200, gestureSourceType: 'touch',
-    });
-  }
-  await expect.poll(() => tip.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
-  await expect.poll(() => tip.evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThanOrEqual(1);
+  // 逐个触点事件拖动。Input.synthesizeScrollGesture 在 CI 的 Linux 上一次都滚不动；
+  // feel-gestures 里用触点事件的滚动用例在同一套 CI 上是通过的，这里用同一写法。
+  const x = box.x + box.width / 2;
+  const send = (type, ys) => client.send('Input.dispatchTouchEvent', { type, touchPoints: ys.map(y => ({ id: 1, x, y })) });
+  const swipeUp = async () => {
+    await send('touchStart', [startY]);
+    for (const travel of [20, 40, 60]) await send('touchMove', [startY - travel]);
+    await send('touchEnd', []);
+  };
+  const remaining = () => tip.evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop);
+  // 滚动由合成器线程命中测试，慢机器上浮层的滚动层可能晚一拍才生效，所以滑到真的动了为止。
+  await expect(async () => {
+    await swipeUp();
+    expect(await tip.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+  }).toPass({ timeout: 8_000 });
+  await expect(async () => {
+    if (await remaining() > 1) await swipeUp();
+    expect(await remaining()).toBeLessThanOrEqual(1);
+  }).toPass({ timeout: 8_000 });
   await expect(tip).toBeVisible();
   await expect(page.locator('#parent-clicks')).toHaveText('0');
   await page.touchscreen.tap(316, 20);
