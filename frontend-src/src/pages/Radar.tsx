@@ -157,7 +157,7 @@ export default function Radar() {
   };
 
   return (
-    <div>
+    <div className="page-stack">
       <PageHeader
         section="screener"
         title={t('突破雷达')}
@@ -194,7 +194,7 @@ export default function Radar() {
         }
       />
 
-      <div className="radar-filterbar mt-4 flex flex-wrap items-center gap-x-5 gap-y-3 pb-4">
+      <div className="radar-filterbar paper-panel page-toolbar p-5 sm:p-6">
         <Segmented<StateGroup>
           options={[
             { value: 'active', label: t('已触发') },
@@ -242,7 +242,7 @@ export default function Radar() {
               type="button"
               onClick={() => setOnlyAbovePivot((v) => !v)}
               className={cn(
-                'flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-caption transition-colors',
+                'mobile-control-target flex items-center gap-1.5 rounded-pill border px-2.5 py-1.5 text-caption transition-colors',
                 onlyAbovePivot
                   ? 'border-up-600/40 bg-up-50 text-up-700'
                   : 'border-line bg-card text-ink-600 hover:border-brand-400',
@@ -263,7 +263,7 @@ export default function Radar() {
             value={onlyWatch ? 'watchlist' : 'all'}
             onChange={(value) => setOnlyWatch(value === 'watchlist')}
             ariaLabel={t('查看范围')}
-            className="max-w-full"
+            className="max-w-full flex-wrap"
           />
           {watchFilterPending && (
             <span className="text-micro text-ink-400">
@@ -281,10 +281,10 @@ export default function Radar() {
         </span>
       </div>
 
-      <section className="mt-8" aria-label={t('当日信号')}>
-        <div className="radar-section-heading mb-4 flex flex-wrap items-end justify-between gap-2 pb-1">
+      <section className="min-w-0 space-y-6" aria-label={t('当日信号')}>
+        <div className="radar-section-heading flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h2 className="mt-1 text-h2 text-ink-900">{t('当日信号')}</h2>
+            <h2 className="section-heading">{t('当日信号')}</h2>
           </div>
           <div className="text-right">
             <p className="tnum text-caption text-ink-400">
@@ -301,19 +301,19 @@ export default function Radar() {
 
       {state === 'loading' ? (
         <>
-          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(260px,5fr)]">
-            <SkeletonCard className="h-[380px]" />
-            <SkeletonCard className="h-[420px]" />
+          <div className="page-grid items-start">
+            <SkeletonCard className="h-[380px] lg:col-span-8" />
+            <SkeletonCard className="h-[420px] lg:col-span-4" />
           </div>
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <SkeletonCard className="h-[220px]" />
             <SkeletonCard className="h-[220px]" />
             <SkeletonCard className="h-[220px]" />
           </div>
         </>
       ) : state === 'error' ? (
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(260px,5fr)]">
-          <div className="card-surface">
+        <div className="page-grid items-start">
+          <div className="card-surface min-w-0 lg:col-span-8">
             <EmptyState
               variant="error"
               image="/empty-radar.svg"
@@ -322,18 +322,18 @@ export default function Radar() {
               action={<EmptyRetryButton onClick={() => query.refresh({ force: true })} refreshing={query.refreshing} />}
             />
           </div>
-          <HistoryRail events={[]} filterKey={`${group}:${onlyAbovePivot}:${minScore}`} onPromoteLead={promoteLead} />
+          <div className="min-w-0 lg:col-span-4"><HistoryRail events={[]} filterKey={`${group}:${onlyAbovePivot}:${minScore}`} onPromoteLead={promoteLead} /></div>
         </div>
       ) : state === 'empty' ? (
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(260px,5fr)]">
-          <div className="card-surface">
+        <div className="page-grid items-start">
+          <div className="card-surface min-w-0 lg:col-span-8">
             <EmptyState
               image="/empty-radar.svg"
               title={t('雷达仍在盯')}
               description={query.data?.note ?? t('新信号出现时会立刻出现在这里。')}
             />
           </div>
-          <HistoryRail events={events} filterKey={`${group}:${onlyAbovePivot}:${minScore}`} onPromoteLead={promoteLead} />
+          <div className="min-w-0 lg:col-span-4"><HistoryRail events={events} filterKey={`${group}:${onlyAbovePivot}:${minScore}`} onPromoteLead={promoteLead} /></div>
         </div>
       ) : (
         <>
@@ -356,19 +356,23 @@ export default function Radar() {
             </div>
           )}
           {lead && (
-            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(260px,5fr)]">
-              <LeadBigCard
-                event={lead}
-                live={overlayRows[lead.event_id]}
-                flash={flashes[lead.event_id]}
-                locate={locateId === lead.event_id}
-              />
-              <HistoryRail events={events} filterKey={`${group}:${onlyAbovePivot}:${minScore}`} onPromoteLead={promoteLead} />
+            <div className="page-grid items-start">
+              <div className="min-w-0 lg:col-span-8">
+                <LeadBigCard
+                  event={lead}
+                  live={overlayRows[lead.event_id]}
+                  flash={flashes[lead.event_id]}
+                  locate={locateId === lead.event_id}
+                />
+              </div>
+              <div className="min-w-0 lg:col-span-4">
+                <HistoryRail events={events} filterKey={`${group}:${onlyAbovePivot}:${minScore}`} onPromoteLead={promoteLead} />
+              </div>
             </div>
           )}
           {restEvents.length > 0 && (
-            <div className="radar-section-heading mb-3 mt-6 flex flex-wrap items-baseline justify-between gap-2 pb-2">
-              <p className="text-body-s font-semibold text-ink-800">
+            <div className="radar-section-heading flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-body-s font-medium text-ink-800">
                 {t('其余信号')} · <span className="tnum">{restEvents.length}</span>
               </p>
               <p className="text-micro text-ink-400">{t('点击小卡设为首要信号 · 点击代码打开个股页')}</p>
@@ -404,7 +408,7 @@ export default function Radar() {
         </>
       )}
       </section>
-      <SourceNote className="mt-8" text={t('突破扫描结果 · 日线收盘后更新')} />
+      <SourceNote text={t('突破扫描结果 · 日线收盘后更新')} />
     </div>
   );
 }
@@ -438,7 +442,7 @@ function LeadBigCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: DUR_SECTION, ease: EASE_PAPER }}
       aria-label={t('{code} 首要信号大卡', { code: event.display_code })}
-      className={cn('radar-lead-card card-surface p-5', locate && 'bk-locate')}
+      className={cn('radar-lead-card paper-panel p-5 sm:p-6', locate && 'bk-locate')}
     >
       <div className="flex flex-wrap items-center gap-1.5">
         <SignalChip signal={event.signal_type} />
@@ -569,7 +573,7 @@ function LeadBigCard({
           </p>
           <Link
             to={`/stock/${event.display_code}`}
-            className="mt-auto flex items-center justify-center gap-1.5 rounded-md bg-brand-600 px-3.5 py-2 text-caption font-medium text-white shadow-btn-hi transition-[transform,background-color] duration-fast hover:bg-brand-700 active:scale-[0.98]"
+            className="mobile-control-target mt-auto flex items-center justify-center gap-1.5 rounded-pill bg-brand-600 px-3.5 py-2 text-caption font-medium text-white shadow-btn-hi transition-[transform,background-color] duration-fast hover:bg-brand-700 active:scale-[0.98]"
           >
             {t('打开研究页')}
             <Icon name="arrow-up-right" size={13} />
@@ -666,7 +670,7 @@ function EventCard({ event, onSelect, live, flash }: {
         type="button"
         onClick={onSelect}
         aria-label={t('{code} 雷达信号卡', { code: event.display_code })}
-        className="absolute inset-0 z-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
+        className="absolute inset-0 z-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
       />
       <div
         className="radar-signal-card card-surface card-lift relative z-10 flex h-full cursor-pointer flex-col"

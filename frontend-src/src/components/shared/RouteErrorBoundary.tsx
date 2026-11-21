@@ -38,7 +38,7 @@ export default class RouteErrorBoundary extends Component<Props, State> {
           onClick={() => window.location.reload()}
           className="mt-4 rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi transition-[filter] hover:brightness-105"
         >
-          {t('刷新页面')}
+          {t('重新加载')}
         </button>
       </div>
     );

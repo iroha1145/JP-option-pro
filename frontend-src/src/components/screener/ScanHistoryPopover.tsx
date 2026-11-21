@@ -59,7 +59,7 @@ export default function ScanHistoryPopover({ history }: { history: ScanHistoryEn
           open ? 'border-brand-400 text-brand-600' : 'border-line bg-card text-ink-500 hover:text-ink-900',
         )}
       >
-        <Icon name="clock-ny" size={14} />
+        <Icon name="clock" size={14} />
         {t('扫描历史')}
       </button>
       <AnimatePresence>
@@ -72,7 +72,7 @@ export default function ScanHistoryPopover({ history }: { history: ScanHistoryEn
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: -4, transition: { duration: 0.16 } }}
             transition={SPRING_POP}
-            className="absolute right-0 top-full mt-2 z-40 w-[320px] max-w-[calc(100vw-2rem)] origin-top-right rounded-md border border-line bg-card p-2 shadow-sh-2"
+            className="absolute right-0 top-full mt-2 z-40 w-[320px] max-w-[calc(100vw-2rem)] origin-top-right rounded-[var(--r-group)] border border-line bg-card p-2 shadow-sh-2"
           >
             <p className="px-2 pb-1.5 pt-1 eyebrow">{t('最近 5 次扫描')}</p>
             {history.length === 0 ? (

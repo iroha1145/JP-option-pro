@@ -43,7 +43,7 @@ function TapeItem({
               })
       }
       className={cn(
-        'tick-flash inline-flex cursor-pointer items-baseline gap-2 rounded-xs px-1 transition-colors duration-150 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30',
+        'tick-flash inline-flex cursor-pointer items-baseline gap-2 rounded-xs px-1 transition-colors duration-150 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600',
         flash === 'up' && 'tick-flash-up',
         flash === 'down' && 'tick-flash-down',
       )}

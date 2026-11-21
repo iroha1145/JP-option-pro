@@ -387,7 +387,7 @@ function RadarSignalCard({ event, index }: { event: RadarEvent; index: number })
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22, ease: EASE_PAPER, delay: staggerDelay(index) }}
     >
-      <Link to={`/stock/${event.display_code}`} className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 transition-colors duration-150 hover:bg-paper-2/70 focus-visible:bg-paper-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400/60 sm:px-6">
+      <Link to={`/stock/${event.display_code}`} className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 transition-colors duration-150 hover:bg-paper-2/70 focus-visible:bg-paper-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600 sm:px-6">
         <div className="flex min-w-0 flex-1 basis-40 items-center gap-2">
           <CodeMark code={event.display_code} size={28} />
           <div className="min-w-0">
@@ -421,7 +421,7 @@ function EarningsAnchorRow({ item, todayKey }: { item: EarningsRecentItem; today
   return (
     <Link
       to={`/stock/${item.display_code}`}
-      className="flex items-center gap-3 px-5 py-2.5 transition-colors duration-fast hover:bg-paper-2/70 focus-visible:bg-paper-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400/60 sm:px-6"
+      className="flex items-center gap-3 px-5 py-2.5 transition-colors duration-fast hover:bg-paper-2/70 focus-visible:bg-paper-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600 sm:px-6"
     >
       <span
         className={cn(
@@ -455,7 +455,7 @@ function WatchlistMoverCard({
   return (
     <motion.div initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22, ease: EASE_PAPER, delay: staggerDelay(index) }}>
-      <Link to={`/stock/${item.display_code}`} className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 transition-colors duration-150 hover:bg-paper-2/70 focus-visible:bg-paper-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400/60 sm:px-6">
+      <Link to={`/stock/${item.display_code}`} className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 transition-colors duration-150 hover:bg-paper-2/70 focus-visible:bg-paper-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600 sm:px-6">
         <CodeMark code={item.display_code} size={28} />
         <div className="min-w-0 flex-1 basis-20">
           <span className="text-body-s font-semibold text-ink-900 tnum">{item.display_code}</span>

@@ -161,7 +161,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
         <div className="mt-3 flex flex-col items-start gap-2">
           <Link
             to={`/stock/${row.canonical_code}`}
-            className="flex items-center gap-1.5 rounded-md border border-line bg-card px-3 py-1.5 text-caption text-ink-600 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600"
+            className="flex items-center gap-1.5 mobile-control-target rounded-pill border border-line bg-card px-3 py-1.5 text-caption text-ink-600 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600"
           >
             <Icon name="arrow-up-right" size={13} />
             {t('打开详情')}
@@ -178,7 +178,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
                   /* 已在自选等情况静默 */
                 }
               }}
-              className="flex items-center gap-1.5 rounded-md border border-line bg-card px-3 py-1.5 text-caption text-ink-600 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
+              className="flex items-center gap-1.5 mobile-control-target rounded-pill border border-line bg-card px-3 py-1.5 text-caption text-ink-600 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
             >
               <Icon name={added ? 'check' : 'plus'} size={13} />
               {added ? t('已加入关注') : t('加入关注')}
@@ -232,7 +232,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live }:
           </div>
           <div className="flex items-center justify-between border-t border-line pt-2">
             <span className="text-ink-500">{t('最终优先级')}</span>
-            <span className="tnum font-semibold text-ink-900">
+            <span className="tnum font-medium text-ink-900">
               {(row.final_ranking_score ?? row.ranking_score) != null
                 ? (row.final_ranking_score ?? row.ranking_score)!.toFixed(1)
                 : '—'}

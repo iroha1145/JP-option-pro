@@ -20,8 +20,8 @@ import { LOCALES, getLocale, setLocale, t } from '../i18n/core.ts';
 
 const THEME_OPTIONS: { value: ThemePreference; label: string; icon: IconName }[] = [
   { value: 'system', label: t('跟随系统'), icon: 'display' },
-  { value: 'light', label: t('浅色'), icon: 'sun-bmo' },
-  { value: 'dark', label: t('深色'), icon: 'moon-amc' },
+  { value: 'light', label: t('浅色'), icon: 'sun' },
+  { value: 'dark', label: t('深色'), icon: 'moon' },
 ];
 
 const COLOR_OPTIONS: { value: ColorMode; label: string }[] = [

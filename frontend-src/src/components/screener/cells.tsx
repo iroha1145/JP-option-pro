@@ -27,7 +27,7 @@ export function ScoreCell({ score }: { score: number | null; index?: number }) {
       contentClassName="p-2.5"
       content={
         <>
-          <span className="block text-caption font-semibold text-ink-800">
+          <span className="block text-caption font-medium text-ink-800">
             {strength.band} · {strength.label}
           </span>
           <span className="mt-1 block tnum text-micro text-ink-500">{score.toFixed(1)}</span>
@@ -35,7 +35,7 @@ export function ScoreCell({ score }: { score: number | null; index?: number }) {
       }
     >
       <span className="inline-flex items-center gap-2.5">
-      <SoftBadge tone={strength.badgeTone} className="metric-value w-[3.25rem] shrink-0 justify-end text-[15px] leading-[20px] font-semibold tnum">
+      <SoftBadge tone={strength.badgeTone} className="metric-value w-[3.25rem] shrink-0 justify-end text-body-s font-medium tnum">
         {score.toFixed(1)}
       </SoftBadge>
       <span

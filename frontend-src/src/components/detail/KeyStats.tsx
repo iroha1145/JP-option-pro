@@ -54,8 +54,8 @@ export default function KeyStats({
   ];
 
   return (
-    <section className="card-surface p-5">
-      <h3 className="mt-1.5 text-h3 text-ink-900">{t('关键数据')}</h3>
+    <section className="paper-panel min-w-0 p-5 sm:p-6">
+      <h2 className="section-heading">{t('关键数据')}</h2>
       <dl className="mt-3 divide-y divide-line">
         {rows.map(([label, value]) => (
           <div key={label} className="flex items-center justify-between py-2">

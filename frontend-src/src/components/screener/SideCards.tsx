@@ -77,7 +77,7 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
                 content={
                   <>
                     <span className="flex items-baseline justify-between">
-                      <span className="text-caption font-semibold text-ink-800">{dim.label}</span>
+                      <span className="text-caption font-medium text-ink-800">{dim.label}</span>
                       <span className="tnum text-micro text-ink-400">{dim.en}</span>
                     </span>
                     {hint && <span className="mt-1.5 block text-micro leading-[16px] text-ink-500">{hint.body}</span>}
@@ -258,7 +258,7 @@ export function MethodCard({
                   <button
                     type="button"
                     onClick={onRetry}
-                    className="mt-2 flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-caption text-ink-600 shadow-btn transition-colors hover:border-brand-400 hover:text-brand-600"
+                    className="mobile-control-target mt-2 flex items-center gap-1.5 rounded-pill border border-line px-2.5 py-1 text-caption text-ink-600 shadow-btn transition-colors hover:border-brand-400 hover:text-brand-600"
                   >
                     <Icon name="refresh" size={12} />
                     {t('重试')}

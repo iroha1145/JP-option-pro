@@ -60,7 +60,7 @@ export default function ResultTable({
   stale = false,
 }: ResultTableProps) {
   return (
-    <div className={cn('card-surface overflow-x-auto overscroll-x-contain', stale && 'opacity-60')}>
+    <div tabIndex={0} className={cn('card-surface min-w-0 overflow-x-auto overscroll-x-contain', stale && 'opacity-60')}>
       <table className="w-full border-collapse">
         <thead>
           <tr className="bg-card-warm">
@@ -100,14 +100,12 @@ export default function ResultTable({
             return (
               <Fragment key={row.canonical_code}>
                 <motion.tr
-                  layout="position"
                   initial={page === 1 ? { opacity: 0, y: 14 } : false}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{
                     duration: 0.4,
                     ease: EASE_PAPER,
                     delay: page === 1 ? Math.min(index * 0.03, 0.3) : 0,
-                    layout: { duration: 0.32, ease: EASE_PAPER },
                   }}
                   onClick={() => onToggle(row.canonical_code)}
                   tabIndex={0}
@@ -120,7 +118,7 @@ export default function ResultTable({
                   }}
                   className={cn(
                     'group h-11 cursor-pointer border-b border-line transition-colors duration-fast hover:bg-paper-2',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500/30',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600',
                     isOpen && 'bg-paper-2',
                   )}
                   aria-expanded={isOpen}
@@ -217,7 +215,7 @@ export default function ResultTable({
               onClick={() => onPageChange(p)}
               aria-current={p === page ? 'page' : undefined}
               className={cn(
-                'flex size-7 items-center justify-center rounded-sm border tnum text-caption tnum transition-colors duration-fast',
+                'mobile-icon-target flex size-7 items-center justify-center rounded-sm border tnum text-caption tnum transition-colors duration-fast',
                 p === page
                   ? 'border-brand-600 bg-brand-600 text-white shadow-chip'
                   : 'border-line text-ink-500 hover:border-brand-400 hover:text-brand-600',
@@ -274,7 +272,7 @@ function PageButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
-      className="flex size-7 items-center justify-center rounded-sm border border-line text-ink-500 shadow-btn transition-colors hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
+      className="mobile-icon-target flex size-7 items-center justify-center rounded-sm border border-line text-ink-500 shadow-btn transition-colors hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
     >
       {children}
     </button>

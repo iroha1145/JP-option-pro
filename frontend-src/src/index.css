@@ -103,9 +103,6 @@
     --insight-frame-shadow: none;
     /* Cloud Monitor 的细节层次，保留 Optix 的纸面与群青。 */
     --control-track: #F2F2F2;
-    --timing-bmo: #C98A00;
-    --timing-amc: #2F7AE5;
-    --timing-tbd: #E0670B;
     --control-selected-shadow: 0 0 0 1px rgba(0, 0, 0, .05), 0 1px 2px rgba(0, 0, 0, .06);
     --control-selected-shadow-raised: 0 2px 4px rgba(0, 0, 0, .05), 0 5px 12px -4px rgba(0, 0, 0, .10);
     --card-shadow: inset 0 1px 0 rgb(255 255 255 / .9), 0 2px 4px -2px rgb(17 17 17 / .10), 0 12px 26px -18px rgb(17 17 17 / .16);
@@ -190,9 +187,6 @@
     --cat-orange-600: #F59360;
     --cat-orange-700: #F9B893;
     --control-track: #1E1E20;
-    --timing-bmo: #FACC15;
-    --timing-amc: #6FA8FF;
-    --timing-tbd: #FB923C;
     --control-selected-shadow: 0 0 0 1px var(--line-strong);
     --control-selected-shadow-raised: 0 2px 4px rgba(0, 0, 0, .28), 0 5px 12px -4px rgba(0, 0, 0, .36);
     --card-shadow: inset 0 1px 0 rgb(255 255 255 / .025), 0 2px 4px -2px rgb(0 0 0 / .4), 0 12px 26px -18px rgb(0 0 0 / .5);
@@ -377,7 +371,7 @@
   .app-shell > footer { padding-block-end: calc(var(--mobile-dock-height) + 2rem + env(safe-area-inset-bottom)); }
   @media (min-width: 1280px) { .app-shell > footer { padding-block-end: 2rem; } }
 
-  .page-stack { display: grid; gap: 1.5rem; min-inline-size: 0; }
+  .page-stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.5rem; min-inline-size: 0; }
   .page-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
   .page-grid > * { min-inline-size: 0; }
   .page-heading { min-inline-size: 0; }
@@ -988,9 +982,6 @@
 .soft-badge { border-radius: var(--r-chip); }
 
 /* 财报时段图标：颜色只跟时段类别走，选中的小块里也保持。 */
-.timing-icon-bmo { color: var(--timing-bmo); }
-.timing-icon-amc { color: var(--timing-amc); }
-.timing-icon-tbd { color: var(--timing-tbd); }
 
 /* Read-only floating details share one surface; coordinates never animate. */
 .cloud-popover {

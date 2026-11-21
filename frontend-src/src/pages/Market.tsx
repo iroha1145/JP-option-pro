@@ -169,7 +169,7 @@ export default function Market() {
   }, [hasExplicitIndex, indexCode, market.data]);
 
   return (
-    <div className="space-y-6">
+    <div className="page-stack">
       <PageHeader
         section="market"
         title={t('日本市场')}
@@ -211,7 +211,7 @@ export default function Market() {
             <StaleStrip onRetry={refreshOverview} refreshing={market.refreshing} />
           )}
           {n225 && (
-            <section className="card-surface flex flex-wrap items-end justify-between gap-3 p-4">
+            <section className="paper-panel flex min-w-0 flex-wrap items-end justify-between gap-3 p-4 sm:p-6">
               <span className="flex flex-col">
                 <span className="eyebrow">{t('日経225 · 盘中')}</span>
                 <span className="mt-1 flex items-baseline gap-3">
@@ -229,7 +229,7 @@ export default function Market() {
             </section>
           )}
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="page-grid items-start">
             <IndexTrendPanel
               name={series.data?.name ?? t('指数')}
               seriesCode={series.data?.index_code ?? indexCode}
@@ -246,7 +246,7 @@ export default function Market() {
               }
             />
 
-            <section className="space-y-3">
+            <section className="min-w-0 space-y-3 lg:col-span-4" aria-label={t('指数概览')}>
               {(market.data?.indices ?? []).map((index) => (
                 <button
                   key={index.index_code}
@@ -258,7 +258,7 @@ export default function Market() {
                   aria-pressed={index.index_code === indexCode}
                   onClick={() => setIndexCode(index.index_code)}
                   className={cn(
-                    'card-surface flex w-full scroll-mt-16 items-center justify-between px-3 py-2 text-left',
+                    'card-surface flex w-full scroll-mt-16 items-center justify-between px-4 py-3 text-left',
                     'transition-shadow duration-240 ease-out hover:shadow-sh-2',
                     'focus-visible:outline-none focus-visible:shadow-focus-ring',
                     index.index_code === indexCode ? 'bg-paper-2 ring-1 ring-brand-100' : 'hover:bg-paper-2',
@@ -300,11 +300,11 @@ export default function Market() {
           </div>
 
           {/* 板块透视：中位收益发散条排名，点击行业查看成员 */}
-          <section className="card-surface p-4 md:p-6">
-            <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <section className="paper-panel min-w-0 p-4 sm:p-6">
+            <header className="page-toolbar mb-3 justify-between">
               <div className="min-w-0">
 
-                <h2 className="mt-0.5 inline-flex items-center text-h3 text-ink-900">
+                <h2 className="section-heading justify-start">
                   {t('板块透视')}
                   <InfoHint hint={MARKET_HINTS.sectorMedian} side="bottom" size={12} className="ml-1" />
                 </h2>
@@ -370,7 +370,7 @@ export default function Market() {
           />
         </>
       )}
-      <SourceNote className="mt-8" text={t('指数与 33 行业为官方日线，收盘后更新')} />
+      <SourceNote text={t('指数与 33 行业为官方日线，收盘后更新')} />
     </div>
   );
 }
@@ -424,17 +424,17 @@ function IndexTrendPanel({
   }, [cursor.index, points, changePct]);
 
   return (
-    <section className="card-surface flex flex-col overflow-hidden p-0 lg:col-span-2">
-      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 pt-3">
+    <section className="paper-panel flex min-w-0 flex-col overflow-hidden p-0 lg:col-span-8">
+      <header className="page-toolbar justify-between px-5 pb-2 pt-5 sm:px-6 sm:pt-6">
         <div className="min-w-0">
 
-          <h2 className="mt-0.5 text-h3 text-ink-900">{t('趋势快照')}</h2>
+          <h2 className="section-heading">{t('趋势快照')}</h2>
         </div>
         <span className="shrink-0 whitespace-nowrap rounded-full bg-paper-2 px-2.5 py-0.5 text-micro text-ink-500">{t('近半年')}</span>
       </header>
-      <div className="mt-3 border-t border-line px-4 pt-3">
+      <div className="mt-3 border-t border-line px-5 pt-3 sm:px-6">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="min-w-0 truncate text-h3 text-ink-900">{name}</h3>
+          <h3 className="min-w-0 truncate text-h3 font-medium text-ink-900">{name}</h3>
           <Segmented options={options} value={indexCode} onChange={onIndexChange} />
         </div>
         <SkeletonReveal
@@ -449,7 +449,7 @@ function IndexTrendPanel({
           )}
         </SkeletonReveal>
       </div>
-      <div className="flex flex-wrap items-baseline justify-between gap-3 px-4 pb-4 pt-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 pb-5 pt-2 sm:px-6 sm:pb-6">
         <div>
           <p className="metric-value text-data-xl tnum text-ink-900">{fmtPrice(shown?.value)}</p>
           <p className="mt-0.5 text-micro text-ink-400">

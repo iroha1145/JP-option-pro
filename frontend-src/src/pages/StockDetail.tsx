@@ -5,7 +5,6 @@
  *  K线叠加: 基底阻力带 markArea + 枢轴/失效位 markLine + 摆动点。 */
 
 import { useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router';
 import { useNow } from '@/hooks/useNow';
 import { useColorMode } from '@/hooks/useColorMode';
@@ -163,7 +162,7 @@ export default function StockDetail() {
     <button
       type="button"
       onClick={goBack}
-      className="inline-flex items-center gap-1.5 rounded-md border border-line-strong bg-card px-3 py-1.5 text-caption font-medium text-ink-600 shadow-btn transition-colors duration-fast hover:bg-paper-2 hover:text-ink-800"
+      className="inline-flex items-center gap-1.5 mobile-control-target rounded-pill border border-line-strong bg-card px-3 py-1.5 text-caption font-medium text-ink-600 shadow-btn transition-colors duration-fast hover:bg-paper-2 hover:text-ink-800"
     >
       <Icon name="chevron-right" size={14} className="rotate-180" />
       {t('返回')}
@@ -172,17 +171,17 @@ export default function StockDetail() {
 
   if (state === 'loading') {
     return (
-      <div className="space-y-5" aria-busy="true">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
+      <div className="page-stack" aria-busy="true">
+        <div className="paper-panel min-w-0 p-5 sm:p-7">
+          <div className="page-toolbar mb-5">
             {backButton}
             {watchlistToggle}
           </div>
+          <SkeletonCard className="h-24" />
         </div>
-        <SkeletonCard className="h-24" />
-        <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
-          <SkeletonCard className="h-[420px] xl:col-span-8" />
-          <div className="grid content-start gap-6 xl:col-span-4">
+        <div className="page-grid items-start">
+          <SkeletonCard className="h-[420px] min-w-0 lg:col-span-12 xl:col-span-8" />
+          <div className="grid min-w-0 grid-cols-1 content-start gap-6 lg:col-span-12 xl:col-span-4">
             <SkeletonCard className="h-48" />
             <SkeletonCard className="h-32" />
             <SkeletonCard className="h-32" />
@@ -194,14 +193,12 @@ export default function StockDetail() {
   }
   if (state === 'error' || !overviewData) {
     return (
-      <div>
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            {backButton}
-            {watchlistToggle}
-          </div>
+      <div className="page-stack">
+        <div className="page-toolbar">
+          {backButton}
+          {watchlistToggle}
         </div>
-        <section className="card-surface">
+        <section className="card-surface min-w-0">
           <EmptyState
             variant="error"
             image="/empty-chart.svg"
@@ -218,29 +215,23 @@ export default function StockDetail() {
   const security = data.security;
 
   return (
-    <div>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          {backButton}
-          <WatchlistToggle
-            canonicalCode={security.canonical_code}
-            displayCode={security.display_code}
-          />
-        </div>
+    <div className="page-stack">
+      <div className="paper-panel min-w-0 p-5 sm:p-7">
+      <div className="page-toolbar mb-5">
+        {backButton}
+        <WatchlistToggle
+          canonicalCode={security.canonical_code}
+          displayCode={security.display_code}
+        />
       </div>
 
       {/* ヘッダー：代码主读 + 名称次读，对齐美站 PriceHeader 节奏；不搬 Logo / 实时伪装。 */}
-      <motion.header
-        className="border-b border-line pb-3"
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.48, ease: [0.16, 1, 0.3, 1] }}
-      >
+      <header>
         <div className="flex flex-wrap items-center gap-3">
           <CodeMark code={security.display_code} size={40} />
           <div className="min-w-0">
             <h1 className="flex flex-wrap items-baseline gap-x-2.5">
-              <span className="font-display text-[22px] leading-[28px] font-bold text-ink-900">
+              <span className="font-display text-h2 font-medium text-ink-900">
                 {security.display_code}
               </span>
               <span className="text-body-s text-ink-500">{security.name_ja ?? security.name_en ?? '—'}</span>
@@ -330,10 +321,11 @@ export default function StockDetail() {
           </p>
         </div>
         <DataThrough date={data.quote.trade_date} className="mt-2" />
-      </motion.header>
+      </header>
+      </div>
 
       {/* 行1: K線 + 右侧紧凑栏 */}
-      <div className="mt-8 grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
+      <div className="page-grid items-start">
         <StockChart
           displayCode={security.display_code}
           ticker={security.canonical_code}
@@ -394,11 +386,11 @@ export default function StockDetail() {
           )}
         </StockChart>
 
-        <div className="grid content-start gap-6 xl:col-span-4">
+        <aside className="grid min-w-0 content-start gap-6 sm:grid-cols-2 lg:col-span-12 xl:col-span-4 xl:grid-cols-1">
           <KeyStats code={code} quote={data.quote} />
           {/* 雷达 */}
-          <section className="card-surface p-5">
-            <h3 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('突破雷达')}</h3>
+          <section className="paper-panel min-w-0 p-5 sm:p-6">
+            <h2 className="section-heading mb-4">{t('突破雷达')}</h2>
             {data.radar_events.length === 0 ? (
               <PanelEmpty image="/empty-radar.svg" title={t('暂无相关雷达事件')} />
             ) : (
@@ -417,50 +409,47 @@ export default function StockDetail() {
           </section>
 
           {/* 信用交易 */}
-          <section className="card-surface p-5">
-            <h3 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('信用交易')}</h3>
+          <section className="paper-panel min-w-0 p-5 sm:p-6">
+            <h2 className="section-heading mb-4">{t('信用交易')}</h2>
             <MarginPanel rows={data.margin_interest} />
           </section>
 
           {/* 技术指标 */}
-          <section className="card-surface p-5">
-            <h3 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('技术指标')}</h3>
+          <section className="paper-panel min-w-0 p-5 sm:p-6 sm:col-span-2 xl:col-span-1">
+            <h2 className="section-heading mb-4">{t('技术指标')}</h2>
             <IndicatorGrid technical={technical} />
           </section>
-        </div>
+        </aside>
       </div>
 
       {/* 行2: 决算时间线 + 技术结构 */}
-      <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
-        <section className="card-surface p-5 xl:col-span-7">
-
-          <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('财报时间线')}</h2>
-          <div className="max-h-[360px] overflow-y-auto">
+      <div className="page-grid items-start">
+        <section className="paper-panel min-w-0 p-5 sm:p-6 lg:col-span-12 xl:col-span-7">
+          <h2 className="section-heading mb-4">{t('财报时间线')}</h2>
+          <div className="max-h-[360px] overflow-y-auto overscroll-contain" tabIndex={0}>
             <FinancialTable summaries={data.financials.summaries} />
           </div>
         </section>
-        <section className="card-surface p-5 xl:col-span-5">
-
-          <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('K线结构分析')}</h2>
+        <section className="paper-panel min-w-0 p-5 sm:p-6 lg:col-span-12 xl:col-span-5">
+          <h2 className="section-heading mb-4">{t('K线结构分析')}</h2>
           <StructurePanel technical={technical} />
         </section>
       </div>
 
       {/* 机构空卖行为：报告本身在下面的「空卖残高报告」，这里是行为分析 */}
-      <section className="mt-6 card-surface p-5">
-
-        <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('机构空卖行为')}</h2>
+      <section className="paper-panel min-w-0 p-5 sm:p-6">
+        <h2 className="section-heading mb-4">{t('机构空卖行为')}</h2>
         <ShortBehaviorPanel code={security.canonical_code} />
       </section>
 
       {/* 行3: 空卖 + 发表预定 */}
-      <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
-        <section className="card-surface p-5">
-          <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('空卖残高报告')}</h2>
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+        <section className="paper-panel min-w-0 p-5 sm:p-6">
+          <h2 className="section-heading mb-4">{t('空卖残高报告')}</h2>
           <ShortPositionsPanel rows={data.short_positions} summary={data.short_interest} />
         </section>
-        <section className="card-surface p-5">
-          <h2 className="mb-4 mt-1.5 text-h3 text-ink-900">{t('发表预定')}</h2>
+        <section className="paper-panel min-w-0 p-5 sm:p-6">
+          <h2 className="section-heading mb-4">{t('发表预定')}</h2>
           {data.earnings.length === 0 ? (
             <PanelEmpty title={t('暂无数据')} />
           ) : (
@@ -472,7 +461,7 @@ export default function StockDetail() {
           )}
         </section>
       </div>
-      <SourceNote className="mt-8" text={t('官方终值来自日线；盘中价为延迟行情，不是实时伪装')} />
+      <SourceNote text={t('官方终值来自日线；盘中价为延迟行情，不是实时伪装')} />
     </div>
   );
 }
@@ -519,7 +508,7 @@ function EarningsScheduleRow({ item, todayKey }: { item: Record<string, unknown>
           isToday ? 'bg-brand-50' : 'bg-paper-2/80',
         )}
       >
-        <span className={cn('block tnum text-body-s font-semibold tnum', isToday ? 'text-brand-700' : 'text-ink-900')}>
+        <span className={cn('block tnum text-body-s font-medium tnum', isToday ? 'text-brand-700' : 'text-ink-900')}>
           {anchor ? anchor.day : '—'}
         </span>
         <span className="block text-micro text-ink-400">{anchor?.monthShort ?? ''}</span>

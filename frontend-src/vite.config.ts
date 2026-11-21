@@ -58,6 +58,9 @@ export default defineConfig({
   base: '/',
   plugins: [react()],
   build: {
+    // 只面向当前的现代浏览器：不降级语法，也不注入 modulepreload 的兼容脚本。
+    target: 'esnext',
+    modulePreload: { polyfill: false },
     rollupOptions: {
       output: {
         // Do not pull runtime/theme dependencies into the otherwise lazy engine.

@@ -151,7 +151,7 @@ function autoPatternName(kind: string, subtype?: string | null): string | null {
 
 function toggleButtonCls(active: boolean): string {
   return cn(
-    'min-h-8 rounded-xs border px-2 py-0.5 text-micro outline-none transition-colors duration-fast',
+    'min-h-8 rounded-xs border px-2 py-0.5 text-micro outline-none focus-visible:ring-2 focus-visible:ring-brand-600 transition-colors duration-fast',
     active
       ? 'border-brand-400 bg-brand-50 text-brand-700 shadow-chip'
       : 'border-line text-ink-400 hover:text-ink-600 focus-visible:text-ink-600',
@@ -705,7 +705,7 @@ export default function StockChart({
 
   return (
     <section
-      className="card-surface p-5 xl:col-span-8"
+      className="paper-panel min-w-0 p-4 sm:p-6 lg:col-span-12 xl:col-span-8"
       aria-label={t('{code} K线图', { code: displayCode })}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">

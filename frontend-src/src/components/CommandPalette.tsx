@@ -272,7 +272,7 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
           ticker: code,
           mono: true,
           hint: t('最近查看'),
-          icon: 'clock-ny',
+          icon: 'clock',
           action: () => pickTicker(code),
         }),
       );

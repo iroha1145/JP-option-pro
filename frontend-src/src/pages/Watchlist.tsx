@@ -6,7 +6,6 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
-import { motion } from 'framer-motion';
 import { stocksApi, watchlistApi } from '@/api/modules';
 import { usePolling } from '@/hooks/usePolling';
 import { useProgressiveList } from '@/hooks/useProgressiveList';
@@ -18,7 +17,6 @@ import Segmented from '@/components/shared/Segmented';
 import DataTable, { type Column, type SortState } from '@/components/shared/DataTable';
 import { SkeletonCard, SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
 import StatCard from '@/components/shared/StatCard';
-import HorizontalScroller from '@/components/shared/HorizontalScroller';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
 import SessionLED from '@/components/shared/SessionLED';
 import MenuSelect from '@/components/shared/MenuSelect';
@@ -39,16 +37,13 @@ import PointerTooltip from '@/components/shared/PointerTooltip';
 import { t } from '@/i18n/core';
 import { cn } from '@/lib/utils';
 import { fmtPrice, fmtTimeHHMMSS, fmtYenCompact } from '@/lib/format';
-import { EASE_PAPER } from '@/lib/motion';
 import { ApiError } from '@/api/client';
 import type { SearchResult, WatchlistItem } from '@/api/types';
 
 const EMPTY_WATCHLIST: WatchlistItem[] = [];
 
-const STAT_ENTER = {
-  hidden: { opacity: 0, y: 14 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.48, ease: EASE_PAPER } },
-};
+/* 三张统计卡：手机两列、涨跌卡占整行，平板起三列。 */
+const STAT_GRID = 'watch-stats-grid grid grid-cols-2 gap-4 md:grid-cols-3 max-md:[&>*:last-child:nth-child(odd)]:col-span-2';
 
 type WatchSortId = 'default' | 'gain' | 'loss' | 'turnover' | 'code' | 'close';
 
@@ -283,7 +278,7 @@ export default function Watchlist() {
                   disabled={busy === row.canonical_code}
                   aria-label={t('标记重点')}
                   className={cn(
-                    'rounded-md border border-line px-2 py-0.5 text-micro shadow-btn opacity-0 transition-[opacity,color] duration-fast hover:bg-brand-50 focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100',
+                    'pointer-events-none inline-flex size-11 items-center justify-center rounded-pill border border-line text-micro shadow-btn opacity-0 transition-[opacity,color] duration-fast hover:bg-brand-50 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 disabled:pointer-events-auto [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100',
                     row.marked_important ? 'text-warn-600' : 'text-ink-400',
                   )}
                   onClick={(event) => {
@@ -303,7 +298,7 @@ export default function Watchlist() {
                   type="button"
                   disabled={busy === row.canonical_code}
                   aria-label={t('从关注移除 {code}', { code: row.display_code })}
-                  className="rounded-md border border-line px-2 py-0.5 text-micro text-down-700 shadow-btn opacity-0 transition-[opacity,color] duration-fast hover:bg-down-50 focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+                  className="pointer-events-none inline-flex size-11 items-center justify-center rounded-pill border border-line text-micro text-down-700 shadow-btn opacity-0 transition-[opacity,color] duration-fast hover:bg-down-50 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 disabled:pointer-events-auto [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100"
                   onClick={(event) => {
                     event.stopPropagation();
                     void doRemove(row.canonical_code);
@@ -314,7 +309,7 @@ export default function Watchlist() {
               </PointerTooltip>
             </>
           )}
-          <span className="inline-flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-400 opacity-0 transition-opacity duration-fast group-hover:opacity-100 [@media(hover:none)]:opacity-100">
+          <span aria-hidden="true" className="pointer-events-none inline-flex size-7 items-center justify-center rounded-sm border border-line bg-card text-ink-400 opacity-0 transition-opacity duration-fast group-hover:opacity-100 [@media(hover:none)]:hidden">
             <Icon name="arrow-up-right" size={14} />
           </span>
         </span>
@@ -325,7 +320,7 @@ export default function Watchlist() {
   }, [canManageWatchlist, busy, flashes]);
 
   return (
-    <div>
+    <div className="page-stack">
       <PageHeader
         title={t('我的关注')}
         description={t('本页为日线数据，收盘后更新')}
@@ -349,54 +344,40 @@ export default function Watchlist() {
       />
 
       {(query.loading && !query.data) || items.length > 0 ? (
-        <section className="mt-6" aria-label={t('关注统计')}>
+        <section aria-label={t('关注统计')}>
           {query.loading && !query.data ? (
-            <HorizontalScroller className="-mx-1 sm:mx-0" scrollerClassName="px-1 sm:px-0" label={t('关注统计')}>
-              <div className="flex snap-x snap-mandatory gap-4 pb-1 sm:grid sm:grid-cols-3">
-                <SkeletonCard className="min-w-[240px] sm:min-w-0" />
-                <SkeletonCard className="min-w-[240px] sm:min-w-0" />
-                <SkeletonCard className="min-w-[240px] sm:min-w-0" />
-              </div>
-            </HorizontalScroller>
+            <div className={STAT_GRID}>
+              <SkeletonCard className="min-w-0" />
+              <SkeletonCard className="min-w-0" />
+              <SkeletonCard className="min-w-0" />
+            </div>
           ) : (
-            <HorizontalScroller className="-mx-1 sm:mx-0" scrollerClassName="px-1 sm:px-0" label={t('关注统计')}>
-              <motion.div
-                initial="hidden"
-                animate="show"
-                variants={{ hidden: {}, show: { transition: { staggerChildren: 0.045 } } }}
-                className="flex snap-x snap-mandatory gap-4 pb-1 sm:grid sm:grid-cols-3"
-              >
-                <motion.div variants={STAT_ENTER} className="min-w-[240px] snap-start sm:min-w-0">
-                  <StatCard label={t('只标的')} icon="list" value={items.length} />
-                </motion.div>
-                <motion.div variants={STAT_ENTER} className="min-w-[240px] snap-start sm:min-w-0">
-                  <div className="card-surface metric-card p-5">
-                    <div className="flex items-start justify-between">
-                      <p className="eyebrow">{t('上涨 / 下跌')}</p>
-                      <Icon name="candle" size={18} className="text-ink-400" />
-                    </div>
-                    <AdvanceDeclineBar
-                      advancers={breadth.advancers}
-                      decliners={breadth.decliners}
-                      unchanged={breadth.unchanged}
-                    />
-                  </div>
-                </motion.div>
-                <motion.div variants={STAT_ENTER} className="min-w-[240px] snap-start sm:min-w-0">
-                  <StatCard
-                    label={t('重点标记')}
-                    icon="flag"
-                    value={items.filter((item) => item.marked_important).length}
-                  />
-                </motion.div>
-              </motion.div>
-            </HorizontalScroller>
+            <div className={STAT_GRID}>
+              <StatCard label={t('只标的')} icon="list" value={items.length} className="h-full min-w-0" />
+              <div className="card-surface h-full min-w-0 p-5">
+                <div className="flex items-start justify-between">
+                  <p className="eyebrow">{t('上涨 / 下跌')}</p>
+                  <Icon name="candle" size={18} className="text-ink-400" />
+                </div>
+                <AdvanceDeclineBar
+                  advancers={breadth.advancers}
+                  decliners={breadth.decliners}
+                  unchanged={breadth.unchanged}
+                />
+              </div>
+              <StatCard
+                label={t('重点标记')}
+                icon="flag"
+                value={items.filter((item) => item.marked_important).length}
+                className="h-full min-w-0"
+              />
+            </div>
           )}
         </section>
       ) : null}
 
       {anonymous ? (
-        <section className="mt-8 card-surface">
+        <section className="card-surface">
           <EmptyState
             image="/empty-watchlist.svg"
             title={t('登录后可以把关注股票保存在账号里')}
@@ -412,10 +393,11 @@ export default function Watchlist() {
           />
         </section>
       ) : (
-        <div className="mt-8">
+        <div className="min-w-0">
       {/* 工具行：视图切换 + 添加表单 + 计数 */}
-      <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 border-b border-line py-1.5">
-        <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+      <div className="paper-panel p-4 sm:p-5">
+      <div className="page-toolbar justify-between">
+        <div className="page-toolbar min-w-0">
           <Segmented
             options={[
               { value: 'cards' as const, label: t('卡片') },
@@ -454,12 +436,13 @@ export default function Watchlist() {
           </p>
         </div>
       </div>
+      </div>
 
       {query.error && query.data && (
-        <StaleStrip onRetry={() => query.refresh()} refreshing={query.refreshing} />
+        <StaleStrip onRetry={() => query.refresh()} refreshing={query.refreshing} className="mt-4" />
       )}
 
-        <div className="mt-4 min-h-[70vh]">
+        <div className="mt-6 min-h-[70vh]">
           <SkeletonReveal
             loading={query.loading && !query.data}
             skeleton={
@@ -501,13 +484,11 @@ export default function Watchlist() {
                   />
                 </div>
                 <div className="grid grid-cols-1 gap-4 md:hidden">
-                  {renderedItems.map((item, index) => (
+                  {renderedItems.map((item) => (
                     <WatchCard
                       key={item.canonical_code}
                       item={item}
-                      index={index}
                       flash={flashes[item.canonical_code]}
-                      animateIn={index < FIRST_BATCH}
                       onRemove={canManageWatchlist ? () => void doRemove(item.canonical_code) : undefined}
                       onToggleStar={canManageWatchlist ? () => void doToggleStar(item) : undefined}
                     />
@@ -516,13 +497,11 @@ export default function Watchlist() {
               </>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {renderedItems.map((item, index) => (
+                {renderedItems.map((item) => (
                   <WatchCard
                     key={item.canonical_code}
                     item={item}
-                    index={index}
                     flash={flashes[item.canonical_code]}
-                    animateIn={index < FIRST_BATCH}
                     onRemove={canManageWatchlist ? () => void doRemove(item.canonical_code) : undefined}
                     onToggleStar={canManageWatchlist ? () => void doToggleStar(item) : undefined}
                   />
@@ -535,7 +514,7 @@ export default function Watchlist() {
                 <button
                   type="button"
                   onClick={progressive.loadMore}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line-strong bg-card px-4 py-2 text-caption text-ink-600 shadow-btn transition-colors hover:bg-paper-2"
+                  className="mobile-control-target inline-flex min-h-11 items-center gap-2 rounded-pill border border-line-strong bg-card px-4 py-2 text-caption text-ink-600 shadow-btn transition-colors hover:bg-paper-2"
                 >
                   {t('加载更多')}
                   <span className="tnum text-micro text-ink-400">
@@ -547,7 +526,7 @@ export default function Watchlist() {
         </div>
         </div>
       )}
-      <SourceNote className="mt-8" text={t('本页为日线数据，收盘后更新 · 仅供研究参考，不构成投资建议')} />
+      <SourceNote text={t('本页为日线数据，收盘后更新 · 仅供研究参考，不构成投资建议')} />
     </div>
   );
 }
@@ -640,28 +619,28 @@ function AddStockForm({ onAdded, onError }: { onAdded: () => void; onError: (mes
           placeholder={t('代码或公司名')}
           maxLength={24}
           aria-label={t('添加关注股票票')}
-          className="h-8 w-[150px] rounded-sm border border-line-strong bg-card px-2 tnum text-caption text-ink-800 outline-none transition-[border-color] duration-fast placeholder:font-sans placeholder:text-ink-300 focus:border-brand-600"
+          className="h-8 w-[150px] mobile-control-target rounded-[var(--r-control)] border border-line-strong bg-card px-2 tnum text-caption text-ink-800 outline-none transition-[border-color] duration-fast placeholder:font-sans placeholder:text-ink-300 focus:border-brand-600"
         />
         <button
           type="submit"
           disabled={saving || !input.trim()}
-          className="flex h-8 items-center gap-1 rounded-sm border border-line-strong bg-card px-2.5 text-caption text-ink-600 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+          className="mobile-control-target flex h-8 items-center gap-1 rounded-pill border border-line-strong bg-card px-2.5 text-caption text-ink-600 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Icon name="plus" size={13} />
           {t('添加')}
         </button>
       </form>
       {open && suggestions.length > 0 && (
-        <div className="absolute left-0 top-9 z-30 w-72 overflow-hidden rounded-md border border-line bg-card shadow-sh-2">
+        <div className="absolute left-0 top-9 z-30 w-72 overflow-hidden rounded-[var(--r-group)] border border-line bg-card shadow-sh-2">
           {suggestions.map((result) => (
             <button
               key={result.canonical_code}
               type="button"
               onClick={() => void add(result.canonical_code)}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-brand-50"
+              className="mobile-control-target flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-brand-50"
             >
               <CodeMark code={result.display_code} size={22} />
-              <span className="tnum text-caption font-semibold text-brand-700">{result.display_code}</span>
+              <span className="tnum text-caption font-medium text-brand-700">{result.display_code}</span>
               <span className="min-w-0 flex-1 truncate text-caption text-ink-700">{result.name_ja ?? result.name_en ?? '—'}</span>
               {result.sector33_name ? (
                 <SoftBadge className="max-w-[7.5rem]" title={result.sector33_name}>
@@ -680,37 +659,24 @@ function AddStockForm({ onAdded, onError }: { onAdded: () => void; onError: (mes
 
 function WatchCard({
   item,
-  index,
   flash,
   onRemove,
   onToggleStar,
-  animateIn,
 }: {
   item: WatchlistItem;
-  index: number;
   flash?: 'up' | 'down';
   onRemove?: () => void;
   onToggleStar?: () => void;
-  animateIn: boolean;
 }) {
   return (
-    <motion.div
-      initial={animateIn ? { opacity: 0, y: 14 } : false}
-      animate={animateIn ? { opacity: 1, y: 0 } : undefined}
-      transition={
-        animateIn
-          ? { duration: 0.48, ease: EASE_PAPER, delay: Math.min(index * 0.045, 0.5) }
-          : undefined
-      }
-      className="group/card relative"
-    >
+    <div className="group/card relative min-w-0">
       <Link
         to={`/stock/${item.display_code}`}
-        className="card-surface card-lift flex w-full flex-col p-4 pr-24 text-left"
+        className="paper-panel card-lift flex w-full flex-col p-5 pr-24 text-left"
       >
         <span className="flex items-center gap-2.5">
           {item.marked_important && <span className="shrink-0 text-warn-600">★</span>}
-          <span className="rounded-md bg-brand-50 px-1.5 py-0.5 tnum text-body-s font-semibold text-brand-700">
+          <span className="rounded-md bg-brand-50 px-1.5 py-0.5 tnum text-body-s font-medium text-brand-700">
             {item.display_code}
           </span>
           <span className="min-w-0 flex-1">
@@ -750,7 +716,7 @@ function WatchCard({
             event.stopPropagation();
             onRemove();
           }}
-          className="pointer-events-none absolute right-1 top-1 z-10 inline-flex size-11 cursor-pointer items-center justify-center rounded-xs text-ink-300 opacity-0 outline-none transition-[opacity,color] duration-fast hover:bg-paper-2 hover:text-down-700 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/card:pointer-events-auto group-hover/card:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:text-ink-400"
+          className="pointer-events-none absolute right-1 top-1 z-10 inline-flex size-11 cursor-pointer items-center justify-center rounded-xs text-ink-300 opacity-0 outline-none focus-visible:ring-2 focus-visible:ring-brand-600 transition-[opacity,color] duration-fast hover:bg-paper-2 hover:text-down-700 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/card:pointer-events-auto group-hover/card:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:text-ink-400"
         >
           <Icon name="x" size={13} />
         </button>
@@ -764,13 +730,13 @@ function WatchCard({
             onToggleStar();
           }}
           className={cn(
-            'pointer-events-none absolute right-12 top-1 z-10 inline-flex size-11 cursor-pointer items-center justify-center rounded-xs opacity-0 outline-none transition-[opacity,color] duration-fast hover:bg-paper-2 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/card:pointer-events-auto group-hover/card:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100',
+            'pointer-events-none absolute right-12 top-1 z-10 inline-flex size-11 cursor-pointer items-center justify-center rounded-xs opacity-0 outline-none focus-visible:ring-2 focus-visible:ring-brand-600 transition-[opacity,color] duration-fast hover:bg-paper-2 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/card:pointer-events-auto group-hover/card:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100',
             item.marked_important ? 'text-warn-600' : 'text-ink-300 hover:text-warn-600',
           )}
         >
           ★
         </button>
       )}
-    </motion.div>
+    </div>
   );
 }

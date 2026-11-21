@@ -7,7 +7,6 @@
  * 数据三态：released（实绩）/ confirmed（官方確定）/ estimated（目安，前年同期推导）。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { Link } from 'react-router';
 import { earningsApi } from '@/api/modules';
 import { invalidateQueryPaths } from '@/api/queryRegistry';
@@ -20,11 +19,12 @@ import SourceNote from '@/components/shared/SourceNote';
 import { SkeletonBlock, SkeletonCard, SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
 import { DataThrough } from '@/components/domain';
 import Icon from '@/components/icons';
-import WeekScrubber from '@/components/earnings/WeekScrubber';
+import WeekScrubber, { WEEK_DAY_MIN_H } from '@/components/earnings/WeekScrubber';
 import MonthCalendar from '@/components/earnings/MonthCalendar';
 import EarningsList from '@/components/earnings/EarningsList';
 import DensityStrip from '@/components/earnings/DensityStrip';
 import {
+  addDays,
   computeListState,
   fmtMDCN,
   jstToday,
@@ -42,7 +42,6 @@ import { t } from '@/i18n/core';
 import type { EarningsRecentItem } from '@/api/types';
 
 const LIST_PAGE_SIZE = 24;
-const EASE_PAPER = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
 export default function Earnings() {
   const q = usePolling(() => earningsApi.upcoming(), 1_800_000);
@@ -53,7 +52,6 @@ export default function Earnings() {
   const sawRefreshing = useRef(false);
 
   const [monday, setMonday] = useState(() => weekStartMonday(jstToday()));
-  const [weekDir, setWeekDir] = useState(0);
   const [calView, setCalView] = useState<'week' | 'month'>('week');
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [listMode, setListMode] = useState<ListMode>('all');
@@ -65,7 +63,6 @@ export default function Earnings() {
   const counts = q.data?.counts ?? null;
 
   const onWeekChange = useCallback((dir: -1 | 1) => {
-    setWeekDir(dir);
     setMonday((current) => {
       const d = new Date(`${current}T12:00:00Z`);
       d.setUTCDate(d.getUTCDate() + dir * 7);
@@ -78,11 +75,10 @@ export default function Earnings() {
       setSelectedDay(date);
       setVisibleLimit(LIST_PAGE_SIZE);
       if (date) {
-        setWeekDir(date >= monday ? 1 : -1);
         setMonday(weekStartMonday(date));
       }
     },
-    [monday],
+    [],
   );
 
   const onForceRefresh = useCallback(() => {
@@ -112,12 +108,11 @@ export default function Earnings() {
 
   const onJumpDay = useCallback(
     (date: string) => {
-      setWeekDir(date >= monday ? 1 : -1);
       setMonday(weekStartMonday(date));
       setSelectedDay(date);
       setVisibleLimit(LIST_PAGE_SIZE);
     },
-    [monday],
+    [],
   );
 
   const onListModeChange = useCallback((mode: ListMode) => {
@@ -133,8 +128,21 @@ export default function Earnings() {
   const loading = q.loading && !q.data;
   const error503 = q.error && !q.data;
 
+  const calendarHeading = (
+    <div className="page-toolbar mb-4">
+      <Segmented
+        options={[
+          { value: 'week' as const, label: t('周') },
+          { value: 'month' as const, label: t('月') },
+        ]}
+        value={calView}
+        onChange={setCalView}
+      />
+    </div>
+  );
+
   return (
-    <div>
+    <div className="page-stack">
       {/* B0 页头带 */}
       <PageHeader
         title={t('财报日历')}
@@ -165,26 +173,41 @@ export default function Earnings() {
       />
 
       {q.error && q.data && (
-        <StaleStrip className="mt-4" onRetry={() => q.refresh()} refreshing={q.refreshing} />
+        <StaleStrip onRetry={() => q.refresh()} refreshing={q.refreshing} />
       )}
 
-      {/* B1 周历 / 月历 */}
-      <div className="mt-6">
+      {/* B1 周历 / 月历。读取中与读到后共用同一外壳，骨架的表头与日格按真实周历的尺寸排，数据到达时不跳动。 */}
+      <div className="min-w-0">
         {loading ? (
-          <div className="card-surface overflow-hidden" aria-label={t('周历加载中')}>
-            <div className="flex h-11 items-center justify-center border-b border-line">
-              <SkeletonBlock className="h-3 w-40" />
-            </div>
-            <div className="grid grid-cols-7">
-              {Array.from({ length: 7 }, (_, i) => (
-                <div key={i} className="min-h-[148px] space-y-2 border-r border-line p-2.5 last:border-r-0">
-                  <SkeletonBlock className="h-3 w-8" />
-                  <SkeletonBlock className="h-2.5 w-10" />
-                  <SkeletonBlock className="h-5 w-full" />
-                  <SkeletonBlock className="h-5 w-full" />
+          <div>
+            {calendarHeading}
+            <section className="paper-panel earnings-calendar" aria-label={t('周历加载中')} aria-busy="true">
+              <div className="earnings-calendar-toolbar" aria-hidden="true">
+                <div className="earnings-calendar-nav"><SkeletonBlock className="size-4" /></div>
+                <p className="earnings-calendar-period tnum">
+                  <span>{fmtMDCN(monday)} – {fmtMDCN(addDays(monday, 6))}</span>
+                  <span className="text-caption text-ink-400">JST</span>
+                </p>
+                <div className="earnings-calendar-nav"><SkeletonBlock className="size-4" /></div>
+              </div>
+              <div className="earnings-week-scroll" aria-hidden="true">
+                <div className="earnings-week-grid">
+                  {Array.from({ length: 7 }, (_, i) => (
+                    <div key={i} className={cn('earnings-week-day', WEEK_DAY_MIN_H)}>
+                      <div className="earnings-week-date">
+                        <SkeletonBlock className="h-5 w-8" />
+                        <SkeletonBlock className="h-5 w-10" />
+                      </div>
+                      <div className="earnings-week-tickers">
+                        {[0, 1, 2].map((chip) => (
+                          <div key={chip} className="earnings-calendar-ticker"><SkeletonBlock className="h-3 w-16" /></div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            </section>
           </div>
         ) : error503 ? (
           <section className="card-surface" aria-label={t('日历数据不可用')}>
@@ -198,62 +221,35 @@ export default function Earnings() {
           </section>
         ) : (
           <div>
-            <div className="mb-3 flex items-center justify-between">
-
-              <Segmented
-                options={[
-                  { value: 'week' as const, label: t('周') },
-                  { value: 'month' as const, label: t('月') },
-                ]}
-                value={calView}
-                onChange={setCalView}
-              />
-            </div>
-            <AnimatePresence mode="wait" initial={false}>
-              {calView === 'week' ? (
-                <motion.div
-                  key="week"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.32, ease: EASE_PAPER }}
-                  className="overflow-hidden"
-                >
-                  <WeekScrubber
-                    items={items}
-                    monday={monday}
-                    weekDir={weekDir}
-                    onWeekChange={onWeekChange}
-                    selectedDay={selectedDay}
-                    onSelectDay={onSelectDay}
-                    flashSignal={flashSignal}
-                  />
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="month"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.32, ease: EASE_PAPER }}
-                  className="overflow-hidden"
-                >
-                  <MonthCalendar
-                    items={items}
-                    selectedDay={selectedDay}
-                    onSelectDay={onSelectDay}
-                    anchorDate={monday}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {calendarHeading}
+            {calView === 'week' ? (
+              <div key="week" className="anim-fade-in">
+                <WeekScrubber
+                  items={items}
+                  monday={monday}
+                  onWeekChange={onWeekChange}
+                  selectedDay={selectedDay}
+                  onSelectDay={onSelectDay}
+                  flashSignal={flashSignal}
+                />
+              </div>
+            ) : (
+              <div key="month" className="anim-fade-in">
+                <MonthCalendar
+                  items={items}
+                  selectedDay={selectedDay}
+                  onSelectDay={onSelectDay}
+                  anchorDate={monday}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>
 
       {/* B2 列表（8 列）· B3 右栏（4 列） */}
-      <div className="mt-6 grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-12" aria-label={t('财报主体')}>
-        <div className="min-w-0 space-y-6 xl:col-span-8">
+      <div className="grid min-w-0 grid-cols-1 items-start gap-6 xl:grid-cols-12" aria-label={t('财报主体')}>
+        <div className="grid min-w-0 grid-cols-1 gap-6 xl:col-span-8">
           {error503 ? null : (
             <SkeletonReveal
               loading={loading}
@@ -264,7 +260,7 @@ export default function Earnings() {
               }
             >
             <>
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="page-toolbar justify-between">
                 <Segmented
                   options={[
                     { value: 'featured' as const, label: `${t('重点公司')} ${listState.featuredCount}` },
@@ -274,14 +270,14 @@ export default function Earnings() {
                   onChange={onListModeChange}
                 />
                 {selectedDay && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <p className="text-caption text-ink-500">
                       {t('已筛选')} <span className="tnum text-brand-600">{fmtMDCN(selectedDay)}</span>
                     </p>
                     <button
                       type="button"
                       onClick={() => onSelectDay(null)}
-                      className="flex items-center gap-1 rounded-sm border border-line bg-card px-2 py-1 text-caption text-ink-500 shadow-btn transition-colors hover:text-ink-800"
+                      className="mobile-control-target flex items-center gap-1 rounded-pill border border-line bg-card px-3 py-1 text-caption text-ink-500 shadow-btn transition-colors hover:text-ink-800"
                     >
                       <Icon name="x" size={12} />
                       {t('清除筛选')}
@@ -302,7 +298,7 @@ export default function Earnings() {
               />
 
               {listState.visibleItems.length < listState.listItems.length && (
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-line bg-card px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--r-control)] border border-line bg-card px-4 py-3">
                   <p className="text-caption text-ink-500">
                     {t('已显示')} <span className="tnum text-ink-800">{listState.visibleItems.length}</span>
                     {' / '}
@@ -311,7 +307,7 @@ export default function Earnings() {
                   <button
                     type="button"
                     onClick={() => setVisibleLimit((limit) => limit + LIST_PAGE_SIZE)}
-                    className="h-8 rounded-md border border-line bg-card-warm px-3 text-caption text-ink-600 shadow-btn transition-colors hover:border-brand-400 hover:text-brand-600"
+                    className="mobile-control-target rounded-pill border border-line bg-card-warm px-4 text-caption text-ink-600 shadow-btn transition-colors hover:border-brand-400 hover:text-brand-600"
                   >
                     {t('显示更多 ·')} {Math.min(LIST_PAGE_SIZE, listState.listItems.length - listState.visibleItems.length)} {t('件')}
                   </button>
@@ -322,7 +318,7 @@ export default function Earnings() {
                   <button
                     type="button"
                     onClick={() => setVisibleLimit(LIST_PAGE_SIZE)}
-                    className="h-8 px-2 text-caption text-ink-400 transition-colors hover:text-brand-600"
+                    className="mobile-control-target px-2 text-caption text-ink-400 transition-colors hover:text-brand-600"
                   >
                     {t('收起至前')} {LIST_PAGE_SIZE} {t('件')}
                   </button>
@@ -336,7 +332,7 @@ export default function Earnings() {
                     type="button"
                     onClick={() => setShowTbd((v) => !v)}
                     aria-expanded={showTbd}
-                    className="flex w-full items-center justify-between px-4 py-3"
+                    className="mobile-control-target flex w-full items-center justify-between px-4 py-3"
                   >
                     <span className="text-body-s text-ink-700">
                       {t('日期未定')} <span className="tnum text-caption text-ink-400">{tbdItems.length}</span>
@@ -362,13 +358,13 @@ export default function Earnings() {
         </div>
 
         {/* B3 右栏 */}
-        <aside className="min-w-0 space-y-6 self-start xl:col-span-4" aria-label={t('侧栏')}>
+        <aside className="grid min-w-0 grid-cols-1 content-start gap-6 xl:col-span-4" aria-label={t('侧栏')}>
           {loading ? <SkeletonCard /> : !error503 && <DensityStrip items={items} onJumpDay={onJumpDay} />}
           <RecentPanel items={recentQ.data?.items ?? []} loading={recentQ.loading && !recentQ.data} />
           {q.data?.coverage_note && (
-            <div className="card-surface p-5">
-              <p className="eyebrow">{t('覆盖口径')}</p>
-              <p className="mt-2.5 text-caption leading-[19px] text-ink-500">{t(q.data.coverage_note)}</p>
+            <div className="paper-panel p-5 sm:p-6">
+              <h2 className="section-heading">{t('覆盖口径')}</h2>
+              <p className="mt-2.5 max-w-prose text-caption text-ink-500">{t(q.data.coverage_note)}</p>
               <SourceNote className="mt-3" text={t('预估日期可能调整，请以公司公告为准。')} />
             </div>
           )}
@@ -383,8 +379,8 @@ function RecentPanel({ items, loading }: { items: EarningsRecentItem[]; loading:
   if (loading) return <SkeletonCard />;
   const shown = items.slice(0, 8);
   return (
-    <section className="card-surface p-5" aria-label={t('最近财报')}>
-      <p className="eyebrow">{t('最近财报 · 7 天')}</p>
+    <section className="paper-panel p-5 sm:p-6" aria-label={t('最近财报')}>
+      <h2 className="section-heading">{t('最近财报 · 7 天')}</h2>
       {shown.length === 0 ? (
         <EmptyState size="compact" image="/empty-chart.svg" title={t('暂无数据')} className="mt-2" />
       ) : (
@@ -395,7 +391,7 @@ function RecentPanel({ items, loading }: { items: EarningsRecentItem[]; loading:
               to={`/stock/${row.display_code}`}
               className="flex items-center gap-2 rounded-md px-1 py-0.5 transition-colors hover:bg-paper-2"
             >
-              <span className="shrink-0 rounded-md bg-brand-50 px-1.5 py-0.5 tnum text-caption font-semibold text-brand-700">
+              <span className="shrink-0 rounded-md bg-brand-50 px-1.5 py-0.5 tnum text-caption font-medium text-brand-700">
                 {row.display_code}
               </span>
               <span className="min-w-0 flex-1">

@@ -195,10 +195,10 @@ export default function HistoryRail({
   let rowIndex = 0;
 
   return (
-    <aside aria-label={t('历史事件回溯')} className="radar-history card-surface flex max-h-[560px] flex-col overflow-hidden">
+    <aside aria-label={t('历史事件回溯')} className="radar-history paper-panel flex max-h-[560px] flex-col overflow-hidden">
       <div className="shrink-0 border-b border-line px-4 pb-2.5 pt-3.5">
         <p className="flex items-baseline justify-between gap-2">
-          <span className="text-body-s font-semibold text-ink-900">
+          <span className="text-body-s font-medium text-ink-900">
             {t('历史事件回溯')}
             <span className="tnum">
               {' '}
@@ -243,7 +243,7 @@ export default function HistoryRail({
                     })
                     .catch(() => setHistoryState('error'));
                 }}
-                className="rounded-md bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi"
+                className="mobile-control-target rounded-pill bg-brand-600 px-4 py-2 text-caption font-medium text-white shadow-btn-hi"
               >
                 {t('重试')}
               </button>
@@ -306,7 +306,7 @@ export default function HistoryRail({
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="flex items-baseline gap-1.5">
-                              <span className="shrink-0 tnum text-body-s font-semibold text-ink-800">{row.code}</span>
+                              <span className="shrink-0 tnum text-body-s font-medium text-ink-800">{row.code}</span>
                               <span className="truncate text-micro text-ink-400">{row.name ?? '—'}</span>
                             </span>
                             <span className="mt-0.5 flex items-center gap-1.5 text-micro leading-[14px]">
@@ -337,7 +337,7 @@ export default function HistoryRail({
                   type="button"
                   onClick={onLoadMore}
                   disabled={loadingMore}
-                  className="flex items-center gap-2 rounded-md border border-line bg-card px-3 py-1.5 text-caption font-medium text-ink-600 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
+                  className="mobile-control-target flex items-center gap-2 rounded-pill border border-line bg-card px-3 py-1.5 text-caption font-medium text-ink-600 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:opacity-60"
                 >
                   {loadingMore && <DotsLoader />}
                   {t('加载更多')}

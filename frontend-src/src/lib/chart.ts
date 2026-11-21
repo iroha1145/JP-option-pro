@@ -263,46 +263,6 @@ export function glassTooltip(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/* ---------- 点阵面积图 pattern（§6-2） ---------- */
-const stippleCanvases: Partial<Record<Appearance, HTMLCanvasElement>> = {};
-export function stipplePattern(): HTMLCanvasElement | null {
-  if (typeof document === 'undefined') return null;
-  const appearance = getAppearance();
-  if (stippleCanvases[appearance]) return stippleCanvases[appearance]!;
-  const c = document.createElement('canvas');
-  c.width = 6;
-  c.height = 6;
-  const ctx = c.getContext('2d');
-  if (!ctx) return null;
-  ctx.fillStyle = surface().stipple;
-  ctx.beginPath();
-  ctx.arc(3, 3, 1.1, 0, Math.PI * 2);
-  ctx.fill();
-  stippleCanvases[appearance] = c;
-  return c;
-}
-
-/** 点阵面积（stipple area）series 片段 */
-export function stippleAreaStyle(): LineSeriesOption['areaStyle'] {
-  const pattern = stipplePattern();
-  return pattern
-    ? { color: { image: pattern, repeat: 'repeat' } as unknown as string, opacity: 1 }
-    : { color: surface().stippleFill };
-}
-
-/* ---------- 斜纹柱 decal（§6-3） ---------- */
-export function hatchDecal(color = CH.brand600) {
-  return {
-    symbol: 'rect',
-    symbolSize: 1,
-    rotation: Math.PI / 4,
-    dashArrayX: [1, 0] as [number, number],
-    dashArrayY: [1.2, 4] as [number, number],
-    color,
-    symbolKeepAspect: true,
-  };
-}
-
 /* ---------- 涨跌热力色阶（§1.7 连续映射） ----------
    色阶两端是「涨/跌」不是固定绿/红。基表按西方习惯（绿涨红跌）；
    亚洲习惯下翻转符号，与显示设置 / CH.up600 共用同一快照。 */
@@ -354,4 +314,3 @@ export function strengthColor(score: number): string {
   return CH.ink300;
 }
 
-export const upColor = (change: number) => (change >= 0 ? CH.up600 : CH.down600);

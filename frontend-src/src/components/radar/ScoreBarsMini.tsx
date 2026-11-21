@@ -56,8 +56,8 @@ export default function ScoreBarsMini({ event, className }: { event: RadarEvent;
           >
             <div>
               <p className="flex items-baseline justify-between">
-                <span className="text-[11px] leading-[16px] text-ink-500">{label}</span>
-                <span className="tnum text-[11px] leading-[16px] text-ink-700">{disp(value)}</span>
+                <span className="text-micro text-ink-500">{label}</span>
+                <span className="tnum text-micro text-ink-700">{disp(value)}</span>
               </p>
               <div className="radar-bar-track mt-0.5 h-[5px] overflow-hidden rounded-pill bg-line">
                 {fin(value) && (

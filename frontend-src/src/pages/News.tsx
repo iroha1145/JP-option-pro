@@ -110,7 +110,7 @@ export default function News() {
   }, [feed, hotspots, refreshingNews, securities, status, tab]);
 
   return (
-    <div>
+    <div className="page-stack">
       <PageHeader
         title={t('新闻')}
         description={t('查看新闻原文与关联股票')}
@@ -133,10 +133,10 @@ export default function News() {
       />
 
       {status.error && status.data && (
-        <StaleStrip onRetry={() => status.refresh()} refreshing={status.refreshing} className="mt-4" />
+        <StaleStrip onRetry={() => status.refresh()} refreshing={status.refreshing} />
       )}
 
-      <div className="mt-8 flex min-w-0 flex-wrap items-center justify-between gap-2">
+      <div className="page-toolbar justify-between">
         <Segmented<Tab>
           options={[
             { value: 'feed', label: t('信息流') },
@@ -159,13 +159,13 @@ export default function News() {
         )}
       </div>
 
-      <div className="mt-4 space-y-5">
+      <div className="grid min-w-0 grid-cols-1 gap-6">
       {tab === 'feed' && (
         <>
           {feedState === 'stale' && (
             <StaleStrip onRetry={() => feed.refresh()} refreshing={feed.refreshing} />
           )}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="page-toolbar">
             <SelectionViewport>
               <div className="filter-group" role="group" aria-label={t('类别')}>
                 <FilterButton active={category === null} onClick={() => setCategory(null)}>
@@ -429,14 +429,14 @@ function TimeCol({ iso }: { iso: string | null }) {
   if (!iso) {
     return (
       <div className="flex w-11 shrink-0 flex-col items-center pt-0.5">
-        <span className="tnum text-[11px] leading-[14px] text-ink-400">—</span>
+        <span className="tnum text-micro text-ink-400">—</span>
       </div>
     );
   }
   const sameDay = JST_DAY.format(new Date(iso)) === JST_DAY.format(new Date());
   return (
     <div className="flex w-11 shrink-0 flex-col items-center pt-0.5">
-      <span className="tnum text-[11px] leading-[14px] text-ink-400">
+      <span className="tnum text-micro text-ink-400">
         {sameDay ? fmtJstTime(iso) : fmtJstDateShort(iso)}
       </span>
       <span className="mt-1.5 hidden w-[2px] flex-1 rounded-full bg-line sm:block" aria-hidden="true" />
@@ -473,7 +473,7 @@ function HotspotStrip({
 }) {
   return (
     <section aria-label={t('热点主题')}>
-      <h3 className="mb-2 mt-1 text-h3 text-ink-900">{t('热点主题')}</h3>
+      <h2 className="section-heading mb-3">{t('热点主题')}</h2>
       {Boolean(error) && groups.length > 0 && <StaleStrip onRetry={onRetry} refreshing={refreshing} className="mb-2" />}
       {loading ? (
         <HorizontalScroller className="mt-1" scrollerClassName="pb-1" label={t('热点主题带，可横向滚动')}>
@@ -527,7 +527,7 @@ function HotspotCard({ group, index }: { group: NewsHotspotGroup; index: number 
     >
       <span className="flex items-center gap-1.5">
         <CodeMark code={group.display_code} size={22} />
-        <span className="tnum text-caption font-semibold text-brand-700">{group.display_code}</span>
+        <span className="tnum text-caption font-medium text-brand-700">{group.display_code}</span>
         <span className="min-w-0 truncate text-caption text-ink-700">{group.name_ja ?? '—'}</span>
         <span className="ml-auto">
           <ImportanceBadge value={group.max_importance} />
@@ -566,16 +566,16 @@ function NewsRow({ item, index, animate = true }: { item: NewsItem; index: numbe
           <time dateTime={item.published_at ?? undefined} className="tnum">{fmtRelative(item.published_at)}</time>
           <span className="ml-auto"><ImportanceBadge value={item.importance} /></span>
         </p>
-        <h3 className="mt-2 text-[16px] font-semibold leading-6 text-ink-900">
+        <h3 className="mt-2 text-body font-medium text-ink-900">
           {item.source_url ? (
-            <a href={item.source_url} target="_blank" rel="noreferrer" className="rounded-xs underline-offset-4 hover:text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/60">
+            <a href={item.source_url} target="_blank" rel="noreferrer" className="rounded-xs underline-offset-4 hover:text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600">
               {title}
               <Icon name="arrow-up-right" size={13} className="ml-1.5 inline-block text-ink-400" />
               <span className="sr-only">{t('原文')}</span>
             </a>
           ) : title}
         </h3>
-        {item.original_summary && <p className="mt-2 line-clamp-3 text-body-s leading-relaxed text-ink-600">{item.original_summary}</p>}
+        {item.original_summary && <p className="mt-2 line-clamp-3 max-w-prose text-body-s leading-relaxed text-ink-600">{item.original_summary}</p>}
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           {(item.categories ?? []).slice(0, 3).map((cat) => <SoftBadge key={cat}>{t(cat)}</SoftBadge>)}
           {item.securities.map((security) => (
@@ -588,12 +588,12 @@ function NewsRow({ item, index, animate = true }: { item: NewsItem; index: numbe
           ))}
         </div>
         <details className="group mt-3 border-t border-line pt-2 text-caption text-ink-500">
-          <summary className="flex min-h-8 cursor-pointer list-none items-center gap-1.5 rounded-xs marker:content-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/60 [&::-webkit-details-marker]:hidden">
+          <summary className="mobile-control-target flex min-h-8 cursor-pointer list-none items-center gap-1.5 rounded-xs marker:content-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 [&::-webkit-details-marker]:hidden">
             <Icon name="chevron-down" size={13} className="transition-transform duration-150 group-open:rotate-180 motion-reduce:transition-none" />
             {t('新闻详情')}
           </summary>
           <div className="space-y-2 pb-1 pt-1">
-            {item.original_summary && <p className="leading-relaxed text-ink-600">{item.original_summary}</p>}
+            {item.original_summary && <p className="max-w-prose leading-relaxed text-ink-600">{item.original_summary}</p>}
             {(item.importance_reason_items?.length ?? item.importance_reasons?.length ?? 0) > 0 && (
               <p>{t('重要度依据')}: {explanationLines(item.importance_reason_items, item.importance_reasons).join(' · ')}</p>
             )}
@@ -619,7 +619,7 @@ function StocksImpactPanel({ rows, loading }: { rows: NewsSecurityRow[]; loading
         width: '30%',
         render: (row) => (
           <Link to={`/stock/${row.display_code}`} className="flex min-w-0 items-center gap-2 hover:underline">
-            <span className="rounded-md bg-brand-50 px-1.5 py-0.5 tnum text-body-s font-semibold text-brand-700">
+            <span className="rounded-md bg-brand-50 px-1.5 py-0.5 tnum text-body-s font-medium text-brand-700">
               {row.display_code}
             </span>
             <span className="min-w-0 truncate text-body-s text-ink-800">{row.name_ja ?? '—'}</span>
@@ -725,7 +725,7 @@ function SourcesPanel({ status, loading }: { status: NewsStatus | null; loading:
                 hidden: { opacity: 0, y: 8 },
                 show: { opacity: 1, y: 0, transition: { duration: 0.22, ease: EASE_PAPER } },
               }}
-              className="card-surface p-5"
+              className="paper-panel p-5 sm:p-6"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">

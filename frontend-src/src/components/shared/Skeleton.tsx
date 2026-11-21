@@ -7,16 +7,6 @@ export function SkeletonBlock({ className }: { className?: string }) {
   return <div className={cn('skeleton-shimmer rounded-sm', className)} aria-hidden="true" />;
 }
 
-export function SkeletonText({ lines = 3, className }: { lines?: number; className?: string }) {
-  return (
-    <div className={cn('space-y-2', className)} aria-hidden="true">
-      {Array.from({ length: lines }, (_, i) => (
-        <SkeletonBlock key={i} className={cn('h-3', i === lines - 1 ? 'w-2/3' : 'w-full')} />
-      ))}
-    </div>
-  );
-}
-
 export function SkeletonCard({ className }: { className?: string }) {
   return (
     <div className={cn('card-surface t-skel p-5', className)} data-state="loading" aria-hidden="true">

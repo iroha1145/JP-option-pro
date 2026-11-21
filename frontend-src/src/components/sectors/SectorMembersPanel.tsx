@@ -58,11 +58,11 @@ export default function SectorMembersPanel({
   );
   const flashes = useTickFlash(flashRows, (row) => row.code, (row) => row.price);
   return (
-    <section className="card-surface p-4 md:p-5" aria-label={t('板块最热门个股')}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <section className="paper-panel min-w-0 p-5 sm:p-6" aria-label={t('板块最热门个股')}>
+      <div className="page-toolbar justify-between">
         <div className="min-w-0">
           <p className="eyebrow">{t('板块最热门个股')}</p>
-          <h2 className="mt-0.5 truncate text-h3 text-ink-900">
+          <h2 className="section-heading mt-0.5 justify-start">
             {data?.sector33_name ?? '—'}
             {data && (
               <span className="ml-2 tnum text-caption font-normal text-ink-400">
@@ -160,7 +160,7 @@ export default function SectorMembersPanel({
                       <span
                         className={cn(
                           'block tnum text-micro tnum',
-                          (row.turnover_ratio ?? 0) >= 2 ? 'font-semibold text-warn-700' : 'text-ink-400',
+                          (row.turnover_ratio ?? 0) >= 2 ? 'font-medium text-warn-700' : 'text-ink-400',
                         )}
                       >
                         {row.turnover_ratio != null ? `${row.turnover_ratio.toFixed(1)}x` : '—'}
