@@ -11,6 +11,7 @@ interface Drag {
   lastY: number;
   lastAt: number;
   moved: boolean;
+  interrupted: boolean;
 }
 
 /** Open/closed magnetic stops preserve the existing full-height reading area. */
@@ -217,7 +218,7 @@ export function useFeelSheetDrag({ panelRef, backdropRef, onClose, enabled = tru
     dragRef.current = {
       pointerId: event.pointerId, handle: event.currentTarget, panel,
       body: new MagneticSheetBody(panel.offsetHeight, originY, state?.v ?? 0),
-      startY: event.clientY, originY, lastY: event.clientY, lastAt: performance.now(), moved: false,
+      startY: event.clientY, originY, lastY: event.clientY, lastAt: performance.now(), moved: false, interrupted: Boolean(state) || Math.abs(originY) > 0.25,
     };
     dragRef.current.body.hand = { x: originY, v: 0 };
     clockRef.current = performance.now();
@@ -230,7 +231,7 @@ export function useFeelSheetDrag({ panelRef, backdropRef, onClose, enabled = tru
     const finalDelta = event.clientY - drag.lastY;
     if (!cancelled) update(event);
     releaseCapture();
-    if (drag.moved) suppressClick.current = true;
+    if (drag.moved || drag.interrupted) suppressClick.current = true;
     if (cancelled || !enabled) {
       // A regrab can be cancelled before any new movement. Its subsequent
       // native click must not turn that cancellation into a close command.
@@ -240,7 +241,12 @@ export function useFeelSheetDrag({ panelRef, backdropRef, onClose, enabled = tru
       drag.panel.style.transition = '';
       return;
     }
-    if (!drag.moved) return;
+    if (!drag.moved && !drag.interrupted) {
+      restoreBackdrop();
+      drag.panel.style.transform = '';
+      drag.panel.style.transition = '';
+      return;
+    }
     // A final pointerup position is not guaranteed to have a pointermove. Give
     // that last displacement a physical step before dropping the hand spring.
     if (finalDelta !== 0 && drag.body.hand) drag.body.step(1 / 60);
@@ -267,6 +273,7 @@ export function useFeelSheetDrag({ panelRef, backdropRef, onClose, enabled = tru
     animate(panel, body);
   };
   return {
+    requestClose: () => go(true),
     onPointerDown,
     onPointerMove: update,
     onPointerUp: (event: PointerEvent<HTMLElement>) => finish(event, false),

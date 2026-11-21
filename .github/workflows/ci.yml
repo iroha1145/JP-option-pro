@@ -87,15 +87,20 @@ jobs:
             frontend-src/tests/watchlist-search-lifecycle.mjs \
             frontend-src/tests/page-refresh-cache.mjs
 
-      # 版式约定、首帧前的主题与语言脚本、开关与底部面板的物理手感、手机上的长说明。
-      - name: Layout, pre-paint and gesture gates
+      # 版式约定、首帧前的主题与语言脚本、底部面板的物理手感。
+      - name: Layout and pre-paint gates
         run: |
           node --experimental-strip-types --test \
             frontend-src/tests/ui-foundations.mjs \
             frontend-src/tests/theme-boot.mjs \
-            frontend-src/tests/heavy-toggle-motion.mjs \
-            frontend-src/tests/magnetic-sheet.mjs \
-            frontend-src/tests/mobile-controls.mjs
+            frontend-src/tests/magnetic-sheet.mjs
+
+      - name: UI viewport and gesture regression
+        working-directory: frontend-src
+        run: |
+          node --experimental-strip-types --test tests/jp-mobile-controls.mjs tests/heavy-toggle-motion.mjs tests/jp-feel-alignment.mjs
+          npx playwright install --with-deps chromium
+          npm run test:browser
 
       - name: Screener freshness gate
         run: node --experimental-strip-types --test frontend-src/tests/screener-freshness.mjs

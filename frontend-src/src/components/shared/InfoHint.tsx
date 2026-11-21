@@ -6,7 +6,7 @@
  *   内部，真按钮会形成非法嵌套（TickerChip 同款教训）
  * - 点击/键盘触发要 stopPropagation，避免误触所在行的跳转
  * - 触屏无 hover，用受控 open 点按切换
- * - 文案来自 lib/scoreHints（源自后端真实算法），本组件不编内容
+ * - 文案来自 lib/indicatorHints（源自后端真实算法），本组件不编内容
  *
  * 浮层挂在 document.body（portal + position:fixed），不留在触发点旁边：
  * 读数几乎都在 `card-surface overflow-hidden` 之类的裁剪盒里，同层的绝对定位
@@ -330,7 +330,7 @@ export default function InfoHint({
               }px))`,
             }}
           >
-            {/* scoreHints 的 title/body/note 在定义处已经 t() 过：再包一层会在
+            {/* indicatorHints 的 title/body/note 在定义处已经 t() 过：再包一层会在
                 EN/JA 下拿译文回查词典，DEV 的缺译告警被几十条假警报淹没。 */}
             <span className="block text-caption font-medium text-ink-800">{hint.title}</span>
             <span className="mt-1 block whitespace-normal text-micro leading-relaxed text-ink-600">

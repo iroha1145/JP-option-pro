@@ -566,7 +566,7 @@ function NewsRow({ item, index, animate = true }: { item: NewsItem; index: numbe
           <time dateTime={item.published_at ?? undefined} className="tnum">{fmtRelative(item.published_at)}</time>
           <span className="ml-auto"><ImportanceBadge value={item.importance} /></span>
         </p>
-        <h3 className="mt-2 max-w-prose text-body font-medium text-ink-900">
+        <h3 className="mt-2 max-w-[75ch] text-body font-medium text-ink-900">
           {item.source_url ? (
             <a href={item.source_url} target="_blank" rel="noreferrer" className="rounded-xs underline-offset-4 hover:text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600">
               {title}
@@ -575,7 +575,7 @@ function NewsRow({ item, index, animate = true }: { item: NewsItem; index: numbe
             </a>
           ) : title}
         </h3>
-        {item.original_summary && <p className="mt-2 line-clamp-3 max-w-prose text-body-s leading-relaxed text-ink-600">{item.original_summary}</p>}
+        {item.original_summary && <p className="mt-2 max-w-[75ch] break-words line-clamp-3 text-body-s leading-relaxed text-ink-600">{item.original_summary}</p>}
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           {(item.categories ?? []).slice(0, 3).map((cat) => <SoftBadge key={cat}>{t(cat)}</SoftBadge>)}
           {item.securities.map((security) => (
@@ -593,7 +593,7 @@ function NewsRow({ item, index, animate = true }: { item: NewsItem; index: numbe
             {t('新闻详情')}
           </summary>
           <div className="space-y-2 pb-1 pt-1">
-            {item.original_summary && <p className="max-w-prose leading-relaxed text-ink-600">{item.original_summary}</p>}
+            {item.original_summary && <p className="max-w-[75ch] break-words leading-relaxed text-ink-600">{item.original_summary}</p>}
             {(item.importance_reason_items?.length ?? item.importance_reasons?.length ?? 0) > 0 && (
               <p>{t('重要度依据')}: {explanationLines(item.importance_reason_items, item.importance_reasons).join(' · ')}</p>
             )}

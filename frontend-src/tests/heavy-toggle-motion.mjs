@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
-import { createReactStub } from './helpers/react-hooks.mjs';
+import { createReactStub } from './helpers/feel-react-hooks.mjs';
 
 function harness() {
   let now = 0, id = 0;

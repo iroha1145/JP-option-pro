@@ -79,7 +79,7 @@ test('通知保留状态图标、最高浮层阴影与够大的关闭按钮', as
   assert.match(toast, /icon:\s*'check'[\s\S]*bg-ok-50\s+text-ok-700/);
   assert.match(toast, /icon:\s*'bell'[\s\S]*bg-brand-50\s+text-brand-700/);
   assert.match(toast, /rounded-\[var\(--r-group\)\]\s+border\s+border-line\s+bg-card\s+shadow-sh-3/);
-  assert.match(toast, /touch-target[^\n]*rounded-\[var\(--r-dropdown-item\)\]/);
+  assert.match(toast, /mobile-icon-target[^\n]*rounded-\[var\(--r-dropdown-item\)\]/);
 });
 
 test('排版基础：标题均匀断行、标签不被误选中、字重只用常规与中等', async () => {
@@ -94,7 +94,7 @@ test('排版基础：标题均匀断行、标签不被误选中、字重只用�
   }
 });
 
-test('字阶：最小字号 12 像素，说明文字用字阶自带行高，表头不做全大写加字距', async () => {
+test('字阶：最小字号 12 像素，说明文字用字阶自带行高，表头不做全大写加字距，新闻标题限制行宽', async () => {
   for (const file of await walk(src)) {
     if (!/\.tsx?$/.test(file)) continue;
     const text = codeOf(await readFile(file, 'utf8'));
@@ -111,7 +111,7 @@ test('字阶：最小字号 12 像素，说明文字用字阶自带行高，表�
   assert.match(tailwind, /body:\s*\['1rem',\s*\{\s*lineHeight:\s*'1\.625'/);
   assert.match(tailwind, /micro:\s*\['\.8125rem',\s*\{\s*lineHeight:\s*'1\.4'/);
   assert.match(tailwind, /tag:\s*\['\.75rem'/);
-  assert.match(await code('pages/News.tsx'), /<h3 className="mt-2 max-w-prose /);
+  assert.match(await code('pages/News.tsx'), /<h3 className="mt-2 max-w-\[75ch\] /);
 });
 
 test('每个页面都放在同一套页面堆叠里，整页不会被内容撑宽', async () => {

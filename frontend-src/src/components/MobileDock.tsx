@@ -59,19 +59,22 @@ function MobileDockContent({ onHeightChange }: MobileDockProps) {
   }, [onHeightChange]);
   const backdropRef = useRef<HTMLDivElement | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
-  const sheetDrag = useFeelSheetDrag({ enabled: moreOpen, panelRef: sheetRef, backdropRef, onClose: () => setMoreOpen(false) });
-  useFocusTrap(sheetRef, moreOpen);
+  const { requestClose: closeSheet, ...sheetDrag } = useFeelSheetDrag({ enabled: moreOpen, panelRef: sheetRef, backdropRef, onClose: () => setMoreOpen(false) });
   const overlayId = useId();
   const morePhase = useOverlayPhase(moreOpen, DUR_FAST * 1000);
-  useBodyScrollLock(overlayVisible(moreOpen, morePhase));
+  const moreVisible = overlayVisible(moreOpen, morePhase);
+  useBodyScrollLock(moreVisible);
+  useFocusTrap(sheetRef, moreVisible);
 
+  const closeSheetRef = useRef(closeSheet);
+  closeSheetRef.current = closeSheet;
   useEffect(() => {
     if (!moreOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || e.keyCode === 229 || !isTopFocusScope(sheetRef.current)) return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      setMoreOpen(false);
+      closeSheetRef.current();
     };
     document.addEventListener('keydown', onKey);
     return () => {
@@ -129,11 +132,11 @@ function MobileDockContent({ onHeightChange }: MobileDockProps) {
         </motion.div>
       </nav>
 
-      {overlayVisible(moreOpen, morePhase) && (
+      {moreVisible && (
         <div
           ref={backdropRef}
           className={cn('t-backdrop fixed inset-0 z-[64] bg-[var(--scrim)] xl:hidden', morePhase === 'open' && 'is-open')}
-          onClick={() => setMoreOpen(false)}
+          onClick={closeSheet}
           data-focus-backdrop={overlayId}
           aria-hidden="true"
         />
@@ -160,8 +163,7 @@ function MobileDockContent({ onHeightChange }: MobileDockProps) {
             {...sheetDrag}
             aria-label={t('收起')}
             aria-keyshortcuts="ArrowUp ArrowDown Home End"
-            className="icon-motion-trigger flex min-h-11 w-full items-center justify-center text-ink-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600"
-          >
+            className="icon-motion-trigger flex min-h-11 w-full items-center justify-center text-ink-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600">
             <Icon motion name="dots-grid" size={18} aria-hidden="true" />
           </button>
           <p className="eyebrow px-5 pb-2 pt-1">{t('更多功能')}</p>
@@ -170,7 +172,7 @@ function MobileDockContent({ onHeightChange }: MobileDockProps) {
               <button
                 key={m.path}
                 onClick={() => {
-                  setMoreOpen(false);
+                  closeSheet();
                   navigate(m.path);
                 }}
                 aria-current={isNavPathActive(location.pathname, m.path) ? 'page' : undefined}
@@ -199,13 +201,13 @@ function MobileDockContent({ onHeightChange }: MobileDockProps) {
               disabled={loggingOut}
               onClick={() => {
                 if (!isSignedIn) {
-                  setMoreOpen(false);
+                  closeSheet();
                   navigate('/login', { state: { from: location.pathname + location.search } });
                   return;
                 }
                 setLoggingOut(true);
                 void logout()
-                  .then(() => setMoreOpen(false))
+                  .then(closeSheet)
                   .catch((error: unknown) => {
                     toast.error(t('退出失败'), error instanceof Error ? error.message : undefined);
                   })
@@ -231,7 +233,7 @@ function MobileDockContent({ onHeightChange }: MobileDockProps) {
               <button
                 type="button"
                 onClick={() => {
-                  setMoreOpen(false);
+                  closeSheet();
                   navigate('/login', { state: { from: location.pathname + location.search } });
                 }}
                 className="icon-motion-trigger flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-micro text-ink-500 transition-[background-color] hover:bg-paper-2 active:bg-line/60"

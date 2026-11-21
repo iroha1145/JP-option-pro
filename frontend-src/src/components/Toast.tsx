@@ -81,10 +81,7 @@ function ToastCard({ t, onDismiss, onRemove }: { t: ToastItem; onDismiss: (id: n
         >
           <div className="flex items-start gap-2.5 py-2.5 pl-3 pr-2">
             <span
-              className={cn(
-                'mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-[var(--r-dropdown-item)]',
-                STATUS_BADGE[t.kind].cls,
-              )}
+              className={cn('mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-[var(--r-dropdown-item)]', STATUS_BADGE[t.kind].cls)}
               aria-hidden="true"
             >
               <Icon name={STATUS_BADGE[t.kind].icon} size={13} />
@@ -95,7 +92,7 @@ function ToastCard({ t, onDismiss, onRemove }: { t: ToastItem; onDismiss: (id: n
             </div>
             <button
               onClick={() => onDismiss(t.id)}
-              className="icon-motion-trigger touch-target flex size-8 shrink-0 items-center justify-center rounded-[var(--r-dropdown-item)] text-ink-400 transition-[transform,color,background-color] duration-fast hover:bg-paper-2 hover:text-ink-600 active:scale-95"
+              className="icon-motion-trigger mobile-icon-target flex size-8 shrink-0 items-center justify-center rounded-[var(--r-dropdown-item)] text-ink-400 transition-[transform,color,background-color] duration-fast hover:bg-paper-2 hover:text-ink-600 active:scale-95"
               aria-label={__t('关闭通知')}
             >
               <Icon motion name="x" size={13} />

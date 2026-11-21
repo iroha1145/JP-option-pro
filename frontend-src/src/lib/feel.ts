@@ -1,324 +1,43 @@
 /**
- * Feel — Perceptual Physics & Fluid Functionalism Engine for Option-Pro.
+ * Feel spring and drag gestures used by the Japanese toggle and more sheet.
  *
  * Adapted from Feel (https://github.com/diip3sh/feel, https://diip3sh.github.io/feel/, MIT License).
- * Expresses motion in perceptual modal coordinates (mass m, natural frequency f in Hz,
- * damping ratio ζ) and compiles them to physical springs (stiffness k, damping c),
- * analytical step responses, CSS `linear()` curves, RK4 trajectories, rubber-band walls,
- * and momentum-projected drag release.
+ * Uses fixed spring parameters, RK4 trajectories, rubber-band walls and
+ * momentum-projected drag release. General spring editors and demos are omitted.
  */
 import { useCallback, useLayoutEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 
-export interface ModalSpring {
-  mass: number;
-  freq: number;
-  zeta: number;
-}
+// Fixed parameters used by the Japanese toggle and more-sheet gestures.
+const SHEET_MASS = 1.3;
+const SHEET_FREQUENCY = 3;
+const SHEET_DAMPING_RATIO = 0.84;
+const SHEET_STIFFNESS = SHEET_MASS * (2 * Math.PI * SHEET_FREQUENCY) ** 2;
+const SHEET_DAMPING = 2 * SHEET_DAMPING_RATIO * Math.sqrt(SHEET_STIFFNESS * SHEET_MASS);
 
-export interface PhysicalSpring extends ModalSpring {
-  stiffness: number;
-  damping: number;
-}
-
-export type SpringInput =
-  | string
-  | Partial<ModalSpring & { stiffness: number; damping: number }>;
-
-export interface MagnetWell {
-  x: number;
-  y?: number;
-  strength?: number;
-  radius?: number;
-}
-
-export interface SpringMetrics {
-  overshootPct: number;
-  settle: number;
-  firstZero: number | null;
-  oscillations: number;
-  regime: 'underdamped' | 'critical' | 'overdamped';
-}
+interface SpringParameters { mass: number; stiffness: number; damping: number }
+const SHEET_SPRING: SpringParameters = { mass: SHEET_MASS, stiffness: SHEET_STIFFNESS, damping: SHEET_DAMPING };
+const TOGGLE_MASS = 2.2;
+const TOGGLE_STIFFNESS = TOGGLE_MASS * (2 * Math.PI * 3.3) ** 2;
+const TOGGLE_DAMPING = 2 * 0.78 * Math.sqrt(TOGGLE_STIFFNESS * TOGGLE_MASS);
+const TOGGLE_SPRING: SpringParameters = { mass: TOGGLE_MASS, stiffness: TOGGLE_STIFFNESS, damping: TOGGLE_DAMPING };
+const HAND_STIFFNESS = (2 * Math.PI * 6) ** 2;
+const TOGGLE_HAND: SpringParameters = {
+  mass: TOGGLE_MASS,
+  stiffness: HAND_STIFFNESS,
+  damping: TOGGLE_DAMPING + 2 * Math.sqrt(HAND_STIFFNESS * TOGGLE_MASS),
+};
 
 const DT = 1 / 240;
 const MAX_STEP = 1 / 20;
 const VEL_EPS = 1e-3;
 const POS_EPS = 1e-4;
 
-export function prefersReducedMotionNow(): boolean {
+function prefersReducedMotionNow(): boolean {
   return (
     typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches
   );
-}
-
-/**
- * Convert modal coordinates { mass, freq (Hz), zeta } to physical { mass, stiffness, damping }.
- *   ω₀ = 2πf,  k = m·ω₀²,  c = 2·ζ·√(k·m)
- */
-export function fromModal({
-  mass = 1,
-  freq = 3.5,
-  zeta = 0.72,
-}: Partial<ModalSpring> = {}): PhysicalSpring {
-  const m = Math.max(0.05, mass);
-  const f = Math.max(0.2, freq);
-  const z = Math.max(0.05, zeta);
-  const w0 = 2 * Math.PI * f;
-  const stiffness = m * w0 * w0;
-  const damping = 2 * z * Math.sqrt(stiffness * m);
-  return { mass: m, stiffness, damping, freq: f, zeta: z };
-}
-
-/**
- * Convert physical { mass, stiffness, damping } back to modal { mass, freq, zeta }.
- */
-export function toModal({
-  mass = 1,
-  stiffness = 200,
-  damping = 20,
-}: {
-  mass?: number;
-  stiffness?: number;
-  damping?: number;
-} = {}): ModalSpring {
-  const m = Math.max(0.05, mass);
-  const k = Math.max(1, stiffness);
-  const c = Math.max(0, damping);
-  const w0 = Math.sqrt(k / m);
-  const freq = w0 / (2 * Math.PI);
-  const zeta = c / (2 * Math.sqrt(k * m));
-  return { mass: m, freq, zeta };
-}
-
-type WordModifier = {
-  df?: number;
-  dz?: number;
-  dm?: number;
-  freq?: number;
-  zeta?: number;
-  mass?: number;
-};
-
-export const WORDS: Record<string, WordModifier> = {
-  // Perceptual speed (natural frequency f)
-  snappy: { df: +1.8, dz: -0.05 },
-  quick: { df: +1.2 },
-  crisp: { df: +1.5, dz: +0.08 },
-  tight: { df: +2.0, dz: +0.12 },
-  fast: { df: +1.4 },
-  slow: { df: -1.4 },
-  lazy: { df: -1.8, dz: +0.1 },
-  gentle: { df: -1.0, dz: +0.12 },
-  calm: { df: -1.2, dz: +0.18 },
-
-  // Damping & character (zeta)
-  bouncy: { dz: -0.32 },
-  playful: { dz: -0.25, df: +0.4 },
-  elastic: { dz: -0.38, df: +0.3 },
-  springy: { dz: -0.22 },
-  wobbly: { dz: -0.45 },
-  settled: { dz: +0.22 },
-  dead: { zeta: 1.05 },
-  'critically-damped': { zeta: 1.0 },
-  'no-overshoot': { zeta: 1.0 },
-  smooth: { dz: +0.15, df: -0.4 },
-  soft: { dz: +0.08, df: -0.8 },
-
-  // Perceived weight (mass m)
-  heavy: { dm: +1.2, df: -0.9, dz: +0.05 },
-  weighted: { dm: +0.7, df: -0.5 },
-  solid: { dm: +0.4, dz: +0.1 },
-  light: { dm: -0.4, df: +0.6 },
-  feathered: { dm: -0.55, df: +0.9, dz: +0.1 },
-  airy: { dm: -0.5, df: -0.3, dz: -0.1 },
-
-  // Ambient / spatial
-  floating: { freq: 1.4, zeta: 0.55, mass: 1.3 },
-  floaty: { freq: 1.6, zeta: 0.5, mass: 1.2 },
-  drifting: { freq: 0.9, zeta: 0.7, mass: 1.6 },
-
-  // Intent nouns
-  dismiss: { freq: 4.6, zeta: 0.92, mass: 0.8 },
-  snap: { freq: 5.2, zeta: 0.78, mass: 0.7 },
-  flick: { freq: 4.8, zeta: 0.65, mass: 0.7 },
-  hover: { freq: 4.2, zeta: 0.88, mass: 0.6 },
-  press: { freq: 5.5, zeta: 0.85, mass: 0.6 },
-  expand: { freq: 3.1, zeta: 0.76, mass: 1.1 },
-  collapse: { freq: 3.8, zeta: 0.88, mass: 0.9 },
-  enter: { freq: 3.2, zeta: 0.74, mass: 1.0 },
-  exit: { freq: 4.4, zeta: 0.95, mass: 0.75 },
-  modal: { freq: 3.3, zeta: 0.78, mass: 1.15 },
-  sheet: { freq: 3.0, zeta: 0.84, mass: 1.3 },
-  drawer: { freq: 3.2, zeta: 0.82, mass: 1.2 },
-  tooltip: { freq: 5.0, zeta: 0.86, mass: 0.5 },
-  popover: { freq: 4.4, zeta: 0.78, mass: 0.75 },
-  pill: { freq: 3.4, zeta: 0.78, mass: 1.0 },
-  toggle: { freq: 4.2, zeta: 0.68, mass: 0.85 },
-  thumb: { freq: 4.4, zeta: 0.7, mass: 0.8 },
-};
-
-/**
- * Compile a whitespace/comma-separated perceptual phrase (e.g. "crisp toggle")
- * into physical spring parameters.
- */
-export function fromWords(
-  words: string,
-  base: ModalSpring = { mass: 1, freq: 3.5, zeta: 0.72 },
-): PhysicalSpring {
-  const tokens = String(words)
-    .toLowerCase()
-    .trim()
-    .split(/[\s,]+/)
-    .filter(Boolean);
-  let { mass, freq, zeta } = base;
-  for (const tok of tokens) {
-    const w = WORDS[tok];
-    if (!w) continue;
-    if (w.freq !== undefined) freq = w.freq;
-    if (w.zeta !== undefined) zeta = w.zeta;
-    if (w.mass !== undefined) mass = w.mass;
-    if (w.df) freq += w.df;
-    if (w.dz) zeta += w.dz;
-    if (w.dm) mass += w.dm;
-  }
-  mass = Math.max(0.2, Math.min(4.0, mass));
-  freq = Math.max(0.5, Math.min(9.0, freq));
-  zeta = Math.max(0.18, Math.min(1.6, zeta));
-  return fromModal({ mass, freq, zeta });
-}
-
-export function resolveSpring(input?: SpringInput): PhysicalSpring {
-  if (!input) return fromModal();
-  if (typeof input === 'string') return fromWords(input);
-  if (typeof input.freq === 'number' || typeof input.zeta === 'number') {
-    return fromModal({
-      mass: input.mass ?? 1,
-      freq: input.freq ?? 3.5,
-      zeta: input.zeta ?? 0.72,
-    });
-  }
-  const m = input.mass ?? 1;
-  const k = input.stiffness ?? 200;
-  const c = input.damping ?? 20;
-  const modal = toModal({ mass: m, stiffness: k, damping: c });
-  return { mass: m, stiffness: k, damping: c, freq: modal.freq, zeta: modal.zeta };
-}
-
-/**
- * Exact closed-form analytical solution for a 1D damped harmonic oscillator
- * with initial displacement `u0` (default -1 for unit step to 0) and velocity `v0`.
- */
-export function response(input?: SpringInput, u0 = -1, v0 = 0) {
-  const { mass: m, stiffness: k, damping: c } = resolveSpring(input);
-  const w0 = Math.sqrt(k / m);
-  const zeta = c / (2 * Math.sqrt(k * m));
-
-  if (zeta < 1 - 1e-6) {
-    const wd = w0 * Math.sqrt(1 - zeta * zeta);
-    const A = u0;
-    const B = (v0 + zeta * w0 * u0) / wd;
-    return {
-      zeta,
-      w0,
-      pos: (t: number) =>
-        Math.exp(-zeta * w0 * t) * (A * Math.cos(wd * t) + B * Math.sin(wd * t)),
-      vel: (t: number) => {
-        const e = Math.exp(-zeta * w0 * t);
-        const cos = Math.cos(wd * t);
-        const sin = Math.sin(wd * t);
-        return (
-          e *
-          ((B * wd - zeta * w0 * A) * cos - (A * wd + zeta * w0 * B) * sin)
-        );
-      },
-    };
-  }
-
-  if (Math.abs(zeta - 1) <= 1e-6) {
-    const A = u0;
-    const B = v0 + w0 * u0;
-    return {
-      zeta: 1,
-      w0,
-      pos: (t: number) => Math.exp(-w0 * t) * (A + B * t),
-      vel: (t: number) => Math.exp(-w0 * t) * (B - w0 * (A + B * t)),
-    };
-  }
-
-  const s = Math.sqrt(zeta * zeta - 1);
-  const r1 = -w0 * (zeta - s);
-  const r2 = -w0 * (zeta + s);
-  const A = (v0 - r2 * u0) / (r1 - r2);
-  const B = u0 - A;
-  return {
-    zeta,
-    w0,
-    pos: (t: number) => A * Math.exp(r1 * t) + B * Math.exp(r2 * t),
-    vel: (t: number) => A * r1 * Math.exp(r1 * t) + B * r2 * Math.exp(r2 * t),
-  };
-}
-
-/**
- * Derive perceptual metrics (overshoot %, 2% envelope settle time, first zero crossing)
- * from any spring specification.
- */
-export function metrics(input?: SpringInput): SpringMetrics {
-  const { mass: m, stiffness: k, damping: c } = resolveSpring(input);
-  const w0 = Math.sqrt(k / m);
-  const zeta = c / (2 * Math.sqrt(k * m));
-  const overshootPct =
-    zeta < 1
-      ? Math.exp((-zeta * Math.PI) / Math.sqrt(1 - zeta * zeta)) * 100
-      : 0;
-  const settle =
-    zeta < 1 ? 4 / (zeta * w0) : (4 / w0) * (1 + 0.6 * (zeta - 1));
-  const firstZero =
-    zeta < 1
-      ? (Math.PI - Math.acos(zeta)) / (w0 * Math.sqrt(1 - zeta * zeta))
-      : null;
-  const oscillations =
-    zeta < 1
-      ? Math.max(0, Math.floor((settle * w0 * Math.sqrt(1 - zeta * zeta)) / Math.PI))
-      : 0;
-  return {
-    overshootPct,
-    settle,
-    firstZero,
-    oscillations,
-    regime: zeta < 0.99 ? 'underdamped' : zeta <= 1.01 ? 'critical' : 'overdamped',
-  };
-}
-
-/**
- * Sample the exact analytical unit step response into a CSS `linear(...)` timing function.
- */
-export function linearEasing(
-  input?: SpringInput,
-  samples = 36,
-): {
-  easing: string;
-  durationMs: number;
-  settleMs: number;
-  overshootPct: number;
-} {
-  const p = resolveSpring(input);
-  const m = metrics(p);
-  const sol = response(p, -1, 0);
-  const totalSec = Math.min(1.4, Math.max(0.16, m.settle * 1.12));
-  const count = Math.max(8, samples);
-  const stops: string[] = [];
-  for (let i = 0; i <= count; i++) {
-    const t = (i / count) * totalSec;
-    const y = i === count ? 1 : 1 + sol.pos(t);
-    const rounded = Number(y.toFixed(4));
-    stops.push(String(rounded));
-  }
-  return {
-    easing: `linear(${stops.join(', ')})`,
-    durationMs: Math.round(totalSec * 1000),
-    settleMs: Math.round(m.settle * 1000),
-    overshootPct: Number(m.overshootPct.toFixed(2)),
-  };
 }
 
 /**
@@ -356,38 +75,38 @@ export function projectCoast(
 }
 
 /**
- * 1D RK4 Spring-Damper-Magnet Body.
+ * Internal RK4 spring body used by the fixed toggle and sheet springs.
  */
-export class Body {
+class Body {
   x: number;
   v: number;
   target: number;
   mass: number;
   stiffness: number;
   damping: number;
-  magnets: MagnetWell[];
   asleep: boolean;
 
-  constructor(
-    initial = 0,
-    opts?: SpringInput & { magnets?: MagnetWell[] },
-  ) {
-    const p = resolveSpring(opts);
+  constructor(initial: number, params: SpringParameters = SHEET_SPRING) {
     this.x = initial;
     this.v = 0;
     this.target = initial;
-    this.mass = p.mass;
-    this.stiffness = p.stiffness;
-    this.damping = p.damping;
-    this.magnets = opts && typeof opts === 'object' && 'magnets' in opts && Array.isArray(opts.magnets) ? opts.magnets : [];
+    this.mass = params.mass;
+    this.stiffness = params.stiffness;
+    this.damping = params.damping;
     this.asleep = true;
   }
 
-  setParams(opts: SpringInput): this {
-    const p = resolveSpring(opts);
-    this.mass = p.mass;
-    this.stiffness = p.stiffness;
-    this.damping = p.damping;
+  setParams(params: SpringParameters): this {
+    this.mass = params.mass;
+    this.stiffness = params.stiffness;
+    this.damping = params.damping;
+    return this;
+  }
+
+  set(x: number, v = 0): this {
+    this.x = x;
+    this.v = v;
+    this.asleep = false;
     return this;
   }
 
@@ -404,31 +123,8 @@ export class Body {
     return this;
   }
 
-  set(x: number, v = 0): this {
-    this.x = x;
-    this.v = v;
-    this.asleep = false;
-    return this;
-  }
-
-  impulse(dv: number): this {
-    if (prefersReducedMotionNow()) return this;
-    this.v += dv;
-    this.asleep = false;
-    return this;
-  }
-
   force(x: number, v: number): number {
-    let f = -this.stiffness * (x - this.target) - this.damping * v;
-    for (let i = 0; i < this.magnets.length; i++) {
-      const m = this.magnets[i];
-      const d = x - m.x;
-      const r = m.radius ?? 80;
-      const s = m.strength ?? 400;
-      const g = Math.exp(-(d * d) / (r * r));
-      f += -s * d * g;
-    }
-    return f;
+    return -this.stiffness * (x - this.target) - this.damping * v;
   }
 
   step(dt: number): number {
@@ -485,7 +181,6 @@ export function handoff(
     toY?: number;
     vx?: number;
     vy?: number;
-    spring?: SpringInput;
     maxDurationMs?: number;
     onFinish?: () => void;
   } = {},
@@ -497,12 +192,11 @@ export function handoff(
     toY = 0,
     vx = 0,
     vy = 0,
-    spring = 'sheet',
     maxDurationMs = 520,
     onFinish,
   } = opts;
 
-  if (!el || prefersReducedMotionNow()) {
+  if (!el || prefersReducedMotionNow() || typeof el.animate !== 'function') {
     if (el) {
       el.style.transform =
         toX === 0 && toY === 0 ? '' : `translate3d(${toX}px, ${toY}px, 0)`;
@@ -514,8 +208,8 @@ export function handoff(
     };
   }
 
-  const bx = new Body(fromX, spring);
-  const by = new Body(fromY, spring);
+  const bx = new Body(fromX);
+  const by = new Body(fromY);
   bx.v = vx;
   by.v = vy;
   bx.to(toX);
@@ -568,32 +262,11 @@ export function handoff(
   };
 }
 
-/**
- * Pre-computed Feel spring presets for Option-Pro UI primitives.
- */
-export const FEEL_PRESETS = {
-  pill: fromWords('crisp pill'),
-  toggle: fromWords('crisp toggle'),
-  sheet: fromWords('sheet'),
-  press: fromWords('press'),
-  icon: fromModal({ mass: 0.75, freq: 3.8, zeta: 0.66 }),
-} as const;
-
-/**
- * Tactile thumb drag & press physics hook for `<Switch>` (Fluid Functionalism toggle).
- * Supports both normal clicks/keyboard AND pointer thumb dragging with rubber-band walls
- * and velocity-projected release (`projectCoast`).
- */
 /** The same body follows the hand and continues through release. */
 export class HeavyToggleMotion {
-  readonly spring = fromModal({ mass: 2.2, freq: 3.3, zeta: 0.78 });
-  // The hand stiffness is tuned for a unit mass, independent of the thumb's mass.
-  // Add the hand damper to the body's drag, as in Feel's force model.
-  readonly hand = resolveSpring({
-    mass: this.spring.mass,
-    stiffness: (2 * Math.PI * 6) ** 2,
-    damping: this.spring.damping + 2 * Math.sqrt((2 * Math.PI * 6) ** 2 * this.spring.mass),
-  });
+  readonly spring = TOGGLE_SPRING;
+  // The hand spring adds its damper to the thumb's own drag.
+  readonly hand = TOGGLE_HAND;
   readonly body: Body;
   readonly travel: number;
   constructor(travel: number, checked: boolean) { this.travel = travel; this.body = new Body(checked ? travel : 0, this.spring); }
