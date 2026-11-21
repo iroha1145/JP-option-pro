@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 
+// 盒子尺寸是两个单精度坐标相减的结果，落在小数位置时 44px 会读成 43.99998。
+// 命中面积的下限按百分之一像素取整后再比，不让浮点误差决定成败。
+const px = value => Math.round(value * 100) / 100;
+
 async function open(page, locale = 'en') {
   await page.addInitScript(locale => localStorage.setItem('optixjp:locale', locale), locale);
   await page.route(url => url.pathname.startsWith('/api/'), route => {
@@ -15,12 +19,12 @@ for (const width of [320, 390]) {
     const context = await browser.newContext({ baseURL, viewport: { width, height: 568 }, hasTouch: true, isMobile: true });
     const page = await context.newPage(); await open(page);
     const history = page.locator('button[aria-haspopup=dialog]');
-    expect((await history.boundingBox()).height).toBeGreaterThanOrEqual(44);
+    expect(px((await history.boundingBox()).height)).toBeGreaterThanOrEqual(44);
     await page.getByRole('combobox', { name: 'Regression menu' }).click();
     await page.getByRole('listbox').evaluate(async el => {
       await Promise.all(el.getAnimations().map(animation => animation.finished.catch(() => {})));
     });
-    for (const item of await page.getByRole('option').all()) expect((await item.boundingBox()).height).toBeGreaterThanOrEqual(44);
+    for (const item of await page.getByRole('option').all()) expect(px((await item.boundingBox()).height)).toBeGreaterThanOrEqual(44);
     await page.keyboard.press('Escape');
     await page.locator('#open-palette').click();
     const input = page.getByRole('combobox').last(); await input.fill('zzzz');
@@ -29,11 +33,11 @@ for (const width of [320, 390]) {
     // that real search state has finished changing the input's flex width.
     await expect(clear).toBeVisible();
     const boxes = await Promise.all([input, clear].map(el => el.boundingBox()));
-    for (const box of boxes.slice(1)) { expect(box.width).toBeGreaterThanOrEqual(44); expect(box.height).toBeGreaterThanOrEqual(44); }
+    for (const box of boxes.slice(1)) { expect(px(box.width)).toBeGreaterThanOrEqual(44); expect(px(box.height)).toBeGreaterThanOrEqual(44); }
     expect(boxes[0].x + boxes[0].width).toBeLessThanOrEqual(boxes[1].x);
     expect(boxes[1].x + boxes[1].width).toBeLessThanOrEqual(width - 8);
     await clear.click(); await expect(input).toHaveValue(''); await expect(input).toBeFocused();
-    for (const result of await page.getByRole('option').all()) expect((await result.boundingBox()).height).toBeGreaterThanOrEqual(44);
+    for (const result of await page.getByRole('option').all()) expect(px((await result.boundingBox()).height)).toBeGreaterThanOrEqual(44);
     await context.close();
   });
 }
@@ -120,7 +124,7 @@ for (const theme of ['light', 'dark']) test(`settings and notification retain ta
   await expect(menu).toBeVisible();
   await menu.evaluate(async el => { await Promise.all(el.getAnimations().map(a => a.finished.catch(() => {}))); });
   for (const item of await menu.getByRole('menuitemradio').all()) {
-    await expect.poll(async () => (await item.boundingBox()).height).toBeGreaterThanOrEqual(44);
+    await expect.poll(async () => px((await item.boundingBox()).height)).toBeGreaterThanOrEqual(44);
   }
   await expect(menu.getByRole('menuitemradio', { name: /简体中文/ })).toHaveAttribute('aria-checked', 'true');
   await page.keyboard.press('End');
@@ -134,8 +138,8 @@ for (const theme of ['light', 'dark']) test(`settings and notification retain ta
   await expect(notice).toContainText('需要保留的错误说明');
   await notice.evaluate(async el => { await Promise.all(el.getAnimations().map(a => a.finished.catch(() => {}))); });
   const close = notice.getByRole('button', { name: '关闭通知' });
-  await expect.poll(async () => (await close.boundingBox()).width).toBeGreaterThanOrEqual(44);
-  await expect.poll(async () => (await close.boundingBox()).height).toBeGreaterThanOrEqual(44);
+  await expect.poll(async () => px((await close.boundingBox()).width)).toBeGreaterThanOrEqual(44);
+  await expect.poll(async () => px((await close.boundingBox()).height)).toBeGreaterThanOrEqual(44);
   await close.press('Enter');
   await expect(notice).toHaveCount(0);
 });
@@ -150,7 +154,7 @@ for (const locale of ['zh', 'en', 'ja']) {
       await page.route(url => url.pathname.startsWith('/api/'), route => route.fulfill({ json: { mode: 'password', is_owner: false, password_configured: true, account: { logged_in: false, username: null } } }));
       await page.goto('/visual-tests/support/mobile-controls.html?scan-history' + (populated ? '&populated' : ''));
       const trigger = page.locator('button[aria-haspopup=dialog]');
-      if (width < 768) expect((await trigger.boundingBox()).height).toBeGreaterThanOrEqual(44);
+      if (width < 768) expect(px((await trigger.boundingBox()).height)).toBeGreaterThanOrEqual(44);
       await trigger.press('Enter');
       const panel = page.getByRole('dialog');
       await expect.poll(() => panel.evaluate(el => Number(getComputedStyle(el).opacity))).toBe(1);
@@ -164,7 +168,7 @@ for (const locale of ['zh', 'en', 'ja']) {
       if (populated) {
         await expect(panel.locator('li')).toHaveCount(5);
         for (const row of await panel.locator('li').all()) {
-          expect((await row.boundingBox()).height).toBeGreaterThanOrEqual(44);
+          expect(px((await row.boundingBox()).height)).toBeGreaterThanOrEqual(44);
           const layout = await row.evaluate(el => {
             const rect = el.getBoundingClientRect();
             return {
