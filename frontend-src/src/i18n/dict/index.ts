@@ -1240,7 +1240,7 @@ export const DICT: Record<string, [string, string, string?]> = {
   '合并': ['Consolidated', '連結'],
   '营业利润': ['Operating profit', '営業利益'],
   '净利润': ['Net profit', '純利益'],
-  '公司预测': ['Guidance (OP)', '会社予想（営利）'],
+  '公司预测': ['Guidance', '会社予想'],
   '披露计划': ['Scheduled', '発表予定'],
   '分钟线需开通 J-Quants 分足订阅': ['Minute bars require the J-Quants intraday add-on', '分足の表示には J-Quants 分足アドオンが必要です'],
   '暂无可显示的分钟数据': ['No minute bars available', '表示できる分足データがありません'],
