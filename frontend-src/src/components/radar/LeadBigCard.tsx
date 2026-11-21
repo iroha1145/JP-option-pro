@@ -33,9 +33,10 @@ import { radarStateChipClass } from './stateTone';
 const fin = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
 /* ---------------- 生命周期步进条 ---------------- */
-/* 日本站状态与美国站一一对应（小写）：discovered/watching → triggered → confirmed → holding
-   → retesting 一档（retest_held / reaccelerating / extended 同档，当前节点显示真实状态名）；
-   failed / expired 为终止态。列表接口不带 transitions，终止态时不假设走过哪些节点。 */
+/* 只标出信号当前所处的阶段，不画「已走过」的连线：日本站的状态会来回变化（保持中、再加速、
+   过热延伸、回踩企稳会反复出现），列表接口也不带状态变迁记录，画出路径就是在断言没有依据的事。
+   discovered/watching 一档、retesting/retest_held/reaccelerating/extended 一档，当前节点显示
+   真实状态名；failed / expired 为终止态，单独标在末尾。 */
 const STEPS = ['discovered', 'triggered', 'confirmed', 'holding', 'retesting'] as const;
 
 function stepIndex(state: string): number {
@@ -54,7 +55,7 @@ function stepIndex(state: string): number {
   }
 }
 
-type StepTone = 'past' | 'current' | 'future' | 'down' | 'ink-end';
+type StepTone = 'current' | 'other' | 'down' | 'ink-end';
 
 function LifecycleStepper({ state }: { state: string }) {
   const terminal = state === 'failed' || state === 'expired' ? state : null;
@@ -70,8 +71,7 @@ function LifecycleStepper({ state }: { state: string }) {
         className={cn(
           'size-2.5 rounded-full',
           tone === 'current' && 'bg-brand-600 ring-4 ring-brand-100',
-          tone === 'past' && 'bg-ink-300',
-          tone === 'future' && 'border border-line-strong bg-card',
+          tone === 'other' && 'border border-line-strong bg-card',
           tone === 'down' && 'bg-danger-600 ring-2 ring-danger-600/25',
           tone === 'ink-end' && 'bg-ink-400 ring-2 ring-ink-400/25',
         )}
@@ -81,7 +81,7 @@ function LifecycleStepper({ state }: { state: string }) {
         className={cn(
           'mt-1.5 whitespace-nowrap text-tag',
           tone === 'current' && 'font-medium text-brand-700',
-          (tone === 'past' || tone === 'future') && 'text-ink-400',
+          tone === 'other' && 'text-ink-400',
           tone === 'down' && 'font-medium text-danger-700',
           tone === 'ink-end' && 'text-ink-500',
         )}
@@ -91,21 +91,8 @@ function LifecycleStepper({ state }: { state: string }) {
     </div>
   );
 
-  const items = STEPS.map((key, i) => ({
-    el: node(
-      i === idx ? label(state) : label(key),
-      terminal ? 'future' : i === idx ? 'current' : i < idx ? 'past' : 'future',
-      key,
-      i,
-    ),
-    passed: !terminal && i < idx,
-  }));
-  if (terminal) {
-    items.push({
-      el: node(label(terminal), terminal === 'failed' ? 'down' : 'ink-end', terminal, STEPS.length),
-      passed: false,
-    });
-  }
+  const items = STEPS.map((key, i) => node(i === idx ? label(state) : label(key), i === idx ? 'current' : 'other', key, i));
+  if (terminal) items.push(node(label(terminal), terminal === 'failed' ? 'down' : 'ink-end', terminal, STEPS.length));
 
   return (
     <ol
@@ -114,17 +101,8 @@ function LifecycleStepper({ state }: { state: string }) {
     >
       {items.map((item, i) => (
         <li key={i} className="flex flex-1 items-start last:flex-none">
-          {item.el}
-          {i < items.length - 1 && (
-            <span className="relative mx-1 mt-[5px] h-px min-w-3 flex-1 bg-line" aria-hidden="true">
-              <motion.span
-                className="absolute inset-y-0 left-0 bg-brand-600"
-                initial={{ width: '0%' }}
-                animate={{ width: item.passed ? '100%' : '0%' }}
-                transition={{ duration: DUR_SECTION, ease: EASE_PAPER, delay: 0.24 + i * 0.06 }}
-              />
-            </span>
-          )}
+          {item}
+          {i < items.length - 1 && <span className="mx-1 mt-[5px] h-px min-w-3 flex-1 bg-line" aria-hidden="true" />}
         </li>
       ))}
     </ol>

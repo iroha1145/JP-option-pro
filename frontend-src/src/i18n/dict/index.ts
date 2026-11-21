@@ -2426,7 +2426,6 @@ export const DICT: Record<string, [string, string, string?]> = {
   '扣分': ["Penalty", "減点"],
   '（单次最多 {n} 条）': ["(max {n} per load)", "（1 回最大 {n} 件）"],
   '盘中报价': ["Intraday quotes", "ザラ場気配"],
-  '延迟约 {n} 分钟': ["~{n} min delayed", "約 {n} 分遅延"],
   '未叠加': ["Not overlaid", "未反映"],
   '涉及股票': ["Stocks", "対象銘柄"],
   '按告警优先级从高到低排列；同一只股票的多条信号合并为一张卡。': ["Sorted by alert priority, high to low; multiple signals for the same stock are merged into one card.", "アラート優先度の高い順。同一銘柄の複数シグナルは 1 枚のカードにまとめています。"],

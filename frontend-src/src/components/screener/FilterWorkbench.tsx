@@ -33,9 +33,10 @@ import { t } from '@/i18n/core';
 const EASE_PAPER = [0.16, 1, 0.3, 1] as [number, number, number, number];
 const SECTOR_COLLAPSE_AT = 6;
 
-const TIER_OPTIONS: { value: TierFilter; label: string; tone?: 'ok' | 'warn' }[] = [
+/* 强度分档不用涨跌色（日本站默认红涨绿跌，绿色会读成「跌」）：只有 C 档用警示色，与强度色阶一致。 */
+const TIER_OPTIONS: { value: TierFilter; label: string; tone?: 'warn' }[] = [
   { value: 'all', label: t('全部') },
-  { value: 'S', label: 'S', tone: 'ok' },
+  { value: 'S', label: 'S' },
   { value: 'A', label: 'A' },
   { value: 'B', label: 'B' },
   { value: 'C', label: 'C', tone: 'warn' },

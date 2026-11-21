@@ -30,6 +30,7 @@ import { useAccess } from '@/hooks/useAccess';
 import { useToast } from '@/hooks/useToast';
 import StaleStrip from '@/components/shared/StaleStrip';
 import SourceNote from '@/components/shared/SourceNote';
+import { quoteSourceLabel } from '@/lib/quoteSource';
 import { t } from '@/i18n/core';
 import { fmtDate, fmtPrice, fmtTimeHHMMSS, fmtYenCompact } from '@/lib/format';
 import type { RadarEvent } from '@/api/types';
@@ -240,9 +241,7 @@ export default function Radar() {
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <dt className="text-ink-400">{t('盘中报价')}</dt>
             <dd className="text-ink-700">
-              {!overlay.data ? '—' : overlayOn
-                ? t('延迟约 {n} 分钟', { n: overlay.data.delayed_minutes ?? 15 })
-                : t('未叠加')}
+              {!overlay.data ? '—' : overlayOn ? quoteSourceLabel(overlay.data).text : t('未叠加')}
             </dd>
           </div>
         </dl>
@@ -255,9 +254,6 @@ export default function Radar() {
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-caption text-ink-500">
         <DataThrough date={query.data?.scan_date} className="min-w-0 max-w-full [&_[data-soft-badge]]:whitespace-normal" />
-        {overlayOn && overlay.data?.source_detail && (
-          <span className="text-ink-400">{t('盘中报价')} {overlay.data.source_detail}</span>
-        )}
       </div>
 
       {/* 状态收成一个下拉；评分门槛收进「更多筛选」，折叠时一行摘要写明全部条件。 */}

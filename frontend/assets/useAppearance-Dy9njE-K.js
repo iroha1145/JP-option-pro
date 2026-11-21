@@ -1,1 +1,0 @@
-import{r as a}from"./react-runtime-C6sZTaV_.js";import{Q as n,v as e,R as r}from"./index-DfSBipVL.js";function c(){return a.useSyncExternalStore(n,e,e)}function o(){return a.useSyncExternalStore(n,r,r)}export{o as a,c as u};
