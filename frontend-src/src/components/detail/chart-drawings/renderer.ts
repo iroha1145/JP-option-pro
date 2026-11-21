@@ -1,6 +1,6 @@
-/** Auto-pattern marks only. Hand-drawing projection stays in the US package. */
+/** Auto-pattern marks only; this site has no hand-drawing tools. */
 import { normalizeRectangle } from './geometry.ts';
-import { barKeyOf, resolveAnchor } from './projection.ts';
+import { resolveAnchor } from './projection.ts';
 import { renderPatternInk } from './linePresentation.ts';
 import type { ChartRange, Point, Segment } from './types.ts';
 
@@ -110,13 +110,4 @@ export function autoPatternsToMarks(
     out.polygons.push(...ink.polygons);
   }
   return out;
-}
-
-export function lastBarKey(bars: BarLike[], range: ChartRange): string | null {
-  if (!bars.length) return null;
-  return barKeyOf(bars[bars.length - 1], range);
-}
-
-export function deconflictEndLabels(lines: object[], _yMin: number, _yMax: number): object[] {
-  return lines;
 }

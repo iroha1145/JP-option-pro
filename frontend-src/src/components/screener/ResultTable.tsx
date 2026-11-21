@@ -107,21 +107,15 @@ export default function ResultTable({
                     ease: EASE_PAPER,
                     delay: page === 1 ? Math.min(index * 0.03, 0.3) : 0,
                   }}
-                  onClick={() => onToggle(row.canonical_code)}
-                  tabIndex={0}
-                  role="button"
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      onToggle(row.canonical_code);
-                    }
+                  /* 行保持表格语义：整行点击只是鼠标的便利，键盘与读屏走行尾那个真正的展开按钮。 */
+                  onClick={(event) => {
+                    if (event.target instanceof Element && event.target.closest('button, a, input, select, textarea, [role="button"], [tabindex]')) return;
+                    onToggle(row.canonical_code);
                   }}
                   className={cn(
                     'group h-11 cursor-pointer border-b border-line transition-colors duration-fast hover:bg-paper-2',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600',
                     isOpen && 'bg-paper-2',
                   )}
-                  aria-expanded={isOpen}
                 >
                   <td className="px-3 py-2 tnum text-caption text-ink-400">{startIndex + index + 1}</td>
                   <td className="px-3 py-2">
@@ -165,19 +159,24 @@ export default function ResultTable({
                     {fmtYenCompact(row.avg_turnover_20d)}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <span
+                    <button
+                      type="button"
+                      onClick={() => onToggle(row.canonical_code)}
+                      aria-expanded={isOpen}
+                      aria-controls={isOpen ? `screener-row-${row.canonical_code}` : undefined}
+                      aria-label={t('展开或收起 {code} 详情', { code: row.display_code })}
                       className={cn(
-                        'inline-flex size-6 items-center justify-center rounded-sm border border-line text-ink-400 transition-transform duration-200',
-                        isOpen && 'rotate-180 border-brand-400 text-brand-600',
+                        'mobile-icon-target inline-flex size-8 items-center justify-center rounded-pill border border-line text-ink-400 transition-[color,border-color,transform] duration-fast active:scale-[.94] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600',
+                        isOpen && 'border-brand-400 text-brand-600',
                       )}
                     >
-                      <Icon name="chevron-down" size={13} />
-                    </span>
+                      <Icon name="chevron-down" size={13} className={cn('transition-transform duration-200', isOpen && 'rotate-180')} />
+                    </button>
                   </td>
                 </motion.tr>
                 <AnimatePresence>
                   {isOpen && (
-                    <tr key={`${row.canonical_code}-exp`}>
+                    <tr key={`${row.canonical_code}-exp`} id={`screener-row-${row.canonical_code}`}>
                       <td colSpan={9} className="p-0">
                         <motion.div
                           initial={{ height: 0, opacity: 0 }}

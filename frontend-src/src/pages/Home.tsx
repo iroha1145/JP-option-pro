@@ -298,8 +298,9 @@ export default function Home() {
             emptyImage="/empty-chart.svg"
           >
             <div className="divide-y divide-line">
-              {(earnings.data?.items ?? []).slice(0, 6).map((item) => (
-                <EarningsAnchorRow key={`${item.canonical_code}-${item.disclosed_date}-${item.period_type}`} item={item} todayKey={todayKey} />
+              {/* 同一家公司同一天可能披露两份同期间文件（订正），键里带上行号才唯一。 */}
+              {(earnings.data?.items ?? []).slice(0, 6).map((item, row) => (
+                <EarningsAnchorRow key={`${item.canonical_code}-${item.disclosed_date}-${item.period_type}-${row}`} item={item} todayKey={todayKey} />
               ))}
             </div>
           </ListBody>
@@ -391,7 +392,7 @@ function RadarSignalCard({ event, index }: { event: RadarEvent; index: number })
         <div className="flex min-w-0 flex-1 basis-40 items-center gap-2">
           <CodeMark code={event.display_code} size={28} />
           <div className="min-w-0">
-            <p className="text-body-s font-semibold text-ink-900 tnum">{event.display_code}</p>
+            <p className="text-body-s font-medium text-ink-900 tnum">{event.display_code}</p>
             <p className="truncate text-caption text-ink-500">{event.name_ja ?? '—'}</p>
           </div>
         </div>
@@ -400,7 +401,7 @@ function RadarSignalCard({ event, index }: { event: RadarEvent; index: number })
           <span className="text-micro text-ink-400">{t('数据截至')} {event.last_scanned_date || event.discovered_date || '—'}</span>
         </div>
         <div className="ml-auto flex shrink-0 flex-col items-end gap-1">
-          <TickPrice className="text-body-s font-semibold text-ink-900 tnum">{fmtPrice(close)}</TickPrice>
+          <TickPrice className="text-body-s font-medium text-ink-900 tnum">{fmtPrice(close)}</TickPrice>
           <span className="flex items-center gap-1 text-micro text-ink-400">
             {t('{n}日', { n: 5 })}<ChangeBadge value={ret5} size="sm" />
           </span>
@@ -429,7 +430,7 @@ function EarningsAnchorRow({ item, todayKey }: { item: EarningsRecentItem; today
           isToday ? 'bg-brand-50' : 'bg-paper-2/80',
         )}
       >
-        <span className={cn('block tnum text-body-s font-semibold tnum', isToday ? 'text-brand-700' : 'text-ink-900')}>
+        <span className={cn('block tnum text-body-s font-medium tnum', isToday ? 'text-brand-700' : 'text-ink-900')}>
           {anchor ? anchor.day : '—'}
         </span>
         <span className="block text-micro text-ink-400">{anchor?.monthShort ?? ''}</span>
@@ -458,7 +459,7 @@ function WatchlistMoverCard({
       <Link to={`/stock/${item.display_code}`} className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 transition-colors duration-150 hover:bg-paper-2/70 focus-visible:bg-paper-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600 sm:px-6">
         <CodeMark code={item.display_code} size={28} />
         <div className="min-w-0 flex-1 basis-20">
-          <span className="text-body-s font-semibold text-ink-900 tnum">{item.display_code}</span>
+          <span className="text-body-s font-medium text-ink-900 tnum">{item.display_code}</span>
           <p className="truncate text-caption text-ink-500">{item.name_ja ?? '—'}</p>
         </div>
         <div className="flex flex-1 basis-24 flex-col gap-1 text-micro text-ink-400">
@@ -466,7 +467,7 @@ function WatchlistMoverCard({
           <span>{t('数据截至')} {item.quote?.trade_date ?? '—'}</span>
         </div>
         <div className="ml-auto flex shrink-0 flex-col items-end gap-1">
-          <TickPrice flash={flash} className="text-body-s font-semibold text-ink-900 tnum">{fmtPrice(item.quote?.close)}</TickPrice>
+          <TickPrice flash={flash} className="text-body-s font-medium text-ink-900 tnum">{fmtPrice(item.quote?.close)}</TickPrice>
           <span className="flex items-center gap-1 text-micro text-ink-400">{t('当日')}<ChangeBadge value={item.quote?.change_pct} size="sm" /></span>
         </div>
       </Link>

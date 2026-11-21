@@ -26,7 +26,7 @@ function AuctionCard({ label, print: entry, tone }: { label: string; print: Auct
           <p className="tnum text-micro text-ink-500">
             {shares(entry.volume)}
             {entry.day_volume_share != null && (
-              <span className={cn('ml-1 font-semibold', tone)}>
+              <span className={cn('ml-1 font-medium', tone)}>
                 {(entry.day_volume_share * 100).toFixed(1)}%
               </span>
             )}
@@ -62,7 +62,7 @@ export default function TickAnalyticsPanel({ analytics }: { analytics: TickAnaly
           <span className="block text-micro text-ink-400">{t('现价对 VWAP')}</span>
           <span
             className={cn(
-              'tnum text-data-m font-semibold tnum',
+              'tnum text-data-m font-medium tnum',
               (vwap?.deviation_pct ?? 0) >= 0 ? 'text-up-600' : 'text-down-600',
             )}
           >
@@ -155,7 +155,7 @@ export default function TickAnalyticsPanel({ analytics }: { analytics: TickAnaly
                   <tr key={`${row.time}-${row.volume}`} className="border-b border-line/60 last:border-b-0">
                     <td className="py-1 text-ink-400">{row.time}</td>
                     <td className="py-1 text-right text-ink-800">{fmtPrice(row.price)}</td>
-                    <td className="py-1 text-right font-semibold text-brand-700">{shares(row.volume)}</td>
+                    <td className="py-1 text-right font-medium text-brand-700">{shares(row.volume)}</td>
                   </tr>
                 ))}
               </tbody>

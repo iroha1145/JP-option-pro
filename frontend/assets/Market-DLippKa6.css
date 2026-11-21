@@ -1,0 +1,1 @@
+.sector-heat-matrix{container:sector-heat / inline-size}@container sector-heat (width < 24rem){.sector-heat-row,.sector-heat-header{grid-template-columns:1rem minmax(0,1fr) 4.25rem}.sector-heat-header>:nth-child(3){grid-column:3}.sector-heat-row{row-gap:.75rem}.sector-heat-row>:nth-child(3){grid-row:2;grid-column:2 / -1}.sector-heat-row>:nth-child(4){grid-row:1;grid-column:3}}

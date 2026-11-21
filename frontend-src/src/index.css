@@ -285,6 +285,11 @@
     scrollbar-width: thin;
     scrollbar-color: var(--ink-300) transparent;
   }
+
+  /* 系统要求更高对比度时，滚动条滑块与轨道拉开到看得清的差距。 */
+  @media (prefers-contrast: more) {
+    html { scrollbar-color: var(--ink-500) var(--paper); }
+  }
 }
 
 @layer components {
@@ -427,19 +432,7 @@
       background: var(--action-hover);
     }
   }
-  /* shadcn Button size="sm"：卡片内、行内的紧凑主按钮。此前这类按钮在 50 多处
-     手写 `bg-brand-600 px-3 py-1.5 … hover:brightness-105`，没有按压反馈、悬停
-     不做触屏保护、禁用透明度 .5/.6/.7 各不相同。触屏仍保 44px 触控高度。 */
-  .btn-primary.btn-sm {
-    min-height: 2rem;
-    gap: 0.375rem;
-    border-radius: var(--r-pill);
-    padding: 0.375rem 0.875rem;
-    font-size: 13px;
-  }
-  @media (pointer: coarse) {
-    .btn-primary.btn-sm { min-height: 2.75rem; }
-  }
+
   /* 进行中 ≠ 不可用：aria-busy 的禁用态保持可读、指针换成 progress。 */
   .btn-primary[aria-busy="true"]:disabled {
     cursor: progress;
@@ -553,7 +546,6 @@
     font-weight: 400;
   }
 
-
   /* 骨架屏 shimmer 高光 */
   .skeleton-shimmer {
     position: relative;
@@ -580,10 +572,6 @@
   .marquee-track:hover .marquee-inner,
   .marquee-track:has(:focus-visible) .marquee-inner {
     animation-play-state: paused;
-  }
-  .marquee-track:has(:focus-visible) > .marquee-label {
-    opacity: 0;
-    pointer-events: none;
   }
 
   .tick-flash { transition: background-color 600ms cubic-bezier(.22,1,.36,1); }
@@ -692,42 +680,7 @@
 @media (pointer: coarse) {
   .control-button, .filter-group .control-button, .t-tabs.selection-group .t-tab { min-height: 44px; }
 }
-@media (min-width: 768px) {
-  .control-button.choice-chip {
-    padding-inline: 14px;
-    border-color: transparent;
-    background: var(--control-track);
-    color: var(--ink-700);
-  }
-  .control-button.choice-chip[aria-pressed="true"] {
-    border-color: color-mix(in srgb, var(--brand-600) 24%, transparent);
-    background: var(--brand-50);
-    color: var(--brand-700);
-  }
-  .control-button.choice-chip-more { color: var(--ink-500); }
-}
-@media (min-width: 768px) and (hover: hover) and (pointer: fine) {
-  .control-button.choice-chip:not(:disabled):not([aria-pressed="true"]):hover {
-    border-color: transparent;
-    background: var(--line);
-    color: var(--ink-900);
-  }
-}
-/* 多选芯片的对勾：选中时从 0 宽长出来（同时抵掉按钮里 6px 的间距），取消时收回，后面的芯片跟着平移，
-   不会一下子跳开。 */
-.choice-chip-check {
-  display: inline-flex;
-  width: 0;
-  margin-inline-end: -6px;
-  overflow: hidden;
-  opacity: 0;
-  transition:
-    width var(--duration-quick) var(--ease-snap),
-    margin var(--duration-quick) var(--ease-snap),
-    opacity var(--duration-quick) var(--ease-snap);
-}
-[aria-pressed="true"] > .choice-chip-check { width: 13px; margin-inline-end: 0; opacity: 1; }
-@media (prefers-reduced-motion: reduce) { .choice-chip-check { transition: none; } }
+
 @media (max-width: 767px), (pointer: coarse) {
   .touch-target { min-height: 44px; min-width: 44px; }
 }
@@ -767,7 +720,7 @@
   border-radius: 2px;
   background: var(--brand-600);
 }
-.page-tab-count { color: var(--ink-400); font-weight: 400; }
+
 @media (hover: hover) and (pointer: fine) {
   .page-tab:hover { color: var(--ink-900); }
 }
@@ -812,80 +765,17 @@
     background-color var(--duration-quick) var(--ease-smooth-out),
     transform var(--duration-quick) var(--ease-smooth-out);
 }
-.header-chip-primary {
-  border-color: transparent;
-  background: var(--action);
-  color: var(--on-action);
-  padding: 0 0.875rem;
-  font-weight: 500;
-}
+
 .header-action[aria-expanded="true"] > .header-chip { border-color: var(--brand-400); color: var(--brand-600); background: var(--card); }
 .header-action:disabled { cursor: wait; }
 .header-action:disabled > .header-chip { opacity: 0.6; }
 .header-action:not(:disabled):active > .header-chip { transform: scale(0.97); }
 @media (hover: hover) and (pointer: fine) {
   .header-action:not(:disabled):hover > .header-chip { border-color: var(--line-strong); color: var(--ink-800); }
-  .header-action:not(:disabled):hover > .header-chip-primary { border-color: transparent; background: var(--action-hover); color: var(--on-action); }
+
 }
 @media (prefers-reduced-motion: reduce) { .header-chip { transition: none; } }
 @media (prefers-reduced-motion: reduce) { .control-button { transition: none; } }
-
-/* 模型相关操作（2026-09-26 重做）。此前一律 bg-ai-600 实心青块：财报列表和新闻流
-   每行一个，整列深色压过了代码、价格这些数据本身。现在分两档，颜色只用来表达状态：
-   - .control-button.ai-action  列表里每行都有的入口：与其他次级按钮同一副白底发丝边，
-     只有图标是青瓷色，悬停才上浅青；这一行已有分析结果可看时加 .is-ready，浅青底
-     直接标出「这里有结果」。
-   - .btn-ai  面板里单个的发起操作（生成分析、开始分析、确认）：浅青底 + 青瓷字 + 细边，
-     仍一眼可认，但不再是一块深色。 */
-.control-button.ai-action svg { color: var(--ai-600); }
-.control-button.ai-action.is-ready {
-  border-color: color-mix(in srgb, var(--ai-600) 26%, transparent);
-  background: var(--ai-50);
-  color: var(--ai-600);
-}
-.control-button.btn-icon { width: 32px; padding: 0; }
-@media (pointer: coarse) {
-  .control-button.btn-icon { width: 44px; }
-}
-.btn-ai {
-  display: inline-flex;
-  min-height: 32px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border: 1px solid color-mix(in srgb, var(--ai-600) 26%, transparent);
-  border-radius: var(--r-pill);
-  background: var(--ai-50);
-  color: var(--ai-600);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 18px;
-  white-space: nowrap;
-  transition:
-    color var(--duration-quick) var(--ease-snap),
-    background-color var(--duration-quick) var(--ease-snap),
-    border-color var(--duration-quick) var(--ease-snap),
-    transform var(--duration-quick) var(--ease-snap);
-}
-.btn-ai:not(:disabled):active { transform: scale(.97); }
-.btn-ai:disabled { cursor: not-allowed; opacity: .5; }
-.btn-ai[aria-busy="true"]:disabled { cursor: progress; opacity: .8; }
-@media (hover: hover) and (pointer: fine) {
-  .control-button.ai-action:not(:disabled):hover {
-    border-color: color-mix(in srgb, var(--ai-600) 32%, transparent);
-    background: var(--ai-50);
-    color: var(--ai-600);
-  }
-  .btn-ai:not(:disabled):hover {
-    border-color: color-mix(in srgb, var(--ai-600) 42%, transparent);
-    background: color-mix(in srgb, var(--ai-600) 14%, var(--card));
-  }
-}
-@media (pointer: coarse) {
-  .btn-ai { min-height: 44px; }
-}
-@media (prefers-reduced-motion: reduce) { .btn-ai { transition: none; } }
 
 /* Phone selectors mirror the narrow rail and raised selection in Cloud Monitor.
    The separate scrolling viewport retains room for the full touch target/shadow. */
@@ -901,7 +791,7 @@
     overflow-y: hidden;
     scrollbar-width: none;
   }
-  .selection-viewport-full { width: 100%; }
+
   .t-tabs.selection-group,
   .filter-group,
   .mobile-selection-rail {
@@ -920,13 +810,11 @@
     border-radius: var(--r-pill);
     background: var(--control-track);
   }
-  .selection-viewport-full > .mobile-selection-rail { width: 100%; }
-  .selection-viewport-full > .mobile-selection-rail > button { flex: 1; }
+
   .t-tabs.selection-group > div { flex-shrink: 0; }
   .t-tabs.selection-group .t-tab,
   .filter-group > .control-button,
-  .mobile-selection-rail > button,
-  .mobile-selection-rail .mobile-selection-option {
+  .mobile-selection-rail > button {
     position: relative;
     flex-shrink: 0;
     height: 44px;
@@ -948,28 +836,18 @@
     box-shadow: var(--control-selected-shadow-raised);
   }
   .filter-group > .control-button[aria-pressed="true"],
-  .mobile-selection-rail > button:is([aria-selected="true"], [aria-pressed="true"]),
-  .mobile-selection-rail .mobile-selection-option[aria-pressed="true"] {
+  .mobile-selection-rail > button:is([aria-selected="true"], [aria-pressed="true"]) {
     background: var(--card);
     color: var(--brand-700);
     font-weight: 500;
     box-shadow: var(--control-selected-shadow-raised);
   }
   .mobile-selection-rail [data-selection-decoration] { display: none; }
-  .mobile-selection-rail > button:focus-visible,
-  .mobile-selection-rail .mobile-selection-option:focus-visible {
+  .mobile-selection-rail > button:focus-visible {
     outline: 2px solid var(--brand-600);
     outline-offset: 2px;
   }
-  .selection-wrap:is(.mobile-selection-rail, .t-tabs.selection-group) {
-    inline-size: 100%;
-    max-inline-size: 100%;
-    block-size: auto;
-    flex-wrap: wrap;
-    gap: 4px;
-    padding: 4px;
-    border-radius: var(--r-group);
-  }
+
 }
 
 /* 数据读数与小标签：代码仍使用等宽字体，主要数值使用等宽数字的正文字体。 */
@@ -980,8 +858,6 @@
   letter-spacing: -.035em;
 }
 .soft-badge { border-radius: var(--r-chip); }
-
-/* 财报时段图标：颜色只跟时段类别走，选中的小块里也保持。 */
 
 /* Read-only floating details share one surface; coordinates never animate. */
 .cloud-popover {
@@ -1011,32 +887,7 @@
   border-radius: var(--r-pill);
   box-shadow: none;
 }
-.data-coverage-strip {
-  padding: 8px 0;
-  line-height: 20px;
-}
-/* 新闻状态按自身可用宽度重排，避免手机刚过固定断点时把数字、单位挤碎。 */
-.news-status { container: news-status / inline-size; }
-.news-status-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
-.news-status-cell + .news-status-cell { border-top: 1px solid var(--line); }
-.news-status-content { margin-top: .5rem; }
-@container news-status (min-width: 20em) {
-  .news-status-cell { display: grid; grid-template-columns: 6em minmax(0, 1fr); gap: 1rem; align-items: start; }
-  .news-status-label { padding-top: .2rem; }
-  .news-status-content { margin-top: 0; }
-}
-@container news-status (min-width: 34em) {
-  .news-status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .news-status-cell { display: block; }
-  .news-status-cell:nth-child(2) { border-top: 0; }
-  .news-status-cell:nth-child(even) { border-left: 1px solid var(--line); }
-  .news-status-label { padding-top: 0; }
-  .news-status-content { margin-top: .5rem; }
-}
-@container news-status (min-width: 68em) {
-  .news-status-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .news-status-cell + .news-status-cell { border-top: 0; border-left: 1px solid var(--line); }
-}
+
 /* 触屏行情带整格可点；各段直接居中，不受字体与装饰点的基线差异影响。 */
 @media (pointer: coarse) {
   .marquee-track { height: 2.75rem; }
@@ -1156,14 +1007,7 @@
 }
 
 @layer utilities {
-  /* 点阵纹理（登录页） */
-  .dot-grid-dense {
-    background-image: radial-gradient(circle, rgba(13, 22, 38, .04) 1px, transparent 1px);
-    background-size: 18px 18px;
-  }
-  html.dark .dot-grid-dense {
-    background-image: radial-gradient(circle, rgba(241, 243, 245, .045) 1px, transparent 1px);
-  }
+
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { scrollbar-width: none; }
   /* v8 荧光笔标记（hum-07 风格，登录大标「市场」） */
@@ -1182,9 +1026,7 @@
   .animate-led-pulse {
     animation: none !important;
   }
-  .ui-spinner {
-    animation: none !important;
-  }
+
   .spark-draw {
     stroke-dashoffset: 0 !important;
   }
@@ -1204,13 +1046,7 @@
   /* 不动的跑马灯改成可横向滑动的一条：副本藏起来，免得同一只指数出现两次；
      右侧标签改为贴边占位，滑到头时不再盖住最后一项。 */
   .marquee-track { overflow-x: auto; }
-  .marquee-echo { display: none; }
-  .marquee-track > .marquee-label {
-    position: sticky;
-    align-self: stretch;
-    flex-shrink: 0;
-    margin-left: auto;
-  }
+
 }
 
 /* Keep keyboard focus visible when the operating system replaces page colors. */
@@ -1238,11 +1074,7 @@
 
 /* Japan chart and loading helpers. */
 @layer components {
-  .hairline-b { border-bottom: 1px solid var(--line); }
-  .hairline-t { border-top: 1px solid var(--line); }
-  .hairline-x { border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
-  .hairline { border: 1px solid var(--line); }
-  .hairline-strong { border: 1px solid var(--line-strong); }
+
 .dots-loader {
   display: inline-flex;
   align-items: center;
@@ -1259,21 +1091,6 @@
 .dots-loader > i:nth-child(3) { animation-delay: 240ms; }
   @media (prefers-reduced-motion: reduce) { .dots-loader > i { animation: none !important; opacity: .7; } }
 
-.insight-chart-interactive {
-  touch-action: none;
-  cursor: crosshair;
-  outline: none;
-}
-.insight-chart-interactive:focus-visible {
-  box-shadow: 0 0 0 3px rgba(46, 70, 224, .18);
-  border-radius: 8px;
-}
-.insight-cursor-pill {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  box-shadow: var(--popover-shadow);
-}
 }
 
 @keyframes dot-pulse { 0%, 100% { opacity: .35; transform: scale(.85); } 50% { opacity: 1; transform: scale(1); } }

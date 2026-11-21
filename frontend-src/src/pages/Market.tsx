@@ -359,7 +359,7 @@ export default function Market() {
             )}
           </section>
 
-          {/* 该板块最热门个股（美版此处是板块 IV 横截面排名） */}
+          {/* 该板块最热门个股 */}
           <SectorMembersPanel
             data={members.data ?? null}
             loading={members.loading}
