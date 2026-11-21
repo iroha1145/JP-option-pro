@@ -25,8 +25,8 @@ export function quoteSourceLabel(
   const realtime = envelope?.is_realtime ?? envelope?.delay_class === 'realtime';
   const official = envelope?.is_official ?? false;
 
-  if (realtime && official) return { text: t('实时 · 官方源'), tone: 'ok' };
-  if (realtime) return { text: t('实时 · 非官方源'), tone: 'warn' };
-  if (official) return { text: t('延迟{n}分 · 官方源', { n: minutes }), tone: 'warn' };
-  return { text: t('延迟{n}分 · 非官方源', { n: minutes }), tone: 'warn' };
+  if (realtime && official) return { text: t('实时行情'), tone: 'ok' };
+  if (realtime) return { text: t('实时行情'), tone: 'warn' };
+  if (official) return { text: t('延迟 {n} 分钟', { n: minutes }), tone: 'warn' };
+  return { text: t('延迟 {n} 分钟', { n: minutes }), tone: 'warn' };
 }

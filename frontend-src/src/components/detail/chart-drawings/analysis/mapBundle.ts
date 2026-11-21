@@ -3,14 +3,6 @@
 import { layerIdForOverlay, type LayerSettings } from './settings.ts';
 import { sha256Hex } from './sha256.ts';
 
-export { sha256Hex };
-
-export interface AnalysisAnchor {
-  time: string;
-  barKey: string;
-  price: number;
-}
-
 export interface AnalysisOverlay {
   id: string;
   sourceId: string;
@@ -302,10 +294,6 @@ export function analysisGate(bundle: ChartAnalysisBundle | null, opts: AnalysisG
   return 'ok';
 }
 
-export function analysisMatchesChart(bundle: ChartAnalysisBundle | null, opts: AnalysisGateOpts): boolean {
-  return analysisGate(bundle, opts) === 'ok';
-}
-
 /** 日线直接用日历日。日本站分析包只覆盖已收盘日 K。 */
 export function barStampForRange(t: string, _range: string): string {
   const stamp = String(t).trim();
@@ -313,89 +301,6 @@ export function barStampForRange(t: string, _range: string): string {
   const epoch = epochOfStamp(stamp);
   if (!epoch) return stamp.slice(0, 10);
   return new Date(epoch * 1000).toISOString().slice(0, 10);
-}
-
-export function closedBarsForFingerprint<T extends CanonicalBar & { t: string }>(
-  bars: T[],
-  range: string,
-  opts?: { dropLast?: boolean; fromDate?: string | null; throughDate?: string | null },
-): T[] {
-  const regular = bars.filter((bar) => bar.ext !== true && bar.quote_only !== true);
-  const minute = range === '5m' || range === '15m' || range === '1h';
-  // A matching fingerprint is not a close-time guarantee. Minute snapshots must
-  // carry the server's completion flag; elapsed client time cannot upgrade them.
-  let rows = regular.filter(bar => minute ? bar.closed === true : bar.closed !== false);
-  if (opts?.fromDate || opts?.throughDate) {
-    // 日期字符串只算一遍，避免 500 根各切两次。
-    let stamps = rows.map((bar) => barStampForRange(bar.t, range));
-    if (opts.fromDate) {
-      const index = stamps.indexOf(opts.fromDate);
-      if (index > 0) {
-        rows = rows.slice(index);
-        stamps = stamps.slice(index);
-      }
-    }
-    // throughDate 已经把「后端没吃到的末根」切掉了，再叠 dropLast 会多砍一根。
-    if (opts.throughDate) {
-      const last = stamps.lastIndexOf(opts.throughDate);
-      if (last >= 0) return rows.slice(0, last + 1);
-    }
-  }
-  if (opts?.dropLast && rows.length && rows[rows.length - 1] === regular[regular.length - 1]) rows = rows.slice(0, -1);
-  return rows;
-}
-
-export function barFingerprintFromBars<T extends CanonicalBar & { t: string }>(
-  bars: T[],
-  range: string,
-  opts?: { dropLast?: boolean; fromDate?: string | null; throughDate?: string | null },
-): string {
-  return barFingerprint(closedBarsForFingerprint(bars, range, opts));
-}
-
-/**
- * 用 bundle 自带的指纹元数据（首/末 bar 日期）去切当前图表序列，而不是靠
- * technical.series_break_at 猜。后端声明它哈希了哪一段，前端就哈希同一段——
- * series_break_at 之类的口径差不再表现为「整块分析静默消失」。
- */
-/** 指纹、根数闸门、诊断必须切同一段，否则会出现「120/120 却说不同版本」。 */
-export function fingerprintWindowOpts(
-  bundle: ChartAnalysisBundle | null,
-  opts?: { dropLast?: boolean; fromDate?: string | null },
-): { dropLast?: boolean; fromDate: string | null; throughDate: string | null } {
-  return {
-    dropLast: opts?.dropLast,
-    fromDate: bundle?.firstBarDate ?? opts?.fromDate ?? null,
-    throughDate: bundle?.lastBarDate ?? null,
-  };
-}
-
-export function fingerprintForBundle<T extends CanonicalBar & { t: string }>(
-  bundle: ChartAnalysisBundle | null,
-  bars: T[],
-  range: string,
-  opts?: { dropLast?: boolean; fromDate?: string | null },
-): string | null {
-  if (!bundle || !bars.length) return null;
-  return barFingerprintFromBars(bars, range, fingerprintWindowOpts(bundle, opts));
-}
-
-/** 指纹对不上时，元数据能说清是「根数不同」还是「同一段但数值有出入」。 */
-export function fingerprintDiagnosis<T extends CanonicalBar & { t: string }>(
-  bundle: ChartAnalysisBundle | null,
-  bars: T[],
-  range: string,
-  opts?: { dropLast?: boolean; fromDate?: string | null },
-): { bars: number; expected: number | null; sameWindow: boolean } | null {
-  if (!bundle) return null;
-  const rows = closedBarsForFingerprint(bars, range, fingerprintWindowOpts(bundle, opts));
-  const first = rows.length ? barStampForRange(rows[0].t, range) : null;
-  const last = rows.length ? barStampForRange(rows[rows.length - 1].t, range) : null;
-  return {
-    bars: rows.length,
-    expected: bundle.barCount,
-    sameWindow: first === bundle.firstBarDate && last === bundle.lastBarDate,
-  };
 }
 
 const ACTIVE_STATUSES = new Set(['forming', 'testing', 'triggered', 'confirmed', 'retest']);

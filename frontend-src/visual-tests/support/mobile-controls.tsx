@@ -47,13 +47,13 @@ function ScanHistoryHeader() {
   })) : [];
   return <main className="mx-auto w-full max-w-shell min-h-[100dvh] flex-1 scroll-mt-24 px-4 pt-6 md:px-8 md:pt-8">
     <PageHeader section="screener" title={t('条件选股')}
-      description={t('收盘后按日线全市场计算强度分，扫描读取已保存发布，不会触发供应商。')}
+      description={t('按收盘日线对全市场多维评分与筛选。')}
       meta={<>
         <DataThrough date={populated ? '2026-10-23' : null} />
         {populated && <span className="hidden text-right sm:block"><span className="block text-micro text-ink-400">{t('评分时间')}</span><span className="tnum text-caption text-ink-600">15:00:00</span></span>}
         {populated && <span className="hidden text-right sm:block"><span className="block text-micro text-ink-400">{t('上次筛选')}</span><span className="tnum text-caption text-ink-600">15:04:00</span></span>}
         <ScanHistoryPopover history={history} />
-        <ForceRefreshButton onClick={() => {}} label={t('重新读取')} title={t('按当前条件重新读取已保存发布，不会重算日线')} testId="screener-reread" />
+        <ForceRefreshButton onClick={() => {}} label={t('重新读取')} title={t('重新读取当前筛选结果')} testId="screener-reread" />
       </>}
     />
     <button id="history-outside" className="mt-8">Outside</button>

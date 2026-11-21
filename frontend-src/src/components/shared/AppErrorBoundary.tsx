@@ -37,7 +37,7 @@ export default class AppErrorBoundary extends Component<Props, State> {
       <div
         role="alert"
         style={{
-          margin: '10vh auto 0',
+          margin: '10dvh auto 0',
           maxWidth: '34rem',
           padding: '1.5rem',
           borderRadius: '12px',

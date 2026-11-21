@@ -32,12 +32,12 @@ const VERDICT_TEXT: Record<string, { label: string; tone: BadgeTone; note: strin
   weak: {
     label: '弱单调',
     tone: 'warn',
-    note: '部分窗口成立、部分不成立。不足以把分数当作概率。',
+    note: '部分窗口单调成立，排序稳定性有限。',
   },
   not_monotonic: {
     label: '不单调',
     tone: 'warn',
-    note: '高分层未稳定优于低分层。当前分数不具备概率含义，只能当作粗排。',
+    note: '高分组未稳定跑赢低分组，排序区分度不足。',
   },
   insufficient_data: {
     label: '样本不足',
@@ -58,8 +58,7 @@ function SpreadExplanation() {
       <InfoHint
         hint={{
           title: t('高低分组超额收益差'),
-          body: t('每个评估日按评分选出前 10% 和后 10% 的股票。在每个验证窗口内汇总两组样本，分别计算相对 TOPIX 收益的中位数并相减，再汇总窗口结果。'),
-          note: t('这是分组统计，不是实际交易组合的收益。'),
+          body: t('每个评估日按评分选出前 10% 与后 10% 股票，在各验证窗口内分别计算相对 TOPIX 收益中位数之差。'),
         }}
       />
     </span>

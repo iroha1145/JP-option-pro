@@ -12,7 +12,6 @@ import Icon from '@/components/icons';
 import HatchLegend from '@/components/shared/HatchLegend';
 import InfoHint from '@/components/shared/InfoHint';
 import PointerTooltip from '@/components/shared/PointerTooltip';
-import SourceNote from '@/components/shared/SourceNote';
 import SoftBadge from '@/components/shared/SoftBadge';
 import EmptyState from '@/components/shared/EmptyState';
 import { SkeletonBlock } from '@/components/shared/Skeleton';
@@ -112,7 +111,6 @@ export function MarketRegimeCard({ regime }: { regime: MarketRegime }) {
           ))}
         </ul>
       )}
-      <SourceNote className="mt-4" text={t('由 TOPIX 与全市场日线断面推导 · 收盘后更新')} />
     </div>
   );
 }
@@ -226,7 +224,7 @@ export function MethodCard({
         aria-controls={panelId}
       >
         <span className="eyebrow">
-          {t('评分方法 ·')} {profile ? profile.name : loading ? t('读取中') : error ? t('档位未知') : t('默认权重')}
+          {t('评分方法 ·')} {profile ? t(profile.name) : loading ? t('读取中') : error ? t('档位未知') : t('默认权重')}
         </span>
         <span className="t-acc-chevron text-ink-400">
           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -292,7 +290,7 @@ export function MethodCard({
                   : t('内在强度为六族加权合成（0–100，缺失重新配权）。')}
               </p>
               <p className="mt-1.5 text-micro text-ink-400">
-                {t('最终排序分 = 内在 78% + 市场形态 8% + 偏好适配 14%（置信度加权）。')}
+                {t('排序分 = 内在 66% + 市场形态 8% + 偏好适配 26%（按置信度加权）。')}
               </p>
             </>
           )}

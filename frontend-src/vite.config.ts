@@ -9,6 +9,7 @@ const proxyTarget = process.env.OPTIXJP_API_PROXY || 'http://127.0.0.1:2100';
 const fromRoot = (file: string) => normalizePath(fileURLToPath(new URL(file, import.meta.url)));
 const MAIN_MODULE = fromRoot('./src/main.tsx');
 const APP_MODULE = fromRoot('./src/App.tsx');
+const ROUTE_LOADERS_MODULE = fromRoot('./src/lib/routeLoaders.ts');
 const HOME_MODULE = fromRoot('./src/pages/Home.tsx');
 const STYLES = /\.(?:css|scss|sass|less|styl)(?:\?|$)/;
 
@@ -19,7 +20,8 @@ function applicationChunks(): GetManualChunk {
   let homeShared: Set<string> | undefined;
   return (id, meta) => {
     const file = normalizePath(id.split('?')[0]);
-    if (/\/node_modules\/(?:echarts|zrender)\//.test(file)) return 'chart-engine';
+    if (file.includes('/node_modules/zrender/')) return 'chart-renderer';
+    if (file.includes('/node_modules/echarts/')) return 'chart-engine';
     if (file.endsWith('commonjsHelpers.js') || /\/node_modules\/(?:react|react-dom|scheduler)\//.test(file)) return 'react-runtime';
     if (/\/node_modules\/(?:framer-motion|motion-dom|motion-utils)\//.test(file)) return 'motion-runtime';
     if (file.includes('/src/i18n/')) return 'i18n';
@@ -36,8 +38,11 @@ function applicationChunks(): GetManualChunk {
         return seen;
       };
       const entry = closure(MAIN_MODULE);
-      // Derive Japan's lazy routes from App, rather than duplicating a route list.
-      const routes = meta.getModuleInfo(APP_MODULE)?.dynamicallyImportedIds ?? [];
+      // Derive Japan's lazy routes from App / routeLoaders, rather than duplicating a route list.
+      const routes = [
+        ...(meta.getModuleInfo(APP_MODULE)?.dynamicallyImportedIds ?? []),
+        ...(meta.getModuleInfo(ROUTE_LOADERS_MODULE)?.dynamicallyImportedIds ?? []),
+      ];
       const users = new Map<string, number>();
       for (const route of routes) {
         for (const moduleId of closure(route)) users.set(moduleId, (users.get(moduleId) ?? 0) + 1);

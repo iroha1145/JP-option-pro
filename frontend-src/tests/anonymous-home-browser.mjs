@@ -31,7 +31,7 @@ async function anonymousHomeBrowser(page) {
     return route.fulfill({json:{items:[],indices:[]}});
   });
   await page.goto(origin);
-  await page.getByText('登录后可以把关注股票保存在账号里', {exact:true}).waitFor();
+  await page.getByText('登录后可保存关注股票', {exact:true}).waitFor();
   await page.getByText('123', {exact:true}).waitFor();
   check(watchCalls === 0, 'anonymous home must not request watchlist');
   const initialStatus = statusCalls;
@@ -58,7 +58,7 @@ async function anonymousHomeBrowser(page) {
   check(statusCalls === beforeExpiry+1, 'concurrent expiry notifications must share one status refresh');
   release();
   holdStatus = null;
-  await page.getByText('登录后可以把关注股票保存在账号里', {exact:true}).waitFor();
+  await page.getByText('登录后可保存关注股票', {exact:true}).waitFor();
   await page.getByText('123', {exact:true}).waitFor();
   const settled = statusCalls;
   await page.evaluate(() => { for(let i=0;i<12;i++) window.dispatchEvent(new Event('optixjp:principal-invalid')); });

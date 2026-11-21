@@ -4,17 +4,9 @@
  * すべて J-Quants の確定ティック由来。遅延気配（Yahoo）は混ざらない。
  */
 import { cn } from '@/lib/utils';
-import { fmtPct, fmtPrice } from '@/lib/format';
-import SourceNote from '@/components/shared/SourceNote';
+import { fmtPct, fmtPrice, fmtSharesCompact } from '@/lib/format';
 import { t } from '@/i18n/core';
 import type { AuctionPrint, TickAnalytics } from '@/api/types';
-
-function shares(value: number | null | undefined): string {
-  if (value == null) return '—';
-  if (value >= 1e8) return `${(value / 1e8).toFixed(2)}億株`;
-  if (value >= 1e4) return `${(value / 1e4).toFixed(1)}万株`;
-  return `${Math.round(value).toLocaleString()}株`;
-}
 
 function AuctionCard({ label, print: entry, tone }: { label: string; print: AuctionPrint | null; tone: string }) {
   return (
@@ -24,7 +16,7 @@ function AuctionCard({ label, print: entry, tone }: { label: string; print: Auct
         <>
           <p className="tnum text-body-s text-ink-900">{fmtPrice(entry.price)}</p>
           <p className="tnum text-micro text-ink-500">
-            {shares(entry.volume)}
+            {fmtSharesCompact(entry.volume)}
             {entry.day_volume_share != null && (
               <span className={cn('ml-1 font-medium', tone)}>
                 {(entry.day_volume_share * 100).toFixed(1)}%
@@ -50,7 +42,7 @@ export default function TickAnalyticsPanel({ analytics }: { analytics: TickAnaly
 
   return (
     <section className="card-surface p-4" aria-label={t('逐笔分析')}>
-      <p className="eyebrow">{t('逐笔分析 · 仅 Tick 数据可得')}</p>
+      <p className="eyebrow">{t('逐笔成交结构')}</p>
 
       {/* VWAP と乖離 */}
       <div className="mt-3 flex flex-wrap items-end gap-x-6 gap-y-2 border-b border-line pb-3">
@@ -77,9 +69,9 @@ export default function TickAnalyticsPanel({ analytics }: { analytics: TickAnaly
         </span>
         {sessions && (
           <span>
-            <span className="block text-micro text-ink-400">{t('前場 / 後場')}</span>
+            <span className="block text-micro text-ink-400">{t('早盘 / 午盘')}</span>
             <span className="tnum text-caption text-ink-600">
-              {shares(sessions.morning.volume)} / {shares(sessions.afternoon.volume)}
+              {fmtSharesCompact(sessions.morning.volume)} / {fmtSharesCompact(sessions.afternoon.volume)}
             </span>
           </span>
         )}
@@ -88,17 +80,17 @@ export default function TickAnalyticsPanel({ analytics }: { analytics: TickAnaly
       {/* 板寄せ */}
       <div className="mt-3">
         <p className="mb-1.5 flex items-center gap-2 text-caption text-ink-500">
-          {t('集合竞价（板寄せ）')}
+          {t('集合竞价')}
           {closingHeavy && (
             <span className="rounded-sm bg-warn-50 px-1.5 py-0.5 text-micro text-warn-700">
-              {t('引け占比偏高 · 终值由需给形成')}
+              {t('收盘竞价占比高')}
             </span>
           )}
         </p>
         <div className="grid grid-cols-3 gap-2">
-          <AuctionCard label={t('寄付')} print={auctions?.opening ?? null} tone="text-ink-600" />
-          <AuctionCard label={t('後場寄り')} print={auctions?.afternoon_open ?? null} tone="text-ink-600" />
-          <AuctionCard label={t('引け')} print={auctions?.closing ?? null} tone={closingHeavy ? 'text-warn-700' : 'text-ink-600'} />
+          <AuctionCard label={t('早盘开盘')} print={auctions?.opening ?? null} tone="text-ink-600" />
+          <AuctionCard label={t('午盘开盘')} print={auctions?.afternoon_open ?? null} tone="text-ink-600" />
+          <AuctionCard label={t('收盘竞价')} print={auctions?.closing ?? null} tone={closingHeavy ? 'text-warn-700' : 'text-ink-600'} />
         </div>
       </div>
 
@@ -106,7 +98,7 @@ export default function TickAnalyticsPanel({ analytics }: { analytics: TickAnaly
         {/* 価格帯別出来高 */}
         <div>
           <p className="mb-1.5 text-caption text-ink-500">
-            {t('价格帯别成交量')}
+            {t('分价成交量')}
             {profile?.poc != null && (
               <span className="ml-2 tnum text-micro text-brand-600">
                 POC {fmtPrice(profile.poc)}
@@ -114,7 +106,7 @@ export default function TickAnalyticsPanel({ analytics }: { analytics: TickAnaly
             )}
           </p>
           <div className="space-y-px">
-            {[...(profile?.buckets ?? [])].reverse().map((bucket) => {
+            {(profile?.buckets ?? []).toReversed().map((bucket) => {
               const isPoc = profile?.poc != null
                 && profile.poc >= bucket.price_low
                 && profile.poc <= bucket.price_high;
@@ -138,16 +130,16 @@ export default function TickAnalyticsPanel({ analytics }: { analytics: TickAnaly
         {/* 大口約定 */}
         <div>
           <p className="mb-1.5 text-caption text-ink-500">
-            {t('大口成交')}
+            {t('大单成交')}
             {large?.threshold != null && (
               <span className="ml-2 tnum text-micro text-ink-400">
-                ≥{shares(large.threshold)} · {large.count} {t('笔')}
+                ≥{fmtSharesCompact(large.threshold)} · {large.count} {t('笔')}
                 {large.volume_share != null && ` · ${(large.volume_share * 100).toFixed(1)}%`}
               </span>
             )}
           </p>
           {(large?.rows ?? []).length === 0 ? (
-            <p className="text-caption text-ink-400">{t('当日无显著大口成交')}</p>
+            <p className="text-caption text-ink-400">{t('当日无大单成交')}</p>
           ) : (
             <table className="w-full border-collapse tnum text-micro">
               <tbody>
@@ -155,7 +147,7 @@ export default function TickAnalyticsPanel({ analytics }: { analytics: TickAnaly
                   <tr key={`${row.time}-${row.volume}`} className="border-b border-line/60 last:border-b-0">
                     <td className="py-1 text-ink-400">{row.time}</td>
                     <td className="py-1 text-right text-ink-800">{fmtPrice(row.price)}</td>
-                    <td className="py-1 text-right font-medium text-brand-700">{shares(row.volume)}</td>
+                    <td className="py-1 text-right font-medium text-brand-700">{fmtSharesCompact(row.volume)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -163,11 +155,6 @@ export default function TickAnalyticsPanel({ analytics }: { analytics: TickAnaly
           )}
         </div>
       </div>
-
-      <SourceNote
-        className="mt-3"
-        text={t('VWAP=Σ(价格×数量)/Σ数量（分足均价不可替代）· 大口=中位笔数量 25 倍且 ≥当日成交量 0.2%，板寄せ另计')}
-      />
     </section>
   );
 }

@@ -118,9 +118,10 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
     setSearching(true);
     setSearchError(null);
     let cancelled = false;
+    const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
-        const next = await stocksApi.search(q);
+        const next = await stocksApi.search(q, { signal: controller.signal });
         if (!cancelled) {
           setResults(next.results);
           setSearchError(null);
@@ -137,6 +138,7 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
+      controller.abort();
     };
   }, [query, open]);
 
@@ -156,7 +158,6 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
         id: `f-${n.path}`,
         group: t('功能'),
         title: n.label,
-        hint: t('前往{label}', { label: n.label }),
         keywords: n.path,
         icon: 'chevron-right',
         action: () => {
@@ -206,8 +207,7 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
       list.push({
         id: 'f-logout',
         group: t('功能'),
-        title: t('退出 管理员 登录'),
-        hint: t('结束本机会话'),
+        title: t('退出管理员登录'),
         icon: 'shield',
         action: () => {
           onClose();
@@ -219,7 +219,6 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
         id: 'f-logout',
         group: t('功能'),
         title: username ? t('退出 {name}', { name: username }) : t('退出登录'),
-        hint: t('结束本机会话'),
         icon: 'shield',
         action: () => {
           onClose();
@@ -231,7 +230,7 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
         id: 'f-login',
         group: t('功能'),
         title: t('登录'),
-        hint: t('管理员 或访客账号'),
+        hint: t('保存个人关注股票'),
         icon: 'shield',
         action: () => {
           onClose();
@@ -254,7 +253,7 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
           mono: true,
           hint: r.name_ja ?? r.name_en ?? undefined,
           ticker: r.display_code,
-          sector: r.market_name ?? undefined,
+          sector: r.market_name ? t(r.market_name) : undefined,
           icon: 'candle',
           action: () => pickTicker(r.display_code),
         }),
@@ -271,7 +270,6 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
           title: code,
           ticker: code,
           mono: true,
-          hint: t('最近查看'),
           icon: 'clock',
           action: () => pickTicker(code),
         }),
@@ -352,7 +350,7 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
         data-focus-backdrop="command-palette"
         aria-hidden="true"
       />
-      <div className="pointer-events-none fixed left-1/2 top-[18vh] z-[81] w-[640px] max-w-[calc(100vw-24px)] -translate-x-1/2">
+      <div className="pointer-events-none fixed left-1/2 top-[18dvh] z-[81] w-[640px] max-w-[calc(100vw-24px)] -translate-x-1/2">
         <div
           ref={panelRef}
           role="dialog"
@@ -365,7 +363,7 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
             overlayClassName(phase),
           )}
         >
-          <div className="flex h-12 items-center gap-2.5 border-b border-line px-4">
+          <search className="flex h-12 items-center gap-2.5 border-b border-line px-4">
             <Icon name="search" size={16} className="shrink-0 text-ink-400" />
             <input
               ref={inputRef}
@@ -376,6 +374,7 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
                 setActive(0);
               }}
               placeholder={t('搜索股票代码、名称或功能…')}
+              enterKeyHint="go"
               className="h-full min-w-0 w-0 flex-1 bg-transparent text-body text-ink-800 outline-none placeholder:text-ink-300 focus-visible:!shadow-none"
               role="combobox"
               aria-expanded={open}
@@ -403,9 +402,9 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
             ) : (
               <Kbd>ESC</Kbd>
             )}
-          </div>
+          </search>
 
-          <div id="command-palette-listbox" role="listbox" ref={listRef} className="relative max-h-[46vh] overflow-y-auto py-1.5">
+          <div id="command-palette-listbox" role="listbox" ref={listRef} className="relative max-h-[46dvh] overflow-y-auto py-1.5">
             <span
               ref={glideRef}
               aria-hidden="true"
@@ -450,6 +449,7 @@ export default function CommandPalette({ open, onClose, onOpenTicker, onForceRef
                 {g.items.map((e) => (
                   <button
                     key={e.id}
+                    type="button"
                     id={`command-palette-option-${e.idx}`}
                     role="option"
                     aria-selected={e.idx === clampedActive}

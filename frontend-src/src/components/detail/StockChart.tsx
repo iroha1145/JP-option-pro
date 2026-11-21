@@ -473,7 +473,7 @@ export default function StockChart({
     if (!daily || rows.length === 0) return null;
     const closes = rows.map((bar) => pickPrice(bar, priceMode, 'adj_close', 'close'));
     const first = closes.find((value) => value != null);
-    const last = [...closes].reverse().find((value) => value != null);
+    const last = closes.findLast((value) => value != null);
     const change = first != null && last != null ? last - first : null;
     if (style === 'area') {
       return {

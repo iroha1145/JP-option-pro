@@ -3,16 +3,20 @@ import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import { cn } from '@/lib/utils';
 import { numberGlyphs } from '@/lib/numberTicker';
 
-const DIGITS = Array.from({ length: 10 }, (_, digit) => (
-  <span key={digit} style={{ height: '1.1em', lineHeight: '1.1em' }}>{digit}</span>
-));
+const DIGITS = '0\n1\n2\n3\n4\n5\n6\n7\n8\n9';
 const Digit = memo(function Digit({ char }: { char: string }) {
   return (
     <span className="relative inline-block overflow-hidden" style={{ height: '1.1em', width: '1ch' }}>
-      <span className="absolute inset-x-0 top-0 flex flex-col items-center" style={{
-        transform: `translateY(-${Number(char) * 1.1}em)`,
-        transition: 'transform 250ms cubic-bezier(0.16, 1, 0.3, 1)',
-      }}>{DIGITS}</span>
+      <span
+        className="absolute inset-x-0 top-0 whitespace-pre text-center"
+        style={{
+          lineHeight: '1.1em',
+          transform: `translateY(-${Number(char) * 1.1}em)`,
+          transition: 'transform 250ms cubic-bezier(0.16, 1, 0.3, 1)',
+        }}
+      >
+        {DIGITS}
+      </span>
     </span>
   );
 });

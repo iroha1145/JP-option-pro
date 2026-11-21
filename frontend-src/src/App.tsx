@@ -7,20 +7,21 @@ import { AccessProvider } from '@/hooks/useAccess';
 import { ToastProvider } from '@/components/Toast';
 import AppErrorBoundary from '@/components/shared/AppErrorBoundary';
 import PageFallback from '@/components/shared/PageFallback';
+import { routeLoaders } from '@/lib/routeLoaders';
 import NotFound from '@/pages/NotFound';
 
-const Home = lazy(() => import('@/pages/Home'));
-const Market = lazy(() => import('@/pages/Market'));
-const Radar = lazy(() => import('@/pages/Radar'));
-const Screener = lazy(() => import('@/pages/Screener'));
-const Watchlist = lazy(() => import('@/pages/Watchlist'));
-const Earnings = lazy(() => import('@/pages/Earnings'));
-const News = lazy(() => import('@/pages/News'));
-const StockDetail = lazy(() => import('@/pages/StockDetail'));
-const DataStatus = lazy(() => import('@/pages/DataStatus'));
-const Research = lazy(() => import('@/pages/Research'));
-const ShortMonitor = lazy(() => import('@/pages/ShortMonitor'));
-const Login = lazy(() => import('@/pages/Login'));
+const Home = lazy(routeLoaders.home);
+const Market = lazy(routeLoaders.market);
+const Radar = lazy(routeLoaders.radar);
+const Screener = lazy(routeLoaders.screener);
+const Watchlist = lazy(routeLoaders.watchlist);
+const Earnings = lazy(routeLoaders.earnings);
+const News = lazy(routeLoaders.news);
+const StockDetail = lazy(routeLoaders.stockDetail);
+const DataStatus = lazy(routeLoaders.dataStatus);
+const Research = lazy(routeLoaders.research);
+const ShortMonitor = lazy(routeLoaders.shortMonitor);
+const Login = lazy(routeLoaders.login);
 
 export default function App() {
   const reducedMotion = usePrefersReducedMotion();

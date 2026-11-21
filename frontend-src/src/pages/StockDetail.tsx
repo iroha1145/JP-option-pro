@@ -19,7 +19,6 @@ import PointerTooltip from '@/components/shared/PointerTooltip';
 import { remoteState } from '@/hooks/remoteState';
 import EmptyState from '@/components/shared/EmptyState';
 import EmptyRetryButton from '@/components/shared/EmptyRetryButton';
-import SourceNote from '@/components/shared/SourceNote';
 import { InsightValue } from '@/components/shared/InsightCard';
 import WatchlistToggle from '@/components/shared/WatchlistToggle';
 import DataTable, { type Column } from '@/components/shared/DataTable';
@@ -44,15 +43,13 @@ import { RADAR_SCORE_HINTS, STRUCTURE_HINTS, TECHNICAL_HINTS, type ScoreHint } f
 import { t } from '@/i18n/core';
 import { quoteSourceLabel } from '@/lib/quoteSource';
 import { codesMatch, pickQuoteForCode } from '@/lib/securityIdentity';
-import { dateAnchorParts, fmtDate, fmtDateShort, fmtPct, fmtPrice, fmtShares, fmtTimeJst, fmtYenCompact } from '@/lib/format';
+import { dateAnchorParts, fmtDate, fmtPct, fmtPrice, fmtShares, fmtSharesCompact, fmtTimeJst, fmtYenCompact } from '@/lib/format';
 import { jstToday } from '@/components/earnings/types';
 import { cn } from '@/lib/utils';
 import type {
   FinancialSummaryView,
   IntradayChart,
   MarginInterestRow,
-  ShortInterestSummary,
-  ShortPositionRow,
   TechnicalStructure,
   TickView,
 } from '@/api/types';
@@ -238,13 +235,13 @@ export default function StockDetail() {
             </h1>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <SessionLED session={session} />
-              {security.sector33_name && <SoftBadge>{security.sector33_name}</SoftBadge>}
-              {security.market_name && <SoftBadge>{security.market_name}</SoftBadge>}
-              {security.scale_category && <SoftBadge>{security.scale_category}</SoftBadge>}
-              {security.margin_name && <SoftBadge>{security.margin_name}</SoftBadge>}
+              {security.sector33_name && <SoftBadge>{t(security.sector33_name)}</SoftBadge>}
+              {security.market_name && <SoftBadge>{t(security.market_name)}</SoftBadge>}
+              {security.scale_category && <SoftBadge>{t(security.scale_category)}</SoftBadge>}
+              {security.margin_name && <SoftBadge>{t(security.margin_name)}</SoftBadge>}
               {security.active === 0 && (
                 <SoftBadge tone="warn">
-                  {t('上場廃止')} {security.delisted_date ?? ''}
+                  {t('已退市')} {security.delisted_date ?? ''}
                 </SoftBadge>
               )}
             </div>
@@ -289,7 +286,7 @@ export default function StockDetail() {
                 {liveQuote.as_of_epoch ? ` · ${fmtTimeJst(liveQuote.as_of_epoch)}` : ''}
               </span>
               <span className="mt-1 block tnum text-micro text-ink-400">
-                {t('官方终值')} {fmtPrice(data.quote.close)} {data.quote.trade_date ?? ''}
+                {t('收盘价')} {fmtPrice(data.quote.close)} {data.quote.trade_date ?? ''}
               </span>
             </div>
           ) : (
@@ -317,7 +314,7 @@ export default function StockDetail() {
           )}
           <p className="pb-1.5 text-right tnum text-micro text-ink-500">
             {t('成交额')} {fmtYenCompact(data.quote.turnover_value)}
-            {data.quote.volume != null ? ` · ${fmtShares(data.quote.volume)}${t('株')}` : ''}
+            {data.quote.volume != null ? ` · ${fmtShares(data.quote.volume)}${t('股')}` : ''}
           </p>
         </div>
         <DataThrough date={data.quote.trade_date} className="mt-2" />
@@ -424,32 +421,26 @@ export default function StockDetail() {
 
       {/* 行2: 决算时间线 + 技术结构 */}
       <div className="page-grid items-start">
-        <section className="paper-panel min-w-0 p-5 sm:p-6 lg:col-span-12 xl:col-span-7">
+        <section className="paper-panel cv-auto min-w-0 p-5 sm:p-6 lg:col-span-12 xl:col-span-7">
           <h2 className="section-heading mb-4">{t('财报时间线')}</h2>
           <div className="max-h-[360px] overflow-y-auto overscroll-contain" tabIndex={0}>
             <FinancialTable summaries={data.financials.summaries} />
           </div>
         </section>
-        <section className="paper-panel min-w-0 p-5 sm:p-6 lg:col-span-12 xl:col-span-5">
+        <section className="paper-panel cv-auto min-w-0 p-5 sm:p-6 lg:col-span-12 xl:col-span-5">
           <h2 className="section-heading mb-4">{t('K线结构分析')}</h2>
           <StructurePanel technical={technical} />
         </section>
       </div>
 
-      {/* 机构空卖行为：报告本身在下面的「空卖残高报告」，这里是行为分析 */}
-      <section className="paper-panel min-w-0 p-5 sm:p-6">
-        <h2 className="section-heading mb-4">{t('机构空卖行为')}</h2>
-        <ShortBehaviorPanel code={security.canonical_code} />
-      </section>
-
-      {/* 行3: 空卖 + 发表预定 */}
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-        <section className="paper-panel min-w-0 p-5 sm:p-6">
-          <h2 className="section-heading mb-4">{t('空卖残高报告')}</h2>
-          <ShortPositionsPanel rows={data.short_positions} summary={data.short_interest} />
+      {/* 行3: 机构空卖行为 + 披露计划 */}
+      <div className="page-grid items-start">
+        <section className="paper-panel cv-auto min-w-0 p-5 sm:p-6 lg:col-span-12 xl:col-span-8">
+          <h2 className="section-heading mb-4">{t('机构空卖行为')}</h2>
+          <ShortBehaviorPanel code={security.canonical_code} />
         </section>
-        <section className="paper-panel min-w-0 p-5 sm:p-6">
-          <h2 className="section-heading mb-4">{t('发表预定')}</h2>
+        <section className="paper-panel cv-auto min-w-0 p-5 sm:p-6 lg:col-span-12 xl:col-span-4">
+          <h2 className="section-heading mb-4">{t('披露计划')}</h2>
           {data.earnings.length === 0 ? (
             <PanelEmpty title={t('暂无数据')} />
           ) : (
@@ -461,7 +452,6 @@ export default function StockDetail() {
           )}
         </section>
       </div>
-      <SourceNote text={t('官方终值来自日线；盘中价为延迟行情，不是实时伪装')} />
     </div>
   );
 }
@@ -497,7 +487,7 @@ function PanelEmpty({ title, image = '/empty-chart.svg' }: { title: string; imag
 
 function EarningsScheduleRow({ item, todayKey }: { item: Record<string, unknown>; todayKey: string }) {
   const date = item.announcement_date ? String(item.announcement_date) : '';
-  const quarter = item.fiscal_quarter ? String(item.fiscal_quarter) : '—';
+  const quarter = item.fiscal_quarter ? t(String(item.fiscal_quarter)) : '—';
   const anchor = dateAnchorParts(date);
   const isToday = date.slice(0, 10) === todayKey;
   return (
@@ -608,16 +598,15 @@ function IntradayPane({
     <div className="flex h-[360px] flex-col items-center justify-center gap-3 rounded-md bg-paper-2">
       <p className="max-w-md px-6 text-center text-body-s text-ink-600">
         {planBlocked
-          ? t('分钟线需要 J-Quants 分足加购（当前订阅未包含）')
+          ? t('分钟线需开通 J-Quants 分足订阅')
           : data?.reason === 'fetching'
             ? t('正在取得分钟数据，请稍候刷新')
             : pending
               ? t('最新交易日数据尚未发布，稍后自动重试')
             : empty
-              ? t('已取得，但没有可显示的分钟数据')
+              ? t('暂无可显示的分钟数据')
               : t('该股票的分钟数据尚未取得')}
       </p>
-      {data?.note_ja && <p className="max-w-md px-6 text-center text-caption text-ink-400">{data.note_ja}</p>}
       {canFetch && !planBlocked && (
         <button
           type="button"
@@ -723,7 +712,7 @@ function TickPane({
         </div>
         <aside className="min-w-0">
           <p className="mb-1 flex items-baseline justify-between text-caption text-ink-500">
-            {t('歩み值 · 最近 {n} 笔', { n: data.tape.length })}
+            {t('逐笔明细 · 最近 {n} 笔', { n: data.tape.length })}
             <button type="button" onClick={onRefresh} className="text-micro text-brand-700 hover:underline">
               {t('刷新')}
             </button>
@@ -761,16 +750,15 @@ function TickPane({
     <div className="flex h-[360px] flex-col items-center justify-center gap-3 rounded-md bg-paper-2">
       <p className="max-w-md px-6 text-center text-body-s text-ink-600">
         {planBlocked
-          ? t('逐笔需要 J-Quants Tick 加购（刚购买时，API 侧生效可能有延迟）')
+          ? t('逐笔数据需开通 J-Quants Tick 订阅')
           : fetching
-            ? t('正在取得逐笔数据（全市场日次文件约 50MB，稍候刷新）')
+            ? t('正在取得逐笔数据，请稍候刷新')
             : pending
               ? t('最新交易日数据尚未发布，稍后自动重试')
             : empty
-              ? t('已取得，但没有可显示的逐笔数据（可能尚未配信）')
+              ? t('暂无可显示的逐笔数据')
               : t('该股票的逐笔数据尚未取得')}
       </p>
-      {data?.note_ja && <p className="max-w-md px-6 text-center text-caption text-ink-400">{data.note_ja}</p>}
       {canFetch && !planBlocked && (
         <button
           type="button"
@@ -946,17 +934,17 @@ function StructFact({ label, value }: { label: string; value: string }) {
 function FinancialTable({ summaries }: { summaries: FinancialSummaryView[] }) {
   const columns: Column<FinancialSummaryView>[] = [
     {
-      key: 'date', title: t('发表预定'), width: '96px',
+      key: 'date', title: t('披露日'), width: '96px',
       render: (row) => <span className="tnum text-caption text-ink-700">{fmtDate(row.disclosed_date)}</span>,
     },
     {
-      key: 'period', title: t('财报种别'),
+      key: 'period', title: t('报告期'),
       render: (row) => (
         <span className="flex items-center gap-1">
           <SoftBadge>
             {row.fiscal_year_end?.slice(0, 7) ?? '—'} {row.period_type ?? ''}
           </SoftBadge>
-          <span className="text-micro text-ink-400">{row.is_consolidated ? t('连结') : t('单体')}</span>
+          <span className="text-micro text-ink-400">{row.is_consolidated ? t('合并') : t('单体')}</span>
         </span>
       ),
     },
@@ -965,17 +953,17 @@ function FinancialTable({ summaries }: { summaries: FinancialSummaryView[] }) {
       render: (row) => <span className="tnum text-caption">{fmtYenCompact(row.sales ?? row.nc_sales)}</span>,
     },
     {
-      key: 'op', title: t('营业利益'), align: 'right',
+      key: 'op', title: t('营业利润'), align: 'right',
       render: (row) => (
         <span className="tnum text-caption">{fmtYenCompact(row.operating_profit ?? row.nc_operating_profit)}</span>
       ),
     },
     {
-      key: 'np', title: t('纯利益'), align: 'right',
+      key: 'np', title: t('净利润'), align: 'right',
       render: (row) => <span className="tnum text-caption">{fmtYenCompact(row.net_profit)}</span>,
     },
     {
-      key: 'forecast', title: `${t('会社预想')}·OP`, align: 'right',
+      key: 'forecast', title: `${t('公司预测')}·OP`, align: 'right',
       render: (row) => (
         <span className="tnum text-caption text-ink-500">{fmtYenCompact(row.forecast_operating_profit)}</span>
       ),
@@ -997,149 +985,13 @@ function MarginPanel({ rows }: { rows: MarginInterestRow[] }) {
   return (
     <div className="space-y-1.5">
       <dl className="grid grid-cols-3 gap-1.5">
-        <MiniStat label={t('信用买残')} value={fmtYenCompact(latest.long_total, 0)} />
-        <MiniStat label={t('信用卖残')} value={fmtYenCompact(latest.short_total, 0)} />
+        <MiniStat label={t('融资余额')} value={fmtSharesCompact(latest.long_total)} />
+        <MiniStat label={t('融券余额')} value={fmtSharesCompact(latest.short_total)} />
         <MiniStat label={t('信用倍率')} value={ratio !== null ? `${ratio.toFixed(2)}x` : '—'} />
       </dl>
       <p className="text-right text-micro text-ink-400">
         {t('数据截至')} {fmtDate(latest.application_date)}（{latest.application_date >= '2026-09-25' ? t('日度') : t('周度历史')}）
-        <span className="mt-1 block">{t('2026-09-25起为日度、下一交易日发布；此前为周度历史。')}</span>
       </p>
-    </div>
-  );
-}
-
-function ShortPositionsPanel({
-  rows,
-  summary,
-}: {
-  rows: ShortPositionRow[];
-  summary: ShortInterestSummary | null;
-}) {
-  if (rows.length === 0) return <PanelEmpty title={t('暂无数据')} />;
-
-  const changes = summary?.changes ?? [];
-  const KIND_LABEL: Record<string, string> = {
-    new: '新規',
-    increased: '増',
-    decreased: '減',
-    below_threshold: '義務消失',
-    closed: '解消',
-    unknown: '状态未知',
-  };
-  // ラベルの色は **株にとっての向き**（赤=買い方に有利／緑=売り方に有利）。
-  // 新しい売り方が出た＝弱気で緑、義務消失・解消＝買い戻し済みで赤。
-  // 増減は隣の変化幅がすでに符号で色を持っているので、ここは無彩色にする
-  // （同じことを二度色で言わない）。
-  const KIND_TONE: Record<string, string> = {
-    new: 'text-down-600',
-    below_threshold: 'text-up-600',
-    closed: 'text-up-600',
-  };
-
-  return (
-    <div className="space-y-3">
-      {summary && (
-        <div className="rounded-md bg-paper-2 px-3 py-2">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="text-micro text-ink-400">{t('报告义务中合计')}</span>
-            <span className="tnum text-data-m text-ink-900">
-              {summary.reporting_total != null ? `${(summary.reporting_total * 100).toFixed(2)}%` : '—'}
-            </span>
-            {summary.reporting_shares != null && (
-              <span className="tnum text-caption text-ink-500">
-                {fmtShares(summary.reporting_shares)}
-                {t('株')}
-              </span>
-            )}
-            <span className="text-micro text-ink-400">
-              {t('{n}家', { n: summary.reporting_holders })}
-            </span>
-            {summary.change != null && (
-              <span
-                className={`tnum text-caption tnum ${
-                  summary.change > 0 ? 'text-up-600' : summary.change < 0 ? 'text-down-600' : 'text-ink-400'
-                }`}
-              >
-                {t('2周')} {summary.change > 0 ? '+' : summary.change < 0 ? '−' : '±'}
-                {Math.abs(summary.change * 100).toFixed(2)}%
-              </span>
-            )}
-          </div>
-          {/* 閾値割れは「その値以下のどこか」で実際は不明。合計に足さない。 */}
-          {(summary.below_threshold_holders > 0 || summary.closed_holders > 0) && (
-            <p className="mt-1 text-micro text-ink-400">
-              {t('另有 {b} 家跌破{th}%（实际持仓不再披露）· {c} 家已解消', {
-                b: summary.below_threshold_holders,
-                th: (summary.reporting_threshold * 100).toFixed(1),
-                c: summary.closed_holders,
-              })}
-            </p>
-          )}
-        </div>
-      )}
-
-      {changes.length > 0 ? (
-        <div>
-          <p className="mb-1 text-micro text-ink-400">
-            {t('2周内全部变化')}
-            {summary?.baseline_date ? `（${fmtDate(summary.baseline_date)} ~）` : ''}
-          </p>
-          {/* 1 行 2 段。横に 5 列並べると「義務消失」が折り返して行の高さが
-              暴れるので、名前・区分・日付を上段、水準・株数・変化を下段に置く。 */}
-          <ul>
-            {changes.map((row, index) => (
-              <li
-                key={index}
-                className="flex min-h-[60px] items-start gap-3 px-1 py-[14px] transition-colors duration-fast hover:bg-paper-2/70"
-              >
-                <div className="flex w-11 shrink-0 flex-col items-center self-stretch pt-0.5">
-                  <span className="tnum text-tag leading-[14px] text-ink-400">
-                    {fmtDateShort(row.calculated_date)}
-                  </span>
-                  <span className="mt-1.5 hidden w-[2px] flex-1 rounded-full bg-line sm:block" aria-hidden="true" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="min-w-0 truncate text-body-s text-ink-700">{row.holder_name ?? '—'}</span>
-                    <span className={`shrink-0 whitespace-nowrap text-micro ${KIND_TONE[row.kind] ?? 'text-ink-400'}`}>
-                      {t(KIND_LABEL[row.kind] ?? '')}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 tnum text-caption">
-                    <span className="text-ink-900">
-                      {row.ratio != null ? `${(row.ratio * 100).toFixed(2)}%` : '—'}
-                    </span>
-                    {row.shares != null && (
-                      <span className="text-ink-500">
-                        {fmtShares(row.shares)}
-                        {t('株')}
-                      </span>
-                    )}
-                    <span
-                      className={
-                        row.delta == null
-                          ? 'text-ink-400'
-                          : row.delta > 0
-                            ? 'text-up-600'
-                            : row.delta < 0
-                              ? 'text-down-600'
-                              : 'text-ink-400'
-                      }
-                    >
-                      {row.delta != null
-                        ? `${row.delta > 0 ? '+' : row.delta < 0 ? '−' : '±'}${Math.abs(row.delta * 100).toFixed(2)}%`
-                        : '—'}
-                    </span>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : (
-        <PanelEmpty title={t('2周内没有新的残高报告')} />
-      )}
     </div>
   );
 }

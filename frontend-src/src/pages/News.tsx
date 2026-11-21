@@ -21,7 +21,6 @@ import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
 import Switch from '@/components/shared/Switch';
 import FilterButton from '@/components/shared/FilterButton';
 import SelectionViewport from '@/components/shared/SelectionViewport';
-import SourceNote from '@/components/shared/SourceNote';
 import Icon from '@/components/icons';
 import { NEWS_HINTS } from '@/lib/indicatorHints';
 import { t } from '@/i18n/core';
@@ -44,6 +43,16 @@ type Tab = 'feed' | 'stocks' | 'sources';
 const CATEGORY_FILTERS = ['決算', '業績予想修正', 'M&A・TOB', '自社株買い', '配当', '日銀・金利', '規制・政策'];
 const TABS: Tab[] = ['feed', 'stocks', 'sources'];
 const HOURS = [24, 72, 168] as const;
+
+function safeExternalUrl(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
 
 function parseNewsSearch(sp: URLSearchParams): {
   tab: Tab;
@@ -222,7 +231,7 @@ export default function News() {
             </section>
           ) : feedState === 'empty' || (feedState === 'stale' && feed.data?.items.length === 0) ? (
             <section className="card-surface">
-              <EmptyState image="/empty-news.svg" title={t('暂无数据')} description={feed.data?.note_ja ?? ''} />
+              <EmptyState image="/empty-news.svg" title={t('暂无数据')} />
             </section>
           ) : (
             <ul className="card-surface divide-y divide-line overflow-hidden">
@@ -378,20 +387,6 @@ function StatusHero({ status, loading }: { status: NewsStatus | null; loading: b
           )}
         </HeroCell>
       </div>
-      <details className="group border-t border-line px-4 py-1 sm:px-5">
-        <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 text-caption text-ink-500 marker:content-none [&::-webkit-details-marker]:hidden">
-          {t('数据说明')}
-          <Icon
-            name="chevron-down"
-            size={14}
-            className="shrink-0 transition-transform duration-fast group-open:rotate-180 motion-reduce:transition-none"
-          />
-        </summary>
-        <SourceNote
-          className="border-0 pb-3 pt-1"
-          text={t('新闻按原始语言展示，标题与摘要来自新闻源。关联个股依据代码与名称匹配，重要度依据规则评分。')}
-        />
-      </details>
     </motion.section>
   );
 }
@@ -567,13 +562,16 @@ function NewsRow({ item, index, animate = true }: { item: NewsItem; index: numbe
           <span className="ml-auto"><ImportanceBadge value={item.importance} /></span>
         </p>
         <h3 className="mt-2 max-w-[75ch] text-body font-medium text-ink-900">
-          {item.source_url ? (
-            <a href={item.source_url} target="_blank" rel="noreferrer" className="rounded-xs underline-offset-4 hover:text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600">
-              {title}
-              <Icon name="arrow-up-right" size={13} className="ml-1.5 inline-block text-ink-400" />
-              <span className="sr-only">{t('原文')}</span>
-            </a>
-          ) : title}
+          {(() => {
+            const href = safeExternalUrl(item.source_url);
+            return href ? (
+              <a href={href} target="_blank" rel="noopener noreferrer" className="rounded-xs underline-offset-4 hover:text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600">
+                {title}
+                <Icon name="arrow-up-right" size={13} className="ml-1.5 inline-block text-ink-400" />
+                <span className="sr-only">{t('原文')}</span>
+              </a>
+            ) : title;
+          })()}
         </h3>
         {item.original_summary && <p className="mt-2 max-w-[75ch] break-words line-clamp-3 text-body-s leading-relaxed text-ink-600">{item.original_summary}</p>}
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
@@ -600,7 +598,12 @@ function NewsRow({ item, index, animate = true }: { item: NewsItem; index: numbe
             <p>{t('发布')}: {fmtJstDateTime(item.published_at)} · {t('语言')}: {item.source_language ?? '—'}
               {item.market_relevance === 'market' && <span> · {t('市场级新闻')}</span>}
             </p>
-            {item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-brand-700 hover:underline">{t('原文')}<Icon name="arrow-up-right" size={12} /></a>}
+            {(() => {
+              const href = safeExternalUrl(item.source_url);
+              return href ? (
+                <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-brand-700 hover:underline">{t('原文')}<Icon name="arrow-up-right" size={12} /></a>
+              ) : null;
+            })()}
           </div>
         </details>
       </article>

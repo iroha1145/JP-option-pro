@@ -53,12 +53,14 @@ export function resolveAppearance(preference: ThemePreference): Appearance {
   return preference === 'system' ? systemAppearance() : preference;
 }
 
-function paintDocument(appearance: Appearance): void {
+function paintDocument(appearance: Appearance, preference: ThemePreference): void {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
   root.classList.toggle('dark', appearance === 'dark');
   root.dataset.theme = appearance;
   root.style.colorScheme = appearance;
+  const scheme = preference === 'system' ? 'light dark' : preference;
+  document.querySelector('meta[name="color-scheme"]')?.setAttribute('content', scheme);
   const themeColor = appearance === 'dark' ? '#0F0F10' : '#FAFAFA';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor);
 }
@@ -67,7 +69,7 @@ export function applyAppearance(preference: ThemePreference = getThemePreference
   hydrate();
   currentPreference = preference;
   currentAppearance = resolveAppearance(preference);
-  paintDocument(currentAppearance);
+  paintDocument(currentAppearance, preference);
   ensureMediaListener();
   ensureStorageListener();
 }

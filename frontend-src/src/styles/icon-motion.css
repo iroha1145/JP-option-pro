@@ -166,15 +166,6 @@
     --icon-part-motion: icon-dots-wave;
     animation-delay: 110ms;
   }
-  [data-icon-motion="spark-ai"] > [data-icon-part="0"] {
-    --icon-part-motion: icon-spark-ai-left;
-  }
-  [data-icon-motion="spark-ai"] > [data-icon-part="1"] {
-    --icon-part-motion: icon-spark-ai-right;
-  }
-  [data-icon-motion="spark-ai"] > [data-icon-part="2"] {
-    --icon-part-motion: icon-signal;
-  }
   [data-icon-motion="clock"] > [data-icon-part="1"] {
     --icon-part-motion: icon-clock-hands;
     transform-origin: 12px 12.2px;
@@ -205,9 +196,6 @@
   }
   [data-icon-motion="channel"] > [data-icon-part="1"] {
     --icon-part-motion: icon-channel-bottom;
-  }
-  [data-icon-motion="rect"] > [data-icon-part] {
-    --icon-part-motion: icon-rect-pop;
   }
   [data-icon-motion="crosshair"] > [data-icon-part="0"] {
     --icon-part-motion: icon-target-outer;
@@ -376,14 +364,6 @@
     0%, 100% { transform: translateY(0); }
     45% { transform: translateY(-1.8px); }
   }
-  @keyframes icon-spark-ai-left {
-    0%, 100% { transform: translateX(0) scaleY(1); }
-    45% { transform: translateX(1.3px) scaleY(.92); }
-  }
-  @keyframes icon-spark-ai-right {
-    0%, 100% { transform: translateX(0) scaleY(1); }
-    45% { transform: translateX(-1.3px) scaleY(.92); }
-  }
   @keyframes icon-clock-hands {
     0%, 100% { transform: rotate(0deg); }
     45% { transform: rotate(32deg); }
@@ -419,11 +399,6 @@
   @keyframes icon-channel-bottom {
     0%, 100% { transform: translateY(0); }
     45% { transform: translateY(1.2px); }
-  }
-  @keyframes icon-rect-pop {
-    0%, 100% { transform: scale(1); }
-    40% { transform: scale(.9); }
-    75% { transform: scale(1.05); }
   }
   @keyframes icon-crosshair-ticks {
     0%, 100% { transform: rotate(0deg) scale(1); }

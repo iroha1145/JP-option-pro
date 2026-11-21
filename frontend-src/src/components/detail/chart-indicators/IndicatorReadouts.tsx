@@ -42,7 +42,7 @@ function IndicatorReadouts({ chart, bars, panes, layout }: {
   }, [chart, bars]);
   const stamp = bar?.t ? fmtDate(bar.t.slice(0, 10)) : '—';
   const rows = [{ id: 'volume', label: t('成交量'), series: [{ name: t('量'), value: bar?.v }] },
-    ...panes.map(pane => ({ id: pane.id, label: pane.label, series: pane.series.map(series => ({
+    ...panes.map(pane => ({ id: pane.id, label: t(pane.label), series: pane.series.map(series => ({
       name: series.name, value: series.data[index],
     })) }))];
   return <div className="pointer-events-none absolute inset-0" data-indicator-readouts>

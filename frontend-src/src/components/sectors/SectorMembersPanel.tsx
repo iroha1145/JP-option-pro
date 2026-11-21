@@ -10,7 +10,6 @@ import ChangeBadge from '@/components/shared/ChangeBadge';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import Segmented from '@/components/shared/Segmented';
 import EmptyState from '@/components/shared/EmptyState';
-import SourceNote from '@/components/shared/SourceNote';
 import TickPrice from '@/components/shared/TickPrice';
 import { SkeletonRows } from '@/components/shared/Skeleton';
 import { CodeCell, StateChip } from '@/components/domain';
@@ -36,7 +35,6 @@ export default function SectorMembersPanel({
   sort,
   onSortChange,
   liveQuotes,
-  delayedMinutes,
 }: {
   data: SectorMembersView | null;
   loading: boolean;
@@ -44,9 +42,7 @@ export default function SectorMembersPanel({
   onSortChange: (sort: SectorMemberSort) => void;
   /** 遅延気配（非公式）。無い銘柄は公式終値のまま出す —— 埋めない。 */
   liveQuotes?: Record<string, IntradayQuote>;
-  delayedMinutes?: number | null;
 }) {
-  const hasLive = Boolean(liveQuotes && Object.keys(liveQuotes).length);
   const rows = data?.rows ?? EMPTY_ROWS;
   const flashRows = useMemo(
     () =>
@@ -63,7 +59,7 @@ export default function SectorMembersPanel({
         <div className="min-w-0">
           <p className="eyebrow">{t('板块最热门个股')}</p>
           <h2 className="section-heading mt-0.5 justify-start">
-            {data?.sector33_name ?? '—'}
+            {data?.sector33_name ? t(data.sector33_name) : '—'}
             {data && (
               <span className="ml-2 tnum text-caption font-normal text-ink-400">
                 {t('{n} 只', { n: data.member_count })} · {fmtYenCompact(data.sector_turnover_value)}
@@ -176,16 +172,6 @@ export default function SectorMembersPanel({
           </ol>
         </>
       )}
-      <SourceNote
-        className="mt-3"
-        text={
-          hasLive
-            ? t('● = 延迟{n}分盘中价（非官方源）· 其余为 J-Quants 官方日线 · 量比=当日成交额/20日均额', {
-                n: delayedMinutes ?? 15,
-              })
-            : t('量比=当日成交额/20日均额 · 份额=占本行业当日成交额比重')
-        }
-      />
     </section>
   );
 }

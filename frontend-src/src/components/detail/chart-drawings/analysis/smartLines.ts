@@ -80,7 +80,7 @@ export function withChartIndices<T extends SmartBar>(bars: readonly T[], chartKe
 
 function median(values: number[]): number {
   if (!values.length) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
+  const sorted = values.toSorted((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
@@ -139,7 +139,7 @@ export function confirmedPivots(bars: readonly SmartBar[], wing: number, offset 
 
 function separated(points: Pivot[], gap = 4): Pivot[] {
   const result: Pivot[] = [];
-  for (const p of [...points].sort((a, b) => a.x - b.x)) {
+  for (const p of points.toSorted((a, b) => a.x - b.x)) {
     if (!result.length || p.x - result[result.length - 1].x >= gap) result.push(p);
   }
   return result;

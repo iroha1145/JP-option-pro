@@ -109,7 +109,7 @@ export default function WeekScrubber({
                   className="earnings-week-date"
                   aria-pressed={isSelected}
                   aria-current={isToday ? 'date' : undefined}
-                  aria-label={t('{weekday} {md}，{n} 件财报', { weekday: weekdayCN(date), md: fmtMMDD(date), n: dayItems.length })}
+                  aria-label={t('{weekday} {md}，{n} 家财报', { weekday: weekdayCN(date), md: fmtMMDD(date), n: dayItems.length })}
                   onClick={() => onSelectDay(isSelected ? null : date)}
                 >
                   <span className={cn('earnings-week-weekday', isToday && 'text-brand-600')}>
@@ -118,7 +118,7 @@ export default function WeekScrubber({
                   </span>
                   <span className={cn('text-caption tnum', isToday ? 'text-brand-600' : 'text-ink-500')}>{fmtMMDD(date)}</span>
                   {confirmedCount > 0 && confirmedCount < dayItems.length && (
-                    <span className="earnings-week-note tnum">{t('{n} 件 · 確定{c}', { n: dayItems.length, c: confirmedCount })}</span>
+                    <span className="earnings-week-note tnum">{t('{n} 家 · 已确认 {c}', { n: dayItems.length, c: confirmedCount })}</span>
                   )}
                 </button>
                 <div className="earnings-week-tickers">

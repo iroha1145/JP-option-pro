@@ -85,15 +85,15 @@ export function statusMeta(status: EarningsStatus): { label: string; dotClass: s
     return { label: t('已公布'), dotClass: 'bg-ink-400', chipClass: 'bg-paper-2 text-ink-600' };
   }
   if (status === 'confirmed') {
-    return { label: t('確定'), dotClass: 'bg-brand-600', chipClass: 'bg-brand-50 text-brand-700' };
+    return { label: t('已确认'), dotClass: 'bg-brand-600', chipClass: 'bg-brand-50 text-brand-700' };
   }
-  return { label: t('目安'), dotClass: 'border border-ink-400 bg-transparent', chipClass: 'border border-dashed border-line-strong text-ink-500' };
+  return { label: t('预估'), dotClass: 'border border-ink-400 bg-transparent', chipClass: 'border border-dashed border-line-strong text-ink-500' };
 }
 
-/** 决算种别短标（chips 用）：1Q/2Q/3Q/本 */
+/** 决算种别短标（chips 用）：1Q/2Q/3Q/年报 */
 export function periodShort(periodType: string | null): string {
   if (!periodType) return '—';
-  if (periodType === 'FY' || periodType === '4Q') return t('本');
+  if (periodType === 'FY' || periodType === '4Q') return t('年报');
   return periodType;
 }
 

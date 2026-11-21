@@ -15,13 +15,12 @@ import EmptyRetryButton from '@/components/shared/EmptyRetryButton';
 import ChangeBadge from '@/components/shared/ChangeBadge';
 import Segmented from '@/components/shared/Segmented';
 import DataTable, { type Column, type SortState } from '@/components/shared/DataTable';
-import { SkeletonCard, SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
+import { SkeletonReveal, SkeletonRows } from '@/components/shared/Skeleton';
 import StatCard from '@/components/shared/StatCard';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
 import SessionLED from '@/components/shared/SessionLED';
 import MenuSelect from '@/components/shared/MenuSelect';
 import AdvanceDeclineBar from '@/components/shared/AdvanceDeclineBar';
-import SourceNote from '@/components/shared/SourceNote';
 import { CodeCell, DataThrough } from '@/components/domain';
 import Icon from '@/components/icons';
 import { useAccess } from '@/hooks/useAccess';
@@ -45,15 +44,14 @@ const EMPTY_WATCHLIST: WatchlistItem[] = [];
 /* 三张统计卡：手机两列、涨跌卡占整行，平板起三列。 */
 const STAT_GRID = 'watch-stats-grid grid grid-cols-2 gap-4 md:grid-cols-3 max-md:[&>*:last-child:nth-child(odd)]:col-span-2';
 
-type WatchSortId = 'default' | 'gain' | 'loss' | 'turnover' | 'code' | 'close';
+type WatchSortId = 'default' | 'gain' | 'loss' | 'turnover' | 'code';
 
 const WATCH_SORTS: { id: WatchSortId; label: string }[] = [
   { id: 'default', label: t('默认排序') },
   { id: 'gain', label: t('涨幅优先') },
   { id: 'loss', label: t('跌幅优先') },
   { id: 'turnover', label: t('成交额优先') },
-  { id: 'code', label: t('按代码 A–Z') },
-  { id: 'close', label: t('收盘优先') },
+  { id: 'code', label: t('代码顺序') },
 ];
 
 function sortFromId(id: WatchSortId): SortState | null {
@@ -61,7 +59,6 @@ function sortFromId(id: WatchSortId): SortState | null {
   if (id === 'loss') return { key: 'change', desc: false };
   if (id === 'turnover') return { key: 'turnover', desc: true };
   if (id === 'code') return { key: 'code', desc: false };
-  if (id === 'close') return { key: 'close', desc: true };
   return null;
 }
 
@@ -70,7 +67,6 @@ function idFromSort(sort: SortState | null): WatchSortId {
   if (sort.key === 'change') return sort.desc ? 'gain' : 'loss';
   if (sort.key === 'turnover') return 'turnover';
   if (sort.key === 'code') return 'code';
-  if (sort.key === 'close') return 'close';
   return 'default';
 }
 
@@ -213,11 +209,11 @@ export default function Watchlist() {
           row.sector33_name ? (
             <PointerTooltip
               passthrough
-              label={row.sector33_name}
-              content={<span className="text-micro text-ink-600">{row.sector33_name}</span>}
+              label={t(row.sector33_name)}
+              content={<span className="text-micro text-ink-600">{t(row.sector33_name)}</span>}
             >
               <SoftBadge className="max-w-[7.5rem]">
-                <span className="truncate">{row.sector33_name}</span>
+                <span className="truncate">{t(row.sector33_name)}</span>
               </SoftBadge>
             </PointerTooltip>
           ) : (
@@ -323,7 +319,6 @@ export default function Watchlist() {
     <div className="page-stack">
       <PageHeader
         title={t('我的关注')}
-        description={t('本页为日线数据，收盘后更新')}
         meta={
           <>
             {accountUsername && (
@@ -343,45 +338,12 @@ export default function Watchlist() {
         }
       />
 
-      {(query.loading && !query.data) || items.length > 0 ? (
-        <section aria-label={t('关注统计')}>
-          {query.loading && !query.data ? (
-            <div className={STAT_GRID}>
-              <SkeletonCard className="min-w-0" />
-              <SkeletonCard className="min-w-0" />
-              <SkeletonCard className="min-w-0" />
-            </div>
-          ) : (
-            <div className={STAT_GRID}>
-              <StatCard label={t('只标的')} icon="list" value={items.length} className="h-full min-w-0" />
-              <div className="card-surface h-full min-w-0 p-5">
-                <div className="flex items-start justify-between">
-                  <p className="eyebrow">{t('上涨 / 下跌')}</p>
-                  <Icon name="candle" size={18} className="text-ink-400" />
-                </div>
-                <AdvanceDeclineBar
-                  advancers={breadth.advancers}
-                  decliners={breadth.decliners}
-                  unchanged={breadth.unchanged}
-                />
-              </div>
-              <StatCard
-                label={t('重点标记')}
-                icon="flag"
-                value={items.filter((item) => item.marked_important).length}
-                className="h-full min-w-0"
-              />
-            </div>
-          )}
-        </section>
-      ) : null}
-
       {anonymous ? (
         <section className="card-surface">
           <EmptyState
             image="/empty-watchlist.svg"
-            title={t('登录后可以把关注股票保存在账号里')}
-            description={t('账号与美股版通用，换设备也还在')}
+            title={t('登录后可保存关注股票')}
+            description={t('关注列表可跨设备同步查看')}
             action={
               <Link
                 to="/login"
@@ -394,7 +356,7 @@ export default function Watchlist() {
         </section>
       ) : (
         <div className="min-w-0">
-      {/* 工具行：视图切换 + 添加表单 + 计数 */}
+      {/* 工具行固定在页头下方：加载完成前后位置恒定，避免输入框跳动（CLS = 0）。 */}
       <div className="paper-panel p-4 sm:p-5">
       <div className="page-toolbar justify-between">
         <div className="page-toolbar min-w-0">
@@ -442,7 +404,7 @@ export default function Watchlist() {
         <StaleStrip onRetry={() => query.refresh()} refreshing={query.refreshing} className="mt-4" />
       )}
 
-        <div className="mt-6 min-h-[70vh]">
+        <div className="mt-6 min-h-[70dvh]">
           <SkeletonReveal
             loading={query.loading && !query.data}
             skeleton={
@@ -451,6 +413,30 @@ export default function Watchlist() {
               </section>
             }
           >
+            {items.length > 0 && (
+              <section aria-label={t('关注统计')} className="mb-6">
+                <div className={STAT_GRID}>
+                  <StatCard label={t('只标的')} icon="list" value={items.length} className="h-full min-w-0" />
+                  <div className="card-surface h-full min-w-0 p-5">
+                    <div className="flex items-start justify-between">
+                      <p className="eyebrow">{t('上涨 / 下跌')}</p>
+                      <Icon name="candle" size={18} className="text-ink-400" />
+                    </div>
+                    <AdvanceDeclineBar
+                      advancers={breadth.advancers}
+                      decliners={breadth.decliners}
+                      unchanged={breadth.unchanged}
+                    />
+                  </div>
+                  <StatCard
+                    label={t('重点标记')}
+                    icon="flag"
+                    value={items.filter((item) => item.marked_important).length}
+                    className="h-full min-w-0"
+                  />
+                </div>
+              </section>
+            )}
             {query.error && !query.data ? (
               <section className="card-surface">
                 <EmptyState
@@ -526,7 +512,6 @@ export default function Watchlist() {
         </div>
         </div>
       )}
-      <SourceNote text={t('本页为日线数据，收盘后更新 · 仅供研究参考，不构成投资建议')} />
     </div>
   );
 }
@@ -548,9 +533,10 @@ function AddStockForm({ onAdded, onError }: { onAdded: () => void; onError: (mes
       return;
     }
     let active = true;
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timer = window.setTimeout(() => {
       stocksApi
-        .search(keyword)
+        .search(keyword, controller ? { signal: controller.signal } : undefined)
         .then((data) => {
           if (active) {
             setSuggestions(data.results.slice(0, 6));
@@ -564,6 +550,7 @@ function AddStockForm({ onAdded, onError }: { onAdded: () => void; onError: (mes
     return () => {
       window.clearTimeout(timer);
       active = false;
+      controller?.abort();
     };
   }, [input]);
 
@@ -605,31 +592,34 @@ function AddStockForm({ onAdded, onError }: { onAdded: () => void; onError: (mes
 
   return (
     <div ref={boxRef} className="relative">
-      <form
-        className="flex items-center gap-1.5"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void add(input.trim());
-        }}
-      >
-        <input
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          onFocus={() => suggestions.length > 0 && setOpen(true)}
-          placeholder={t('代码或公司名')}
-          maxLength={24}
-          aria-label={t('添加关注股票票')}
-          className="h-8 w-[150px] mobile-control-target rounded-[var(--r-control)] border border-line-strong bg-card px-2 tnum text-caption text-ink-800 outline-none transition-[border-color] duration-fast placeholder:font-sans placeholder:text-ink-300 focus:border-brand-600"
-        />
-        <button
-          type="submit"
-          disabled={saving || !input.trim()}
-          className="mobile-control-target flex h-8 items-center gap-1 rounded-pill border border-line-strong bg-card px-2.5 text-caption text-ink-600 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+      <search>
+        <form
+          className="flex items-center gap-1.5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void add(input.trim());
+          }}
         >
-          <Icon name="plus" size={13} />
-          {t('添加')}
-        </button>
-      </form>
+          <input
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            onFocus={() => suggestions.length > 0 && setOpen(true)}
+            placeholder={t('代码或公司名')}
+            maxLength={24}
+            enterKeyHint="done"
+            aria-label={t('添加关注股票')}
+            className="h-8 w-[150px] mobile-control-target rounded-[var(--r-control)] border border-line-strong bg-card px-2 tnum text-caption text-ink-800 outline-none transition-[border-color] duration-fast placeholder:font-sans placeholder:text-ink-300 focus:border-brand-600"
+          />
+          <button
+            type="submit"
+            disabled={saving || !input.trim()}
+            className="mobile-control-target flex h-8 items-center gap-1 rounded-pill border border-line-strong bg-card px-2.5 text-caption text-ink-600 shadow-btn transition-colors duration-fast hover:border-brand-400 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Icon name="plus" size={13} />
+            {t('添加')}
+          </button>
+        </form>
+      </search>
       {open && suggestions.length > 0 && (
         <div className="absolute left-0 top-9 z-30 w-72 overflow-hidden rounded-[var(--r-group)] border border-line bg-card shadow-sh-2">
           {suggestions.map((result) => (
@@ -643,8 +633,8 @@ function AddStockForm({ onAdded, onError }: { onAdded: () => void; onError: (mes
               <span className="tnum text-caption font-medium text-brand-700">{result.display_code}</span>
               <span className="min-w-0 flex-1 truncate text-caption text-ink-700">{result.name_ja ?? result.name_en ?? '—'}</span>
               {result.sector33_name ? (
-                <SoftBadge className="max-w-[7.5rem]" title={result.sector33_name}>
-                  <span className="truncate">{result.sector33_name}</span>
+                <SoftBadge className="max-w-[7.5rem]" title={t(result.sector33_name)}>
+                  <span className="truncate">{t(result.sector33_name)}</span>
                 </SoftBadge>
               ) : null}
             </button>
@@ -684,11 +674,11 @@ function WatchCard({
             {item.sector33_name ? (
               <PointerTooltip
                 passthrough
-                label={item.sector33_name}
-                content={<span className="text-micro text-ink-600">{item.sector33_name}</span>}
+                label={t(item.sector33_name)}
+                content={<span className="text-micro text-ink-600">{t(item.sector33_name)}</span>}
               >
                 <SoftBadge className="mt-0.5 max-w-[8rem]">
-                  <span className="truncate">{item.sector33_name}</span>
+                  <span className="truncate">{t(item.sector33_name)}</span>
                 </SoftBadge>
               </PointerTooltip>
             ) : (

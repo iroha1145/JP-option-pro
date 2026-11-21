@@ -196,26 +196,14 @@ export default function HistoryRail({
 
   return (
     <aside aria-label={t('历史事件回溯')} className="radar-history paper-panel flex max-h-[560px] flex-col overflow-hidden">
-      <div className="shrink-0 border-b border-line px-4 pb-2.5 pt-3.5">
+      <div className="shrink-0 border-b border-line px-4 py-3">
         <p className="flex items-baseline justify-between gap-2">
           <span className="text-body-s font-medium text-ink-900">
             {t('历史事件回溯')}
-            <span className="tnum">
-              {' '}
-              · {t('共')} {rows.length} {t('条')}
-            </span>
           </span>
-        </p>
-        <p className="mt-1 text-micro text-ink-400">
-          {t('按时间倒序')}
-          <span className="mx-1 text-ink-300" aria-hidden="true">
-            ·
+          <span className="tnum text-micro text-ink-400">
+            {t('共')} {rows.length} {t('条')}
           </span>
-          {t('状态变更会按东京日历日归组。')}
-          <span className="mx-1 text-ink-300" aria-hidden="true">
-            ·
-          </span>
-          {t('点击行打开事件或个股')}
         </p>
       </div>
 
@@ -289,6 +277,7 @@ export default function HistoryRail({
                           tabIndex={0}
                           onClick={() => openRow(row)}
                           onKeyDown={(event) => {
+                            if (event.nativeEvent.isComposing || event.keyCode === 229) return;
                             if (event.key === 'Enter' || event.key === ' ') {
                               event.preventDefault();
                               openRow(row);

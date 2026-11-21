@@ -14,19 +14,6 @@ export interface OverlaySeriesLine {
   data: Array<number | null>;
 }
 
-export interface OverlayRender {
-  marks: DrawingMarks;
-  series: OverlaySeriesLine[];
-}
-
-export interface LayoutGrid {
-  left: number;
-  right: number;
-  top: string;
-  height: string;
-  containLabel: boolean;
-}
-
 export function alignSeriesToBars(
   values: Array<number | null | undefined>,
   dates: string[] | undefined,
@@ -357,47 +344,5 @@ export function panesToOption(
         type: 'line',
       }],
     };
-  });
-}
-
-export function analysisLayout(paneCount: number): LayoutGrid[] {
-  const extra = Math.max(0, paneCount);
-  const topPad = 3;
-  const bottomPad = 2;
-  const gap = extra ? 1.2 : 2;
-  const regions = 2 + extra;
-  const usable = 100 - topPad - bottomPad - (regions - 1) * gap;
-  let volH: number;
-  let paneH: number;
-  let priceH: number;
-  if (extra === 0) {
-    priceH = usable * 0.78;
-    volH = usable * 0.22;
-    paneH = 0;
-  } else {
-    volH = Math.min(11, usable * 0.12);
-    const paneBudget = Math.min(usable * 0.42, extra * 16);
-    paneH = paneBudget / extra;
-    priceH = usable - volH - paneH * extra;
-    if (priceH < 28) {
-      const shrink = paneH * extra;
-      const need = 28 - priceH;
-      const scale = shrink > 0 ? Math.max(0, shrink - need) / shrink : 0;
-      paneH *= scale;
-      priceH = usable - volH - paneH * extra;
-    }
-  }
-  const heights = [priceH, volH, ...Array.from({ length: extra }, () => paneH)];
-  let cursor = topPad;
-  return heights.map((height, index) => {
-    const grid = {
-      left: 8,
-      right: 8,
-      top: `${Number(cursor.toFixed(2))}%`,
-      height: `${Number(height.toFixed(2))}%`,
-      containLabel: true,
-    };
-    cursor += height + (index === heights.length - 1 ? 0 : gap);
-    return grid;
   });
 }

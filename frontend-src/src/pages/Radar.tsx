@@ -8,7 +8,6 @@ import { usePolling } from '@/hooks/usePolling';
 import { useTickFlash } from '@/hooks/useTickFlash';
 import TickPrice from '@/components/shared/TickPrice';
 import Icon from '@/components/icons';
-import { cn } from '@/lib/utils';
 import { remoteState } from '@/hooks/remoteState';
 import PageHeader from '@/components/shared/PageHeader';
 import EmptyState from '@/components/shared/EmptyState';
@@ -29,7 +28,6 @@ import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
 import { useAccess } from '@/hooks/useAccess';
 import { useToast } from '@/hooks/useToast';
 import StaleStrip from '@/components/shared/StaleStrip';
-import SourceNote from '@/components/shared/SourceNote';
 import { quoteSourceLabel } from '@/lib/quoteSource';
 import { t } from '@/i18n/core';
 import { fmtDate, fmtPrice, fmtTimeHHMMSS, fmtYenCompact } from '@/lib/format';
@@ -176,14 +174,6 @@ export default function Radar() {
   const filterKey = `${group}:${onlyAbovePivot}:${minScore}`;
   const cardsKey = `${filterKey}:${onlyWatch}:${watchFilterPending}`;
 
-  /* 「更多筛选」折叠时的一行摘要：写明当前生效的全部条件。 */
-  const filterSummary: [string, string][] = [
-    [t('查看范围'), onlyWatch ? t('只看关注') : t('全部')],
-    [t('状态'), GROUP_OPTIONS.find((option) => option.value === group)?.label ?? ''],
-    [t('评分'), SCORE_CAPS.find((cap) => cap.value === minScore)?.label ?? ''],
-    ...(onlyAbovePivot ? [[t('盘中站上枢轴'), t('已启用')] as [string, string]] : []),
-  ];
-
   const historyRail = (
     <HistoryRail events={events} filterKey={filterKey} onPromoteLead={promoteLead} />
   );
@@ -194,8 +184,15 @@ export default function Radar() {
       <PageHeader
         section="screener"
         title={t('突破雷达')}
+        description={t('收盘后扫描日线，追踪价格突破与形态演进。')}
         meta={
           <>
+            <DataThrough date={query.data?.scan_date} />
+            {query.lastUpdatedAt && (
+              <span className="tnum text-caption text-ink-400">
+                {t('更新')} {fmtTimeHHMMSS(query.lastUpdatedAt)}
+              </span>
+            )}
             <Segmented
               options={WATCH_SCOPE_OPTIONS}
               value={onlyWatch ? 'watchlist' : 'all'}
@@ -208,55 +205,30 @@ export default function Radar() {
                 {watchFailed ? t('关注读取失败 · 暂显示全部') : t('关注加载中 · 暂显示全部')}
               </span>
             )}
+            {canRefreshPublicData && (
+              <ForceRefreshButton
+                onClick={async () => {
+                  if (rescanning) return;
+                  setRescanning(true);
+                  try {
+                    await workerApi.trigger('radar_refresh');
+                    toast.success(t('重算雷达'), t('已提交'));
+                    query.refresh({ force: true });
+                  } catch (error) {
+                    toast.error(t('重算雷达'), String((error as Error).message ?? error));
+                  } finally {
+                    setRescanning(false);
+                  }
+                }}
+                spinning={rescanning}
+                label={t('重算雷达')}
+                title={t('重算雷达')}
+              />
+            )}
           </>
         }
       />
 
-      {/* 状态带：日本站只有收盘后扫描，没有扫描服务与下次扫描；只写接口真有的信息。 */}
-      <div className="radar-status paper-panel grid min-w-0 grid-cols-2 gap-4 p-4 sm:gap-6 sm:p-6 xl:grid-cols-4">
-        <div className="col-span-2 min-w-0 space-y-3 xl:col-span-1">
-          <span className="inline-flex items-center gap-2 text-body-s text-ink-700">
-            <span className={cn('size-2 shrink-0 rounded-full', query.data ? 'bg-ok-600' : 'bg-ink-300')} aria-hidden="true" />
-            {t('收盘后扫描日线，追踪价格突破与形态变化')}
-          </span>
-        </div>
-        <dl className="min-w-0 space-y-2 text-caption">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <dt className="text-ink-400">{t('数据截至')}</dt>
-            <dd className="tnum text-ink-700">{fmtDate(query.data?.scan_date)}</dd>
-          </div>
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <dt className="text-ink-400">{t('更新')}</dt>
-            <dd className="tnum text-ink-700">{query.lastUpdatedAt ? fmtTimeHHMMSS(query.lastUpdatedAt) : '—'}</dd>
-          </div>
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <dt className="text-ink-400">{t('活跃信号')}</dt>
-            <dd className="tnum text-ink-700">
-              {query.data ? remoteCount : '—'}
-              {remoteCount >= FETCH_LIMIT && <span className="ml-1 text-ink-400">{t('（单次最多 {n} 条）', { n: FETCH_LIMIT })}</span>}
-            </dd>
-          </div>
-        </dl>
-        <dl className="min-w-0 space-y-2 text-caption">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <dt className="text-ink-400">{t('盘中报价')}</dt>
-            <dd className="text-ink-700">
-              {!overlay.data ? '—' : overlayOn ? quoteSourceLabel(overlay.data).text : t('未叠加')}
-            </dd>
-          </div>
-        </dl>
-        <dl className="min-w-0 space-y-2 text-caption">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <dt className="text-ink-400">{t('涉及股票')}</dt>
-            <dd className="tnum text-ink-700">{query.data ? t('{n} 只', { n: new Set(query.data.events.map((event) => event.canonical_code)).size }) : '—'}</dd>
-          </div>
-        </dl>
-      </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-caption text-ink-500">
-        <DataThrough date={query.data?.scan_date} className="min-w-0 max-w-full [&_[data-soft-badge]]:whitespace-normal" />
-      </div>
-
-      {/* 状态收成一个下拉；评分门槛收进「更多筛选」，折叠时一行摘要写明全部条件。 */}
       <div className="radar-filterbar paper-panel flex min-w-0 flex-wrap items-center gap-x-5 gap-y-4 p-5 sm:p-6">
         <div className="flex max-w-full flex-wrap items-center gap-2">
           <span className="flex items-center gap-1.5 text-caption text-ink-500">
@@ -265,29 +237,49 @@ export default function Radar() {
           </span>
           <MenuSelect<StateGroup> ariaLabel={t('状态')} value={group} onChange={setGroup} options={GROUP_OPTIONS} />
         </div>
+        <div className="flex max-w-full flex-wrap items-center gap-2">
+          <span className="text-caption text-ink-500">{t('评分')}</span>
+          <SelectionViewport>
+            <div className="filter-group flex-wrap" role="group" aria-label={t('评分')}>
+              {SCORE_CAPS.map((cap) => (
+                <FilterButton
+                  key={cap.value}
+                  active={minScore === cap.value}
+                  onClick={() => setMinScore(cap.value)}
+                  aria-label={t('评分{label}', { label: cap.label })}
+                >
+                  {cap.label}
+                </FilterButton>
+              ))}
+            </div>
+          </SelectionViewport>
+        </div>
         {overlayOn && (
-          <PointerTooltip
-            passthrough
-            label={t('用延迟{n}分的盘中价与夜间枢轴比较', { n: overlay.data?.delayed_minutes ?? 15 })}
-            width={240}
-            contentClassName="p-2.5"
-            content={
-              <span className="text-micro text-ink-600">
-                {t('用延迟{n}分的盘中价与夜间枢轴比较', { n: overlay.data?.delayed_minutes ?? 15 })}
-              </span>
-            }
-          >
-            <button
-              type="button"
-              onClick={() => setOnlyAbovePivot((v) => !v)}
-              aria-pressed={onlyAbovePivot}
-              className="control-button mobile-control-target"
+          <div className="flex flex-wrap items-center gap-2">
+            <PointerTooltip
+              passthrough
+              label={t('按 {n} 分钟延迟盘中价比较突破枢轴', { n: overlay.data?.delayed_minutes ?? 15 })}
+              width={240}
+              contentClassName="p-2.5"
+              content={
+                <span className="text-micro text-ink-600">
+                  {t('按 {n} 分钟延迟盘中价比较突破枢轴', { n: overlay.data?.delayed_minutes ?? 15 })}
+                </span>
+              }
             >
-              <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
-              {t('盘中站上枢轴')}
-              <span className="tnum">{overlay.data?.above_pivot_count ?? 0}</span>
-            </button>
-          </PointerTooltip>
+              <button
+                type="button"
+                onClick={() => setOnlyAbovePivot((v) => !v)}
+                aria-pressed={onlyAbovePivot}
+                className="control-button mobile-control-target"
+              >
+                <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
+                {t('盘中站上枢轴')}
+                <span className="tnum">{overlay.data?.above_pivot_count ?? 0}</span>
+              </button>
+            </PointerTooltip>
+            <span className="text-micro text-ink-400">{quoteSourceLabel(overlay.data).text}</span>
+          </div>
         )}
         <span className="flex flex-wrap items-center gap-3 sm:ml-auto">
           <Segmented<ViewMode>
@@ -298,68 +290,8 @@ export default function Radar() {
             value={view}
             onChange={setView}
           />
-          {query.lastUpdatedAt && (
-            <span className="tnum text-micro text-ink-400">{t('更新')} {fmtTimeHHMMSS(query.lastUpdatedAt)}</span>
-          )}
-          {canRefreshPublicData && (
-            <ForceRefreshButton
-              onClick={async () => {
-                if (rescanning) return;
-                setRescanning(true);
-                try {
-                  await workerApi.trigger('radar_refresh');
-                  toast.success(t('重算雷达'), t('已提交'));
-                  query.refresh({ force: true });
-                } catch (error) {
-                  toast.error(t('重算雷达'), String((error as Error).message ?? error));
-                } finally {
-                  setRescanning(false);
-                }
-              }}
-              spinning={rescanning}
-              label={t('重算雷达')}
-              title={t('重算雷达')}
-            />
-          )}
         </span>
-        <details className="group/more basis-full border-t border-line/70 pt-3">
-          <summary className="disclosure-trigger flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-2 rounded-lg py-1 text-caption text-ink-500 outline-none transition-colors duration-fast hover:text-ink-800 focus-visible:ring-2 focus-visible:ring-brand-600 [&::-webkit-details-marker]:hidden">
-            <span className="inline-flex shrink-0 items-center gap-2 text-ink-700">
-              {t('更多筛选')}
-              <Icon name="chevron-down" size={13} className="text-ink-400 transition-transform group-open/more:rotate-180" />
-            </span>
-            <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-micro">
-              {filterSummary.map(([name, value]) => (
-                <span key={name}>
-                  <span className="text-ink-400">{name}</span> <span className="text-ink-700">{value}</span>
-                </span>
-              ))}
-            </span>
-          </summary>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-3 pt-3">
-            <div className="flex max-w-full flex-wrap items-center gap-2">
-              <span className="text-caption text-ink-500">{t('评分')}</span>
-              <SelectionViewport>
-                <div className="filter-group flex-wrap" role="group" aria-label={t('评分')}>
-                  {SCORE_CAPS.map((cap) => (
-                    <FilterButton
-                      key={cap.value}
-                      active={minScore === cap.value}
-                      onClick={() => setMinScore(cap.value)}
-                      aria-label={t('评分{label}', { label: cap.label })}
-                    >
-                      {cap.label}
-                    </FilterButton>
-                  ))}
-                </div>
-              </SelectionViewport>
-            </div>
-          </div>
-        </details>
       </div>
-      <p className="min-w-0 text-caption text-ink-500">
-        {t('按告警优先级从高到低排列；同一只股票的多条信号合并为一张卡。')}
-      </p>
 
       <section className="min-w-0" aria-label={t('当日信号')}>
         <div className="radar-section-heading mb-5 flex flex-wrap items-end justify-between gap-3">
@@ -367,6 +299,7 @@ export default function Radar() {
           <p className="tnum text-caption text-ink-400">
             {t('{n} 个活跃', { n: events.length })}
             {events.length > 0 ? ` · ${t('{n} 只', { n: stockCount })}` : ''}
+            {remoteCount >= FETCH_LIMIT ? ` · ${t('上限 {n} 条', { n: FETCH_LIMIT })}` : ''}
             {onlyWatch && !watchFilterPending ? t(' · 只看关注') : ''}
           </p>
         </div>
@@ -452,7 +385,6 @@ export default function Radar() {
                   <p className="text-body-s font-medium text-ink-800">
                     {t('其余信号')} · <span className="tnum">{t('{stocks} 只股票 · {signals} 条信号', { stocks: restGroups.length, signals: restSignalCount })}</span>
                   </p>
-                  <p className="text-micro text-ink-400">{t('点击小卡设为首要信号 · 点击代码打开个股页')}</p>
                 </div>
                 <SignalCards
                   key={cardsKey}
@@ -474,7 +406,6 @@ export default function Radar() {
         </div>
       )}
       </section>
-      <SourceNote text={t('突破扫描结果 · 日线收盘后更新')} />
     </div>
   );
 }

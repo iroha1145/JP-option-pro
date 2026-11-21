@@ -21,7 +21,6 @@ import SectorMembersPanel from '@/components/sectors/SectorMembersPanel';
 import StaleStrip from '@/components/shared/StaleStrip';
 import SessionLED from '@/components/shared/SessionLED';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
-import SourceNote from '@/components/shared/SourceNote';
 import InfoHint from '@/components/shared/InfoHint';
 import { MARKET_HINTS } from '@/lib/indicatorHints';
 import { tokyoSession } from '@/lib/tokyoSession';
@@ -210,34 +209,16 @@ export default function Market() {
           {state === 'stale' && (
             <StaleStrip onRetry={refreshOverview} refreshing={market.refreshing} />
           )}
-          {n225 && (
-            <section className="paper-panel flex min-w-0 flex-wrap items-end justify-between gap-3 p-4 sm:p-6">
-              <span className="flex flex-col">
-                <span className="eyebrow">{t('日経225 · 盘中')}</span>
-                <span className="mt-1 flex items-baseline gap-3">
-                  <span className="metric-value text-data-l tnum text-ink-900">
-                    {n225.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                  </span>
-                  <ChangeBadge value={n225.change_pct} />
-                </span>
-              </span>
-              <span className="flex items-center gap-1 text-micro text-warn-700">
-                <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
-                {quoteSourceLabel(live.data).text}
-                {n225.as_of_epoch ? ` · ${fmtTimeJst(n225.as_of_epoch)}` : ''}
-              </span>
-            </section>
-          )}
 
           <div className="page-grid items-start">
             <IndexTrendPanel
-              name={series.data?.name ?? t('指数')}
+              name={series.data?.name ? t(series.data.name) : t('指数')}
               seriesCode={series.data?.index_code ?? indexCode}
               indexCode={indexCode}
               onIndexChange={setIndexCode}
               options={(market.data?.indices ?? []).slice(0, 4).map((index) => ({
                 value: index.index_code,
-                label: index.name.replace('東証', '').replace('市場指数', ''),
+                label: t(index.name.replace('東証', '').replace('市場指数', '')),
               }))}
               bars={series.data?.bars ?? []}
               loading={series.loading}
@@ -247,7 +228,9 @@ export default function Market() {
             />
 
             <section className="min-w-0 space-y-3 lg:col-span-4" aria-label={t('指数概览')}>
-              {(market.data?.indices ?? []).map((index) => (
+              {market.loading && !market.data
+                ? Array.from({ length: 6 }, (_, i) => <SkeletonCard key={i} className="h-[88px]" />)
+                : (market.data?.indices ?? []).map((index) => (
                 <button
                   key={index.index_code}
                   type="button"
@@ -265,7 +248,7 @@ export default function Market() {
                   )}
                 >
                   <span className="min-w-0">
-                    <span className="block truncate text-body-s text-ink-700">{index.name}</span>
+                    <span className="block truncate text-body-s text-ink-700">{t(index.name)}</span>
                     <TickPrice
                       flash={indexFlashes[index.index_code]}
                       className="metric-value text-data-m tnum text-ink-900"
@@ -296,6 +279,24 @@ export default function Market() {
                   </span>
                 </button>
               ))}
+              {n225 && (
+                <div className="paper-panel flex min-w-0 flex-wrap items-end justify-between gap-3 px-4 py-3">
+                  <span className="flex flex-col">
+                    <span className="eyebrow">{t('日经225 · 盘中')}</span>
+                    <span className="mt-1 flex items-baseline gap-3">
+                      <span className="metric-value text-data-m tnum text-ink-900">
+                        {fmtPrice(n225.price, 2)}
+                      </span>
+                      <ChangeBadge value={n225.change_pct} size="sm" />
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-1 text-micro text-warn-700">
+                    <span className="inline-block size-1.5 rounded-full bg-warn-600" aria-hidden />
+                    {quoteSourceLabel(live.data).text}
+                    {n225.as_of_epoch ? ` · ${fmtTimeJst(n225.as_of_epoch)}` : ''}
+                  </span>
+                </div>
+              )}
             </section>
           </div>
 
@@ -310,13 +311,12 @@ export default function Market() {
                 </h2>
                 <p className="mt-0.5 text-micro text-ink-400">
                   {tileSource === 'intraday' && liveByCode.size
-                    ? t('1日=盘中延迟{n}分（{q}/{u} 只覆盖）· 20日=官方日线 {date}', {
+                    ? t('1日为延迟 {n} 分钟盘中涨跌（覆盖 {q}/{u} 只）· 20日为收盘日线', {
                         n: liveSectors.data?.delayed_minutes ?? 15,
                         q: liveSectors.data?.quoted ?? 0,
                         u: liveSectors.data?.universe ?? 0,
-                        date: market.data?.data_through ?? '—',
                       })
-                    : t('行业断面 · J-Quants 官方日线 {date} 收盘（盘中不更新）', {
+                    : t('截至 {date} 收盘日线', {
                         date: market.data?.data_through ?? '—',
                       })}
                 </p>
@@ -366,11 +366,9 @@ export default function Market() {
             sort={memberSort}
             onSortChange={setMemberSort}
             liveQuotes={liveQuotes}
-            delayedMinutes={live.data?.delayed_minutes ?? null}
           />
         </>
       )}
-      <SourceNote text={t('指数与 33 行业为官方日线，收盘后更新')} />
     </div>
   );
 }

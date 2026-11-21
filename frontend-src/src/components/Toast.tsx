@@ -91,6 +91,7 @@ function ToastCard({ t, onDismiss, onRemove }: { t: ToastItem; onDismiss: (id: n
               {t.description && <p className="mt-0.5 text-caption text-ink-500">{t.description}</p>}
             </div>
             <button
+              type="button"
               onClick={() => onDismiss(t.id)}
               className="icon-motion-trigger mobile-icon-target flex size-8 shrink-0 items-center justify-center rounded-[var(--r-dropdown-item)] text-ink-400 transition-[transform,color,background-color] duration-fast hover:bg-paper-2 hover:text-ink-600 active:scale-95"
               aria-label={__t('关闭通知')}

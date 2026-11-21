@@ -34,18 +34,18 @@ STATE_LABELS: dict[str, str] = {
     STATE_NO_SIGNAL: "无公开空头动向",
 }
 
-#: 状態ごとに必ず添える但し書き。
+#: 状態ごとに添える範囲の補足。
 STATE_CAVEATS: dict[str, str] = {
-    STATE_BUILDING: "公开空头增加只说明达到披露门槛的仓位在上升，门槛以下的仓位看不到。",
-    STATE_COVERING: "公开空头减少只说明报告义务范围内的仓位下降，剩余仓位未知。",
-    STATE_MIXED: "20 日与 5 日的方向不一致，净变化可能只是机构之间的换手。",
+    STATE_BUILDING: "仅统计达到披露门槛的持仓，门槛以下未计入。",
+    STATE_COVERING: "仅统计报告义务范围内的减持，跌破门槛后的剩余持仓不可见。",
+    STATE_MIXED: "近 20 日与近 5 日净变动方向相反，机构间增减互现。",
 }
 
 #: 拥挤度の段 → 説明文（段の規則をそのまま書く。`states.CROWDING_RULES` と揃える）。
 CROWDING_LINES: dict[int, str] = {
-    CROWDING_HIGH: "公开空头拥挤度：高（近期机构不少于 4 家，或公开持仓不低于 4%）。",
-    CROWDING_MID: "公开空头拥挤度：中（近期机构不少于 2 家，或公开持仓不低于 2%）。",
-    CROWDING_LOW: "公开空头拥挤度：低（仅 1 家近期机构，且公开持仓低于 2%）。",
+    CROWDING_HIGH: "公开空头拥挤度：高（近期机构 ≥ 4 家，或公开持仓 ≥ 4%）。",
+    CROWDING_MID: "公开空头拥挤度：中（近期机构 ≥ 2 家，或公开持仓 ≥ 2%）。",
+    CROWDING_LOW: "公开空头拥挤度：低（近期机构 1 家，且公开持仓 < 2%）。",
 }
 
 
@@ -90,32 +90,27 @@ def describe(
     unknown = [h for h in holders if h.get("visibility_status") == "unknown"]
     ratio = _pct(snapshot.get("visible_short_ratio"))
     if ratio and reporting:
-        say("近期有更新的报告义务中机构 {n} 家，公开可见空头比例合计 {ratio}。",
+        say("近期更新的报告义务中机构 {n} 家，公开持仓合计 {ratio}。",
             n=len(reporting), ratio=ratio)
     elif not reporting:
-        say("当前没有近期更新的报告义务中机构，公开可见空头比例为 0。")
+        say("当前无近期更新的报告义务中机构，公开持仓比例为 0。")
     if stale:
         oldest = max((h.get("state_age_trading_days") or 0) for h in stale)
         in_scope = _pct(snapshot.get("reported_in_scope_ratio"))
         if in_scope:
             say(
-                "另有 {n} 家按官方口径仍在报告义务中，但最后一次报告已是 {days} 个交易日之前。"
-                "官方规则没有失效期限——变动不足 0.1% 就无需再报，所以旧值可能仍然成立，"
-                "也可能早已不同；含这些机构的在册合计为 {ratio}，上面的「公开可见」口径未计入它们。",
+                "另有 {n} 家最后报告在 {days} 个交易日之前，未计入公开持仓；含其在册合计为 {ratio}。",
                 n=len(stale), days=oldest, ratio=in_scope,
             )
         else:
             say(
-                "另有 {n} 家按官方口径仍在报告义务中，但最后一次报告已是 {days} 个交易日之前。"
-                "官方规则没有失效期限——变动不足 0.1% 就无需再报，所以旧值可能仍然成立，"
-                "也可能早已不同；上面的「公开可见」口径未计入它们。",
+                "另有 {n} 家最后报告在 {days} 个交易日之前，未计入公开持仓。",
                 n=len(stale), days=oldest,
             )
     if below:
-        say("另有 {n} 家已跌破公开披露门槛——该机构已降至门槛以下，实际剩余仓位未知，未计入合计。",
-            n=len(below))
+        say("另有 {n} 家已跌破公开披露门槛，未计入合计。", n=len(below))
     if unknown:
-        say("另有 {n} 家的最新报告缺少可读的比例数值，状态未知，未计入任何合计。", n=len(unknown))
+        say("另有 {n} 家最新报告缺少持仓比例，未计入合计。", n=len(unknown))
 
     level = crowding_level(
         snapshot.get("visible_institution_count"), snapshot.get("visible_short_ratio"),
@@ -151,14 +146,13 @@ def describe(
 
     days_to_cover = snapshot.get("visible_days_to_cover")
     if days_to_cover is not None:
-        say("公开可见回补天数约 {days} 天（仅按可见部分计算，不是市场总空头回补天数）。",
-            days=_num(days_to_cover))
+        say("公开持仓回补约 {days} 天。", days=_num(days_to_cover))
 
     # 件数の並びは言語ごとに語順が違う。1 項目 = 1 テンプレートにして、
     # つなぎ（、）もフロント側の区切りに任せる。
     moves: list[dict[str, Any]] = []
     for value, template in (
-        (snapshot.get("entry_count_20d"), "{n}家新规进入"),
+        (snapshot.get("entry_count_20d"), "{n}家新进"),
         (snapshot.get("reentry_count_20d"), "{n}家重新进入"),
         (snapshot.get("reduction_count_20d"), "{n}家减仓"),
         (snapshot.get("threshold_exit_count_20d"), "{n}家跌破门槛"),
@@ -176,8 +170,7 @@ def describe(
 
     state = str(snapshot.get("primary_state") or STATE_NO_SIGNAL)
     label = STATE_LABELS.get(state, state)
-    say("近 20 日动向归为「{label}」。这是按公开报告的净变化做的规则分类，不代表机构意图。",
-        label=label)
+    say("近 20 日动向归为「{label}」。", label=label)
 
     return {
         "state": state,

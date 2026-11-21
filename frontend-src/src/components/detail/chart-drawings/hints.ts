@@ -22,25 +22,24 @@ export const LAYER_HINTS: Record<string, ScoreHint> = {
     body: t('相邻两根已收盘日线之间未交易的价格区间；被后续交易填掉的部分会缩小。'),
   },
   pivots: {
-    title: t('pivot/invalidation'),
-    body: t('突破参考价（pivot）是整理区的上沿；失效价（invalidation）表示该整理结构不再成立的价位。'),
+    title: t('突破位与失效位'),
+    body: t('突破位为整理区上沿；失效位为整理结构不再成立的下破价位。'),
   },
   auto_patterns: {
-    title: t('自动趋势线/通道/三角形/楔形'),
-    body: t('根据已确认的高低点绘制趋势线、通道、三角形和楔形；触碰次数和间隔达到要求后才显示。'),
-    note: t('几何质量表示形状的吻合程度，不代表涨跌概率。'),
+    title: t('趋势线与几何形态'),
+    body: t('基于已确认摆动高低点绘制趋势线、通道、三角形与楔形。'),
   },
   candles: {
     title: t('K线形态'),
-    body: t('单根或两根 K 线的经典形态标记（如吞没、锤子），标在事件发生的那根上。'),
+    body: t('标记吞没、锤子线、射击之星等单根或双根 K 线形态。'),
   },
   traps: {
     title: t('Spring/Upthrust'),
-    body: t('假跌破收回（Spring）：跌破后迅速回到区间内。假突破回落（Upthrust）：突破后迅速跌回区间内。'),
+    body: t('Spring：跌破支撑后迅速收回区间内；Upthrust：突破阻力后迅速跌回区间内。'),
   },
   breakouts: {
-    title: t('突破触发/测试/失败'),
-    body: t('显示突破后的进展：已触发、回踩测试或突破失败。'),
+    title: t('突破状态'),
+    body: t('显示突破进展：已触发、回踩确认或突破失败。'),
   },
   rsi: {
     title: t('RSI'),

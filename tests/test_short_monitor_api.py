@@ -250,7 +250,7 @@ def test_stock_detail_explanation_is_deterministic_and_caveated(client):
     assert a == b
     joined = " ".join(a["lines"])
     assert "跌破公开披露门槛" in joined
-    assert "不代表机构意图" in joined
+    assert "近 20 日动向归为" in joined
 
 
 def test_events_endpoint_is_paginated(client):
@@ -285,14 +285,14 @@ def test_institutions_do_not_merge_legal_entities(client):
 
 
 def test_directional_states_always_carry_their_caveat():
-    """増減・方向反復の但し書きは外せない。持仓が見えている範囲の話でしかない。"""
+    """増減・方向反復の範囲補足を保持する。"""
 
     building = explain.describe({"primary_state": states.STATE_BUILDING})
-    assert "门槛以下的仓位看不到" in building["caveat"]
+    assert "门槛以下未计入" in building["caveat"]
     covering = explain.describe({"primary_state": states.STATE_COVERING})
-    assert "剩余仓位未知" in covering["caveat"]
+    assert "剩余持仓不可见" in covering["caveat"]
     mixed = explain.describe({"primary_state": states.STATE_MIXED})
-    assert "换手" in mixed["caveat"]
+    assert "增减互现" in mixed["caveat"]
 
 
 def test_explanation_never_claims_intent():

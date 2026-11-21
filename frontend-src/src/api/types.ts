@@ -432,48 +432,6 @@ export interface RadarCurrent {
   note?: string;
 }
 
-export interface ScreenerRow {
-  canonical_code: string;
-  trade_date: string;
-  market_code: string | null;
-  sector33_code: string | null;
-  close: number | null;
-  turnover_value: number | null;
-  avg_turnover_20d: number | null;
-  turnover_ratio: number | null;
-  return_1d: number | null;
-  return_5d: number | null;
-  return_20d: number | null;
-  return_63d: number | null;
-  pct_from_high_252: number | null;
-  ma25_gap_pct: number | null;
-  ma75_gap_pct: number | null;
-  ma200_gap_pct: number | null;
-  ma_alignment: number | null;
-  rs_topix_63d: number | null;
-  rs_sector_20d?: number | null;
-  rs_sector_63d: number | null;
-  /** none | precaution | daily_publication | restricted | severe | unknown */
-  regulation_level?: string | null;
-  regulation_severity?: number | null;
-  volatility_contraction: number | null;
-  drawdown_63d: number | null;
-  margin_long_short_ratio: number | null;
-  metrics: {
-    name_ja?: string | null;
-    sector33_name?: string | null;
-    market_name?: string | null;
-    radar_state?: string | null;
-  };
-}
-
-export interface ScreenerResponse {
-  version: string;
-  trade_date: string | null;
-  total: number;
-  rows: ScreenerRow[];
-}
-
 export interface WatchlistItem {
   canonical_code: string;
   display_code: string;
@@ -489,18 +447,6 @@ export interface WatchlistItem {
     change_pct: number | null;
     turnover_value: number | null;
   } | null;
-}
-
-export interface EarningsCalendarItem {
-  canonical_code: string;
-  display_code: string;
-  company_name: string | null;
-  announcement_date: string | null;
-  fiscal_year_end: string | null;
-  fiscal_quarter: string | null;
-  sector_name: string | null;
-  section: string | null;
-  in_watchlist: boolean;
 }
 
 export interface EarningsRecentItem {
@@ -926,15 +872,6 @@ export interface AccessStatus {
   password_configured: boolean;
   /** 访客账号会话（与美股版共库的账号体系；不授予任何 owner 权限）。 */
   account?: { logged_in: boolean; username: string | null };
-}
-
-export interface SettingsView {
-  jquants_configured: boolean;
-  access_mode: string;
-  radar_enabled: boolean;
-  news_mode: string;
-  app_version: string;
-  app_commit: string;
 }
 
 /** 走步検証レポート（読み取り専用・研究ページ用） */

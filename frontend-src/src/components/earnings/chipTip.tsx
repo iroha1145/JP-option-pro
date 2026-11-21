@@ -1,9 +1,10 @@
 import type { EarningsUpcomingItem } from '@/api/types';
+import { t } from '@/i18n/core';
 import { statusMeta } from './types';
 
 export function earningsChipLabel(item: EarningsUpcomingItem): string {
   const meta = statusMeta(item.status);
-  return [item.name_ja ?? item.display_code, item.quarter_label, meta.label].filter(Boolean).join(' · ');
+  return [item.name_ja ?? item.display_code, item.quarter_label ? t(item.quarter_label) : null, meta.label].filter(Boolean).join(' · ');
 }
 
 export function EarningsChipContent({ item }: { item: EarningsUpcomingItem }) {
@@ -13,7 +14,7 @@ export function EarningsChipContent({ item }: { item: EarningsUpcomingItem }) {
       <span className="block text-caption font-medium text-ink-800">{item.name_ja ?? item.display_code}</span>
       <span className="mt-1 block tnum text-micro text-ink-500">{item.display_code}</span>
       <span className="mt-1 block text-micro text-ink-500">
-        {[item.quarter_label, meta.label].filter(Boolean).join(' · ')}
+        {[item.quarter_label ? t(item.quarter_label) : null, meta.label].filter(Boolean).join(' · ')}
       </span>
     </>
   );

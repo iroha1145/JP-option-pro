@@ -17,6 +17,7 @@ import Icon, { type IconName } from '@/components/icons';
 import GlidePill from '@/components/shared/GlidePill';
 import { t } from '@/i18n/core';
 import { NAV_GROUPS, isNavGroupActive, navAriaCurrent } from '@/lib/navigation';
+import { preloadRoute } from '@/lib/routeLoaders';
 import { useGlideLayoutId } from '@/hooks/useGlideLayoutId';
 
 const DOCK_ITEMS: { label: string; path: string; icon: IconName }[] = [
@@ -95,6 +96,8 @@ function MobileDockContent({ onHeightChange }: MobileDockProps) {
         )}
         <Link
           to={item.path}
+          onPointerEnter={() => preloadRoute(item.path)}
+          onFocus={() => preloadRoute(item.path)}
           className="icon-motion-trigger relative z-10 flex min-h-[44px] min-w-0 flex-1 flex-col items-center justify-center gap-1 py-2 transition-transform duration-fast active:scale-[0.96]"
           aria-label={item.label}
           aria-current={navAriaCurrent(location.pathname, group)}
@@ -120,6 +123,7 @@ function MobileDockContent({ onHeightChange }: MobileDockProps) {
               <GlidePill dependency={location.pathname} layoutId={dockGlideId} className="inset-1 rounded-[var(--r-dock-item)] bg-brand-50 shadow-none" />
             )}
             <button
+              type="button"
               onClick={() => setMoreOpen(true)}
               className="icon-motion-trigger relative z-10 flex min-h-[44px] w-full flex-col items-center justify-center gap-1 py-2 transition-transform duration-fast active:scale-[0.96]"
               aria-label={t('更多')}
@@ -171,6 +175,9 @@ function MobileDockContent({ onHeightChange }: MobileDockProps) {
             {MORE_ITEMS.map((m) => (
               <button
                 key={m.path}
+                type="button"
+                onPointerEnter={() => preloadRoute(m.path)}
+                onFocus={() => preloadRoute(m.path)}
                 onClick={() => {
                   closeSheet();
                   navigate(m.path);
@@ -220,7 +227,7 @@ function MobileDockContent({ onHeightChange }: MobileDockProps) {
               </span>
               <span className="flex-1">
                 <span className="block text-body-s font-medium text-ink-800">
-                  {isOwner ? t('管理员 已登录') : isSignedIn ? t('已登录 {name}', { name: username ?? '' }) : t('访客只读模式')}
+                  {isOwner ? t('管理员已登录') : isSignedIn ? t('已登录 {name}', { name: username ?? '' }) : t('访客只读模式')}
                 </span>
                 <span className="block text-micro text-ink-400">
                   {isOwner || isSignedIn
@@ -229,21 +236,6 @@ function MobileDockContent({ onHeightChange }: MobileDockProps) {
                 </span>
               </span>
             </button>
-            {isSignedIn && (
-              <button
-                type="button"
-                onClick={() => {
-                  closeSheet();
-                  navigate('/login', { state: { from: location.pathname + location.search } });
-                }}
-                className="icon-motion-trigger flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-micro text-ink-500 transition-[background-color] hover:bg-paper-2 active:bg-line/60"
-              >
-                <span className="flex size-9 items-center justify-center rounded-md border border-line bg-card-warm text-ink-400">
-                  <Icon motion name="shield" size={17} />
-                </span>
-                {t('退出并换账号')}
-              </button>
-            )}
           </div>
         </div>
       )}

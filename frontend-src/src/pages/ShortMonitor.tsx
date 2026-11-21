@@ -46,7 +46,6 @@ import { explanationLine } from '@/lib/explainText';
 import SoftBadge from '@/components/shared/SoftBadge';
 import StaleStrip from '@/components/shared/StaleStrip';
 import ForceRefreshButton from '@/components/shared/ForceRefreshButton';
-import SourceNote from '@/components/shared/SourceNote';
 import InfoHint from '@/components/shared/InfoHint';
 import PointerTooltip from '@/components/shared/PointerTooltip';
 import { SHORT_HINTS, type ScoreHint } from '@/lib/indicatorHints';
@@ -81,14 +80,14 @@ const STATE_LABELS: Record<string, string> = {
 };
 
 const FLAG_LABELS: Record<string, string> = {
-  new_entry: '新规进入',
+  new_entry: '新进',
   reentry: '重新进入',
   concentrated: '空头集中',
   multi_reduction: '多机构减仓',
   below_threshold: '跌破门槛',
   not_visible: '数据不可见',
   crowded_margin: '信用买入拥挤',
-  regulated: '信用规制',
+  regulated: '信用限制',
   earnings_near: '财报临近',
   thin_liquidity: '低流动性',
   stale_data: '数据过期',
@@ -165,7 +164,7 @@ export default function ShortMonitor() {
       <PageHeader
         section="market"
         title={t('机构空卖')}
-        description={t('哪些股票被公开做空得最集中，最近在增加还是减少')}
+        description={t('追踪达到 0.5% 法定披露门槛的机构空头持仓与近期增减。')}
         meta={
           <>
             <DataThrough date={overview?.as_of_date ?? rankingQuery.data?.as_of_date} />
@@ -183,8 +182,6 @@ export default function ShortMonitor() {
           </>
         }
       />
-
-      <ReadingGuide />
 
       {(state === 'stale' || overviewState === 'stale') && (
         <StaleStrip onRetry={onRefreshMonitor} refreshing={refreshingMonitor} />
@@ -285,47 +282,7 @@ export default function ShortMonitor() {
           )}
         </SkeletonReveal>
       )}
-
-      <div className="space-y-1 text-micro text-ink-400">
-        <p>{t('机构数仅统计近期公开持仓；低于门槛、久未更新和比例缺失的机构分别标注')}</p>
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="inline-flex items-center gap-1 text-down-600">
-            <span className="inline-block size-1.5 rounded-full bg-down-600" aria-hidden />
-            {t('空头增加用跌色')}
-          </span>
-          <span className="inline-flex items-center gap-1 text-up-600">
-            <span className="inline-block size-1.5 rounded-full bg-up-600" aria-hidden />
-            {t('空头减少用涨色')}
-          </span>
-          <span>{t('相对收益按正负使用系统涨跌配色')}</span>
-          <span>{t('拥挤度与动向徽标不用涨跌色')}</span>
-        </p>
-      </div>
-      <SourceNote text={t('公开披露的机构空卖持仓 · 非全市场空头')} />
     </div>
-  );
-}
-
-/* ---------------- 读法说明 ---------------- */
-
-function ReadingGuide() {
-  return (
-    <section aria-label={t('读法说明')} className="paper-panel px-4 py-3.5 sm:px-5">
-      <ul className="grid grid-cols-1 gap-x-8 gap-y-2 text-caption text-ink-600 lg:grid-cols-2">
-        <li className="flex gap-2">
-          <Icon name="filter-funnel" size={14} className="mt-[3px] shrink-0 text-ink-400" />
-          <span className="max-w-prose">
-            {t('这里只有达到 0.5% 披露门槛的机构持仓，不是全市场的空头。跌破门槛不等于清仓。')}
-          </span>
-        </li>
-        <li className="flex gap-2">
-          <Icon name="clock" size={14} className="mt-[3px] shrink-0 text-ink-400" />
-          <span className="max-w-prose">
-            {t('历史统计上，公开做空的机构越多、持仓比例越高，这只股票之后一段时间往往弱于同板块。这是统计关系，不是买卖建议。')}
-          </span>
-        </li>
-      </ul>
-    </section>
   );
 }
 
@@ -685,7 +642,7 @@ function DetailCard({ row }: { row: ShortMonitorRow }) {
         </Link>
       </h3>
       <p className="mt-1 text-caption text-ink-500">
-        {row.sector33_name ?? '—'} · {row.market_name ?? '—'}
+        {row.sector33_name ? t(row.sector33_name) : '—'} · {row.market_name ? t(row.market_name) : '—'}
       </p>
 
       <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2">
@@ -733,7 +690,7 @@ function DetailCard({ row }: { row: ShortMonitorRow }) {
             <span className="inline-block size-1.5 rounded-full bg-up-600" aria-hidden />
             {t('公开空头减少或跌破门槛')}
           </span>
-          <span>{t('标在公开日之后的首个交易日 —— 市场最早能知道的那天')}</span>
+          <span>{t('按披露次一交易日标记')}</span>
         </p>
       </div>
 
@@ -831,17 +788,17 @@ function InstitutionStatusNotes({ row }: { row: ShortMonitorRow }) {
     {
       count: row.below_threshold_count,
       label: t('低于披露门槛'),
-      detail: t('最后报告比例低于 0.5%，不计入近期公开持仓或在册合计；不代表持仓已清零。'),
+      detail: t('最后报告低于 0.5%，未计入公开持仓与在册合计。'),
     },
     {
       count: row.stale_reporting_count ?? 0,
       label: t('久未更新'),
-      detail: t('最后报告仍达到 0.5%，但超过 125 个交易日未更新。不计入近期公开持仓，仍保留在册合计。'),
+      detail: t('最后报告达 0.5% 但逾 125 个交易日未更新，仅计入在册合计。'),
     },
     {
       count: row.unknown_institution_count ?? 0,
       label: t('比例缺失'),
-      detail: t('最新报告缺少可读持仓比例，无法判断持仓状态；不表示机构名称不明或持仓已清零。'),
+      detail: t('最新报告缺少持仓比例，未计入合计。'),
     },
   ].filter((status) => status.count > 0);
   if (!statuses.length) return null;

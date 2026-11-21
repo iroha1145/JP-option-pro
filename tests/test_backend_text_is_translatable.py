@@ -151,8 +151,12 @@ def _label_constants() -> dict[str, str]:
     groups: dict[str, list[str]] = {
         "radar/price_action._STRUCTURE_LABELS": list(_STRUCTURE_LABELS.values()),
         "radar/price_action._PATTERN_LABELS": list(_PATTERN_LABELS.values()),
-        "strength_scan.REGIME_LABELS": [*strength_scan.REGIME_LABELS,
-                                        strength_scan.REGIME_SPREAD_LABEL],
+        "strength_scan.REGIME_LABELS": [
+            *strength_scan.REGIME_LABELS,
+            strength_scan.REGIME_SPREAD_LABEL,
+            strength_scan.REGIME_WARNING_TOPIX_MA200,
+            strength_scan.REGIME_WARNING_BREADTH,
+        ],
         # ニュースの分類は **API の絞り込み値そのもの**（画面にも出る）。
         "news/classify.CATEGORY_WEIGHTS": list(CATEGORY_WEIGHTS),
         "research/replay.POINT_IN_TIME_LIMITS": list(POINT_IN_TIME_LIMITS),

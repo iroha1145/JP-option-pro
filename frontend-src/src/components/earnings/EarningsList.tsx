@@ -88,20 +88,20 @@ function ActualCompare({ actual }: { actual: NonNullable<EarningsUpcomingItem['a
     const over = actual.achievement >= 1;
     parts.push(
       <span key="ach" className={over ? 'text-up-700' : 'text-down-700'}>
-        {t('対予想')} {pct(actual.achievement)}
+        {t('达成率')} {pct(actual.achievement)}
       </span>,
     );
   } else if (actual.basis === 'progress' && actual.progress != null) {
     parts.push(
       <span key="prg" className="text-ink-500">
-        {t('進捗')} {pct(actual.progress)}
+        {t('进度')} {pct(actual.progress)}
       </span>,
     );
   }
   if (actual.yoy_change != null) {
     parts.push(
       <span key="yoy" className={actual.yoy_change >= 0 ? 'text-up-700' : 'text-down-700'}>
-        {t('前年同期')} {actual.yoy_change >= 0 ? '+' : ''}
+        {t('同比')} {actual.yoy_change >= 0 ? '+' : ''}
         {pct(actual.yoy_change)}
       </span>,
     );
@@ -122,7 +122,7 @@ function ActualCompare({ actual }: { actual: NonNullable<EarningsUpcomingItem['a
 /* 短縮形（OP / NP）を使う: 行は元々コンパクトで、隣の実績行も「营利/纯利」表記。
    フル表記だと英語 "Operating profit" が端末幅で確実に切れる。 */
 function metricLabel(metric: string | undefined): string {
-  return metric === 'net_profit' ? t('纯利') : t('营利');
+  return metric === 'net_profit' ? t('净利') : t('营利');
 }
 
 /* ---------------- 状态芯片 ---------------- */
@@ -130,15 +130,15 @@ export function StatusChip({ item }: { item: EarningsUpcomingItem }) {
   const meta = statusMeta(item.status);
   return (
     <span className="flex flex-wrap items-center gap-1">
-      <SoftBadge>{item.quarter_label ?? '—'}</SoftBadge>
+      <SoftBadge>{item.quarter_label ? t(item.quarter_label) : '—'}</SoftBadge>
       {item.status === 'estimated' ? (
         <PointerTooltip
-          label={t('前年同期开示日推导的目安，以公司正式公告为准')}
-          width={240}
+          label={t('按上年同期披露日推算')}
+          width={220}
           contentClassName="p-2.5"
           content={
             <span className="block text-micro text-ink-600">
-              {t('前年同期开示日推导的目安，以公司正式公告为准')}
+              {t('按上年同期披露日推算')}
             </span>
           }
         >
@@ -149,7 +149,7 @@ export function StatusChip({ item }: { item: EarningsUpcomingItem }) {
       ) : (
         <SoftBadge tone={item.status === 'confirmed' ? 'brand' : 'neutral'}>{meta.label}</SoftBadge>
       )}
-      {item.actual?.is_revision && <SoftBadge tone="warn">{t('业绩预想修正')}</SoftBadge>}
+      {item.actual?.is_revision && <SoftBadge tone="warn">{t('业绩预测修正')}</SoftBadge>}
     </span>
   );
 }
@@ -226,15 +226,15 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
 
   return (
     <section
-      className="card-surface overflow-x-auto overscroll-x-contain md:max-h-[min(72vh,880px)] md:overflow-y-auto [scrollbar-gutter:stable]"
+      className="card-surface overflow-x-auto overscroll-x-contain md:max-h-[min(72dvh,880px)] md:overflow-y-auto [scrollbar-gutter:stable]"
       tabIndex={0}
       aria-label={t('财报列表')}
     >
       {/* 桌面列头 */}
       <div className={cn('sticky top-0 z-20 hidden border-b border-line bg-card-warm px-4 py-2.5 md:grid md:gap-3', GRID)}>
         <span className="eyebrow">{t('代码')}</span>
-        <span className="eyebrow">{t('种别 · 状态')}</span>
-        <span className="eyebrow">{t('前期実績 → 会社予想 → 実績')}</span>
+        <span className="eyebrow">{t('报告期 · 状态')}</span>
+        <span className="eyebrow">{t('上期实绩 → 公司预测 → 实绩')}</span>
         <span className="eyebrow text-right">{t('收盘 / 涨跌')}</span>
         <span className="eyebrow text-right">{t('20日均额')}</span>
         <span className="eyebrow text-right">★</span>
@@ -260,7 +260,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                 )}
               </p>
               <p className="tnum text-micro text-ink-400">
-                {group.date ? `${relativeDayCN(group.date)} · ` : ''}{group.rows.length} {t('件')}
+                {group.date ? `${relativeDayCN(group.date)} · ` : ''}{group.rows.length} {t('家')}
               </p>
             </div>
 
@@ -285,6 +285,7 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                     tabIndex={0}
                     onClick={open}
                     onKeyDown={(event) => {
+                      if (event.nativeEvent.isComposing || event.keyCode === 229) return;
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
                         open();
@@ -307,8 +308,8 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                       <span className="min-w-0">
                         <span className="block truncate text-body-s text-ink-800">{row.name_ja ?? '—'}</span>
                         {row.sector33_name ? (
-                          <SoftBadge className="mt-0.5 max-w-[11rem]" title={row.sector33_name}>
-                            <span className="truncate">{row.sector33_name}</span>
+                          <SoftBadge className="mt-0.5 max-w-[11rem]" title={t(row.sector33_name)}>
+                            <span className="truncate">{t(row.sector33_name)}</span>
                           </SoftBadge>
                         ) : (
                           <span className="block truncate text-micro text-ink-400">—</span>
@@ -353,8 +354,8 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                           </span>
                           <span className="block flex items-center gap-1 truncate text-micro text-ink-400">
                             {forecast ? metricLabel(forecast.metric) : t('营利')}
-                            {forecast?.direction === 'upward' && <span className="text-up-700">{t('上方修正')}</span>}
-                            {forecast?.direction === 'downward' && <span className="text-down-700">{t('下方修正')}</span>}
+                            {forecast?.direction === 'upward' && <span className="text-up-700">{t('上调预测')}</span>}
+                            {forecast?.direction === 'downward' && <span className="text-down-700">{t('下调预测')}</span>}
                           </span>
                         </span>
                       </span>
@@ -395,8 +396,8 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-body-s text-ink-800">{row.name_ja ?? '—'}</span>
                         {row.sector33_name ? (
-                          <SoftBadge className="mt-0.5 max-w-[11rem]" title={row.sector33_name}>
-                            <span className="truncate">{row.sector33_name}</span>
+                          <SoftBadge className="mt-0.5 max-w-[11rem]" title={t(row.sector33_name)}>
+                            <span className="truncate">{t(row.sector33_name)}</span>
                           </SoftBadge>
                         ) : (
                           <span className="block truncate text-micro text-ink-400">—</span>
@@ -445,8 +446,8 @@ export default function EarningsList({ items, filteredByDay, featuredFilteredEmp
                             </span>
                             <span className="block truncate text-micro text-ink-400">
                               {forecast ? metricLabel(forecast.metric) : t('营利')}
-                              {forecast?.direction === 'upward' && <span className="ml-1 text-up-700">{t('上方修正')}</span>}
-                              {forecast?.direction === 'downward' && <span className="ml-1 text-down-700">{t('下方修正')}</span>}
+                                {forecast?.direction === 'upward' && <span className="ml-1 text-up-700">{t('上调预测')}</span>}
+                                {forecast?.direction === 'downward' && <span className="ml-1 text-down-700">{t('下调预测')}</span>}
                             </span>
                           </span>
                         </span>

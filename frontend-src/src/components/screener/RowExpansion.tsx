@@ -77,7 +77,7 @@ export default function RowExpansion({ row, weights, canManageWatchlist, live, l
         </div>
         {row.missing_families.length > 0 && (
           <p className="mt-2.5 text-micro text-ink-400">
-            {t('缺失维度')}: {row.missing_families.join(' · ')} {t('（按缺失重新配权，不填中性值）')}
+            {t('缺失维度')}: {row.missing_families.map((key) => FAMILY_META.find((item) => item.key === key)?.label ?? key).join(' · ')}
           </p>
         )}
         {warnings.length > 0 && (

@@ -18,7 +18,7 @@ import { t } from '../../i18n/core.ts';
 export default function PageFallback() {
   return (
     <div
-      className="flex min-h-screen items-start justify-center pt-[20vh]"
+      className="flex min-h-dvh items-start justify-center pt-[20dvh]"
       role="status"
       aria-label={t("页面加载中")}
     >
