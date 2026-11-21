@@ -1,7 +1,7 @@
 # 机构空卖行为监控 — 数据源、算法与运维
 
-対象: `/short-monitor`、`/api/short-monitor/*`、`app/services/short_monitor/*`、
-`app/research/short_behavior*.py`。
+対象: `/short-monitor`、`/api/short-monitor/*`、`app/services/short_monitor/*`。
+（履歴検証用の `app/research/` は 2026-11-21 に削除。下の検証結果は当時の記録。）
 
 > **2026-11-21 重做（inst-v4 / evt-v4 / sbf-v3 / sbs-v4，接口 jp-short-monitor-v4）。**
 > 第 3 节的地址规则、第 4 至 7 节（事实量、动向、拥挤度、雷达联动）和第 12 节（证据）
@@ -345,7 +345,6 @@ ETF 与 ETN（`ProdCat` 014、023）默认不进排行和计数：对指数连�
 | やりたいこと | 手順 |
 | --- | --- |
 | 手動で作り直す | ワーカーの引け後バッチが同じ関数を呼ぶ。単発なら `pipeline.rebuild_events` → `pipeline.refresh_snapshots` |
-| 履歴検証 | `python -m app.research.short_behavior_runner --start YYYY-MM-DD --end YYYY-MM-DD --out report.json` |
 | 状態を見る | `GET /api/short-monitor/status` |
 | 回填の進み | `sync_state` の `bulk_pending` / `bulk_done` / `bulk_history_from` |
 

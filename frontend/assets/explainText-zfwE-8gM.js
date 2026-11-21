@@ -1,0 +1,1 @@
+import{h as e,t as s}from"./i18n-BeKEEMdw.js";function o(a){const r={};for(const[n,t]of Object.entries(a.params??{}))r[n]=typeof t=="string"&&e(t)?s(t):t;if(a.parts?.length){const n=a.parts_sep??"、";r[a.parts_key??"moves"]=a.parts.map(o).join(e(n)?s(n):n)}return s(a.template,r)}function f(a,r=[]){return a?.length?a.map(o):r.map(n=>s(n))}export{o as a,f as e};

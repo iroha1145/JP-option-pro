@@ -4,7 +4,6 @@ import { del, get, patch as patchVerb, post, toQuery, type RequestOptions } from
 import { registryGet } from './queryRegistry.ts';
 import type {
   AccessStatus,
-  ResearchReport,
   DataStatusResponse,
   EarningsRecentItem,
   EarningsUpcomingResponse,
@@ -97,12 +96,6 @@ export const earningsApi = {
   },
   recent(days = 7): Promise<{ items: EarningsRecentItem[] }> {
     return days === 7 ? registryGet('/earnings/recent') : get(`/earnings/recent?${toQuery({ days })}`);
-  },
-};
-
-export const researchApi = {
-  report(runId?: string): Promise<ResearchReport> {
-    return get(runId ? `/research/report?run_id=${encodeURIComponent(runId)}` : '/research/report');
   },
 };
 

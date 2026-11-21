@@ -38,7 +38,7 @@ STATE_LABELS: dict[str, str] = {
 STATE_CAVEATS: dict[str, str] = {
     STATE_BUILDING: "仅统计达到披露门槛的持仓，门槛以下未计入。",
     STATE_COVERING: "仅统计报告义务范围内的减持，跌破门槛后的剩余持仓不可见。",
-    STATE_MIXED: "近 20 日与近 5 日净变动方向相反，机构间增减互现。",
+    STATE_MIXED: "近 20 日与近 5 日的净变动方向不一致。",
 }
 
 #: 拥挤度の段 → 説明文（段の規則をそのまま書く。`states.CROWDING_RULES` と揃える）。
